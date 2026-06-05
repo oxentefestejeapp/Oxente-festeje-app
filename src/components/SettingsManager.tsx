@@ -161,6 +161,7 @@ export function SettingsManager({
     }
     localStorage.setItem('supabase_url', supUrl.trim());
     localStorage.setItem('supabase_anon_key', supKey.trim());
+    localStorage.setItem('supabase_keys_dirty', 'true');
     setDbSuccessMsg('Credenciais do Supabase aplicadas com sucesso! Inicializando conexão com a nuvem...');
     setDbErrorMsg(null);
     setTimeout(() => {

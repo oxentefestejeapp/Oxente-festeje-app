@@ -4,12 +4,58 @@
  */
 
 import React, { useState, useRef, DragEvent, ChangeEvent } from 'react';
-import { Upload, X, Sparkles, AlertCircle, ShoppingBag, Plus, Trash2, Layers } from 'lucide-react';
+import { Upload, X, Sparkles, AlertCircle, ShoppingBag, Plus, Trash2, Layers, Loader2 } from 'lucide-react';
 import { Product, PricingTier } from '../types';
 
 interface ProductFormProps {
-  onAddProduct: (product: Product) => void;
+  onAddProduct: (product: Product) => Promise<boolean> | void;
 }
+
+// Client-side image compression using HTML5 Canvas to keep Base64 strings tiny (~30KB-50KB)
+const compressImage = (file: File, maxWidth = 480, maxHeight = 480, quality = 0.6): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Keep aspect ratio
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string || '');
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => {
+        reject(new Error('Erro ao processar imagem para compressão. Verifique o formato.'));
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
 
 export function ProductForm({ onAddProduct }: ProductFormProps) {
   const [nome, setNome] = useState('');
@@ -21,6 +67,8 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   
   // Progressive Pricing Tiers State
   const [faixasPreco, setFaixasPreco] = useState<PricingTier[]>([]);
@@ -29,27 +77,31 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Convert file to Base64
-  const processFile = (file: File) => {
+  // Compress and convert file to Base64
+  const processFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       setError('Por favor, selecione apenas arquivos de imagem.');
       return;
     }
-    
-    // Limit to ~2MB just for good performance inside localStorage
-    if (file.size > 2 * 1024 * 1024) {
-      setError('A imagem é muito grande. Escolha uma foto menor que 2MB.');
-      return;
-    }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        setPhoto(e.target.result as string);
-        setError('');
-      }
-    };
-    reader.readAsDataURL(file);
+    setIsCompressing(true);
+    setError('');
+    try {
+      const compressedBase64 = await compressImage(file);
+      setPhoto(compressedBase64);
+    } catch (err: any) {
+      console.error('Erro de compressão:', err);
+      // Fallback to normal loading if canvas fails
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setPhoto(e.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsCompressing(false);
+    }
   };
 
   const handleDrag = (e: DragEvent) => {
@@ -125,8 +177,10 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
     setFaixasPreco(updated);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSaving || isCompressing) return;
+
     setError('');
     setSuccess('');
 
@@ -164,23 +218,37 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       faixasPreco: faixasPreco.length > 0 ? faixasPreco : undefined,
     };
 
-    onAddProduct(newProduct);
-    
-    // Success feedback and Reset
-    setSuccess(`"${newProduct.nome}" cadastrado com sucesso no sistema!`);
-    setNome('');
-    setPreco('');
-    setPrecoCusto('');
-    setEstoque('');
-    setEstoqueInfinito(false);
-    setPhoto('');
-    setFaixasPreco([]);
-    setNovaQuantidadeMinima('');
-    setNovoPrecoFaixa('');
-    
-    setTimeout(() => {
-      setSuccess('');
-    }, 4000);
+    setIsSaving(true);
+    try {
+      // Execute the product registration
+      const result = await onAddProduct(newProduct);
+      
+      // If the parent handleAddProduct returns undefined, we treat it as success, 
+      // but if we update it to return boolean we check the boolean value.
+      if (result === false) {
+        setError('O produto foi registrado localmente no seu dispositivo, mas não pôde ser salvo no banco de dados em nuvem do Supabase. Verifique a conexão do banco nas configurações.');
+      } else {
+        setSuccess(`"${newProduct.nome}" cadastrado com sucesso no sistema e sincronizado com a nuvem!`);
+        setNome('');
+        setPreco('');
+        setPrecoCusto('');
+        setEstoque('');
+        setEstoqueInfinito(false);
+        setPhoto('');
+        setFaixasPreco([]);
+        setNovaQuantidadeMinima('');
+        setNovoPrecoFaixa('');
+        
+        setTimeout(() => {
+          setSuccess('');
+        }, 4000);
+      }
+    } catch (err: any) {
+      console.error('Erro ao adicionar produto:', err);
+      setError(`Falha ao registrar produto na nuvem: ${err?.message || String(err)}`);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -385,8 +453,14 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
 
         {/* Drag and Drop File Input */}
         <div>
-          <label className="block text-sm font-medium text-zinc-300 mb-1.5">
-            Foto do Produto (Arrastar ou selecionar)
+          <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center justify-between">
+            <span>Foto do Produto (Arrastar ou selecionar)</span>
+            {isCompressing && (
+              <span className="text-xs text-brand-pink flex items-center gap-1 animate-pulse">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>Otimizando imagem...</span>
+              </span>
+            )}
           </label>
           <input
             type="file"
@@ -394,31 +468,36 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
             onChange={handleChange}
             accept="image/*"
             className="hidden"
+            disabled={isSaving || isCompressing}
           />
 
           {!photo ? (
-            <div
+            <button
+              type="button"
               onDragEnter={handleDrag}
               onDragOver={handleDrag}
               onDragLeave={handleDrag}
               onDrop={handleDrop}
               onClick={triggerFileSelect}
-              className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+              disabled={isSaving || isCompressing}
+              className={`w-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
                 dragActive
                   ? 'border-brand-pink bg-brand-pink/10'
                   : 'border-zinc-800 hover:border-brand-pink hover:bg-zinc-950'
-              }`}
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
             >
               <div className="flex flex-col items-center gap-3">
                 <div className="p-3 bg-zinc-950 rounded-full text-brand-pink border border-zinc-800">
-                  <Upload className="h-6 w-6" />
+                  {isCompressing ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
                 </div>
                 <div>
-                  <p className="font-medium text-zinc-300 text-sm">Arraste uma imagem aqui ou clique para selecionar</p>
-                  <p className="text-xs text-zinc-550 mt-1">PNG, JPG, JPEG (Tamanho máx. recomendado: 2MB)</p>
+                  <p className="font-medium text-zinc-300 text-sm">
+                    {isCompressing ? 'Compactando foto do produto...' : 'Arraste uma imagem aqui ou clique para selecionar'}
+                  </p>
+                  <p className="text-xs text-zinc-550 mt-1">O sistema otimiza qualquer tamanho de foto automaticamente para a nuvem!</p>
                 </div>
               </div>
-            </div>
+            </button>
           ) : (
             <div className="relative border border-zinc-800 rounded-xl overflow-hidden bg-black p-4 flex items-center justify-center">
               <div className="relative h-44 w-44 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
@@ -430,7 +509,8 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
                 <button
                   type="button"
                   onClick={removePhoto}
-                  className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-sm hover:scale-105 transition-all"
+                  disabled={isSaving || isCompressing}
+                  className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-sm hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   title="Remover imagem"
                 >
                   <X className="h-4 w-4" />
@@ -443,10 +523,25 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
         {/* Submit button */}
         <button
           type="submit"
-          className="w-full flex items-center justify-center gap-2 py-3 bg-brand-pink hover:bg-brand-pink-hover text-black font-bold rounded-xl shadow-md hover:shadow-lg transition-all transform active:scale-98 cursor-pointer mt-2"
+          disabled={isSaving || isCompressing}
+          className="w-full flex items-center justify-center gap-2 py-3 bg-brand-pink hover:bg-brand-pink-hover text-black font-bold rounded-xl shadow-md hover:shadow-lg transition-all transform active:scale-98 cursor-pointer mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
-          <Plus className="h-5 w-5" />
-          <span>Salvar no Sistema</span>
+          {isSaving ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span>Sincronizando com Supabase...</span>
+            </>
+          ) : isCompressing ? (
+            <>
+              <Loader2 className="h-5 w-5 animate-spin" />
+              <span>Processando Imagem...</span>
+            </>
+          ) : (
+            <>
+              <Plus className="h-5 w-5" />
+              <span>Salvar no Sistema</span>
+            </>
+          )}
         </button>
 
       </form>

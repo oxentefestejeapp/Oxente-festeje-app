@@ -267,40 +267,45 @@ export default function App() {
     const syncSupabaseSettings = async () => {
       try {
         const configDocRef = doc(db, 'config', 'supabase');
+        const docSnap = await getDoc(configDocRef);
         
-        if (isAdmin) {
-          // Administrator shares their Supabase credentials to all users
-          const localUrl = localStorage.getItem('supabase_url');
-          const localKey = localStorage.getItem('supabase_anon_key');
-          
+        const localUrl = localStorage.getItem('supabase_url');
+        const localKey = localStorage.getItem('supabase_anon_key');
+        const isDirty = localStorage.getItem('supabase_keys_dirty') === 'true';
+
+        if (isAdmin && isDirty) {
+          // Administrator manually entered keys via configuration tab -> upload to Firestore
           if (localUrl && localKey) {
-            const docSnap = await getDoc(configDocRef);
-            if (!docSnap.exists() || docSnap.data()?.url !== localUrl || docSnap.data()?.key !== localKey) {
-              await setDoc(configDocRef, {
-                url: localUrl,
-                key: localKey,
-                updatedAt: serverTimestamp()
-              });
-              console.log('Sincronizados detalhes do Supabase do administrador com o Firestore.');
-            }
+            await setDoc(configDocRef, {
+              url: localUrl,
+              key: localKey,
+              updatedAt: serverTimestamp()
+            });
+            localStorage.removeItem('supabase_keys_dirty');
+            console.log('Sincronizados detalhes do Supabase do administrador com o Firestore.');
           }
         } else {
-          // Collaborators download the master connection details from Firestore
-          const docSnap = await getDoc(configDocRef);
+          // Both collaborators and administrator (on other devices/browsers) pull the keys from Firestore
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.url && data.key) {
-              const localUrl = localStorage.getItem('supabase_url');
-              const localKey = localStorage.getItem('supabase_anon_key');
-              
               if (localUrl !== data.url || localKey !== data.key) {
-                console.log('Nova configuração de Supabase detectada na nuvem. Atualizando...');
+                console.log('Nova configuração de Supabase detectada na nuvem. Atualizando localmente...');
                 localStorage.setItem('supabase_url', data.url);
                 localStorage.setItem('supabase_anon_key', data.key);
+                localStorage.removeItem('supabase_keys_dirty');
                 // Trigger reload to apply connection details globally
                 window.location.reload();
               }
             }
+          } else if (isAdmin && localUrl && localKey) {
+            // First time running or Firestore document doesn't exist yet, bootstrap Firestore config
+            await setDoc(configDocRef, {
+              url: localUrl,
+              key: localKey,
+              updatedAt: serverTimestamp()
+            });
+            console.log('Inicializada configuração do Supabase no Firestore.');
           }
         }
       } catch (err) {
@@ -696,7 +701,7 @@ export default function App() {
   };
 
   // State mutation actions with automatic remote DB sync
-  const handleAddProduct = async (newProduct: Product) => {
+  const handleAddProduct = async (newProduct: Product): Promise<boolean> => {
     // Record in local pending products map to survive any background refreshes
     addPendingProduct(newProduct);
 
@@ -705,12 +710,15 @@ export default function App() {
     
     // Background sync to Supabase
     try {
-      await dbSupabase.saveProduct(newProduct);
-      // We no longer clear pendingProducts unconditionally after a timeout.
-      // Doing so causes products to be deleted if replication delays or queries are cached.
-      // Instead, we let the safe merge in pollCloudUpdates confirm the database actually returns it.
-    } catch (e) {
-      console.warn('Erro ao sincronizar novo produto em segundo plano:', e);
+      const success = await dbSupabase.saveProduct(newProduct);
+      if (!success) {
+        console.warn('Falha ao registrar produto no Supabase após criação.');
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      console.error('Erro ao sincronizar novo produto em segundo plano:', e);
+      return false;
     }
   };
 
