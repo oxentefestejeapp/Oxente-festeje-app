@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box } from 'lucide-react';
+import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box, Check, X } from 'lucide-react';
 import { Product } from '../types';
 
 interface StockManagerProps {
@@ -17,6 +17,7 @@ interface StockManagerProps {
 export function StockManager({ products, onUpdateStock, onDeleteProduct, isAdmin = false }: StockManagerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [editedStocks, setEditedStocks] = useState<Record<string, number>>({});
 
   const stockMetrics = useMemo(() => {
     let totalStockVolume = 0;
@@ -58,19 +59,21 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, isAdmin
   const handleStockChange = (id: string, currentStock: number, value: string) => {
     const parsed = parseInt(value, 10);
     if (!isNaN(parsed) && parsed >= 0) {
-      onUpdateStock(id, parsed);
+      setEditedStocks(prev => ({ ...prev, [id]: parsed }));
     } else if (value === '') {
-      onUpdateStock(id, 0);
+      setEditedStocks(prev => ({ ...prev, [id]: 0 }));
     }
   };
 
   const handleIncrement = (id: string, currentStock: number) => {
-    onUpdateStock(id, currentStock + 1);
+    const active = editedStocks[id] !== undefined ? editedStocks[id] : currentStock;
+    setEditedStocks(prev => ({ ...prev, [id]: active + 1 }));
   };
 
   const handleDecrement = (id: string, currentStock: number) => {
-    if (currentStock > 0) {
-      onUpdateStock(id, currentStock - 1);
+    const active = editedStocks[id] !== undefined ? editedStocks[id] : currentStock;
+    if (active > 0) {
+      setEditedStocks(prev => ({ ...prev, [id]: active - 1 }));
     }
   };
 
@@ -171,6 +174,9 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, isAdmin
             const isDeleting = productToDelete === p.id;
             const isOutOfStock = !p.estoqueInfinito && p.estoque === 0;
             const isLowStock = !p.estoqueInfinito && p.estoque > 0 && p.estoque <= 5;
+            const hasDraft = editedStocks[p.id] !== undefined;
+            const draftVal = hasDraft ? editedStocks[p.id] : p.estoque;
+            const isChanged = hasDraft && editedStocks[p.id] !== p.estoque;
 
             return (
               <div 
@@ -239,7 +245,15 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, isAdmin
                           <input
                             type="checkbox"
                             checked={!!p.estoqueInfinito}
-                            onChange={(e) => onUpdateStock(p.id, p.estoque, e.target.checked)}
+                            onChange={(e) => {
+                              // If they choose infinite, clear any temporary drafts too
+                              setEditedStocks(prev => {
+                                const next = { ...prev };
+                                delete next[p.id];
+                                return next;
+                              });
+                              onUpdateStock(p.id, p.estoque, e.target.checked);
+                            }}
                             className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-3 w-3 cursor-pointer bg-black"
                           />
                           <span>Estoque Infinito</span>
@@ -248,36 +262,71 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, isAdmin
                     </div>
                     
                     {isAdmin ? (
-                      <div className="flex items-center">
-                        <button
-                          onClick={() => handleDecrement(p.id, p.estoque)}
-                          disabled={p.estoqueInfinito || p.estoque <= 0}
-                          className="p-2 border border-zinc-800 bg-black rounded-l-lg hover:bg-zinc-900 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 font-bold active:scale-95 disabled:opacity-40 select-none cursor-pointer"
-                          title="Remover 1 item"
-                        >
-                          <Minus className="h-4 w-4" />
-                        </button>
-                        {p.estoqueInfinito ? (
-                          <div className="w-full text-center py-1.5 px-2 bg-black border-y border-zinc-800 text-xs font-extrabold text-brand-pink">
-                            ∞ Sem limites
+                      <div className="space-y-2">
+                        <div className="flex items-center">
+                          <button
+                            onClick={() => handleDecrement(p.id, p.estoque)}
+                            disabled={p.estoqueInfinito || draftVal <= 0}
+                            className="p-2 border border-zinc-800 bg-black rounded-l-lg hover:bg-zinc-900 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 font-bold active:scale-95 disabled:opacity-40 select-none cursor-pointer"
+                            title="Remover 1 item"
+                          >
+                            <Minus className="h-4 w-4" />
+                          </button>
+                          {p.estoqueInfinito ? (
+                            <div className="w-full text-center py-1.5 px-2 bg-black border-y border-zinc-800 text-xs font-extrabold text-brand-pink">
+                              ∞ Sem limites
+                            </div>
+                          ) : (
+                            <input
+                              type="number"
+                              min="0"
+                              value={draftVal}
+                              onChange={(e) => handleStockChange(p.id, p.estoque, e.target.value)}
+                              className="w-full text-center py-1.5 px-2 bg-black border-y border-zinc-800 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-sm font-semibold text-zinc-100"
+                            />
+                          )}
+                          <button
+                            onClick={() => handleIncrement(p.id, p.estoque)}
+                            disabled={p.estoqueInfinito}
+                            className="p-2 border border-zinc-800 bg-black rounded-r-lg hover:bg-zinc-900 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 font-bold active:scale-95 select-none cursor-pointer disabled:opacity-40"
+                            title="Adicionar 1 item"
+                          >
+                            <Plus className="h-4 w-4" />
+                          </button>
+                        </div>
+
+                        {/* Save Stock Modification action button */}
+                        {isChanged && !p.estoqueInfinito && (
+                          <div className="flex items-center gap-2 pt-1 animate-fade-in">
+                            <button
+                              onClick={() => {
+                                onUpdateStock(p.id, draftVal);
+                                setEditedStocks(prev => {
+                                  const updated = { ...prev };
+                                  delete updated[p.id];
+                                  return updated;
+                                });
+                              }}
+                              className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold shadow-xs flex items-center justify-center gap-1 active:scale-[0.98] transition-all cursor-pointer"
+                            >
+                              <Check className="h-3.5 w-3.5" />
+                              <span>Salvar Estoque</span>
+                            </button>
+                            <button
+                              onClick={() => {
+                                setEditedStocks(prev => {
+                                  const updated = { ...prev };
+                                  delete updated[p.id];
+                                  return updated;
+                                });
+                              }}
+                              className="py-1.5 px-2.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 rounded-lg text-xs font-semibold hover:text-zinc-100 transition-colors cursor-pointer"
+                              title="Cancelar alterações"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
                           </div>
-                        ) : (
-                          <input
-                            type="number"
-                            min="0"
-                            value={p.estoque}
-                            onChange={(e) => handleStockChange(p.id, p.estoque, e.target.value)}
-                            className="w-full text-center py-1.5 px-2 bg-black border-y border-zinc-800 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-sm font-semibold text-zinc-100"
-                          />
                         )}
-                        <button
-                          onClick={() => handleIncrement(p.id, p.estoque)}
-                          disabled={p.estoqueInfinito}
-                          className="p-2 border border-zinc-800 bg-black rounded-r-lg hover:bg-zinc-900 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 font-bold active:scale-95 select-none cursor-pointer disabled:opacity-40"
-                          title="Adicionar 1 item"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </button>
                       </div>
                     ) : (
                       <div>

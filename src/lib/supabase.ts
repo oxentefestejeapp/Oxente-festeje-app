@@ -125,7 +125,7 @@ const mapProductToDb = (product: Product) => ({
   updated_at: new Date().toISOString()
 });
 
-const mapDbToProduct = (dbItem: any): Product => {
+export const mapDbToProduct = (dbItem: any): Product => {
   let faixasPreco = undefined;
   if (dbItem.precos_progressivos) {
     try {
@@ -143,7 +143,7 @@ const mapDbToProduct = (dbItem: any): Product => {
     estoque: Number(dbItem.estoque),
     imagemBase64: dbItem.imagem_base64 || undefined,
     estoqueInfinito: dbItem.estoque_infinito || undefined,
-    precoCusto: dbItem.precoCusto ? Number(dbItem.preco_custo) : undefined,
+    precoCusto: dbItem.preco_custo ? Number(dbItem.preco_custo) : undefined,
     faixasPreco
   };
 };
@@ -183,7 +183,7 @@ const mapSaleToDb = (sale: Sale) => ({
   updated_at: new Date().toISOString()
 });
 
-const mapDbToSale = (dbItem: any): Sale => ({
+export const mapDbToSale = (dbItem: any): Sale => ({
   id: dbItem.id,
   cliente: dbItem.cliente,
   telefoneCliente: dbItem.telefone_cliente || undefined,

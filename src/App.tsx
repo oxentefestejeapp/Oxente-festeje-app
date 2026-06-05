@@ -28,7 +28,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, hasConfig } from './lib/firebase';
-import { supabase, dbSupabase } from './lib/supabase';
+import { supabase, dbSupabase, mapDbToProduct, mapDbToSale } from './lib/supabase';
 
 import { Header } from './components/Header';
 import { ProductForm } from './components/ProductForm';
@@ -344,42 +344,87 @@ export default function App() {
   useEffect(() => {
     let active = true;
 
-    const handleProductsChange = async () => {
+    const handleProductsChange = (payload: any) => {
       if (!active) return;
-      try {
-        const dbProds = await dbSupabase.fetchProducts();
-        if (dbProds && dbProds.length > 0 && active) {
-          setProducts(dbProds);
-          localStorage.setItem('oxente_products', JSON.stringify(dbProds));
+      const { eventType, new: newRow, old: oldRow } = payload;
+      console.log('Sincronização em Tempo Real (Produtos):', eventType, payload);
+
+      if (eventType === 'INSERT') {
+        const prod = mapDbToProduct(newRow);
+        setProducts((current) => {
+          if (current.some(p => p.id === prod.id)) return current;
+          const updated = [prod, ...current];
+          localStorage.setItem('oxente_products', JSON.stringify(updated));
+          return updated;
+        });
+      } else if (eventType === 'UPDATE') {
+        const prod = mapDbToProduct(newRow);
+        setProducts((current) => {
+          const updated = current.map(p => p.id === prod.id ? prod : p);
+          localStorage.setItem('oxente_products', JSON.stringify(updated));
+          return updated;
+        });
+      } else if (eventType === 'DELETE') {
+        const targetId = oldRow?.id || newRow?.id;
+        if (targetId) {
+          setProducts((current) => {
+            const updated = current.filter(p => p.id !== targetId);
+            localStorage.setItem('oxente_products', JSON.stringify(updated));
+            return updated;
+          });
         }
-      } catch (err) {
-        console.error('Erro ao sincronizar produtos em tempo real:', err);
       }
     };
 
-    const handleSalesChange = async () => {
+    const handleSalesChange = (payload: any) => {
       if (!active) return;
-      try {
-        const dbSales = await dbSupabase.fetchSales();
-        if (dbSales && dbSales.length > 0 && active) {
-          setSales(dbSales);
-          localStorage.setItem('oxente_sales', JSON.stringify(dbSales));
+      const { eventType, new: newRow, old: oldRow } = payload;
+      console.log('Sincronização em Tempo Real (Vendas):', eventType, payload);
+
+      if (eventType === 'INSERT') {
+        const sale = mapDbToSale(newRow);
+        setSales((current) => {
+          if (current.some(s => s.id === sale.id)) return current;
+          const updated = [sale, ...current];
+          updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+          localStorage.setItem('oxente_sales', JSON.stringify(updated));
+          return updated;
+        });
+      } else if (eventType === 'UPDATE') {
+        const sale = mapDbToSale(newRow);
+        setSales((current) => {
+          const updated = current.map(s => s.id === sale.id ? sale : s);
+          updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+          localStorage.setItem('oxente_sales', JSON.stringify(updated));
+          return updated;
+        });
+      } else if (eventType === 'DELETE') {
+        const targetId = oldRow?.id || newRow?.id;
+        if (targetId) {
+          setSales((current) => {
+            const updated = current.filter(s => s.id !== targetId);
+            localStorage.setItem('oxente_sales', JSON.stringify(updated));
+            return updated;
+          });
         }
-      } catch (err) {
-        console.error('Erro ao sincronizar vendas em tempo real:', err);
       }
     };
 
-    const handleStoreChange = async () => {
+    const handleStoreChange = (payload: any) => {
       if (!active) return;
-      try {
-        const dbStore = await dbSupabase.fetchStoreInfo();
-        if (dbStore && active) {
-          setStoreInfo(dbStore);
-          localStorage.setItem('oxente_store_info', JSON.stringify(dbStore));
-        }
-      } catch (err) {
-        console.error('Erro ao sincronizar configurações em tempo real:', err);
+      const { eventType, new: newRow } = payload;
+      console.log('Sincronização em Tempo Real (Loja):', eventType, payload);
+
+      if (eventType === 'INSERT' || eventType === 'UPDATE') {
+        const updatedStore = {
+          nome: newRow.nome,
+          instagram: newRow.instagram || '',
+          telefone: newRow.telefone || '',
+          endereco: newRow.endereco || '',
+          whatsappTemplate: newRow.whatsapp_template || ''
+        };
+        setStoreInfo(updatedStore);
+        localStorage.setItem('oxente_store_info', JSON.stringify(updatedStore));
       }
     };
 
@@ -461,8 +506,8 @@ export default function App() {
       }
     };
 
-    // Poll every 8 seconds when the tab is visible
-    intervalId = setInterval(pollCloudUpdates, 8000);
+    // Poll every 30 seconds when the tab is visible
+    intervalId = setInterval(pollCloudUpdates, 30000);
 
     // Refresh instantly whenever tab is focused/visible again
     const handleVisibilityChange = () => {
@@ -682,7 +727,7 @@ export default function App() {
         : 'text-zinc-400 hover:bg-zinc-800/80 hover:text-brand-pink'
     } ${
       isAdmin
-        ? 'py-3.5 px-3 md:px-4 text-[11px] md:text-xs xl:text-[13px] border border-zinc-800/45 shadow-sm'
+        ? 'py-3.5 px-3 md:px-4 text-xs md:text-[13px] border border-zinc-800/45 shadow-sm'
         : 'py-3.5 px-5 text-xs sm:text-sm'
     }`;
   };
@@ -724,7 +769,7 @@ export default function App() {
         {/* Navigation Tabs Bar */}
         <div className={`no-print bg-zinc-900 rounded-2xl border border-zinc-800 mb-8 shadow-lg ${
           isAdmin 
-            ? 'p-4 sm:p-5 md:p-6 pb-6 md:pb-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-3.5 sm:gap-4 md:gap-5 w-full' 
+            ? 'p-4 sm:p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4 w-full' 
             : 'p-3 grid grid-cols-2 sm:grid-cols-7 gap-3 w-full'
         }`}>
           
