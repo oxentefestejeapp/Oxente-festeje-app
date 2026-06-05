@@ -277,6 +277,31 @@ export const dbSupabase = {
     }
   },
 
+  async updateProductStock(id: string, newStock: number, isInfinite?: boolean): Promise<boolean> {
+    try {
+      const updateData: any = {
+        estoque: newStock,
+        updated_at: new Date().toISOString()
+      };
+      if (isInfinite !== undefined) {
+        updateData.estoque_infinito = isInfinite;
+      }
+      const { error } = await supabase
+        .from('oxente_products')
+        .update(updateData)
+        .eq('id', id);
+
+      if (error) {
+        console.error('Erro ao atualizar estoque no Supabase:', error.message);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('Falha ao conectar com Supabase ao atualizar estoque:', e);
+      return false;
+    }
+  },
+
   async deleteProduct(id: string): Promise<boolean> {
     try {
       const { error } = await supabase.from('oxente_products').delete().eq('id', id);

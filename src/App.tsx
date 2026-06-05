@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Package, 
   TrendingUp, 
@@ -59,6 +59,7 @@ export default function App() {
 
   // 2. Core Persistent State
   const [products, setProducts] = useState<Product[]>([]);
+  const pendingStockUpdates = useRef<Record<string, number>>({});
   const [sales, setSales] = useState<Sale[]>([]);
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(defaultStoreInfo);
   const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web'>(() => {
@@ -360,7 +361,9 @@ export default function App() {
       } else if (eventType === 'UPDATE') {
         const prod = mapDbToProduct(newRow);
         setProducts((current) => {
-          const updated = current.map(p => p.id === prod.id ? prod : p);
+          const pendingStock = pendingStockUpdates.current[prod.id];
+          const finalProd = pendingStock !== undefined ? { ...prod, estoque: pendingStock } : prod;
+          const updated = current.map(p => p.id === prod.id ? finalProd : p);
           localStorage.setItem('oxente_products', JSON.stringify(updated));
           return updated;
         });
@@ -471,10 +474,14 @@ export default function App() {
 
         if (dbProds && dbProds.length > 0) {
           setProducts((curr) => {
-            const hasChanged = JSON.stringify(curr) !== JSON.stringify(dbProds);
+            const mergedProds = dbProds.map(p => {
+              const pendingStock = pendingStockUpdates.current[p.id];
+              return pendingStock !== undefined ? { ...p, estoque: pendingStock } : p;
+            });
+            const hasChanged = JSON.stringify(curr) !== JSON.stringify(mergedProds);
             if (hasChanged) {
-              localStorage.setItem('oxente_products', JSON.stringify(dbProds));
-              return dbProds;
+              localStorage.setItem('oxente_products', JSON.stringify(mergedProds));
+              return mergedProds;
             }
             return curr;
           });
@@ -563,6 +570,9 @@ export default function App() {
   };
 
   const handleUpdateStock = async (id: string, newStock: number, isInfinite?: boolean) => {
+    // Record in local pending stock map
+    pendingStockUpdates.current[id] = newStock;
+
     let itemToSync: Product | null = null;
     const updated = products.map((p) => {
       if (p.id === id) {
@@ -577,13 +587,14 @@ export default function App() {
     });
     saveProducts(updated);
 
-    // Background sync to Supabase
-    if (itemToSync) {
-      try {
-        await dbSupabase.saveProduct(itemToSync);
-      } catch (e) {
-        console.warn('Erro ao sincronizar estoque em segundo plano:', e);
-      }
+    // Background sync to Supabase using fast optimized method
+    try {
+      await dbSupabase.updateProductStock(id, newStock, isInfinite);
+    } catch (e) {
+      console.warn('Erro ao sincronizar estoque em segundo plano:', e);
+    } finally {
+      // Clear pending state after sync completes
+      delete pendingStockUpdates.current[id];
     }
   };
 
@@ -630,14 +641,25 @@ export default function App() {
     });
 
     if (productsToSync.length > 0) {
+      // Record pending local stocks to protect them
+      productsToSync.forEach((p) => {
+        pendingStockUpdates.current[p.id] = p.estoque;
+      });
+
       saveProducts(updatedProducts);
-      // Async update each product's stock in Supabase
+
+      // Async update each product's stock in Supabase using the fast optimized method
       try {
         await Promise.all(
-          productsToSync.map(p => dbSupabase.saveProduct(p))
+          productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito))
         );
       } catch (e) {
         console.warn('Erro ao sincronizar estoque atualizado com o Supabase em segundo plano:', e);
+      } finally {
+        // Clear pending states after sync completes
+        productsToSync.forEach((p) => {
+          delete pendingStockUpdates.current[p.id];
+        });
       }
     }
 
