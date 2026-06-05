@@ -498,6 +498,9 @@ export default function App() {
               if (!mergedProdsMap.has(p.id)) {
                 // Keep the locally created pending product
                 mergedProdsMap.set(p.id, p);
+              } else {
+                // Confirmed in the database! Safe to remove from pending map.
+                delete pendingProducts.current[p.id];
               }
             });
 
@@ -593,8 +596,11 @@ export default function App() {
     try {
       const success = await dbSupabase.saveProduct(newProduct);
       if (success) {
-        // Clear from pending map after successful server save
-        delete pendingProducts.current[newProduct.id];
+        // Delay clearing from pending products to allow database replication/indexed views to sync,
+        // preventing immediate "focus" refreshes or tab changes from wiping the local product.
+        setTimeout(() => {
+          delete pendingProducts.current[newProduct.id];
+        }, 12000);
       }
     } catch (e) {
       console.warn('Erro ao sincronizar novo produto em segundo plano:', e);
