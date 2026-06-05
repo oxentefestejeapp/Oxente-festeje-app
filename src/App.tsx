@@ -408,8 +408,8 @@ export default function App() {
 
       if (eventType === 'INSERT') {
         const prod = mapDbToProduct(newRow);
-        // Clean from pending map as we received official confirmation database-side
-        removePendingProduct(prod.id);
+        // Add to pending products list to shield it from disappearing in case of DB read lag
+        addPendingProduct(prod);
         setProducts((current) => {
           if (current.some(p => p.id === prod.id)) return current;
           const updated = [prod, ...current];
@@ -418,8 +418,6 @@ export default function App() {
         });
       } else if (eventType === 'UPDATE') {
         const prod = mapDbToProduct(newRow);
-        // Clean from pending map as we received official confirmation database-side
-        removePendingProduct(prod.id);
         setProducts((current) => {
           const pendingStock = pendingStockUpdates.current[prod.id];
           const finalProd = pendingStock !== undefined ? { ...prod, estoque: pendingStock } : prod;
@@ -430,8 +428,8 @@ export default function App() {
       } else if (eventType === 'DELETE') {
         const targetId = oldRow?.id || newRow?.id;
         if (targetId) {
-          // Guard/protect if product is still pending upload
-          if (pendingProducts.current[targetId]) return;
+          // Clear from pending map as we received official delete confirmation
+          removePendingProduct(targetId);
           setProducts((current) => {
             const updated = current.filter(p => p.id !== targetId);
             localStorage.setItem('oxente_products', JSON.stringify(updated));
