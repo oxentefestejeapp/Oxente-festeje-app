@@ -1,0 +1,600 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useMemo } from 'react';
+import { Search, Phone, CheckCircle2, Clock, DollarSign, Truck, FileText, Check, ShieldAlert, ArrowRight, User } from 'lucide-react';
+import { Sale, PaymentMethod, StoreInfo, Product } from '../types';
+import { Receipt } from './Receipt';
+
+interface DeliveryManagerProps {
+  products: Product[];
+  sales: Sale[];
+  storeInfo: StoreInfo;
+  onUpdateSale: (updatedSale: Sale) => void;
+  preselectedSaleId?: string | null;
+  onClearPreselectedSaleId?: () => void;
+}
+
+const paymentMethods: { value: PaymentMethod; label: string; icon: string }[] = [
+  { value: 'Pix', label: 'Pix (Instantâneo)', icon: '⚡' },
+  { value: 'Dinheiro', label: 'Dinheiro físico', icon: '💵' },
+  { value: 'Cartão de Crédito', label: 'Cartão de Crédito', icon: '💳' },
+  { value: 'Cartão de Débito', label: 'Cartão de Débito', icon: '🏦' },
+];
+
+export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, preselectedSaleId, onClearPreselectedSaleId }: DeliveryManagerProps) {
+  const [category, setCategory] = useState<'Pendentes' | 'Concluidos'>('Pendentes');
+  const [deliverySearchTerm, setDeliverySearchTerm] = useState('');
+  const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+
+  const deliveryReceiptRef = React.useRef<HTMLDivElement>(null);
+
+  const handleSelectDeliverySale = (saleId: string) => {
+    setSelectedSaleId(saleId);
+    setTimeout(() => {
+      deliveryReceiptRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 150);
+  };
+
+  // Sync preselectedSaleId if passed from parent
+  React.useEffect(() => {
+    if (preselectedSaleId) {
+      setSelectedSaleId(preselectedSaleId);
+      const sale = sales.find(s => s.id === preselectedSaleId);
+      if (sale) {
+        if (sale.status === 'Pendente') {
+          setCategory('Pendentes');
+        } else {
+          setCategory('Concluidos');
+        }
+      }
+      if (onClearPreselectedSaleId) {
+        onClearPreselectedSaleId();
+      }
+      // Also scroll to receipt when landing from parent preselection
+      setTimeout(() => {
+        deliveryReceiptRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 250);
+    }
+  }, [preselectedSaleId, sales, onClearPreselectedSaleId]);
+  
+  // Deliver balance custom status states
+  const [deliveryPaymentMethod, setDeliveryPaymentMethod] = useState<PaymentMethod>('Pix');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // Helper helper to check if a sale is Pending delivery
+  const isSalePending = (sale: Sale) => {
+    if (sale.status) {
+      return sale.status === 'Pendente';
+    }
+    // Backward compatibility for old sales
+    const missingValue = sale.valorFaltante !== undefined ? sale.valorFaltante : (sale.total - (sale.valorPago ?? sale.total));
+    return missingValue > 0 || !!sale.numeroPedido;
+  };
+
+  const isForgottenSale = (sale: Sale) => {
+    if (!sale.dataRetirada) return false;
+    // It shouldn't be finalized (i.e. if statusProducao is 'Entregue' or sale.status is 'Concluído', it's delivered)
+    if (sale.status === 'Concluído' || sale.statusProducao === 'Entregue') return false;
+    
+    try {
+      const pickupDate = new Date(sale.dataRetirada + 'T12:00:00');
+      const today = new Date();
+      
+      pickupDate.setHours(12, 0, 0, 0);
+      today.setHours(12, 0, 0, 0);
+      
+      const diffTime = today.getTime() - pickupDate.getTime();
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      
+      return diffDays >= 5;
+    } catch (err) {
+      return false;
+    }
+  };
+
+  const forgottenCount = useMemo(() => {
+    return sales.filter(s => isForgottenSale(s)).length;
+  }, [sales]);
+
+  const pipelineMetrics = useMemo(() => {
+    let rawScheduled = 0;
+    let rawInProduction = 0;
+    let rawReadyForPickup = 0;
+    let rawDeliveredTotal = 0;
+
+    sales.forEach(s => {
+      const prod = s.statusProducao || 'Agendado';
+      if (prod === 'Agendado') {
+        rawScheduled++;
+      } else if (prod === 'Em Produção') {
+        rawInProduction++;
+      } else if (prod === 'Pronto para Retirada') {
+        rawReadyForPickup++;
+      } else if (prod === 'Entregue') {
+        rawDeliveredTotal++;
+      }
+    });
+
+    return {
+      scheduled: rawScheduled,
+      inProduction: rawInProduction,
+      ready: rawReadyForPickup,
+      delivered: rawDeliveredTotal
+    };
+  }, [sales]);
+
+  // Divide sales into Pending and Concluded
+  const pendingSales = useMemo(() => {
+    return sales.filter(s => isSalePending(s));
+  }, [sales]);
+
+  const concludedSales = useMemo(() => {
+    return sales.filter(s => !isSalePending(s));
+  }, [sales]);
+
+  // Handle filtering by order number, client name, or telephone number
+  const getFilteredList = () => {
+    const term = deliverySearchTerm.toLowerCase().trim();
+    const list = category === 'Pendentes' ? pendingSales : concludedSales;
+    if (!term) return list;
+    
+    return list.filter((sale) => {
+      const matchName = sale.cliente.toLowerCase().includes(term);
+      const matchOrderNum = sale.numeroPedido ? sale.numeroPedido.toLowerCase().includes(term) : false;
+      const matchPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '').includes(term.replace(/\D/g, '')) : false;
+      return matchName || matchOrderNum || matchPhone;
+    });
+  };
+
+  const filteredList = getFilteredList();
+
+  // Find the currently active selected sale
+  const selectedSale = useMemo(() => {
+    if (!selectedSaleId) return null;
+    return sales.find(s => s.id === selectedSaleId) || null;
+  }, [selectedSaleId, sales]);
+
+  // Apply default delivery details when the selected sale changes
+  React.useEffect(() => {
+    if (selectedSale) {
+      setDeliveryPaymentMethod(selectedSale.formaPagamento);
+    }
+  }, [selectedSale]);
+
+  const handleConfirmDeliveryAndPayment = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedSale) return;
+
+    const remainingToPay = selectedSale.valorFaltante !== undefined ? selectedSale.valorFaltante : 0;
+
+    // Create updated Sale with 0 balance and Concluding status
+    const updated: Sale = {
+      ...selectedSale,
+      valorPago: selectedSale.total,
+      valorFaltante: 0,
+      formaPagamento: deliveryPaymentMethod,
+      status: 'Concluído',
+      statusProducao: 'Entregue',
+    };
+
+    onUpdateSale(updated);
+
+    setSuccessMessage(`Pedido #${selectedSale.numeroPedido || selectedSale.id.substring(5, 9)} entregue e concluído com sucesso!`);
+    
+    // Clear success message after 4.5 seconds
+    setTimeout(() => {
+      setSuccessMessage('');
+    }, 4500);
+
+    // Keep it selected so they can view/print the concluded receipt, but shift category view if they want or let them enjoy the receipt
+  };
+
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start select-text">
+      
+      {/* LEFT COLUMN: Search & Selector list (7 cols) */}
+      <div className="lg:col-span-7 space-y-6 no-print">
+        
+        {/* Headline Section */}
+        <div className="bg-zinc-900 rounded-2xl border border-zinc-800/80 p-6 flex items-center justify-between shadow-xs">
+          <div className="flex items-center gap-2">
+            <div className="p-2 bg-brand-pink/10 border border-brand-pink/20 rounded-lg text-brand-pink">
+              <Truck className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="font-display font-semibold text-lg text-zinc-100">Controle de Entregas &amp; Pagamentos</h2>
+              <p className="text-xs text-zinc-400 mt-0.5">Gerencie recebimentos no ato da entrega e libere pedidos concluídos</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ⚙️ PIPELINE METRICS CONTAINER BAR */}
+        <div className="grid grid-cols-3 gap-3 no-print">
+          <div className="bg-zinc-900 border border-zinc-850 p-3 rounded-xl">
+            <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-extrabold block">Agendados</span>
+            <span className="text-lg font-black text-blue-400 font-mono mt-0.5 block">{pipelineMetrics.scheduled}</span>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-850 p-3 rounded-xl">
+            <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-extrabold block">Em Produção</span>
+            <span className="text-lg font-black text-amber-400 font-mono mt-0.5 block">{pipelineMetrics.inProduction}</span>
+          </div>
+          <div className="bg-zinc-900 border border-zinc-850 p-3 rounded-xl">
+            <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-extrabold block">Prontos</span>
+            <span className="text-lg font-black text-purple-400 font-mono mt-0.5 block">{pipelineMetrics.ready}</span>
+          </div>
+        </div>
+
+        {forgottenCount > 0 && (
+          <div className="bg-red-950/20 border border-red-800/50 p-4 rounded-xl flex items-center justify-between shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <span className="text-xl">⚠️</span>
+              <div>
+                <h4 className="text-xs font-bold text-red-400">Alerta de Encomendas Esquecidas!</h4>
+                <p className="text-[10px] text-zinc-400 mt-0.5">Detectamos {forgottenCount} {forgottenCount === 1 ? 'pedido pendente há mais' : 'pedidos pendentes há mais'} de 5 dias da data de retirada.</p>
+              </div>
+            </div>
+            <span className="text-[9.5px] font-black uppercase text-red-400 bg-red-900/15 border border-red-800/30 px-2 py-1 rounded-md animate-pulse">
+              Prioridade
+            </span>
+          </div>
+        )}
+
+        {/* Category Toggles - Dual state filter buttons */}
+        <div className="flex gap-2 bg-zinc-900/50 p-1 border border-zinc-850 rounded-xl">
+          <button 
+            type="button"
+            onClick={() => {
+              setCategory('Pendentes');
+              setSelectedSaleId(null);
+            }}
+            className={`flex-1 py-3 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              category === 'Pendentes' 
+                ? 'bg-brand-pink text-black font-bold shadow-xs' 
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <span>📦</span> Pendentes de Entrega ({pendingSales.length})
+          </button>
+          <button 
+            type="button"
+            onClick={() => {
+              setCategory('Concluidos');
+              setSelectedSaleId(null);
+            }}
+            className={`flex-1 py-3 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+              category === 'Concluidos' 
+                ? 'bg-emerald-600 text-white font-bold shadow-xs' 
+                : 'text-zinc-400 hover:text-zinc-200'
+            }`}
+          >
+            <span>✅</span> Pedidos Concluídos ({concludedSales.length})
+          </button>
+        </div>
+
+        {/* Dynamic Search bar optimized for Pedidos/Telefones */}
+        <div className="bg-zinc-900 rounded-2xl border border-zinc-800/80 p-5 space-y-4 shadow-xs">
+          <div className="relative">
+            <span className="absolute left-3.5 top-3 text-zinc-450">
+              <Search className="h-4 w-4" />
+            </span>
+            <input
+              type="text"
+              placeholder="Pesquisar por número do pedido (#), telefone ou cliente..."
+              value={deliverySearchTerm}
+              onChange={(e) => setDeliverySearchTerm(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 placeholder-zinc-600 text-xs font-sans transition-colors"
+            />
+          </div>
+
+          {/* List display */}
+          <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-1">
+            {filteredList.length === 0 ? (
+              <div className="py-12 text-center text-zinc-500 border border-dashed border-zinc-850 rounded-xl bg-black/10">
+                <p className="text-sm font-medium">Nenhum pedido encontrado</p>
+                <p className="text-xs text-zinc-650 mt-1">
+                  Certifique-se de digitar o número do pedido ou telefone corretamente.
+                </p>
+              </div>
+            ) : (
+              filteredList.map((sale) => {
+                const isSelected = selectedSaleId === sale.id;
+                const outstandingAmt = sale.valorFaltante !== undefined ? sale.valorFaltante : 0;
+                
+                return (
+                  <button
+                    key={sale.id}
+                    type="button"
+                    onClick={() => {
+                      handleSelectDeliverySale(sale.id);
+                    }}
+                    className={`w-full text-left p-4 rounded-xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer ${
+                      isSelected
+                        ? 'bg-brand-pink/10 border-brand-pink text-zinc-100'
+                        : 'bg-black border-zinc-850 hover:border-zinc-750 text-zinc-300'
+                    }`}
+                  >
+                    <div className="space-y-1.5 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-zinc-150 text-sm truncate">{sale.cliente}</span>
+                        {sale.numeroPedido && (
+                          <span className="bg-zinc-800 font-bold border border-zinc-750 text-brand-pink font-mono text-[10px] px-1.5 py-0.5 rounded leading-none">
+                            #{sale.numeroPedido}
+                          </span>
+                        )}
+                        {!sale.numeroPedido && (
+                          <span className="bg-zinc-900 border border-zinc-850 text-zinc-400 font-mono text-[9px] px-1 py-0.5 rounded">
+                            Avulso
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-4 text-[11px] text-zinc-450">
+                        {sale.telefoneCliente && (
+                          <span className="flex items-center gap-1 font-mono">
+                            <Phone className="h-3 w-3 text-zinc-500" />
+                            {sale.telefoneCliente}
+                          </span>
+                        )}
+                        <span className="text-zinc-500">
+                          {new Date(sale.data).toLocaleDateString('pt-BR')}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-zinc-400 truncate">
+                        Produto: <span className="text-zinc-200 font-medium">{sale.produtoNome} ({sale.quantidade}x)</span>
+                      </p>
+
+                      <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                        {sale.dataRetirada && (
+                          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-md flex items-center gap-1 font-semibold ${
+                            isForgottenSale(sale)
+                              ? 'bg-red-500/15 text-red-400 border border-red-500/35 animate-pulse-slow'
+                              : 'bg-zinc-900 border border-zinc-800 text-amber-500'
+                          }`}>
+                            📅 Retirada: {new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}
+                            {isForgottenSale(sale) && ' (ESQUECIDO!)'}
+                          </span>
+                        )}
+
+                        {sale.statusProducao && (
+                          <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded border ${
+                            sale.statusProducao === 'Agendado' ? 'bg-blue-900/10 text-blue-400 border-blue-900/20' :
+                            sale.statusProducao === 'Em Produção' ? 'bg-amber-900/10 text-amber-400 border-amber-900/20' :
+                            sale.statusProducao === 'Pronto para Retirada' ? 'bg-purple-900/10 text-purple-400 border-purple-900/20' :
+                            'bg-emerald-900/10 text-emerald-400 border-emerald-900/20'
+                          }`}>
+                            {sale.statusProducao === 'Agendado' ? '📅 Agendado' :
+                             sale.statusProducao === 'Em Produção' ? '🔨 Produção' :
+                             sale.statusProducao === 'Pronto para Retirada' ? '✨ Pronto' :
+                             '🤝 Entregue'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-right flex flex-col justify-center sm:items-end self-start sm:self-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-850 sm:pl-4">
+                      <div className="text-xs text-zinc-500 uppercase select-none text-[10px]">Total: R$ {sale.total.toFixed(2)}</div>
+                      {outstandingAmt > 0 ? (
+                        <div className="text-xs font-bold text-red-400 mt-1 font-mono">
+                          Falta: R$ {outstandingAmt.toFixed(2)}
+                        </div>
+                      ) : (
+                        <div className="text-xs font-bold text-emerald-400 mt-1 flex items-center gap-1">
+                          <Check className="h-3.5 w-3.5 stroke-[3px]" /> Concluído
+                        </div>
+                      )}
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+      </div>
+
+      {/* RIGHT COLUMN: Action panel / Thermal design printing (5 cols) */}
+      <div ref={deliveryReceiptRef} className="lg:col-span-5 space-y-6 scroll-mt-6">
+        
+        {successMessage && (
+          <div className="bg-emerald-950/80 border border-emerald-800 rounded-xl p-4 text-emerald-200 text-xs font-medium text-center shadow-lg flex items-center gap-2 justify-center no-print">
+            <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400 animate-bounce" />
+            <span>{successMessage}</span>
+          </div>
+        )}
+
+        {selectedSale ? (
+          <div className="space-y-6">
+            
+            {/* Forgotten Order Warning Alert */}
+            {isForgottenSale(selectedSale) && (
+              <div className="bg-red-950/25 border border-red-800/40 rounded-xl p-4 mr-0.5 shadow-md flex items-start gap-2.5 text-red-200 text-xs animate-fade-in no-print">
+                <span className="text-xl shrink-0 select-none">⚠️</span>
+                <div className="space-y-1">
+                  <h4 className="font-extrabold text-red-300 uppercase text-[10.5px] tracking-wider">Alerta: Pedido Esquecido!</h4>
+                  <p className="text-red-300/80 leading-relaxed text-[11px]">
+                    Este pedido passou de <strong className="text-white">5 dias</strong> após a data de retirada cadastrada de ({selectedSale.dataRetirada ? new Date(selectedSale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR') : ''}).
+                  </p>
+                  <p className="text-zinc-400 text-[10px] leading-relaxed">
+                    Contate o cliente no telefone <strong className="text-zinc-200 font-mono">{selectedSale.telefoneCliente || 'Não cadastrado'}</strong>.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Interactive Ficha de Entrega (Only for pending categories, or we display finished thermal) */}
+            {isSalePending(selectedSale) ? (
+              <div className="bg-zinc-900 rounded-2xl border border-zinc-800/80 p-6 shadow-md no-print space-y-5">
+                <div className="border-b border-zinc-800 pb-3 flex items-center gap-2">
+                  <div className="p-1 text-red-400">
+                    <Clock className="h-4.5 w-4.5 animate-pulse" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-zinc-100 text-sm">Ficha de Liberação e Entrega</h3>
+                    <p className="text-[10px] text-zinc-550">Resolva obrigações de caixa e registre a entrega</p>
+                  </div>
+                </div>
+
+                <div className="space-y-3.5">
+                  <div className="bg-black/60 border border-zinc-850 p-4 rounded-xl space-y-2">
+                    <div className="flex justify-between text-xs text-zinc-450 border-b border-zinc-800 pb-1.5 leading-relaxed">
+                      <span className="uppercase text-[10px] text-zinc-500 font-bold">Cliente</span>
+                      <span className="text-zinc-200 font-semibold">{selectedSale.cliente}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-zinc-450 pt-0.5">
+                      <span className="font-bold text-[10px] uppercase text-zinc-500">Valor Total</span>
+                      <span className="font-semibold text-zinc-350 font-mono">R$ {selectedSale.total.toFixed(2)}</span>
+                    </div>
+                    <div className="flex justify-between text-xs text-zinc-450">
+                      <span className="font-bold text-[10px] uppercase text-zinc-500">Valor Pago Pago Antecipado</span>
+                      <span className="font-semibold text-emerald-500 font-mono">R$ {(selectedSale.valorPago ?? 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* LARGE BALANCE HIGHLIGHT */}
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-4 text-center">
+                    <p className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider select-none">
+                      Valor a Pagar no Ato da Entrega
+                    </p>
+                    <p className="text-3xl font-extrabold text-red-400 font-mono mt-1">
+                      R$ {((selectedSale.valorFaltante !== undefined ? selectedSale.valorFaltante : 0)).toFixed(2)}
+                    </p>
+                  </div>
+
+                  {/* INTERACTIVE PRODUCTION FLOW STATUS STEPPER */}
+                  <div className="space-y-2 bg-black/45 border border-zinc-850 p-4 rounded-xl no-print">
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5 select-none text-brand-pink">
+                        🔨 FLUXO DE PRODUÇÃO INTERNA (STATUS)
+                      </span>
+                      <span className="text-[9px] font-mono text-zinc-500">
+                        Clique para alterar o status
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1 pt-1 bg-zinc-950 p-1 rounded-lg">
+                      {(['Agendado', 'Em Produção', 'Pronto para Retirada', 'Entregue'] as const).map((st) => {
+                        const isCurrent = (selectedSale.statusProducao || 'Agendado') === st;
+                        return (
+                          <button
+                            key={st}
+                            type="button"
+                            onClick={() => {
+                              const updated: Sale = {
+                                ...selectedSale,
+                                statusProducao: st,
+                                ...(st === 'Entregue' ? { status: 'Concluído', valorFaltante: 0, valorPago: selectedSale.total } : {})
+                              };
+                              onUpdateSale(updated);
+                            }}
+                            className={`py-2 px-0.5 rounded-md text-[9px] font-bold text-center transition-all cursor-pointer truncate ${
+                              isCurrent
+                                ? 'bg-brand-pink text-black'
+                                : 'text-zinc-500 hover:text-zinc-350 hover:bg-zinc-900'
+                            }`}
+                            title={st}
+                          >
+                            {st === 'Agendado' ? '📅 Agendar' :
+                             st === 'Em Produção' ? '🔧 Produzir' :
+                             st === 'Pronto para Retirada' ? '✨ Pronto' :
+                             '🤝 Entregue'}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* INTERACTIVE CUSTOMER NOTES OR INSTRUCTIONS */}
+                  <div className="space-y-1.5 bg-zinc-950/45 border border-zinc-850 p-4 rounded-xl no-print">
+                    <label className="block text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider select-none text-brand-pink">
+                      📝 INSTRUÇÕES OU OBSERVAÇÕES DE RETIRADA/ENTREGA
+                    </label>
+                    <textarea
+                      placeholder="Ex: Entregar após as 14h, embalar para presente, ou deixar na portaria..."
+                      value={selectedSale.observacoesDesign || ''}
+                      onChange={(e) => {
+                        const updated: Sale = {
+                          ...selectedSale,
+                          observacoesDesign: e.target.value
+                        };
+                        onUpdateSale(updated);
+                      }}
+                      className="w-full min-h-[55px] max-h-[140px] p-2 bg-black border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-brand-pink"
+                    />
+                  </div>
+                  
+                  <form onSubmit={handleConfirmDeliveryAndPayment} className="space-y-4">
+                    {/* Method selector */}
+                    <div className="space-y-2">
+                      <label className="block text-xs font-semibold text-zinc-400">
+                        Forma de Pagamento da Entrega: <span className="text-brand-pink font-bold">*</span>
+                      </label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {paymentMethods.map((m) => {
+                          const isSelected = deliveryPaymentMethod === m.value;
+                          return (
+                            <button
+                              key={m.value}
+                              type="button"
+                              onClick={() => setDeliveryPaymentMethod(m.value)}
+                              className={`py-2 px-1.5 rounded-lg text-center border transition-all text-[10px] flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                                isSelected
+                                  ? 'border-brand-pink bg-brand-pink/15 text-brand-pink font-bold shadow-xs'
+                                  : 'border-zinc-850 text-zinc-450 hover:bg-zinc-950/40'
+                              }`}
+                            >
+                              <span className="text-sm">{m.icon}</span>
+                              <span className="whitespace-nowrap">{m.value}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Submit Confirmation button */}
+                    <button
+                      type="submit"
+                      className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md transition-colors flex items-center justify-center gap-1.5 cursor-pointer transform active:scale-98"
+                    >
+                      <span>🚚</span>
+                      <span>Registrar Entrega e Receber Saldo</span>
+                    </button>
+                  </form>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center gap-3 shadow-xs no-print">
+                <div className="h-9 w-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm font-bold animate-pulse">
+                  ✓
+                </div>
+                <div>
+                  <h4 className="font-bold text-zinc-200 text-xs">Pedido Concluído e Pago</h4>
+                  <p className="text-[10px] text-emerald-400 font-medium">Histórico financeiro resolvido integralmente.</p>
+                </div>
+              </div>
+            )}
+
+            {/* Always display thermal template printable receipt below / instead */}
+            <div className="space-y-2">
+              <span className="text-[10px] text-zinc-550 font-bold uppercase block px-1 no-print">Visualização do Recibo Imprimível</span>
+              <Receipt sale={selectedSale} storeInfo={storeInfo} onUpdateSale={onUpdateSale} />
+            </div>
+
+          </div>
+        ) : (
+          <div className="bg-zinc-900 rounded-2xl border border-zinc-850 border-dashed p-10 text-center text-zinc-500 min-h-[400px] flex flex-col items-center justify-center">
+            <Truck className="h-10 w-10 text-zinc-750 stroke-1 mb-3" />
+            <p className="font-semibold text-zinc-400 text-xs">Nenhum Pedido Selecionado</p>
+            <p className="text-[10px] text-zinc-600 max-w-[200px] mx-auto mt-1 leading-normal">
+              Selecione um pedido pendente ou concluído na listagem ao lado para gerenciar sua entrega ou re-imprimir o recibo finalizado.
+            </p>
+          </div>
+        )}
+
+      </div>
+
+    </div>
+  );
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Oxente Festeje - Gestão",
+  "description": "Painel completo de controle de brindes, gestão de estoque e emissão de recibos térmicos otimizados para a marca Oxente Festeje.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

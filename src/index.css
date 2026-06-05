@@ -1,0 +1,84 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Outfit", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-brand-pink: #c59218; /* Elegant Gold */
+  --color-brand-pink-hover: #a3740e; /* Rich Darker Gold */
+  --color-brand-light: #fbf7ee; /* Soft Warm Gold Tint Cream */
+  --color-brand-dark: #4a2e16; /* Warm Leather/Sertão Brown */
+
+  /* Map pink utility colors to gorgeous gold & brown shades */
+  --color-pink-50: #fbf7ee;   /* Very light soft cream / warm sand */
+  --color-pink-100: #f4ebd4;  /* Cream border / light gold outline */
+  --color-pink-200: #e9d5a6;  /* Soft golden sand */
+  --color-pink-300: #d6b876;  /* Mid beige/gold accent */
+  --color-pink-400: #c59f4d;  /* Golden ochre */
+  --color-pink-500: #c59218;  /* Primary Gold */
+  --color-pink-600: #a3740e;  /* Rich Gold Hover / Deeper gold */
+  --color-pink-700: #825908;  /* Deep bronze */
+  --color-pink-800: #5c3d21;  /* Rich leather brown */
+  --color-pink-900: #4a2e16;  /* Deepest warm sienna brown */
+
+  /* Map rose utility colors to the same gorgeous gold & brown shades */
+  --color-rose-50: #fbf7ee;
+  --color-rose-100: #f4ebd4;
+  --color-rose-200: #e9d5a6;
+  --color-rose-300: #d6b876;
+  --color-rose-400: #c59f4d;
+  --color-rose-500: #c59218;
+  --color-rose-600: #a3740e;
+  --color-rose-700: #825908;
+  --color-rose-800: #5c3d21;
+  --color-rose-900: #4a2e16;
+}
+
+/* Custom styles for receipt printing */
+@media print {
+  /* Hide all elements on the page except the printable-receipt class */
+  body * {
+    visibility: hidden;
+  }
+  
+  #printable-receipt, #printable-receipt * {
+    visibility: visible;
+  }
+  
+  #printable-receipt {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100% !important;
+    max-width: 80mm !important; /* Width for standard thermal receipt printers */
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
+  
+  /* Remove page margins / headers / footers provided by browser */
+  @page {
+    margin: 4mm;
+    size: auto;
+  }
+}
+
+/* Elegant custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #f4ebd4;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c59218;
+}
+

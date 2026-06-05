@@ -1,0 +1,322 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useMemo } from 'react';
+import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box } from 'lucide-react';
+import { Product } from '../types';
+
+interface StockManagerProps {
+  products: Product[];
+  onUpdateStock: (id: string, newStock: number, isInfinite?: boolean) => void;
+  onDeleteProduct: (id: string) => void;
+}
+
+export function StockManager({ products, onUpdateStock, onDeleteProduct }: StockManagerProps) {
+  const [searchTerm, setSearchTerm] = useState('');
+  const [productToDelete, setProductToDelete] = useState<string | null>(null);
+
+  const stockMetrics = useMemo(() => {
+    let totalStockVolume = 0;
+    let totalStockCostValue = 0;
+    let totalStockRetailValue = 0;
+    let outOfStockCount = 0;
+    let lowStockCount = 0;
+
+    products.forEach(p => {
+      if (p.estoqueInfinito) return;
+      totalStockVolume += p.estoque;
+      const c = p.precoCusto !== undefined ? p.precoCusto : (p.preco * 0.6);
+      totalStockCostValue += p.estoque * c;
+      totalStockRetailValue += p.estoque * p.preco;
+
+      if (p.estoque === 0) {
+        outOfStockCount++;
+      } else if (p.estoque <= 5) {
+        lowStockCount++;
+      }
+    });
+
+    const expectedMarkup = totalStockCostValue > 0 ? ((totalStockRetailValue - totalStockCostValue) / totalStockCostValue) * 100 : 0;
+
+    return {
+      totalStockVolume,
+      totalStockCostValue,
+      totalStockRetailValue,
+      outOfStockCount,
+      lowStockCount,
+      expectedMarkup
+    };
+  }, [products]);
+
+  const filteredProducts = products.filter(product =>
+    product.nome.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const handleStockChange = (id: string, currentStock: number, value: string) => {
+    const parsed = parseInt(value, 10);
+    if (!isNaN(parsed) && parsed >= 0) {
+      onUpdateStock(id, parsed);
+    } else if (value === '') {
+      onUpdateStock(id, 0);
+    }
+  };
+
+  const handleIncrement = (id: string, currentStock: number) => {
+    onUpdateStock(id, currentStock + 1);
+  };
+
+  const handleDecrement = (id: string, currentStock: number) => {
+    if (currentStock > 0) {
+      onUpdateStock(id, currentStock - 1);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+
+      {/* 📊 STOCK ANALYTICS INDICATORS BAR */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        
+        {/* Total Pieces */}
+        <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
+          <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Volume total no físico</span>
+          <div className="flex items-baseline gap-2 mt-1.5">
+            <span className="text-2xl font-black text-zinc-150 font-mono">{stockMetrics.totalStockVolume}</span>
+            <span className="text-xs text-zinc-450 font-medium">unidades</span>
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1">Exclui brindes com estoque ilimitado</p>
+        </div>
+
+        {/* Investment valuation cost estimation */}
+        <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
+          <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Custo de Aquisição Estimado</span>
+          <div className="flex items-baseline gap-2 mt-1.5">
+            <span className="text-2xl font-black text-brand-pink font-mono">R$ {stockMetrics.totalStockCostValue.toFixed(2)}</span>
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1">Estimado com base em custo ou margem média</p>
+        </div>
+
+        {/* Sales retail revenue potential value */}
+        <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
+          <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Faturamento Estimado Potencial</span>
+          <div className="flex items-baseline gap-2 mt-1.5">
+            <span className="text-2xl font-black text-emerald-450 font-mono">R$ {stockMetrics.totalStockRetailValue.toFixed(2)}</span>
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1">Lucro bruto: +{stockMetrics.expectedMarkup.toFixed(0)}% de valor agregado</p>
+        </div>
+
+        {/* Critical low alert warnings */}
+        <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
+          <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Alertas Críticos de Estoque</span>
+          <div className="flex items-center gap-1.5 mt-2">
+            {stockMetrics.outOfStockCount > 0 ? (
+              <span className="text-xs font-bold font-mono px-2 py-0.5 bg-red-950 text-red-400 border border-red-900/40 rounded flex items-center gap-1">
+                {stockMetrics.outOfStockCount} Esgotado
+              </span>
+            ) : null}
+            {stockMetrics.lowStockCount > 0 ? (
+              <span className="text-xs font-bold font-mono px-2 py-0.5 bg-amber-950 text-amber-400 border border-amber-900/40 rounded flex items-center gap-1">
+                {stockMetrics.lowStockCount} Crítico
+              </span>
+            ) : null}
+            {stockMetrics.outOfStockCount === 0 && stockMetrics.lowStockCount === 0 && (
+              <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                ✔️ Todos niveis ótimos
+              </span>
+            )}
+          </div>
+          <p className="text-[10px] text-zinc-500 mt-1.5">Produtos com estoque menor que 5!</p>
+        </div>
+
+      </div>
+      
+      {/* Search and Filters Bar */}
+      <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-zinc-900 rounded-xl border border-zinc-800 p-4 shadow-md">
+        <div className="relative w-full sm:max-w-md">
+          <span className="absolute left-3.5 top-3 text-zinc-500">
+            <Search className="h-4 w-4" />
+          </span>
+          <input
+            type="text"
+            placeholder="Pesquisar por nome de brinde ou brinco..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-sm"
+          />
+        </div>
+        <div className="text-xs font-semibold text-zinc-400 shrink-0">
+          Mostrando {filteredProducts.length} de {products.length} itens cadastrados
+        </div>
+      </div>
+
+      {/* Grid of Products */}
+      {filteredProducts.length === 0 ? (
+        <div className="bg-zinc-900 rounded-2xl border border-zinc-800 p-12 text-center shadow-lg">
+          <div className="p-4 bg-brand-pink/10 border border-brand-pink/20 rounded-full text-brand-pink inline-block mb-4">
+            <PackageOpen className="h-10 w-10" />
+          </div>
+          <h3 className="text-lg font-semibold text-zinc-105 mb-1">Nenhum brinde encontrado</h3>
+          <p className="text-sm text-zinc-450 max-w-sm mx-auto">
+            {searchTerm 
+              ? 'Nenhum item corresponde à sua pesquisa. Tente buscar por outros termos.'
+              : 'Comece adicionando produtos na aba de Cadastro para montar seu estoque.'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+          {filteredProducts.map((p) => {
+            const isDeleting = productToDelete === p.id;
+            const isOutOfStock = !p.estoqueInfinito && p.estoque === 0;
+            const isLowStock = !p.estoqueInfinito && p.estoque > 0 && p.estoque <= 5;
+
+            return (
+              <div 
+                key={p.id} 
+                className={`bg-zinc-900 rounded-xl border transition-all overflow-hidden shadow-sm hover:shadow-lg ${
+                  isOutOfStock 
+                    ? 'border-zinc-800/80 bg-zinc-950/40' 
+                    : isDeleting 
+                      ? 'border-red-900 ring-2 ring-red-950/50'
+                      : 'border-zinc-850'
+                }`}
+              >
+                {/* Product Thumbnail Banner */}
+                <div className="aspect-square w-full bg-black/30 relative overflow-hidden flex items-center justify-center p-4 border-b border-zinc-800/60">
+                  {p.imagemBase64 ? (
+                    <img 
+                       src={p.imagemBase64} 
+                      alt={p.nome} 
+                      className="max-h-full max-w-full object-contain hover:scale-105 transition-transform duration-300 pointer-events-none"
+                    />
+                  ) : (
+                    <div className="flex flex-col items-center justify-center text-zinc-700">
+                      <Box className="h-16 w-16 stroke-1 mb-2" />
+                      <span className="text-xs uppercase font-bold tracking-wider opacity-60">Sem Foto</span>
+                    </div>
+                  )}
+
+                  {/* Badges */}
+                  <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                    {p.estoqueInfinito ? (
+                      <span className="bg-brand-pink text-black text-[10px] font-extrabold px-2 py-1 rounded-md shadow-xs uppercase tracking-wider">
+                        Infinito ∞
+                      </span>
+                    ) : isOutOfStock ? (
+                      <span className="bg-red-650 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-xs uppercase tracking-wider">
+                        Esgotado
+                      </span>
+                    ) : isLowStock ? (
+                      <span className="bg-amber-600 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-xs uppercase tracking-wider animate-pulse">
+                        Estoque Baixo
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="absolute bottom-3 right-3 bg-zinc-950/90 backdrop-blur-xs border border-zinc-800 px-2.5 py-1 rounded-lg text-xs font-bold text-brand-pink shadow-2xs flex items-center gap-1">
+                    <Tag className="h-3.5 w-3.5 shrink-0" />
+                    R$ {p.preco.toFixed(2)}
+                  </div>
+                </div>
+
+                {/* Info and Actions Area */}
+                <div className="p-5 space-y-4">
+                  <div>
+                    <h4 className="font-display font-semibold text-zinc-100 text-base line-clamp-1 hover:text-brand-pink transition-colors">
+                      {p.nome}
+                    </h4>
+                    <p className="text-xs text-zinc-450 mt-1">Preço unitário: R$ {p.preco.toFixed(2)}</p>
+                  </div>
+
+                  {/* Quantity Editing Control */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-semibold text-zinc-400 block">Estoque Disponível:</label>
+                      <label className="flex items-center gap-1 text-[11px] text-brand-pink font-semibold cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={!!p.estoqueInfinito}
+                          onChange={(e) => onUpdateStock(p.id, p.estoque, e.target.checked)}
+                          className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-3 w-3 cursor-pointer bg-black"
+                        />
+                        <span>Estoque Infinito</span>
+                      </label>
+                    </div>
+                    <div className="flex items-center">
+                      <button
+                        onClick={() => handleDecrement(p.id, p.estoque)}
+                        disabled={p.estoqueInfinito || p.estoque <= 0}
+                        className="p-2 border border-zinc-800 bg-black rounded-l-lg hover:bg-zinc-900 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 font-bold active:scale-95 disabled:opacity-40 select-none cursor-pointer"
+                        title="Remover 1 item"
+                      >
+                        <Minus className="h-4 w-4" />
+                      </button>
+                      {p.estoqueInfinito ? (
+                        <div className="w-full text-center py-1.5 px-2 bg-black border-y border-zinc-800 text-xs font-extrabold text-brand-pink">
+                          ∞ Sem limites
+                        </div>
+                      ) : (
+                        <input
+                          type="number"
+                          min="0"
+                          value={p.estoque}
+                          onChange={(e) => handleStockChange(p.id, p.estoque, e.target.value)}
+                          className="w-full text-center py-1.5 px-2 bg-black border-y border-zinc-800 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-sm font-semibold text-zinc-100"
+                        />
+                      )}
+                      <button
+                        onClick={() => handleIncrement(p.id, p.estoque)}
+                        disabled={p.estoqueInfinito}
+                        className="p-2 border border-zinc-800 bg-black rounded-r-lg hover:bg-zinc-900 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 font-bold active:scale-95 select-none cursor-pointer disabled:opacity-40"
+                        title="Adicionar 1 item"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Delete or Confirmation Actions */}
+                  {!isDeleting ? (
+                    <button
+                      onClick={() => setProductToDelete(p.id)}
+                      className="w-full py-2 hover:bg-red-950/20 text-red-450 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 border border-dashed border-red-900/30 focus:border-red-500 transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      <span>Excluir Produto</span>
+                    </button>
+                  ) : (
+                    <div className="bg-red-950/20 border border-red-900/40 rounded-xl p-3 space-y-2.5 animate-fade-in">
+                      <div className="flex items-start gap-1.5 text-red-300 text-[11px] leading-snug">
+                        <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                        <span>Tem certeza que deseja remover este produto? Isso excluirá seus registros de estoque.</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            onDeleteProduct(p.id);
+                            setProductToDelete(null);
+                          }}
+                          className="flex-1 py-1 px-2.5 bg-red-650 hover:bg-red-700 text-white rounded-md text-xs font-semibold shadow-xs select-none cursor-pointer"
+                        >
+                          Confirmar
+                        </button>
+                        <button
+                          onClick={() => setProductToDelete(null)}
+                          className="flex-1 py-1 px-2.5 bg-black border border-zinc-800 rounded-md text-zinc-400 text-xs font-semibold hover:bg-zinc-900 cursor-pointer"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}

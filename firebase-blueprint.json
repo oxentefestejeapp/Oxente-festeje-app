@@ -1,0 +1,45 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User account registration and approval status",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique Firebase Auth UID"
+        },
+        "name": {
+          "type": "string",
+          "description": "The user's display name"
+        },
+        "email": {
+          "type": "string",
+          "description": "The user's email address"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["pending", "approved", "rejected"],
+          "description": "Approval status"
+        },
+        "createdAt": {
+          "type": "object",
+          "format": "google.protobuf.Timestamp",
+          "description": "Date of registration"
+        },
+        "updatedAt": {
+          "type": "object",
+          "format": "google.protobuf.Timestamp",
+          "description": "Date of last status change"
+        }
+      },
+      "required": ["id", "name", "email", "status", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "users/{userId}": {
+      "schema": "User",
+      "description": "Collection of registered users and their approval statuses"
+    }
+  }
+}
