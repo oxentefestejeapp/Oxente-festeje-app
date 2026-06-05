@@ -20,9 +20,7 @@ export function PendingApproval({ userName, userEmail, status }: PendingApproval
   const handleLogout = async () => {
     try {
       localStorage.removeItem('oxente_local_bypass');
-      if (auth && hasConfig) {
-        await signOut(auth);
-      }
+      localStorage.removeItem('oxente_custom_user');
       window.location.reload();
     } catch (err) {
       console.error('Erro ao sair:', err);
