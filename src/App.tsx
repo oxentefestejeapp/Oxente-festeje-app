@@ -28,6 +28,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { auth, db, hasConfig } from './lib/firebase';
+import { dbSupabase } from './lib/supabase';
 
 import { Header } from './components/Header';
 import { ProductForm } from './components/ProductForm';
@@ -59,6 +60,10 @@ export default function App() {
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(defaultStoreInfo);
   const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web'>('vendas');
   const [preselectedSaleId, setPreselectedSaleId] = useState<string | null>(null);
+
+  // 3. Supabase Sync Status State
+  const [supabaseSyncStatus, setSupabaseSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error' | 'tables_missing'>('idle');
+  const [supabaseErrorMsg, setSupabaseErrorMsg] = useState<string | null>(null);
 
   const [globalMuted, setGlobalMuted] = useState(() => getIsAudioMuted());
 
@@ -236,31 +241,101 @@ export default function App() {
     return () => clearInterval(interval);
   }, [firebaseUser]);
 
-  // Load state on mount
+  // Load state on mount (with SWR pull from Supabase Cloud Database)
   useEffect(() => {
+    // 1. Initial fast local state loading from Cache
     const cachedProducts = localStorage.getItem('oxente_products');
     const cachedSales = localStorage.getItem('oxente_sales');
     const cachedStoreInfo = localStorage.getItem('oxente_store_info');
 
+    let loadedProducts = defaultProducts;
+    let loadedSales = defaultSales;
+    let loadedStoreInfo = defaultStoreInfo;
+
     if (cachedProducts) {
-      setProducts(JSON.parse(cachedProducts));
+      loadedProducts = JSON.parse(cachedProducts);
+      setProducts(loadedProducts);
     } else {
       setProducts(defaultProducts);
       localStorage.setItem('oxente_products', JSON.stringify(defaultProducts));
     }
 
     if (cachedSales) {
-      setSales(JSON.parse(cachedSales));
+      loadedSales = JSON.parse(cachedSales);
+      setSales(loadedSales);
     } else {
       setSales(defaultSales);
       localStorage.setItem('oxente_sales', JSON.stringify(defaultSales));
     }
 
     if (cachedStoreInfo) {
-      setStoreInfo(JSON.parse(cachedStoreInfo));
+      loadedStoreInfo = JSON.parse(cachedStoreInfo);
+      setStoreInfo(loadedStoreInfo);
     } else {
       setStoreInfo(defaultStoreInfo);
+      localStorage.setItem('oxente_store_info', JSON.stringify(defaultStoreInfo));
     }
+
+    // 2. Asynchronous remote cloud pull using SWR (Stale-While-Revalidate)
+    const syncDataWithSupabase = async () => {
+      setSupabaseSyncStatus('syncing');
+      try {
+        const testRes = await dbSupabase.testConnection();
+        if (!testRes.success) {
+          setSupabaseSyncStatus('error');
+          setSupabaseErrorMsg(testRes.error || 'Erro ao conectar no Supabase.');
+          return;
+        }
+
+        if (testRes.tablesConfigured === false) {
+          setSupabaseSyncStatus('tables_missing');
+          setSupabaseErrorMsg(testRes.error || 'Tabelas do aplicativo ausentes no Supabase.');
+          return;
+        }
+
+        // Parallel load of remote data
+        const [dbProds, dbSaless, dbStore] = await Promise.all([
+          dbSupabase.fetchProducts(),
+          dbSupabase.fetchSales(),
+          dbSupabase.fetchStoreInfo()
+        ]);
+
+        // Sync Products
+        if (dbProds && dbProds.length > 0) {
+          setProducts(dbProds);
+          localStorage.setItem('oxente_products', JSON.stringify(dbProds));
+        } else if (dbProds && dbProds.length === 0 && loadedProducts.length > 0) {
+          console.log('Populando produtos locais para o Supabase pela primeira vez...');
+          await Promise.all(loadedProducts.map(p => dbSupabase.saveProduct(p)));
+        }
+
+        // Sync Sales
+        if (dbSaless && dbSaless.length > 0) {
+          setSales(dbSaless);
+          localStorage.setItem('oxente_sales', JSON.stringify(dbSaless));
+        } else if (dbSaless && dbSaless.length === 0 && loadedSales.length > 0) {
+          console.log('Populando vendas locais para o Supabase pela primeira vez...');
+          await Promise.all(loadedSales.map(s => dbSupabase.saveSale(s)));
+        }
+
+        // Sync Store Info
+        if (dbStore) {
+          setStoreInfo(dbStore);
+          localStorage.setItem('oxente_store_info', JSON.stringify(dbStore));
+        } else if (loadedStoreInfo) {
+          await dbSupabase.saveStoreInfo(loadedStoreInfo);
+        }
+
+        setSupabaseSyncStatus('synced');
+        setSupabaseErrorMsg(null);
+      } catch (err: any) {
+        console.error('Falha na sincronização automatizada com Supabase:', err);
+        setSupabaseSyncStatus('error');
+        setSupabaseErrorMsg(err.message || String(err));
+      }
+    };
+
+    syncDataWithSupabase();
   }, []);
 
   // Guarantee that non-admin accounts are immediately kicked back from restricted/admin tabs
@@ -282,53 +357,114 @@ export default function App() {
     localStorage.setItem('oxente_sales', JSON.stringify(updatedSales));
   };
 
-  // State mutation actions
-  const handleAddProduct = (newProduct: Product) => {
+  // State mutation actions with automatic remote DB sync
+  const handleAddProduct = async (newProduct: Product) => {
     const updated = [newProduct, ...products];
     saveProducts(updated);
+    
+    // Background sync to Supabase
+    try {
+      await dbSupabase.saveProduct(newProduct);
+    } catch (e) {
+      console.warn('Erro ao sincronizar novo produto em segundo plano:', e);
+    }
   };
 
-  const handleUpdateStock = (id: string, newStock: number, isInfinite?: boolean) => {
+  const handleUpdateStock = async (id: string, newStock: number, isInfinite?: boolean) => {
+    let itemToSync: Product | null = null;
     const updated = products.map((p) => {
       if (p.id === id) {
-        return { 
+        itemToSync = { 
           ...p, 
           estoque: newStock, 
           estoqueInfinito: isInfinite !== undefined ? (isInfinite ? true : undefined) : p.estoqueInfinito 
         };
+        return itemToSync;
       }
       return p;
     });
     saveProducts(updated);
+
+    // Background sync to Supabase
+    if (itemToSync) {
+      try {
+        await dbSupabase.saveProduct(itemToSync);
+      } catch (e) {
+        console.warn('Erro ao sincronizar estoque em segundo plano:', e);
+      }
+    }
   };
 
-  const handleDeleteProduct = (id: string) => {
+  const handleDeleteProduct = async (id: string) => {
     const updated = products.filter((p) => p.id !== id);
     saveProducts(updated);
+
+    // Background delete in Supabase
+    try {
+      await dbSupabase.deleteProduct(id);
+    } catch (e) {
+      console.warn('Erro ao deletar produto do Supabase:', e);
+    }
   };
 
-  const handleRecordSale = (newSale: Sale) => {
+  const handleRecordSale = async (newSale: Sale) => {
     const updated = [...sales, newSale];
     saveSales(updated);
+
+    // Background save to Supabase
+    try {
+      await dbSupabase.saveSale(newSale);
+    } catch (e) {
+      console.warn('Erro ao sincronizar venda/pedido no Supabase:', e);
+    }
   };
 
-  const handleUpdateSale = (updatedSale: Sale) => {
+  const handleUpdateSale = async (updatedSale: Sale) => {
     const updated = sales.map((s) => (s.id === updatedSale.id ? updatedSale : s));
     saveSales(updated);
+
+    // Background save to Supabase
+    try {
+      await dbSupabase.saveSale(updatedSale);
+    } catch (e) {
+      console.warn('Erro ao sincronizar alteração de venda no Supabase:', e);
+    }
   };
 
-  const handleRestoreBackup = (newProducts: Product[], newSales: Sale[], newStoreInfo: StoreInfo) => {
+  const handleRestoreBackup = async (newProducts: Product[], newSales: Sale[], newStoreInfo: StoreInfo) => {
     setProducts(newProducts);
     setSales(newSales);
     setStoreInfo(newStoreInfo);
     localStorage.setItem('oxente_products', JSON.stringify(newProducts));
     localStorage.setItem('oxente_sales', JSON.stringify(newSales));
     localStorage.setItem('oxente_store_info', JSON.stringify(newStoreInfo));
+
+    // Upload whole dataset securely to Supabase
+    setSupabaseSyncStatus('syncing');
+    try {
+      await Promise.all([
+        ...newProducts.map(p => dbSupabase.saveProduct(p)),
+        ...newSales.map(s => dbSupabase.saveSale(s)),
+        dbSupabase.saveStoreInfo(newStoreInfo)
+      ]);
+      setSupabaseSyncStatus('synced');
+    } catch (err: any) {
+      console.error('Falha de restauração de backup no Supabase:', err);
+      setSupabaseSyncStatus('error');
+      setSupabaseErrorMsg(err.message || 'Erro ao sincronizar backup.');
+    }
   };
 
-  const handleUpdateStoreInfo = (newStoreInfo: StoreInfo) => {
+  const handleUpdateStoreInfo = async (newStoreInfo: StoreInfo) => {
     setStoreInfo(newStoreInfo);
     localStorage.setItem('oxente_store_info', JSON.stringify(newStoreInfo));
+
+    // Async save to Supabase
+    try {
+      await dbSupabase.saveStoreInfo(newStoreInfo);
+    } catch (e) {
+      console.warn('Erro ao atualizar dados da loja no Supabase:', e);
+    }
   };
 
   if (userStatus === 'loading') {
@@ -726,6 +862,8 @@ export default function App() {
                 storeInfo={storeInfo}
                 onRestoreBackup={handleRestoreBackup}
                 onUpdateStoreInfo={handleUpdateStoreInfo}
+                supabaseSyncStatus={supabaseSyncStatus}
+                supabaseErrorMsg={supabaseErrorMsg}
               />
             )}
 

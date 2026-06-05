@@ -26,7 +26,11 @@ import {
   Smartphone,
   Chrome,
   Share2,
-  Sparkles
+  Sparkles,
+  Cloud,
+  Terminal,
+  Copy,
+  CheckCircle
 } from 'lucide-react';
 import { Product, Sale, StoreInfo } from '../types';
 import { 
@@ -40,6 +44,7 @@ import {
   DriveBackupFile 
 } from '../lib/googleDrive';
 import { User } from 'firebase/auth';
+import { getSupabaseConfig, getSupabaseMigrationSQL } from '../lib/supabase';
 
 interface SettingsManagerProps {
   products: Product[];
@@ -47,9 +52,19 @@ interface SettingsManagerProps {
   storeInfo: StoreInfo;
   onRestoreBackup: (products: Product[], sales: Sale[], storeInfo: StoreInfo) => void;
   onUpdateStoreInfo?: (updated: StoreInfo) => void;
+  supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error' | 'tables_missing';
+  supabaseErrorMsg?: string | null;
 }
 
-export function SettingsManager({ products, sales, storeInfo, onRestoreBackup, onUpdateStoreInfo }: SettingsManagerProps) {
+export function SettingsManager({ 
+  products, 
+  sales, 
+  storeInfo, 
+  onRestoreBackup, 
+  onUpdateStoreInfo,
+  supabaseSyncStatus = 'idle',
+  supabaseErrorMsg = null
+}: SettingsManagerProps) {
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [selectedTipId, setSelectedTipId] = useState<number | null>(null);
 
@@ -129,6 +144,40 @@ export function SettingsManager({ products, sales, storeInfo, onRestoreBackup, o
   const [storeEndereco, setStoreEndereco] = useState(storeInfo.endereco || '');
   const [storeTemplate, setStoreTemplate] = useState(storeInfo.whatsappTemplate || '');
   const [saveStoreSuccess, setSaveStoreSuccess] = useState(false);
+
+  // Supabase state handlers and clipboard integration
+  const [supConfig, setSupConfig] = useState(() => getSupabaseConfig());
+  const [supUrl, setSupUrl] = useState(supConfig.url);
+  const [supKey, setSupKey] = useState(supConfig.key);
+  const [dbSuccessMsg, setDbSuccessMsg] = useState<string | null>(null);
+  const [dbErrorMsg, setDbErrorMsg] = useState<string | null>(null);
+  const [copiedMigration, setCopiedMigration] = useState(false);
+
+  const handleSaveSupabaseConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supUrl || !supKey) {
+      setDbErrorMsg('Falta preencher a URL do projeto ou a chave anônima pública.');
+      return;
+    }
+    localStorage.setItem('supabase_url', supUrl.trim());
+    localStorage.setItem('supabase_anon_key', supKey.trim());
+    setDbSuccessMsg('Credenciais do Supabase aplicadas com sucesso! Inicializando conexão com a nuvem...');
+    setDbErrorMsg(null);
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
+  };
+
+  const handleCopyMigrationSQL = () => {
+    try {
+      const sqlText = getSupabaseMigrationSQL();
+      navigator.clipboard.writeText(sqlText);
+      setCopiedMigration(true);
+      setTimeout(() => setCopiedMigration(false), 3000);
+    } catch (e) {
+      console.warn('Erro ao copiar migration SQL:', e);
+    }
+  };
 
   // Sync edit states when storeInfo changes
   useEffect(() => {
@@ -758,6 +807,139 @@ export function SettingsManager({ products, sales, storeInfo, onRestoreBackup, o
             <span>Arquivo de backup baixado com sucesso!</span>
           </div>
         )}
+
+      </div>
+
+      {/* ⚡ SUPABASE DATABASE CONFIGURATION CARD */}
+      <div className="bg-zinc-900 rounded-2xl border border-zinc-800/80 p-6 shadow-md space-y-6">
+        
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-800 pb-4 gap-3">
+          <div className="flex items-center gap-2">
+            <Cloud className="h-5 w-5 text-brand-pink shrink-0 animate-pulse" />
+            <div>
+              <h3 className="font-display font-semibold text-base text-zinc-100">Banco de Dados Supabase (Nuvem)</h3>
+              <p className="text-[10px] text-zinc-450 mt-0.5">Sincronize estoque e vendas em tempo real para hospedar em Hostinger ou localmente</p>
+            </div>
+          </div>
+          
+          {/* Diagnostic Sync Badges */}
+          <div className="shrink-0 self-start sm:self-auto">
+            {supabaseSyncStatus === 'synced' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] rounded-full font-bold bg-emerald-950/45 text-emerald-400 border border-emerald-905/40">
+                <CheckCircle className="h-3 w-3" />
+                Sincronizado
+              </span>
+            )}
+            {supabaseSyncStatus === 'syncing' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] rounded-full font-bold bg-zinc-850 text-brand-pink border border-zinc-800 animate-pulse">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Sincronizando...
+              </span>
+            )}
+            {supabaseSyncStatus === 'tables_missing' && (
+              <span className="inline-flex items-center gap-1 py-1 px-2 text-[10px] rounded-full font-bold bg-amber-950/40 text-amber-302 border border-amber-900/30 animate-pulse">
+                <AlertCircle className="h-3 w-3 text-amber-500" />
+                Tabelas Ausentes
+              </span>
+            )}
+            {supabaseSyncStatus === 'error' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] rounded-full font-bold bg-red-950/45 text-red-400 border border-red-900/40">
+                <AlertCircle className="h-3 w-3" />
+                Erro Conexão
+              </span>
+            )}
+            {supabaseSyncStatus === 'idle' && (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] rounded-full font-bold bg-zinc-800 text-zinc-450 border border-zinc-750">
+                Não Conectado
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Sync feedback panel */}
+        {supabaseErrorMsg && (
+          <div className="p-3.5 bg-red-950/15 border border-red-950/40 rounded-xl text-xs text-red-300 leading-relaxed space-y-1 select-text">
+            <p className="font-bold flex items-center gap-1 text-red-400">
+              <AlertCircle className="h-4.5 w-4.5 text-red-500 shrink-0" />
+              Notificação do Sincronizador:
+            </p>
+            <p className="text-zinc-400 leading-relaxed text-[11px]">{supabaseErrorMsg}</p>
+          </div>
+        )}
+
+        {/* SQL Schema Copy/Migration Instructions block */}
+        <div className="bg-zinc-950 border border-zinc-850 p-4 rounded-xl space-y-2 select-text">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-200">
+              <Terminal className="h-4 w-4 text-brand-pink" />
+              <span>Script de Criação de Tabelas (SQL)</span>
+            </div>
+            <button
+              onClick={handleCopyMigrationSQL}
+              className={`px-3 py-1.5 rounded-lg text-xxs font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
+                copiedMigration 
+                  ? 'bg-emerald-600 text-white' 
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+              }`}
+            >
+              <Copy className="h-3 w-3" />
+              <span>{copiedMigration ? 'Copiado SQL!' : 'Copiar Roteiro SQL'}</span>
+            </button>
+          </div>
+          <p className="text-[10.5px] text-zinc-400 leading-relaxed">
+            Caso as tabelas não tenham sido criadas, abra o painel do seu Supabase, clique em <strong className="text-zinc-200">SQL Editor</strong>, crie uma "New Query", cole o conteúdo do SQL (obtido no botão acima) e clique em <strong className="text-brand-pink">Run</strong>. Isso liberará o armazenamento na nuvem de imediato!
+          </p>
+        </div>
+
+        {/* Credentials Form block */}
+        <form onSubmit={handleSaveSupabaseConfig} className="space-y-4">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">SUPABASE_URL (Projeto)</label>
+              <input
+                type="url"
+                value={supUrl}
+                onChange={(e) => setSupUrl(e.target.value)}
+                placeholder="https://suas-credenciais.supabase.co"
+                className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">SUPABASE_ANON_KEY (Chave Pública Anon)</label>
+              <input
+                type="text"
+                value={supKey}
+                onChange={(e) => setSupKey(e.target.value)}
+                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <button
+              type="submit"
+              className="px-5 py-3.5 bg-brand-pink hover:bg-brand-pink/90 text-black font-extrabold rounded-xl transition-all cursor-pointer text-xs flex-1 flex items-center justify-center gap-1.5 active:scale-97 shadow-md"
+            >
+              <Save className="h-4 w-4" />
+              <span>Salvar Credenciais do Supabase</span>
+            </button>
+          </div>
+
+          {/* Local success / error feedback */}
+          {dbSuccessMsg && (
+            <div className="p-3.5 bg-emerald-950/30 border border-emerald-900/40 rounded-xl text-emerald-300 text-xs font-semibold animate-fade-in text-center">
+              {dbSuccessMsg}
+            </div>
+          )}
+          {dbErrorMsg && (
+            <div className="p-3.5 bg-red-950/25 border border-red-900/30 rounded-xl text-red-300 text-xs font-semibold animate-fade-in">
+              {dbErrorMsg}
+            </div>
+          )}
+        </form>
 
       </div>
 
