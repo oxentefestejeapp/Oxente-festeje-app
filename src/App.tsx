@@ -27,7 +27,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from './lib/firebase';
+import { auth, db, hasConfig } from './lib/firebase';
 
 import { Header } from './components/Header';
 import { ProductForm } from './components/ProductForm';
@@ -128,6 +128,16 @@ export default function App() {
 
   // Monitor Firebase Auth State & Permissions status
   useEffect(() => {
+    if (!hasConfig || !auth) {
+      setFirebaseUser({
+        uid: 'local-admin',
+        displayName: 'Proprietário Local (Offline)',
+        email: 'oxentefesteje@gmail.com',
+      } as any);
+      setUserStatus('approved');
+      return;
+    }
+
     let unsubDoc: (() => void) | null = null;
 
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
@@ -203,7 +213,7 @@ export default function App() {
 
   // Periodic online heartbeat tracking
   useEffect(() => {
-    if (!firebaseUser) return;
+    if (!firebaseUser || !db) return;
 
     // Run heartbeat immediately on connect
     const runHeartbeat = async () => {
@@ -600,7 +610,11 @@ export default function App() {
             onClick={async () => {
               const confirmExit = window.confirm('Tem certeza que deseja sair do sistema?');
               if (confirmExit) {
-                await signOut(auth);
+                if (auth) {
+                  await signOut(auth);
+                } else {
+                  alert('No Modo Local Offline, o login permanece ativo.');
+                }
               }
             }}
             className={`flex items-center justify-center gap-1.5 rounded-xl font-semibold transition-all cursor-pointer text-zinc-400 hover:bg-red-950/20 hover:text-red-450 border border-transparent shadow-sm w-full shrink-0 ${

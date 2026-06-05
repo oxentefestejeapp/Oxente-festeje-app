@@ -8,7 +8,7 @@ import {
   GoogleAuthProvider
 } from 'firebase/auth';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, googleProvider, db } from '../lib/firebase';
+import { auth, googleProvider, db, hasConfig } from '../lib/firebase';
 import { 
   Lock, 
   Mail, 
@@ -35,6 +35,70 @@ export function Login({ onLoginSuccess }: LoginProps) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  if (!hasConfig) {
+    return (
+      <div className="min-h-screen bg-black text-zinc-100 flex items-center justify-center px-4 py-12 font-sans select-none antialiased animate-in fade-in duration-200">
+        <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+          
+          <div className="absolute top-0 right-0 w-32 h-32 bg-brand-pink/10 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute bottom-0 left-0 w-32 h-32 bg-brand-pink/5 rounded-full blur-3xl pointer-events-none" />
+
+          <div className="text-center mb-8 relative">
+            <div className="flex justify-center mb-4">
+              <BrandLogo size="lg" />
+            </div>
+            <h1 className="font-display font-bold text-2xl tracking-tight text-white mb-2">
+              Oxente Festeje
+            </h1>
+            <p className="text-xs text-zinc-400 max-w-xs mx-auto">
+              Modo Offline / Sem Banco de Dados Ativo
+            </p>
+          </div>
+
+          <div className="mb-6 p-4 bg-amber-950/30 border border-amber-900/55 rounded-2xl flex items-start gap-2.5 text-xs text-amber-305">
+            <AlertCircle className="h-5 w-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <p className="font-bold text-amber-400">Aviso de Configuração</p>
+              <p className="text-zinc-400 leading-relaxed">
+                As credenciais do Google Firebase não foram encontradas. Isso ocorre quando o aplicativo é hospedado fora do ambiente de testes da Google AI Studio (como na Hostinger ou localmente).
+              </p>
+            </div>
+          </div>
+
+          <div className="text-xs text-zinc-400 mb-6 bg-zinc-900/50 border border-zinc-850 p-4 rounded-xl space-y-2 select-text">
+            <p className="font-bold text-zinc-200">Como ativar a sincronização em nuvem?</p>
+            <p>Declare as seguintes variáveis de ambiente no painel de administração da Hostinger ou em um arquivo <code className="text-brand-pink font-mono text-[11px] bg-black px-1.5 py-0.5 rounded">.env</code> na raiz do projeto:</p>
+            <ul className="list-disc list-inside space-y-1 text-xxs text-zinc-500 font-mono">
+              <li>VITE_FIREBASE_API_KEY</li>
+              <li>VITE_FIREBASE_PROJECT_ID</li>
+              <li>VITE_FIREBASE_AUTH_DOMAIN</li>
+              <li>VITE_FIREBASE_STORAGE_BUCKET</li>
+              <li>VITE_FIREBASE_MESSAGING_SENDER_ID</li>
+              <li>VITE_FIREBASE_APP_ID</li>
+            </ul>
+          </div>
+
+          {/* Local Mode Entry Button */}
+          <button
+            type="button"
+            onClick={() => {
+              if (onLoginSuccess) {
+                onLoginSuccess();
+              } else {
+                window.location.reload();
+              }
+            }}
+            className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-brand-pink hover:bg-brand-pink/90 text-black font-extrabold rounded-2xl text-xs shadow-lg transition-all transform active:scale-98 cursor-pointer select-none duration-150"
+          >
+            <LogIn className="h-4.5 w-4.5" />
+            <span>Entrar no Modo Local (Offline)</span>
+          </button>
+
+        </div>
+      </div>
+    );
+  }
 
   const getFriendlyError = (code: string) => {
     switch (code) {

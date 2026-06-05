@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, OperationType, handleFirestoreError } from '../lib/firebase';
+import { db, OperationType, handleFirestoreError, hasConfig } from '../lib/firebase';
 import { 
   collection, 
   onSnapshot, 
@@ -80,6 +80,13 @@ export function UserApprovals() {
   useEffect(() => {
     setLoading(true);
     setError(null);
+    
+    if (!hasConfig || !db) {
+      setUsers([]);
+      setLoading(false);
+      return;
+    }
+
     const usersCollection = collection(db, 'users');
     const q = query(usersCollection, orderBy('createdAt', 'desc'));
 
@@ -113,6 +120,10 @@ export function UserApprovals() {
   }, []);
 
   const handleUpdateStatus = async (userId: string, newStatus: 'approved' | 'rejected' | 'pending') => {
+    if (!hasConfig || !db) {
+      setError('Operação indisponível no Modo Local Offline.');
+      return;
+    }
     setActionLoadingId(userId);
     setError(null);
     const docRef = doc(db, 'users', userId);
@@ -138,6 +149,10 @@ export function UserApprovals() {
     const confirmDelete = window.confirm("Tem certeza que deseja excluir esta solicitação de cadastro do histórico?");
     if (!confirmDelete) return;
 
+    if (!hasConfig || !db) {
+      setError('Operação indisponível no Modo Local Offline.');
+      return;
+    }
     setActionLoadingId(userId);
     setError(null);
     const docRef = doc(db, 'users', userId);
@@ -177,6 +192,16 @@ export function UserApprovals() {
   return (
     <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-6 sm:p-8 shadow-xl animate-in fade-in duration-200">
       
+      {!hasConfig && (
+        <div className="mb-6 p-4 bg-amber-950/20 border border-amber-900/40 rounded-2xl flex items-start gap-2.5 text-xs text-amber-300 animate-in fade-in duration-200">
+          <AlertCircle className="h-4.5 w-4.5 text-amber-500 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold">Modo Offline Local Ativo</p>
+            <p className="text-zinc-400">O gerenciador de aprovações requer a ativação do Google Firebase para gerenciar usuários na nuvem. Atualmente os dados de vendas e estoque estão utilizando o armazenamento seguro local (localStorage) de seu navegador com segurança.</p>
+          </div>
+        </div>
+      )}
+
       {/* Container Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-zinc-900">
         <div>

@@ -1,15 +1,49 @@
-import { initializeApp } from 'firebase/app';
+import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import firebaseConfig from '../../firebase-applet-config.json';
 
-const config = (firebaseConfig as any).default || firebaseConfig;
-const databaseId = config.firestoreDatabaseId || config.databaseId || 'ai-studio-d9977160-44d4-41c1-9d78-4c43640d6b79';
+// Safely probe the JSON configuration using import.meta.glob to avoid build errors if the file is missing outside of the AI Studio environment
+const configs = import.meta.glob('../../firebase-applet-config.json', { eager: true });
+const fileConfig = (configs['../../firebase-applet-config.json'] as any)?.default || configs['../../firebase-applet-config.json'] || {};
 
-const app = initializeApp(config);
-export const db = getFirestore(app, databaseId);
-export const auth = getAuth(app);
-export const googleProvider = new GoogleAuthProvider();
+const config = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || fileConfig.apiKey || '',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || fileConfig.authDomain || '',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || fileConfig.projectId || '',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || fileConfig.storageBucket || '',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || fileConfig.messagingSenderId || '',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || fileConfig.appId || '',
+};
+
+const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || 
+                   import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || 
+                   fileConfig.firestoreDatabaseId || 
+                   fileConfig.databaseId || 
+                   '(default)'; // Fallback to classic default database ID for standard Firebase deployments
+
+// Check if Firebase has enough configuration to be initialized
+const hasConfig = !!config.apiKey && !!config.projectId;
+
+let app: any = null;
+let db: any = null;
+let auth: any = null;
+const googleProvider = new GoogleAuthProvider();
+
+if (hasConfig) {
+  try {
+    app = getApps().length === 0 ? initializeApp(config) : getApp();
+    db = getFirestore(app, databaseId);
+    auth = getAuth(app);
+  } catch (error) {
+    console.error('Erro de inicialização do Firebase:', error);
+  }
+} else {
+  console.warn(
+    'Firebase não configurado ou credenciais ausentes. Ativando Modo de Execução Local Offline (localStorage) para funcionamento fora do ambiente Google.'
+  );
+}
+
+export { app, db, auth, googleProvider, hasConfig };
 
 // Standard Firebase collection error logger helper as outlined in guidelines
 export enum OperationType {

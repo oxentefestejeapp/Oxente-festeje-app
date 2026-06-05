@@ -1,6 +1,6 @@
 import React from 'react';
 import { signOut } from 'firebase/auth';
-import { auth } from '../lib/firebase';
+import { auth, hasConfig } from '../lib/firebase';
 import { 
   Hourglass, 
   LogOut, 
@@ -19,7 +19,11 @@ interface PendingApprovalProps {
 export function PendingApproval({ userName, userEmail, status }: PendingApprovalProps) {
   const handleLogout = async () => {
     try {
-      await signOut(auth);
+      if (auth && hasConfig) {
+        await signOut(auth);
+      } else {
+        alert('No Modo Local Offline, você permanece logado.');
+      }
     } catch (err) {
       console.error('Erro ao sair:', err);
     }
