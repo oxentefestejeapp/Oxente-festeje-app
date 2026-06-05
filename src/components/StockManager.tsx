@@ -81,60 +81,62 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, isAdmin
     <div className="space-y-6">
 
       {/* 📊 STOCK ANALYTICS INDICATORS BAR */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Total Pieces */}
-        <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
-          <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Volume total no físico</span>
-          <div className="flex items-baseline gap-2 mt-1.5">
-            <span className="text-2xl font-black text-zinc-150 font-mono">{stockMetrics.totalStockVolume}</span>
-            <span className="text-xs text-zinc-450 font-medium">unidades</span>
+      {isAdmin && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          
+          {/* Total Pieces */}
+          <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
+            <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Volume total no físico</span>
+            <div className="flex items-baseline gap-2 mt-1.5">
+              <span className="text-2xl font-black text-zinc-150 font-mono">{stockMetrics.totalStockVolume}</span>
+              <span className="text-xs text-zinc-450 font-medium">unidades</span>
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-1">Exclui brindes com estoque ilimitado</p>
           </div>
-          <p className="text-[10px] text-zinc-500 mt-1">Exclui brindes com estoque ilimitado</p>
-        </div>
 
-        {/* Investment valuation cost estimation */}
-        <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
-          <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Custo de Aquisição Estimado</span>
-          <div className="flex items-baseline gap-2 mt-1.5">
-            <span className="text-2xl font-black text-brand-pink font-mono">R$ {stockMetrics.totalStockCostValue.toFixed(2)}</span>
+          {/* Investment valuation cost estimation */}
+          <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
+            <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Custo de Aquisição Estimado</span>
+            <div className="flex items-baseline gap-2 mt-1.5">
+              <span className="text-2xl font-black text-brand-pink font-mono">R$ {stockMetrics.totalStockCostValue.toFixed(2)}</span>
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-1">Estimado com base em custo ou margem média</p>
           </div>
-          <p className="text-[10px] text-zinc-500 mt-1">Estimado com base em custo ou margem média</p>
-        </div>
 
-        {/* Sales retail revenue potential value */}
-        <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
-          <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Faturamento Estimado Potencial</span>
-          <div className="flex items-baseline gap-2 mt-1.5">
-            <span className="text-2xl font-black text-emerald-450 font-mono">R$ {stockMetrics.totalStockRetailValue.toFixed(2)}</span>
+          {/* Sales retail revenue potential value */}
+          <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
+            <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Faturamento Estimado Potencial</span>
+            <div className="flex items-baseline gap-2 mt-1.5">
+              <span className="text-2xl font-black text-emerald-450 font-mono">R$ {stockMetrics.totalStockRetailValue.toFixed(2)}</span>
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-1">Lucro bruto: +{stockMetrics.expectedMarkup.toFixed(0)}% de valor agregado</p>
           </div>
-          <p className="text-[10px] text-zinc-500 mt-1">Lucro bruto: +{stockMetrics.expectedMarkup.toFixed(0)}% de valor agregado</p>
-        </div>
 
-        {/* Critical low alert warnings */}
-        <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
-          <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Alertas Críticos de Estoque</span>
-          <div className="flex items-center gap-1.5 mt-2">
-            {stockMetrics.outOfStockCount > 0 ? (
-              <span className="text-xs font-bold font-mono px-2 py-0.5 bg-red-950 text-red-400 border border-red-900/40 rounded flex items-center gap-1">
-                {stockMetrics.outOfStockCount} Esgotado
-              </span>
-            ) : null}
-            {stockMetrics.lowStockCount > 0 ? (
-              <span className="text-xs font-bold font-mono px-2 py-0.5 bg-amber-950 text-amber-400 border border-amber-900/40 rounded flex items-center gap-1">
-                {stockMetrics.lowStockCount} Crítico
-              </span>
-            ) : null}
-            {stockMetrics.outOfStockCount === 0 && stockMetrics.lowStockCount === 0 && (
-              <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
-                ✔️ Todos niveis ótimos
-              </span>
-            )}
+          {/* Critical low alert warnings */}
+          <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
+            <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Alertas Críticos de Estoque</span>
+            <div className="flex items-center gap-1.5 mt-2">
+              {stockMetrics.outOfStockCount > 0 ? (
+                <span className="text-xs font-bold font-mono px-2 py-0.5 bg-red-950 text-red-400 border border-red-900/40 rounded flex items-center gap-1">
+                  {stockMetrics.outOfStockCount} Esgotado
+                </span>
+              ) : null}
+              {stockMetrics.lowStockCount > 0 ? (
+                <span className="text-xs font-bold font-mono px-2 py-0.5 bg-amber-950 text-amber-400 border border-amber-900/40 rounded flex items-center gap-1">
+                  {stockMetrics.lowStockCount} Crítico
+                </span>
+              ) : null}
+              {stockMetrics.outOfStockCount === 0 && stockMetrics.lowStockCount === 0 && (
+                <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                  ✔️ Todos niveis ótimos
+                </span>
+              )}
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-1.5">Produtos com estoque menor que 5!</p>
           </div>
-          <p className="text-[10px] text-zinc-500 mt-1.5">Produtos com estoque menor que 5!</p>
-        </div>
 
-      </div>
+        </div>
+      )}
       
       {/* Search and Filters Bar */}
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-zinc-900 rounded-xl border border-zinc-800 p-4 shadow-md">

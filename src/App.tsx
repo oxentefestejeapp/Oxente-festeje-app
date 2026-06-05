@@ -60,8 +60,28 @@ export default function App() {
   // 2. Core Persistent State
   const [products, setProducts] = useState<Product[]>([]);
   const pendingStockUpdates = useRef<Record<string, number>>({});
-  const pendingProducts = useRef<Record<string, Product>>({});
+  const pendingProducts = useRef<Record<string, Product>>((() => {
+    try {
+      const saved = localStorage.getItem('oxente_pending_products');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  })());
   const [sales, setSales] = useState<Sale[]>([]);
+
+  const addPendingProduct = (product: Product) => {
+    const updated = { ...pendingProducts.current, [product.id]: product };
+    pendingProducts.current = updated;
+    localStorage.setItem('oxente_pending_products', JSON.stringify(updated));
+  };
+
+  const removePendingProduct = (id: string) => {
+    const updated = { ...pendingProducts.current };
+    delete updated[id];
+    pendingProducts.current = updated;
+    localStorage.setItem('oxente_pending_products', JSON.stringify(updated));
+  };
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(defaultStoreInfo);
   const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web'>(() => {
     const saved = localStorage.getItem('oxente_active_tab');
@@ -301,8 +321,38 @@ export default function App() {
 
         // Sync Products
         if (dbProds && dbProds.length > 0) {
-          setProducts(dbProds);
-          localStorage.setItem('oxente_products', JSON.stringify(dbProds));
+          // Merge local loadedProducts or pendingProducts with database dbProds to avoid losing locally registered products
+          const mergedProdsMap = new Map(dbProds.map(p => [p.id, p]));
+          
+          // Guarantee any pending stock updates are merged
+          mergedProdsMap.forEach((p, id) => {
+            const pendingStock = pendingStockUpdates.current[id];
+            if (pendingStock !== undefined) {
+              p.estoque = pendingStock;
+            }
+          });
+
+          // Ensure pending products are merged and kept safe
+          const updatedPendingObj = { ...pendingProducts.current };
+          let pendingChanged = false;
+
+          (Object.values(updatedPendingObj) as Product[]).forEach(p => {
+            if (!mergedProdsMap.has(p.id)) {
+              mergedProdsMap.set(p.id, p);
+            } else {
+              delete updatedPendingObj[p.id];
+              pendingChanged = true;
+            }
+          });
+
+          if (pendingChanged) {
+            pendingProducts.current = updatedPendingObj;
+            localStorage.setItem('oxente_pending_products', JSON.stringify(updatedPendingObj));
+          }
+
+          const mergedProds = Array.from(mergedProdsMap.values());
+          setProducts(mergedProds);
+          localStorage.setItem('oxente_products', JSON.stringify(mergedProds));
         } else if (dbProds && dbProds.length === 0 && loadedProducts.length > 0) {
           console.log('Populando produtos locais para o Supabase pela primeira vez...');
           await Promise.all(loadedProducts.map(p => dbSupabase.saveProduct(p)));
@@ -359,7 +409,7 @@ export default function App() {
       if (eventType === 'INSERT') {
         const prod = mapDbToProduct(newRow);
         // Clean from pending map as we received official confirmation database-side
-        delete pendingProducts.current[prod.id];
+        removePendingProduct(prod.id);
         setProducts((current) => {
           if (current.some(p => p.id === prod.id)) return current;
           const updated = [prod, ...current];
@@ -369,7 +419,7 @@ export default function App() {
       } else if (eventType === 'UPDATE') {
         const prod = mapDbToProduct(newRow);
         // Clean from pending map as we received official confirmation database-side
-        delete pendingProducts.current[prod.id];
+        removePendingProduct(prod.id);
         setProducts((current) => {
           const pendingStock = pendingStockUpdates.current[prod.id];
           const finalProd = pendingStock !== undefined ? { ...prod, estoque: pendingStock } : prod;
@@ -494,15 +544,24 @@ export default function App() {
             }));
 
             // Re-insert any pending new products that aren't acknowledged in the remote list yet
-            (Object.values(pendingProducts.current) as Product[]).forEach(p => {
+            let pendingChanged = false;
+            const updatedPending = { ...pendingProducts.current };
+
+            (Object.values(updatedPending) as Product[]).forEach(p => {
               if (!mergedProdsMap.has(p.id)) {
                 // Keep the locally created pending product
                 mergedProdsMap.set(p.id, p);
               } else {
                 // Confirmed in the database! Safe to remove from pending map.
-                delete pendingProducts.current[p.id];
+                delete updatedPending[p.id];
+                pendingChanged = true;
               }
             });
+
+            if (pendingChanged) {
+              pendingProducts.current = updatedPending;
+              localStorage.setItem('oxente_pending_products', JSON.stringify(updatedPending));
+            }
 
             const mergedProds = Array.from(mergedProdsMap.values());
             const hasChanged = JSON.stringify(curr) !== JSON.stringify(mergedProds);
@@ -587,21 +646,17 @@ export default function App() {
   // State mutation actions with automatic remote DB sync
   const handleAddProduct = async (newProduct: Product) => {
     // Record in local pending products map to survive any background refreshes
-    pendingProducts.current[newProduct.id] = newProduct;
+    addPendingProduct(newProduct);
 
     const updated = [newProduct, ...products];
     saveProducts(updated);
     
     // Background sync to Supabase
     try {
-      const success = await dbSupabase.saveProduct(newProduct);
-      if (success) {
-        // Delay clearing from pending products to allow database replication/indexed views to sync,
-        // preventing immediate "focus" refreshes or tab changes from wiping the local product.
-        setTimeout(() => {
-          delete pendingProducts.current[newProduct.id];
-        }, 12000);
-      }
+      await dbSupabase.saveProduct(newProduct);
+      // We no longer clear pendingProducts unconditionally after a timeout.
+      // Doing so causes products to be deleted if replication delays or queries are cached.
+      // Instead, we let the safe merge in pollCloudUpdates confirm the database actually returns it.
     } catch (e) {
       console.warn('Erro ao sincronizar novo produto em segundo plano:', e);
     }
@@ -637,6 +692,9 @@ export default function App() {
   };
 
   const handleDeleteProduct = async (id: string) => {
+    // Also remove from pending local products to prevent reviving this product
+    removePendingProduct(id);
+
     const updated = products.filter((p) => p.id !== id);
     saveProducts(updated);
 
