@@ -26,8 +26,6 @@ import {
   Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { doc, onSnapshot, updateDoc, serverTimestamp, getDoc, setDoc } from 'firebase/firestore';
-import { db, hasConfig } from './lib/firebase';
 import { supabase, dbSupabase, mapDbToProduct, mapDbToSale } from './lib/supabase';
 
 import { Header } from './components/Header';
@@ -160,64 +158,15 @@ export default function App() {
     return sales.filter(s => isSalePending(s) && (s.valorFaltante !== undefined ? s.valorFaltante > 0 : (s.total - (s.valorPago ?? 0)) > 0)).length;
   }, [sales]);
 
-  // Monitor Authentication State (Custom Code-Based Authenticated User)
+  // Monitor Authentication State (Custom Code-Based Authenticated User) Local Security
   useEffect(() => {
-    let unsubscribeDoc: (() => void) | null = null;
-
     const checkLocalAuth = () => {
-      // Clean up previous Firestore listener if exists
-      if (unsubscribeDoc) {
-        unsubscribeDoc();
-        unsubscribeDoc = null;
-      }
-
       const savedUserStr = localStorage.getItem('oxente_custom_user');
       if (savedUserStr) {
         try {
           const userObj = JSON.parse(savedUserStr);
-          const userIdNormal = userObj.id || userObj.uid || '';
-
-          if (db && hasConfig && userIdNormal) {
-            // Read Firestore real-time snaps for this user
-            const userDocRef = doc(db, 'users', userIdNormal);
-            unsubscribeDoc = onSnapshot(userDocRef, (docSnap) => {
-              if (docSnap.exists()) {
-                const uData = docSnap.data();
-                const enhancedUser = {
-                  ...userObj,
-                  id: uData.id || userIdNormal,
-                  uid: uData.id || userIdNormal,
-                  name: uData.name || userObj.name || 'Colaborador',
-                  displayName: uData.name || userObj.name || 'Colaborador',
-                  email: uData.email || userObj.email || '',
-                  role: uData.role || (uData.id === 'abraaoapp' ? 'admin' : 'colaborador'),
-                  status: uData.status || 'approved'
-                };
-                setFirebaseUser(enhancedUser);
-
-                const statusValue = uData.status || 'approved';
-                if (statusValue === 'approved') {
-                  setUserStatus('approved');
-                } else if (statusValue === 'rejected') {
-                  setUserStatus('rejected');
-                } else {
-                  setUserStatus('pending');
-                }
-              } else {
-                // Not found on DB yet - use local details
-                setFirebaseUser(userObj);
-                setUserStatus(userObj.status || 'approved');
-              }
-            }, (err) => {
-              console.error('Error fetching real-time snapshot status:', err);
-              setFirebaseUser(userObj);
-              setUserStatus(userObj.status || 'approved');
-            });
-          } else {
-            // Local offline fallback
-            setFirebaseUser(userObj);
-            setUserStatus('approved');
-          }
+          setFirebaseUser(userObj);
+          setUserStatus(userObj.status || 'approved');
         } catch (e) {
           setFirebaseUser(null);
           setUserStatus('unauthenticated');
@@ -233,104 +182,8 @@ export default function App() {
 
     return () => {
       window.removeEventListener('oxente_auth_change', checkLocalAuth);
-      if (unsubscribeDoc) {
-        unsubscribeDoc();
-      }
     };
   }, []);
-
-  // Online heartbeat and status synchronization with Firestore
-  useEffect(() => {
-    const uid = firebaseUser?.id || firebaseUser?.uid;
-    if (!uid || !db || !hasConfig) return;
-
-    const runHeartbeat = async () => {
-      try {
-        const userRef = doc(db, 'users', uid);
-        await updateDoc(userRef, {
-          updatedAt: serverTimestamp()
-        });
-      } catch (err) {
-        console.error('Error running online heartbeat:', err);
-      }
-    };
-
-    runHeartbeat();
-    const interval = setInterval(runHeartbeat, 30000); // 30 seconds
-    return () => clearInterval(interval);
-  }, [firebaseUser?.id, firebaseUser?.uid]);
-
-  // Synchronize Supabase configurations dynamically through Firestore database (Real-Time Propagation)
-  useEffect(() => {
-    if (!db || !hasConfig || !firebaseUser) return;
-
-    const configDocRef = doc(db, 'config', 'supabase');
-
-    const unsubscribe = onSnapshot(configDocRef, async (docSnap) => {
-      try {
-        const localUrl = localStorage.getItem('supabase_url');
-        const localKey = localStorage.getItem('supabase_anon_key');
-        const isDirty = localStorage.getItem('supabase_keys_dirty') === 'true';
-
-        if (isAdmin) {
-          // ADMIN SOURCE OF TRUTH PROTOCOL
-          if (localUrl && localKey) {
-            // Admin has local keys. Verify if Firestore matches.
-            const hasDoc = docSnap.exists();
-            const data = hasDoc ? docSnap.data() : null;
-            const matchesCloud = data && data.url === localUrl && data.key === localKey;
-
-            // Update if no cloud configuration exists, keys differ, or keys were marked dirty manually
-            if (!matchesCloud || isDirty) {
-              console.log('Admin: Sincronizando novas chaves locais do Supabase com o Firestore...');
-              await setDoc(configDocRef, {
-                url: localUrl,
-                key: localKey,
-                updatedAt: serverTimestamp()
-              });
-              localStorage.removeItem('supabase_keys_dirty');
-              console.log('Sincronizados detalhes do Supabase do administrador com o Firestore.');
-            }
-          } else {
-            // Admin has no local keys. Try to restore keys from Firestore.
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              if (data.url && data.key) {
-                console.log('Admin: Chaves locais vazias. Restaurando chaves do Firestore...');
-                localStorage.setItem('supabase_url', data.url);
-                localStorage.setItem('supabase_anon_key', data.key);
-                localStorage.removeItem('supabase_keys_dirty');
-                window.location.reload();
-              }
-            }
-          }
-        } else {
-          // COLLABORATOR AUTO-REPLICATE PROTOCOL
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.url && data.key) {
-              if (localUrl !== data.url || localKey !== data.key) {
-                console.log('Colaborador: Nova configuração de Supabase sincronizada do Firestore. Atualizando e reiniciando...');
-                localStorage.setItem('supabase_url', data.url);
-                localStorage.setItem('supabase_anon_key', data.key);
-                localStorage.removeItem('supabase_keys_dirty');
-                // Auto reload to apply settings globally
-                window.location.reload();
-              }
-            }
-          } else {
-            console.warn('Aviso: O administrador ainda não definiu as credenciais do Supabase no Firestore.');
-          }
-        }
-      } catch (err) {
-        console.warn('Erro ao sincronizar chaves do Supabase via Firestore:', err);
-      }
-    }, (err) => {
-      console.error('Erro de escuta (onSnapshot) nas chaves do Supabase:', err);
-    });
-
-    return () => unsubscribe();
-  }, [firebaseUser, isAdmin]);
 
   // Load state on mount (with SWR pull from Supabase Cloud Database)
   useEffect(() => {

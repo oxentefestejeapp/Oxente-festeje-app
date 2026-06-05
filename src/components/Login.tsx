@@ -12,7 +12,6 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BrandLogo } from './BrandLogo';
-import { db, hasConfig } from '../lib/firebase';
 import { playAppSound } from '../lib/audio';
 
 interface LoginProps {
@@ -47,34 +46,26 @@ export function Login({ onLoginSuccess }: LoginProps) {
     }
   }, [showPasswordErrorToast]);
 
-  // Guarantee that default users exist in the Firestore database on load
+  // Guarantee that default users exist in local storage on load if not already populated
   useEffect(() => {
-    const ensureDefaultUsersExistInDb = async () => {
-      if (!db || !hasConfig) return;
+    const localUsersStr = localStorage.getItem('oxente_custom_users_local');
+    if (!localUsersStr) {
+      localStorage.setItem('oxente_custom_users_local', JSON.stringify(INITIAL_USERS));
+    } else {
       try {
-        const { getDoc, setDoc, doc, serverTimestamp } = await import('firebase/firestore');
-        for (const user of INITIAL_USERS) {
-          const userRef = doc(db, 'users', user.id);
-          const snap = await getDoc(userRef);
-          if (!snap.exists()) {
-            await setDoc(userRef, {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              status: user.status,
-              password: user.password,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            });
-            console.log(`Padrão ${user.name} garantido no banco.`);
+        const parsed = JSON.parse(localUsersStr);
+        // Clean duplicates or merge default approved status
+        const merged = [...parsed];
+        INITIAL_USERS.forEach(defU => {
+          if (!merged.some(m => m.id === defU.id)) {
+            merged.push(defU);
           }
-        }
-      } catch (e) {
-        console.warn('Erro ao sincronizar usuários iniciais no Firebase:', e);
+        });
+        localStorage.setItem('oxente_custom_users_local', JSON.stringify(merged));
+      } catch {
+        localStorage.setItem('oxente_custom_users_local', JSON.stringify(INITIAL_USERS));
       }
-    };
-    ensureDefaultUsersExistInDb();
+    }
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -101,44 +92,12 @@ export function Login({ onLoginSuccess }: LoginProps) {
     try {
       let userProfile: any = null;
 
-      // 1. Search in live Firestore database if accessible with graceful local fallback on error/offline
-      if (db && hasConfig) {
-        try {
-          const { getDoc, doc, setDoc, serverTimestamp } = await import('firebase/firestore');
-          const userRef = doc(db, 'users', usernameId);
-          const docSnap = await getDoc(userRef);
-
-          if (docSnap.exists()) {
-            userProfile = docSnap.data();
-          } else if (defaultMatch) {
-            // If they entered a valid login username but the db doc was deleted or empty, seed it
-            userProfile = {
-              id: defaultMatch.id,
-              name: defaultMatch.name,
-              email: defaultMatch.email,
-              role: defaultMatch.role,
-              status: defaultMatch.status,
-              password: defaultMatch.password,
-            };
-            await setDoc(userRef, {
-              ...userProfile,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            });
-          }
-        } catch (dbErr) {
-          console.warn('Erro ao consultar banco online durante login. Prosseguindo com autenticação local segura:', dbErr);
-        }
-      }
-
-      // 2. Fallback check inside cached custom list or default match list
-      if (!userProfile) {
-        const localUsersStr = localStorage.getItem('oxente_custom_users_local');
-        const localUsers = localUsersStr ? JSON.parse(localUsersStr) : [];
-        const localMatch = localUsers.find((u: any) => u.id === usernameId);
-        
-        userProfile = localMatch || defaultMatch;
-      }
+      // Local storage-first lookup of user accounts
+      const localUsersStr = localStorage.getItem('oxente_custom_users_local');
+      const localUsers = localUsersStr ? JSON.parse(localUsersStr) : [];
+      const localMatch = localUsers.find((u: any) => u.id === usernameId || u.name?.toLowerCase() === inputNameOrig.toLowerCase());
+      
+      userProfile = localMatch || defaultMatch;
 
       if (!userProfile) {
         setError('Usuário não cadastrado. Verifique o seu usuário de login.');
@@ -147,7 +106,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
         return;
       }
 
-      // 3. Password match comparison check
+      // Password match comparison check
       if (pWord !== userProfile.password) {
         setError('Senha inválida para este usuário. Tente novamente.');
         setShowPasswordErrorToast(true);
@@ -156,7 +115,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
         return;
       }
 
-      // 4. Status restriction check
+      // Status restriction check
       if (userProfile.status === 'rejected') {
         setError('Acesso recusado pelo administrador do painel.');
         setIsLoading(false);
@@ -169,18 +128,6 @@ export function Login({ onLoginSuccess }: LoginProps) {
         setIsLoading(false);
         playAppSound('alert');
         return;
-      }
-
-      // 5. Successful Login Session setup
-      if (db && hasConfig) {
-        const { updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
-        try {
-          await updateDoc(doc(db, 'users', userProfile.id), {
-            updatedAt: serverTimestamp()
-          });
-        } catch (dbErr) {
-          console.warn('Erro ao registrar heartbeat online:', dbErr);
-        }
       }
 
       const loggedSession = {
@@ -197,8 +144,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
       localStorage.setItem('oxente_custom_user', JSON.stringify(loggedSession));
       
       // Also cache in custom users local cache
-      const localUsersStr = localStorage.getItem('oxente_custom_users_local');
-      let localList = localUsersStr ? JSON.parse(localUsersStr) : [];
+      let localList = [...localUsers];
       const hasId = localList.findIndex((u: any) => u.id === userProfile.id);
       if (hasId >= 0) {
         localList[hasId] = { ...localList[hasId], ...userProfile };

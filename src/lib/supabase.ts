@@ -1,18 +1,27 @@
 import { createClient } from '@supabase/supabase-js';
 import { Product, Sale, StoreInfo } from '../types';
 
-// Read configuration from environment variables or localStorage
+// Read configuration with strict fallback and override rules
 export const getSupabaseConfig = () => {
   const envUrl = import.meta.env.VITE_SUPABASE_URL;
   const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+  const defaultUrl = 'https://sbeyfgxvjoaulxojjguu.supabase.co';
+  const defaultKey = 'sb_publishable_7aL1Xxp82aXaHTA_Zu3diA_GMfOf9oY';
+
   const localUrl = localStorage.getItem('supabase_url');
   const localKey = localStorage.getItem('supabase_anon_key');
+  const keysDirty = localStorage.getItem('supabase_keys_dirty') === 'true';
+
+  // Overwrite local credentials with defaults immediately if they exist but aren't dirty
+  // to heal old incorrect configurations across collaborator browser sessions
+  const finalUrl = envUrl || (keysDirty && localUrl ? localUrl : defaultUrl);
+  const finalKey = envKey || (keysDirty && localKey ? localKey : defaultKey);
 
   return {
-    url: envUrl || localUrl || 'https://sbeyfgxvjoaulxojjguu.supabase.co',
-    key: envKey || localKey || 'sb_publishable_7aL1Xxp82aXaHTA_Zu3diA_GMfOf9oY',
-    isConfigured: !!(envUrl || localUrl) || true, // Default to true as the user provided active keys!
+    url: finalUrl,
+    key: finalKey,
+    isConfigured: true,
   };
 };
 

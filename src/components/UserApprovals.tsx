@@ -1,13 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { db, OperationType, handleFirestoreError, hasConfig } from '../lib/firebase';
-import { 
-  collection, 
-  onSnapshot, 
-  query, 
-  orderBy,
-  doc,
-  updateDoc
-} from 'firebase/firestore';
 import { 
   Users, 
   Search, 
@@ -25,9 +16,16 @@ interface UserProfile {
   email: string;
   role?: 'admin' | 'colaborador' | string;
   status?: 'pending' | 'approved' | 'rejected' | string;
-  createdAt?: any;
-  updatedAt?: any;
+  createdAt?: string;
+  updatedAt?: string;
 }
+
+const INITIAL_USERS = [
+  { id: 'abraaoapp', name: 'Abraão', email: 'abraaoapp@oxente.com', role: 'admin', status: 'approved', password: '65196519' },
+  { id: 'juan', name: 'Juan', email: 'juan@oxente.com', role: 'colaborador', status: 'approved', password: '69app69' },
+  { id: 'assis', name: 'Assis', email: 'assis@oxente.com', role: 'colaborador', status: 'approved', password: '69app69' },
+  { id: 'ana_clara', name: 'Ana Clara', email: 'anaclara@oxente.com', role: 'colaborador', status: 'approved', password: '69app69' }
+];
 
 export function UserApprovals() {
   const [users, setUsers] = useState<UserProfile[]>([]);
@@ -35,7 +33,6 @@ export function UserApprovals() {
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [currentTime, setCurrentTime] = useState(Date.now());
-  const cleanupTriggered = React.useRef(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -44,138 +41,90 @@ export function UserApprovals() {
     return () => clearInterval(timer);
   }, []);
 
+  // Set initial data and load custom users from localStorage
+  useEffect(() => {
+    setLoading(true);
+    try {
+      const savedStr = localStorage.getItem('oxente_custom_users_local');
+      if (savedStr) {
+        const parsed = JSON.parse(savedStr);
+        setUsers(parsed);
+      } else {
+        localStorage.setItem('oxente_custom_users_local', JSON.stringify(INITIAL_USERS));
+        setUsers(INITIAL_USERS);
+      }
+    } catch (e) {
+      console.error('Error loading local users:', e);
+      setError('Falha ao obter lista local de colaboradores.');
+      setUsers(INITIAL_USERS);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const handleUpdateStatus = (userId: string, newStatus: 'approved' | 'rejected') => {
+    try {
+      const updatedList = users.map(user => {
+        if (user.id === userId) {
+          return { ...user, status: newStatus, updatedAt: new Date().toISOString() };
+        }
+        return user;
+      });
+      setUsers(updatedList);
+      localStorage.setItem('oxente_custom_users_local', JSON.stringify(updatedList));
+
+      // Trigger standard auth change event to reload current session status if current user was updated
+      const authEvent = new Event('oxente_auth_change');
+      window.dispatchEvent(authEvent);
+    } catch (e) {
+      console.error('Erro ao atualizar status do usuário:', e);
+      setError('Erro ao salvar alteração de status do usuário.');
+    }
+  };
+
   const isUserOnline = (userProfile: UserProfile) => {
     if (!userProfile.updatedAt) return false;
-    const date = userProfile.updatedAt.toDate ? userProfile.updatedAt.toDate() : new Date(userProfile.updatedAt);
+    const date = new Date(userProfile.updatedAt);
     const diffMs = currentTime - date.getTime();
-    // Consider online if active in the last 75 seconds (heartbeat is 30s)
-    return diffMs < 75000;
+    // Active in last 90 seconds
+    return diffMs < 90000;
   };
 
   const getLastSeenText = (userProfile: UserProfile) => {
-    if (!userProfile.updatedAt) return '';
-    const date = userProfile.updatedAt.toDate ? userProfile.updatedAt.toDate() : new Date(userProfile.updatedAt);
+    if (!userProfile.updatedAt) return 'Não conectado recentemente';
+    const date = new Date(userProfile.updatedAt);
     const diffMs = currentTime - date.getTime();
     
     const diffMins = Math.floor(diffMs / 60000);
     if (diffMins < 1) {
-      return 'agora pouco';
+      return 'Ativo agora';
     }
     if (diffMins < 60) {
-      return `há ${diffMins} min`;
+      return `Ativo há ${diffMins} min`;
     }
     
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) {
-      return `há ${diffHours}h`;
+      return `Ativo há ${diffHours}h`;
     }
     
     const diffDays = Math.floor(diffHours / 24);
-    return `há ${diffDays} d`;
+    return `Ativo há ${diffDays} d`;
   };
-
-  const cleanupDuplicateAbraao = async (usersList: UserProfile[]) => {
-    const matching = usersList.filter(u => {
-      const name = (u.name || '').toLowerCase();
-      const email = (u.email || '').toLowerCase();
-      return name.includes('abraão') || name.includes('abraao') || email.includes('abraao') || email.includes('abraão');
-    });
-
-    if (matching.length <= 1) return;
-
-    // Sort: newer first (biggest timestamp)
-    const sorted = matching.map(u => {
-      const date = u.createdAt?.toDate ? u.createdAt.toDate() : (u.createdAt ? new Date(u.createdAt) : new Date(0));
-      return { ...u, parsedDate: date };
-    }).sort((a, b) => b.parsedDate.getTime() - a.parsedDate.getTime());
-
-    const keeper = sorted[0];
-    const toDelete = sorted.slice(1);
-
-    console.log('[Abraao Cleanup] Keeping newest:', keeper.name, keeper.id, keeper.parsedDate);
-
-    const { deleteDoc, doc } = await import('firebase/firestore');
-    
-    for (const delUser of toDelete) {
-      try {
-        console.log('[Abraao Cleanup] Deleting older duplicate:', delUser.name, delUser.id, delUser.parsedDate);
-        if (db) {
-          await deleteDoc(doc(db, 'users', delUser.id));
-          console.log('[Abraao Cleanup] Deleted older duplicate successfully:', delUser.id);
-        }
-      } catch (e) {
-        console.error('[Abraao Cleanup] Error deleting duplicate:', e);
-      }
-    }
-  };
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-    
-    if (!hasConfig || !db) {
-      setUsers([]);
-      setLoading(false);
-      return;
-    }
-
-    const usersCollection = collection(db, 'users');
-    const q = query(usersCollection, orderBy('updatedAt', 'desc'));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const usersList: UserProfile[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        usersList.push({
-          id: doc.id,
-          name: data.name,
-          email: data.email,
-          role: data.role || (data.email === 'oxentefesteje@gmail.com' || data.email === 'abraaoapp@oxente.com' || doc.id === 'abraaoapp' ? 'admin' : 'colaborador'),
-          status: data.status || 'approved',
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt
-        });
-      });
-      setUsers(usersList);
-      setLoading(false);
-
-      if (!cleanupTriggered.current) {
-        cleanupTriggered.current = true;
-        cleanupDuplicateAbraao(usersList);
-      }
-    }, (err) => {
-      console.error(err);
-      setError('Erro ao carregar lista de usuários do banco de dados.');
-      setLoading(false);
-      try {
-        handleFirestoreError(err, OperationType.LIST, 'users');
-      } catch (firestoreErr) {
-        // Logged
-      }
-    });
-
-    return () => unsubscribe();
-  }, []);
 
   const filteredUsers = users.filter((u, index, self) => {
     const isMatched = (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
                       (u.email || '').toLowerCase().includes(search.toLowerCase());
     if (!isMatched) return false;
 
-    // Deduplicate by email, keeping the first occurrence (which is the most recently updated since the query is ordered by updatedAt desc)
-    const firstIndex = self.findIndex((item) => {
-      if (u.email && item.email) {
-        return item.email.toLowerCase() === u.email.toLowerCase();
-      }
-      return (item.name || '').toLowerCase() === (u.name || '').toLowerCase();
-    });
-
+    // Deduplicate
+    const firstIndex = self.findIndex((item) => item.id === u.id);
     return firstIndex === index;
   });
 
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return 'N/A';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+  const formatDate = (dateStr: any) => {
+    if (!dateStr) return 'N/A';
+    const date = new Date(dateStr);
     return date.toLocaleString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
@@ -188,25 +137,15 @@ export function UserApprovals() {
   return (
     <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-6 sm:p-8 shadow-xl animate-in fade-in duration-200">
       
-      {!hasConfig && (
-        <div className="mb-6 p-4 bg-amber-950/20 border border-amber-900/40 rounded-2xl flex items-start gap-2.5 text-xs text-amber-300 animate-in fade-in duration-200">
-          <AlertCircle className="h-4.5 w-4.5 text-amber-500 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-bold">Modo Offline Local Ativo</p>
-            <p className="text-zinc-400">Este gerenciador requer conexão do Google Firebase para listar as contas em tempo real. Atualmente você pode visualizar seu usuário local seguro.</p>
-          </div>
-        </div>
-      )}
-
       {/* Container Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-zinc-900">
         <div>
           <h2 className="font-display font-bold text-xl text-white flex items-center gap-2">
             <Users className="h-5.5 w-5.5 text-brand-pink" />
-            <span>Painel de Usuários do Sistema</span>
+            <span>Colaboradores Cadastrados</span>
           </h2>
           <p className="text-xs text-zinc-400 mt-1">
-            Lista de contas registradas e status de conexão online/offline de colaboradores em tempo real.
+            Lista de colaboradores ativos do sistema, permitindo aprovação, alteração de status e controle offline seguro.
           </p>
         </div>
 
@@ -218,94 +157,85 @@ export function UserApprovals() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Buscar por nome ou e-mail..."
-            className="w-full bg-zinc-900 border border-zinc-850 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs rounded-xl py-2.5 pl-9 pr-4 outline-none transition-all placeholder:text-zinc-600 text-white"
+            className="w-full bg-zinc-900 border border-zinc-850 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs rounded-xl py-2.5 pl-9 pr-4 outline-none transition-all text-white placeholder:text-zinc-650"
           />
         </div>
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-950/40 border border-red-900/60 rounded-2xl flex items-start gap-2.5 text-xs text-red-300">
+        <div className="mb-6 p-4 bg-red-950/40 border border-red-900/40 rounded-2xl flex items-start gap-2.5 text-xs text-red-300">
           <AlertCircle className="h-4.5 w-4.5 text-red-400 shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
       )}
 
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3 text-zinc-500">
+        <div className="flex flex-col items-center justify-center py-12 gap-3 text-zinc-500">
           <Loader2 className="h-8 w-8 animate-spin text-brand-pink" />
-          <span className="text-xs font-semibold">Sincronizando usuários...</span>
+          <span className="text-xs">Carregando usuários cadastrados...</span>
         </div>
       ) : filteredUsers.length === 0 ? (
-        <div className="text-center py-16 border border-dashed border-zinc-900 rounded-2xl text-zinc-500">
-          <Lock className="h-8 w-8 mx-auto text-zinc-700 mb-3" />
-          <p className="text-xs font-semibold">Nenhum usuário encontrado.</p>
+        <div className="text-center py-12 text-zinc-550 border border-dashed border-zinc-900 rounded-2xl">
+          <p className="text-xs">Nenhum colaborador encontrado para a busca atual.</p>
         </div>
       ) : (
-        <div className="space-y-3.5">
+        <div className="grid grid-cols-1 gap-4">
           {filteredUsers.map((userProfile) => {
-            const isSelf = userProfile.email === 'oxentefesteje@gmail.com' || userProfile.email === 'abraaoapp@oxente.com' || userProfile.id === 'abraaoapp';
-            const isAdminRole = userProfile.role === 'admin' || isSelf;
+            const isOnline = isUserOnline(userProfile);
+            const isSelf = userProfile.id === 'abraaoapp';
             const currentStatus = userProfile.status || 'approved';
-
-            const statusLabelMap: any = {
-              'approved': { text: 'Aprovado', style: 'bg-emerald-950/30 text-emerald-400 border border-emerald-900/30' },
-              'pending': { text: 'Pendente', style: 'bg-amber-950/30 text-amber-400 border border-amber-900/30' },
-              'rejected': { text: 'Recusado', style: 'bg-red-950/30 text-red-400 border border-red-900/30' }
-            };
-
-            const statusInfo = statusLabelMap[currentStatus] || { text: currentStatus, style: 'bg-zinc-805 text-zinc-400' };
 
             return (
               <div 
                 key={userProfile.id}
-                className="p-5 bg-zinc-900 border border-zinc-905 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-zinc-900/80"
+                className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-5 bg-zinc-900/40 border border-zinc-900 rounded-2xl hover:border-zinc-850 hover:bg-zinc-900/60 transition-all gap-4"
               >
-                {/* User Credentials */}
-                <div className="space-y-1.5 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-sm font-semibold text-white truncate max-w-[200px]">
-                      {userProfile.name}
-                    </span>
+                <div className="flex items-start gap-3 w-full sm:w-auto">
+                  {/* Status Indicator circle aura */}
+                  <div className="relative mt-1">
+                    <div className="w-10 h-10 bg-zinc-950 border border-zinc-850 rounded-xl flex items-center justify-center shrink-0">
+                      <Lock className="h-4.5 w-4.5 text-zinc-550" />
+                    </div>
+                    <div 
+                      className={`absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-zinc-900 ${
+                        isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-zinc-600'
+                      }`} 
+                      title={isOnline ? 'Online' : 'Offline'}
+                    />
+                  </div>
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h3 className="font-bold text-sm text-white truncate">{userProfile.name}</h3>
+                      <span className="px-2 py-0.5 bg-zinc-950 border border-zinc-850 text-brand-pink rounded-md text-[10px] font-mono tracking-tight shrink-0">
+                        @{userProfile.id}
+                      </span>
+                      {userProfile.role === 'admin' && (
+                        <span className="px-2 py-0.5 bg-brand-pink/10 border border-brand-pink/20 text-brand-pink rounded-md text-[10px] shrink-0 font-semibold flex items-center gap-1">
+                          <Shield className="h-3 w-3" />
+                          <span>Admin</span>
+                        </span>
+                      )}
+                    </div>
                     
-                    {/* Role Badges */}
-                    {isAdminRole ? (
-                      <span className="text-[9px] bg-brand-pink/10 border border-brand-pink/20 text-brand-pink py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1">
-                        <Shield className="h-2.5 w-2.5" />
-                        Administrador
+                    <p className="text-xs text-zinc-400 select-all truncate mt-0.5">{userProfile.email}</p>
+                    
+                    <div className="flex items-center gap-3 mt-2 text-[10px] text-zinc-500">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3 shrink-0" />
+                        <span>Sessão: {getLastSeenText(userProfile)}</span>
                       </span>
-                    ) : (
-                      <span className="text-[9px] bg-sky-950/40 border border-sky-900/40 text-sky-450 py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1">
-                        <UserCheck className="h-2.5 w-2.5" />
-                        Colaborador
+                      <span className="flex items-center gap-1">
+                        <UserCheck className="h-3 w-3 shrink-0" />
+                        <span className={`capitalize ${
+                          currentStatus === 'approved' ? 'text-emerald-500 font-semibold' :
+                          currentStatus === 'rejected' ? 'text-red-500 font-semibold' : 'text-amber-500 font-semibold'
+                        }`}>
+                          {currentStatus === 'approved' ? 'Aprovado' :
+                           currentStatus === 'rejected' ? 'Acesso Recusado' : 'Pendente'}
+                        </span>
                       </span>
-                    )}
-
-                    {/* Status Badge */}
-                    <span className={`text-[9px] py-0.5 px-2.5 rounded-full font-bold capitalize ${statusInfo.style}`}>
-                      {statusInfo.text}
-                    </span>
-
-                    {/* Online/Offline Status Indicator */}
-                    {isUserOnline(userProfile) ? (
-                      <span className="text-[9px] bg-emerald-950/25 border border-emerald-900/40 text-emerald-400 py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1.5 animate-pulse" title="Conectado agora">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-450"></span>
-                        Online
-                      </span>
-                    ) : (
-                      <span className="text-[9px] bg-zinc-950/60 border border-zinc-850 text-zinc-500 py-0.5 px-2.5 rounded-full font-medium flex items-center gap-1.5" title="Desconectado">
-                        <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
-                        Offline {getLastSeenText(userProfile) ? `(${getLastSeenText(userProfile)})` : ''}
-                      </span>
-                    )}
-                  </div>
-
-                  <div className="text-xs text-zinc-400 truncate select-text">
-                    {userProfile.email?.endsWith('@oxente.com') ? `Login: ${userProfile.email.split('@')[0]}` : `E-mail: ${userProfile.email}`}
-                  </div>
-
-                  <div className="text-[10px] text-zinc-500 flex items-center gap-1.5">
-                    <Calendar className="h-3 w-3" />
-                    <span>Registrado em: {formatDate(userProfile.createdAt)}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -319,14 +249,7 @@ export function UserApprovals() {
                       {/* Status Action Buttons */}
                       {currentStatus !== 'approved' && (
                         <button
-                          onClick={async () => {
-                            if (!db) return;
-                            try {
-                              await updateDoc(doc(db, 'users', userProfile.id), { status: 'approved' });
-                            } catch (e) {
-                              console.error('Error approving user:', e);
-                            }
-                          }}
+                          onClick={() => handleUpdateStatus(userProfile.id, 'approved')}
                           className="bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 hover:text-emerald-200 text-xxs font-bold px-3 py-1.5 rounded-xl border border-emerald-800/50 cursor-pointer transition-all"
                         >
                           Aprovar
@@ -335,14 +258,7 @@ export function UserApprovals() {
 
                       {currentStatus !== 'rejected' && (
                         <button
-                          onClick={async () => {
-                            if (!db) return;
-                            try {
-                              await updateDoc(doc(db, 'users', userProfile.id), { status: 'rejected' });
-                            } catch (e) {
-                              console.error('Error rejecting user:', e);
-                            }
-                          }}
+                          onClick={() => handleUpdateStatus(userProfile.id, 'rejected')}
                           className="bg-red-950/40 hover:bg-red-950/80 text-red-400 hover:text-red-300 text-xxs font-bold px-3 py-1.5 rounded-xl border border-red-900/30 cursor-pointer transition-all"
                         >
                           Recusar

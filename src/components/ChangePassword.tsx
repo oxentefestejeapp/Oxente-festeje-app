@@ -1,6 +1,4 @@
 import React, { useState } from 'react';
-import { db, hasConfig } from '../lib/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { 
   Lock, 
   CheckCircle2, 
@@ -68,24 +66,12 @@ export function ChangePassword({ currentUser, onPasswordChanged }: ChangePasswor
     try {
       // 1. Fetch user record to verify current password
       let userRecord: any = null;
-      let isFirestore = false;
 
-      if (db && hasConfig && userId) {
-        const userRef = doc(db, 'users', userId);
-        const snap = await getDoc(userRef);
-        if (snap.exists()) {
-          userRecord = snap.data();
-          isFirestore = true;
-        }
-      }
-
-      // If not found online, fallback to localStorage
-      if (!userRecord) {
-        const localUsers = localStorage.getItem('oxente_custom_users_local');
-        if (localUsers) {
-          const parsed = JSON.parse(localUsers);
-          userRecord = parsed.find((u: any) => u.id === userId);
-        }
+      // Check in localStorage
+      const localUsers = localStorage.getItem('oxente_custom_users_local');
+      if (localUsers) {
+        const parsed = JSON.parse(localUsers);
+        userRecord = parsed.find((u: any) => u.id === userId);
       }
 
       const defaultPasswords: Record<string, string> = {
@@ -104,17 +90,8 @@ export function ChangePassword({ currentUser, onPasswordChanged }: ChangePasswor
       }
 
       // 2. Save the updated password
-      if (isFirestore && db && userId) {
-        const userRef = doc(db, 'users', userId);
-        await updateDoc(userRef, {
-          password: newPassClean,
-          updatedAt: serverTimestamp()
-        });
-      }
-
-      // Also support localStorage persistent sync
-      const localUsers = localStorage.getItem('oxente_custom_users_local');
-      let parsedLocalList = localUsers ? JSON.parse(localUsers) : [];
+      const localUsersList = localStorage.getItem('oxente_custom_users_local');
+      let parsedLocalList = localUsersList ? JSON.parse(localUsersList) : [];
       
       const existsId = parsedLocalList.findIndex((u: any) => u.id === userId);
       if (existsId >= 0) {
