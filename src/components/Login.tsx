@@ -100,7 +100,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
     );
   }
 
-  const getFriendlyError = (code: string) => {
+  const getFriendlyError = (code: string, originalMessage?: string) => {
     switch (code) {
       case 'auth/invalid-credential':
         return 'E-mail ou senha incorretos.';
@@ -116,8 +116,10 @@ export function Login({ onLoginSuccess }: LoginProps) {
         return 'A senha é muito fraca (mínimo de 6 caracteres).';
       case 'auth/popup-closed-by-user':
         return 'O login com o Google foi fechado antes de ser concluído.';
+      case 'auth/operation-not-allowed':
+        return 'O login por E-mail e Senha está desativado no Console Firebase deste projeto. Ative-o em "Authentication" > "Sign-in method" > "E-mail/senha" no portal do Firebase.';
       default:
-        return 'Ocorreu um erro ao realizar a operação. Tente novamente.';
+        return originalMessage || 'Ocorreu um erro ao realizar a operação. Tente novamente.';
     }
   };
 
@@ -198,19 +200,26 @@ export function Login({ onLoginSuccess }: LoginProps) {
           displayName: name
         });
 
-        // Initialize Firestore profile as pending
+        // Initialize Firestore profile representing user in users collection
         const user = userCredential.user;
         const userRef = doc(db, 'users', user.uid);
+        const isAdminEmail = email.trim().toLowerCase() === 'oxentefesteje@gmail.com';
+        const initialStatus = isAdminEmail ? 'approved' : 'pending';
+
         await setDoc(userRef, {
           id: user.uid,
           name: name,
           email: email,
-          status: 'pending',
+          status: initialStatus,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp()
         });
 
-        setSuccess('Cadastro solicitado com sucesso! Por favor, informe o e-mail oxentefesteje@gmail.com para que o administrador aprove o seu acesso.');
+        if (isAdminEmail) {
+          setSuccess('Cadastro de Administrador criado e aprovado com sucesso! Agora você pode fazer login.');
+        } else {
+          setSuccess('Cadastro solicitado com sucesso! Por favor, informe o e-mail oxentefesteje@gmail.com para que o administrador aprove o seu acesso.');
+        }
         // We will switch to login mode after successful registration
         setIsRegistering(false);
         setPassword('');
@@ -222,7 +231,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
       }
     } catch (err: any) {
       console.error(err);
-      setError(getFriendlyError(err.code || ''));
+      setError(getFriendlyError(err.code || '', err.message));
     } finally {
       setIsLoading(false);
     }

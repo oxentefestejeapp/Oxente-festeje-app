@@ -7,19 +7,19 @@ const configs = import.meta.glob('../../firebase-applet-config.json', { eager: t
 const fileConfig = (configs['../../firebase-applet-config.json'] as any)?.default || configs['../../firebase-applet-config.json'] || {};
 
 const config = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || fileConfig.apiKey || '',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || fileConfig.authDomain || '',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || fileConfig.projectId || '',
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || fileConfig.storageBucket || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || fileConfig.messagingSenderId || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || fileConfig.appId || '',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || fileConfig.apiKey || 'AIzaSyC5Jr4wq2lm_m9XhUIxShpaP1NoP2RgiiE',
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || fileConfig.authDomain || 'practical-hue-l8gvj.firebaseapp.com',
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || fileConfig.projectId || 'practical-hue-l8gvj',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || fileConfig.storageBucket || 'practical-hue-l8gvj.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || fileConfig.messagingSenderId || '912051653362',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || fileConfig.appId || '1:912051653362:web:cb9cdb2a30c0fc1e659e6b',
 };
 
 const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || 
                    import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || 
                    fileConfig.firestoreDatabaseId || 
                    fileConfig.databaseId || 
-                   '(default)'; // Fallback to classic default database ID for standard Firebase deployments
+                   'ai-studio-d9977160-44d4-41c1-9d78-4c43640d6b79';
 
 // Check if Firebase has enough configuration to be initialized
 const hasConfig = !!config.apiKey && !!config.projectId;
