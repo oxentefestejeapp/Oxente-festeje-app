@@ -15,11 +15,17 @@ const config = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID || fileConfig.appId || '1:912051653362:web:cb9cdb2a30c0fc1e659e6b',
 };
 
+const isAiStudio = typeof window !== 'undefined' && (
+  window.location.hostname.includes('.run.app') || 
+  window.location.hostname.includes('localhost') || 
+  window.location.hostname.includes('127.0.0.1')
+);
+
 const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID || 
                    import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || 
                    fileConfig.firestoreDatabaseId || 
                    fileConfig.databaseId || 
-                   'ai-studio-d9977160-44d4-41c1-9d78-4c43640d6b79';
+                   (isAiStudio ? 'ai-studio-d9977160-44d4-41c1-9d78-4c43640d6b79' : '(default)');
 
 // Check if Firebase has enough configuration to be initialized
 const hasConfig = !!config.apiKey && !!config.projectId;
@@ -32,7 +38,7 @@ const googleProvider = new GoogleAuthProvider();
 if (hasConfig) {
   try {
     app = getApps().length === 0 ? initializeApp(config) : getApp();
-    db = getFirestore(app, databaseId);
+    db = databaseId && databaseId !== '(default)' ? getFirestore(app, databaseId) : getFirestore(app);
     auth = getAuth(app);
   } catch (error) {
     console.error('Erro de inicialização do Firebase:', error);

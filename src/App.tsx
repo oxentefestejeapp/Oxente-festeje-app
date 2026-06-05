@@ -131,50 +131,128 @@ export default function App() {
     return sales.filter(s => isSalePending(s) && (s.valorFaltante !== undefined ? s.valorFaltante > 0 : (s.total - (s.valorPago ?? 0)) > 0)).length;
   }, [sales]);
 
-  // Monitor Hostinger & Local Offline custom auth state
+  // Monitor Authentication State
   useEffect(() => {
-    const checkAuthStatus = () => {
-      const savedUserStr = localStorage.getItem('oxente_custom_user');
-      if (savedUserStr) {
-        try {
-          const userObj = JSON.parse(savedUserStr);
-          setFirebaseUser(userObj);
-          setUserStatus('approved');
-        } catch (e) {
+    if (!hasConfig || !auth) {
+      // Offline fallback
+      const checkLocalAuth = () => {
+        const savedUserStr = localStorage.getItem('oxente_custom_user');
+        if (savedUserStr) {
+          try {
+            const userObj = JSON.parse(savedUserStr);
+            setFirebaseUser(userObj);
+            setUserStatus('approved');
+          } catch (e) {
+            setFirebaseUser(null);
+            setUserStatus('unauthenticated');
+          }
+        } else {
           setFirebaseUser(null);
           setUserStatus('unauthenticated');
+        }
+      };
+      checkLocalAuth();
+      window.addEventListener('oxente_auth_change', checkLocalAuth);
+      return () => {
+        window.removeEventListener('oxente_auth_change', checkLocalAuth);
+      };
+    }
+
+    // Direct Firebase Authentication Listener
+    let unsubscribeDoc: (() => void) | null = null;
+
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      // Clean up previous Firestore listener if exists
+      if (unsubscribeDoc) {
+        unsubscribeDoc();
+        unsubscribeDoc = null;
+      }
+
+      if (user) {
+        setFirebaseUser(user);
+        
+        // Listen to their user profile document in Firestore for real-time status changes
+        if (db) {
+          const userDocRef = doc(db, 'users', user.uid);
+          unsubscribeDoc = onSnapshot(userDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const uData = docSnap.data();
+              
+              // Enhance the firebase user with role and offline fields
+              const enhancedUser = {
+                ...user,
+                displayName: uData.name || user.displayName || 'Colaborador',
+                role: uData.role || (user.email === 'oxentefesteje@gmail.com' ? 'admin' : 'colaborador')
+              } as any;
+              
+              setFirebaseUser(enhancedUser);
+              
+              const statusValue = uData.status || (user.email === 'oxentefesteje@gmail.com' ? 'approved' : 'pending');
+              if (statusValue === 'approved' || user.email === 'oxentefesteje@gmail.com') {
+                setUserStatus('approved');
+              } else if (statusValue === 'rejected') {
+                setUserStatus('rejected');
+              } else {
+                setUserStatus('pending');
+              }
+            } else {
+              // If document doesn't exist in Firestore yet (e.g., they registered in Auth but profile creation hasn't completed or was slow),
+              // fallback to admin auto-approval or default pending.
+              if (user.email === 'oxentefesteje@gmail.com') {
+                setUserStatus('approved');
+              } else {
+                setUserStatus('pending');
+              }
+            }
+          }, (err) => {
+            console.error('Error fetching user snapshot status from Firestore:', err);
+            // Permissions issue or network error
+            if (user.email === 'oxentefesteje@gmail.com') {
+              setUserStatus('approved'); // Admin can bypass
+            } else {
+              setUserStatus('pending');
+            }
+          });
+        } else {
+          // If Firestore DB object is missing for some reason
+          if (user.email === 'oxentefesteje@gmail.com') {
+            setUserStatus('approved');
+          } else {
+            setUserStatus('pending');
+          }
         }
       } else {
         setFirebaseUser(null);
         setUserStatus('unauthenticated');
       }
-    };
+    });
 
-    checkAuthStatus();
-
-    // Listen to custom event for dynamic, live updates across parts of the application
-    window.addEventListener('oxente_auth_change', checkAuthStatus);
     return () => {
-      window.removeEventListener('oxente_auth_change', checkAuthStatus);
+      unsubscribeAuth();
+      if (unsubscribeDoc) {
+        unsubscribeDoc();
+      }
     };
   }, []);
 
   // Online heartbeat and status synchronization with Firestore
   useEffect(() => {
-    if (!firebaseUser || !db || !hasConfig) return;
+    const uid = firebaseUser?.uid;
+    if (!uid || !db || !hasConfig) return;
 
     let isFirstRun = true;
 
     const runHeartbeat = async () => {
       try {
-        const userRef = doc(db, 'users', firebaseUser.uid);
+        const userRef = doc(db, 'users', uid);
         if (isFirstRun) {
           // On first run, create user with createdAt if missing, using merge: true
+          const currentUser = auth?.currentUser;
           await setDoc(userRef, {
-            id: firebaseUser.uid,
-            name: firebaseUser.displayName || 'Usuário Local',
-            email: firebaseUser.email || '',
-            role: (firebaseUser as any).role || (firebaseUser.email === 'oxentefesteje@gmail.com' ? 'admin' : 'colaborador'),
+            id: uid,
+            name: currentUser?.displayName || firebaseUser?.displayName || 'Usuário Local',
+            email: currentUser?.email || firebaseUser?.email || '',
+            role: (firebaseUser as any)?.role || (currentUser?.email === 'oxentefesteje@gmail.com' ? 'admin' : 'colaborador'),
             status: 'approved',
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
@@ -186,7 +264,6 @@ export default function App() {
             updatedAt: serverTimestamp()
           });
         }
-        console.log('Heartbeat synced.');
       } catch (err) {
         console.error('Error running online heartbeat:', err);
       }
@@ -195,7 +272,7 @@ export default function App() {
     runHeartbeat();
     const interval = setInterval(runHeartbeat, 30000); // 30 seconds
     return () => clearInterval(interval);
-  }, [firebaseUser]);
+  }, [firebaseUser?.uid]);
 
   // Load state on mount (with SWR pull from Supabase Cloud Database)
   useEffect(() => {
@@ -700,11 +777,18 @@ export default function App() {
  
           {/* Quick Sign Out Action Trigger */}
           <button
-            onClick={() => {
+            onClick={async () => {
               const confirmExit = window.confirm('Tem certeza que deseja sair do sistema?');
               if (confirmExit) {
                 localStorage.removeItem('oxente_local_bypass');
                 localStorage.removeItem('oxente_custom_user');
+                if (hasConfig && auth) {
+                  try {
+                    await signOut(auth);
+                  } catch (e) {
+                    console.error('Error signing out:', e);
+                  }
+                }
                 window.location.reload();
               }
             }}

@@ -4,7 +4,9 @@ import {
   collection, 
   onSnapshot, 
   query, 
-  orderBy 
+  orderBy,
+  doc,
+  updateDoc
 } from 'firebase/firestore';
 import { 
   Users, 
@@ -22,6 +24,7 @@ interface UserProfile {
   name: string;
   email: string;
   role?: 'admin' | 'colaborador' | string;
+  status?: 'pending' | 'approved' | 'rejected' | string;
   createdAt?: any;
   updatedAt?: any;
 }
@@ -128,6 +131,7 @@ export function UserApprovals() {
           name: data.name,
           email: data.email,
           role: data.role || (data.email === 'oxentefesteje@gmail.com' ? 'admin' : 'colaborador'),
+          status: data.status || 'approved',
           createdAt: data.createdAt,
           updatedAt: data.updatedAt
         });
@@ -241,6 +245,15 @@ export function UserApprovals() {
           {filteredUsers.map((userProfile) => {
             const isSelf = userProfile.email === 'oxentefesteje@gmail.com';
             const isAdminRole = userProfile.role === 'admin' || isSelf;
+            const currentStatus = userProfile.status || 'approved';
+
+            const statusLabelMap: any = {
+              'approved': { text: 'Aprovado', style: 'bg-emerald-950/30 text-emerald-400 border border-emerald-900/30' },
+              'pending': { text: 'Pendente', style: 'bg-amber-950/30 text-amber-400 border border-amber-900/30' },
+              'rejected': { text: 'Recusado', style: 'bg-red-950/30 text-red-400 border border-red-900/30' }
+            };
+
+            const statusInfo = statusLabelMap[currentStatus] || { text: currentStatus, style: 'bg-zinc-805 text-zinc-400' };
 
             return (
               <div 
@@ -267,6 +280,11 @@ export function UserApprovals() {
                       </span>
                     )}
 
+                    {/* Status Badge */}
+                    <span className={`text-[9px] py-0.5 px-2.5 rounded-full font-bold capitalize ${statusInfo.style}`}>
+                      {statusInfo.text}
+                    </span>
+
                     {/* Online/Offline Status Indicator */}
                     {isUserOnline(userProfile) ? (
                       <span className="text-[9px] bg-emerald-950/25 border border-emerald-900/40 text-emerald-400 py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1.5 animate-pulse" title="Conectado agora">
@@ -289,11 +307,62 @@ export function UserApprovals() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 sm:self-center">
-                  {isSelf && (
+                <div className="flex items-center gap-2 flex-wrap sm:self-center">
+                  {isSelf ? (
                     <span className="text-xxs text-zinc-500 font-medium italic border bg-zinc-950/60 border-zinc-900 px-2.5 py-1 rounded-lg">
                       Proprietário Principal
                     </span>
+                  ) : (
+                    <>
+                      {/* Status Action Buttons */}
+                      {currentStatus !== 'approved' && (
+                        <button
+                          onClick={async () => {
+                            if (!db) return;
+                            try {
+                              await updateDoc(doc(db, 'users', userProfile.id), { status: 'approved' });
+                            } catch (e) {
+                              console.error('Error approving user:', e);
+                            }
+                          }}
+                          className="bg-emerald-950/80 hover:bg-emerald-900 text-emerald-300 hover:text-emerald-200 text-xxs font-bold px-3 py-1.5 rounded-xl border border-emerald-800/50 cursor-pointer transition-all"
+                        >
+                          Aprovar
+                        </button>
+                      )}
+
+                      {currentStatus !== 'rejected' && (
+                        <button
+                          onClick={async () => {
+                            if (!db) return;
+                            try {
+                              await updateDoc(doc(db, 'users', userProfile.id), { status: 'rejected' });
+                            } catch (e) {
+                              console.error('Error rejecting user:', e);
+                            }
+                          }}
+                          className="bg-red-950/40 hover:bg-red-950/80 text-red-400 hover:text-red-300 text-xxs font-bold px-3 py-1.5 rounded-xl border border-red-900/30 cursor-pointer transition-all"
+                        >
+                          Recusar
+                        </button>
+                      )}
+
+                      {/* Role Toggle Button */}
+                      <button
+                        onClick={async () => {
+                          if (!db) return;
+                          try {
+                            const newRole = userProfile.role === 'admin' ? 'colaborador' : 'admin';
+                            await updateDoc(doc(db, 'users', userProfile.id), { role: newRole });
+                          } catch (e) {
+                            console.error('Error toggling role:', e);
+                          }
+                        }}
+                        className="bg-zinc-905 hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100 text-xxs font-bold px-3 py-1.5 rounded-xl border border-zinc-800 cursor-pointer transition-all animate-none duration-150 active:scale-95"
+                      >
+                        {userProfile.role === 'admin' ? 'Tornar Colaborador' : 'Tornar Admin'}
+                      </button>
+                    </>
                   )}
                 </div>
 
