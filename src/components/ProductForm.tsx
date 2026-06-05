@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useRef, DragEvent, ChangeEvent } from 'react';
-import { Upload, X, Sparkles, AlertCircle, ShoppingBag, Plus } from 'lucide-react';
-import { Product } from '../types';
+import { Upload, X, Sparkles, AlertCircle, ShoppingBag, Plus, Trash2, Layers } from 'lucide-react';
+import { Product, PricingTier } from '../types';
 
 interface ProductFormProps {
   onAddProduct: (product: Product) => void;
@@ -21,6 +21,11 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  
+  // Progressive Pricing Tiers State
+  const [faixasPreco, setFaixasPreco] = useState<PricingTier[]>([]);
+  const [novaQuantidadeMinima, setNovaQuantidadeMinima] = useState<number | ''>('');
+  const [novoPrecoFaixa, setNovoPrecoFaixa] = useState<number | ''>('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -85,6 +90,41 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
     }
   };
 
+  const handleAddFaixa = () => {
+    if (novaQuantidadeMinima === '' || novoPrecoFaixa === '') {
+      setError('Por favor, informe a quantidade mínima e o preço da faixa.');
+      return;
+    }
+    const qMin = Number(novaQuantidadeMinima);
+    const pFaixa = Number(novoPrecoFaixa);
+    if (isNaN(qMin) || qMin <= 0) {
+      setError('A quantidade mínima deve ser maior que zero.');
+      return;
+    }
+    if (isNaN(pFaixa) || pFaixa <= 0) {
+      setError('O preço para a faixa deve ser maior que zero.');
+      return;
+    }
+    
+    if (faixasPreco.some(f => f.quantidadeMinima === qMin)) {
+      setError(`Já existe um valor configurado para a quantidade mínima de ${qMin}.`);
+      return;
+    }
+
+    const updated = [...faixasPreco, { quantidadeMinima: qMin, preco: pFaixa }]
+      .sort((a, b) => a.quantidadeMinima - b.quantidadeMinima);
+
+    setFaixasPreco(updated);
+    setNovaQuantidadeMinima('');
+    setNovoPrecoFaixa('');
+    setError('');
+  };
+
+  const handleRemoveFaixa = (index: number) => {
+    const updated = faixasPreco.filter((_, i) => i !== index);
+    setFaixasPreco(updated);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
@@ -121,6 +161,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       estoque: Math.floor(estoqueNum),
       imagemBase64: photo || undefined,
       estoqueInfinito: estoqueInfinito || undefined,
+      faixasPreco: faixasPreco.length > 0 ? faixasPreco : undefined,
     };
 
     onAddProduct(newProduct);
@@ -133,6 +174,9 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
     setEstoque('');
     setEstoqueInfinito(false);
     setPhoto('');
+    setFaixasPreco([]);
+    setNovaQuantidadeMinima('');
+    setNovoPrecoFaixa('');
     
     setTimeout(() => {
       setSuccess('');
@@ -252,6 +296,91 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
               className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-600 text-sm disabled:opacity-50 disabled:text-zinc-500 disabled:border-zinc-850"
             />
           </div>
+        </div>
+
+        {/* Progressive Pricing (Tiers) Form Section */}
+        <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800/60 space-y-4">
+          <div className="flex items-center gap-2 border-b border-zinc-800 pb-2.5">
+            <Layers className="h-4 w-4 text-brand-pink" />
+            <h3 className="text-xs font-bold tracking-wider uppercase text-zinc-300">
+              Preços Progressivos (Kits & Atacado)
+            </h3>
+          </div>
+          <p className="text-[11px] text-zinc-500 leading-relaxed leading-snug">
+            Configure preços diferenciados por quantidade. Se o cliente comprar essa quantidade mínima ou superior, este preço será aplicado automaticamente.
+          </p>
+
+          <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+            <div className="sm:col-span-5">
+              <label className="block text-[11px] font-semibold text-zinc-400 mb-1">
+                Qtd Mínima (A partir de)
+              </label>
+              <input
+                type="number"
+                min="2"
+                placeholder="Ex : 10"
+                value={novaQuantidadeMinima}
+                onChange={(e) => setNovaQuantidadeMinima(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-xs text-zinc-100 placeholder-zinc-700"
+              />
+            </div>
+
+            <div className="sm:col-span-4">
+              <label className="block text-[11px] font-semibold text-zinc-400 mb-1">
+                Preço Unitário (R$)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0,00"
+                value={novoPrecoFaixa}
+                onChange={(e) => setNovoPrecoFaixa(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-xs text-zinc-100 placeholder-zinc-700"
+              />
+            </div>
+
+            <div className="sm:col-span-3">
+              <button
+                type="button"
+                onClick={handleAddFaixa}
+                className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-brand-pink hover:text-zinc-100 text-xs font-bold rounded-lg flex items-center justify-center gap-1 transition-colors cursor-pointer border border-zinc-700/50"
+              >
+                <Plus className="h-3 w-3" />
+                <span>Adicionar</span>
+              </button>
+            </div>
+          </div>
+
+          {/* List existing pricing tiers, sorted ascendingly */}
+          {faixasPreco.length > 0 ? (
+            <div className="mt-3 space-y-1.5 max-h-40 overflow-y-auto pr-1">
+              {faixasPreco.map((faixa, i) => (
+                <div
+                  key={i}
+                  className="flex items-center justify-between px-3 py-1.5 bg-black border border-zinc-900 rounded-lg text-xs"
+                >
+                  <div className="flex items-center gap-2 text-zinc-300">
+                    <span className="h-1.5 w-1.5 bg-brand-pink rounded-full" />
+                    <span>A partir de <strong>{faixa.quantidadeMinima}</strong> itens:</span>
+                    <span className="font-mono font-bold text-brand-pink">R$ {faixa.preco.toFixed(2)} /un</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveFaixa(i)}
+                    className="p-1 hover:bg-zinc-900 rounded-md text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                    title="Remover faixa"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-2.5 border border-dashed border-zinc-850 rounded-xl text-zinc-650 text-[11px]">
+              Nenhum preço progressivo adicionado. (O produto terá apenas o preço de venda padrão acima)
+            </div>
+          )}
         </div>
 
         {/* Drag and Drop File Input */}

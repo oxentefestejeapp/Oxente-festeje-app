@@ -33,8 +33,12 @@ CREATE TABLE IF NOT EXISTS oxente_products (
   imagem_base64 TEXT,
   estoque_infinito BOOLEAN,
   preco_custo NUMERIC,
+  precos_progressivos TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Garantir que a coluna de preços progressivos exista se a tabela já foi criada anteriormente
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS precos_progressivos TEXT;
 
 -- Habilitar leitura/escrita aberta para simplificar (ajuste as políticas RLS como preferir em produção)
 ALTER TABLE oxente_products ENABLE ROW LEVEL SECURITY;
@@ -109,18 +113,32 @@ const mapProductToDb = (product: Product) => ({
   imagem_base64: product.imagemBase64 || null,
   estoque_infinito: product.estoqueInfinito || false,
   preco_custo: product.precoCusto || null,
+  precos_progressivos: product.faixasPreco ? JSON.stringify(product.faixasPreco) : null,
   updated_at: new Date().toISOString()
 });
 
-const mapDbToProduct = (dbItem: any): Product => ({
-  id: dbItem.id,
-  nome: dbItem.nome,
-  preco: Number(dbItem.preco),
-  estoque: Number(dbItem.estoque),
-  imagemBase64: dbItem.imagem_base64 || undefined,
-  estoqueInfinito: dbItem.estoque_infinito || undefined,
-  precoCusto: dbItem.preco_custo ? Number(dbItem.preco_custo) : undefined
-});
+const mapDbToProduct = (dbItem: any): Product => {
+  let faixasPreco = undefined;
+  if (dbItem.precos_progressivos) {
+    try {
+      faixasPreco = typeof dbItem.precos_progressivos === 'string'
+        ? JSON.parse(dbItem.precos_progressivos)
+        : dbItem.precos_progressivos;
+    } catch (e) {
+      console.error('Falha ao parsear precos_progressivos do banco de dados:', e);
+    }
+  }
+  return {
+    id: dbItem.id,
+    nome: dbItem.nome,
+    preco: Number(dbItem.preco),
+    estoque: Number(dbItem.estoque),
+    imagemBase64: dbItem.imagem_base64 || undefined,
+    estoqueInfinito: dbItem.estoque_infinito || undefined,
+    precoCusto: dbItem.precoCusto ? Number(dbItem.preco_custo) : undefined,
+    faixasPreco
+  };
+};
 
 const mapSaleToDb = (sale: Sale) => ({
   id: sale.id,
@@ -230,6 +248,17 @@ export const dbSupabase = {
       const dbRow = mapProductToDb(product);
       const { error } = await supabase.from('oxente_products').upsert(dbRow);
       if (error) {
+        if (error.code === '42703') {
+          console.warn('Coluna precos_progressivos ausente no Supabase. Salvando localmente e persistindo os demais dados no banco online:', error.message);
+          const fallbackRow = { ...dbRow };
+          delete (fallbackRow as any).precos_progressivos;
+          const { error: fallbackError } = await supabase.from('oxente_products').upsert(fallbackRow);
+          if (fallbackError) {
+            console.error('Erro no fallback de salvar produto no Supabase:', fallbackError.message);
+            return false;
+          }
+          return true;
+        }
         console.error('Erro ao salvar produto no Supabase:', error.message);
         return false;
       }

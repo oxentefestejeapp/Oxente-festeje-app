@@ -28,7 +28,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db, hasConfig } from './lib/firebase';
-import { dbSupabase } from './lib/supabase';
+import { supabase, dbSupabase } from './lib/supabase';
 
 import { Header } from './components/Header';
 import { ProductForm } from './components/ProductForm';
@@ -61,7 +61,11 @@ export default function App() {
   const [products, setProducts] = useState<Product[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(defaultStoreInfo);
-  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web'>('vendas');
+  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web'>(() => {
+    const saved = localStorage.getItem('oxente_active_tab');
+    const allowedTabs = ['vendas', 'a_receber', 'entregas', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'lembretes', 'pedidos_fechados', 'whatsapp_web'];
+    return (allowedTabs.includes(saved || '') ? saved : 'vendas') as any;
+  });
   const [preselectedSaleId, setPreselectedSaleId] = useState<string | null>(null);
 
   // 3. Supabase Sync Status State
@@ -331,9 +335,81 @@ export default function App() {
     syncDataWithSupabase();
   }, []);
 
+  // Persist active tab selection to localStorage
+  useEffect(() => {
+    localStorage.setItem('oxente_active_tab', activeTab);
+  }, [activeTab]);
+
+  // Real-time Supabase Database Synchronisation for all users in real-time
+  useEffect(() => {
+    let active = true;
+
+    const handleProductsChange = async () => {
+      if (!active) return;
+      try {
+        const dbProds = await dbSupabase.fetchProducts();
+        if (dbProds && dbProds.length > 0 && active) {
+          setProducts(dbProds);
+          localStorage.setItem('oxente_products', JSON.stringify(dbProds));
+        }
+      } catch (err) {
+        console.error('Erro ao sincronizar produtos em tempo real:', err);
+      }
+    };
+
+    const handleSalesChange = async () => {
+      if (!active) return;
+      try {
+        const dbSales = await dbSupabase.fetchSales();
+        if (dbSales && dbSales.length > 0 && active) {
+          setSales(dbSales);
+          localStorage.setItem('oxente_sales', JSON.stringify(dbSales));
+        }
+      } catch (err) {
+        console.error('Erro ao sincronizar vendas em tempo real:', err);
+      }
+    };
+
+    const handleStoreChange = async () => {
+      if (!active) return;
+      try {
+        const dbStore = await dbSupabase.fetchStoreInfo();
+        if (dbStore && active) {
+          setStoreInfo(dbStore);
+          localStorage.setItem('oxente_store_info', JSON.stringify(dbStore));
+        }
+      } catch (err) {
+        console.error('Erro ao sincronizar configurações em tempo real:', err);
+      }
+    };
+
+    // Listen to real-time event notifications from Supabase
+    const productsChannel = supabase
+      .channel('oxente_products_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_products' }, handleProductsChange)
+      .subscribe();
+
+    const salesChannel = supabase
+      .channel('oxente_sales_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_sales' }, handleSalesChange)
+      .subscribe();
+
+    const storeChannel = supabase
+      .channel('oxente_store_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_store_info' }, handleStoreChange)
+      .subscribe();
+
+    return () => {
+      active = false;
+      supabase.removeChannel(productsChannel);
+      supabase.removeChannel(salesChannel);
+      supabase.removeChannel(storeChannel);
+    };
+  }, []);
+
   // Guarantee that non-admin accounts are immediately kicked back from restricted/admin tabs
   useEffect(() => {
-    const restrictedTabs = ['usuarios', 'a_receber', 'estoque', 'cadastro', 'configuracoes', 'auditoria'];
+    const restrictedTabs = ['usuarios', 'a_receber', 'cadastro', 'configuracoes', 'auditoria'];
     if (restrictedTabs.includes(activeTab) && !isAdmin) {
       setActiveTab('vendas');
     }
@@ -641,23 +717,21 @@ export default function App() {
           </button>
 
 
-          {isAdmin && (
-            <button
-              onClick={() => changeTab('estoque')}
-              className={getTabClass('estoque')}
+          <button
+            onClick={() => changeTab('estoque')}
+            className={getTabClass('estoque')}
+          >
+            <motion.div
+              animate={activeTab === 'estoque' ? { scale: [1, 1.3, 1], rotate: [0, 8, -8, 0] } : { scale: 1, rotate: 0 }}
+              whileHover={{ scale: 1.25 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ duration: 0.3 }}
             >
-              <motion.div
-                animate={activeTab === 'estoque' ? { scale: [1, 1.3, 1], rotate: [0, 8, -8, 0] } : { scale: 1, rotate: 0 }}
-                whileHover={{ scale: 1.25 }}
-                whileTap={{ scale: 0.9 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Package className="h-4 w-4" />
-              </motion.div>
-              <span className="hidden sm:inline">Conferir Estoque</span>
-              <span className="sm:hidden">Estoque</span>
-            </button>
-          )}
+              <Package className="h-4 w-4" />
+            </motion.div>
+            <span className="hidden sm:inline">Conferir Estoque</span>
+            <span className="sm:hidden">Estoque</span>
+          </button>
  
           {isAdmin && (
             <button
@@ -793,11 +867,12 @@ export default function App() {
               <ProductForm onAddProduct={handleAddProduct} />
             )}
 
-            {activeTab === 'estoque' && isAdmin && (
+            {activeTab === 'estoque' && (
               <StockManager
                 products={products}
                 onUpdateStock={handleUpdateStock}
                 onDeleteProduct={handleDeleteProduct}
+                isAdmin={isAdmin}
               />
             )}
 

@@ -3,6 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+export interface PricingTier {
+  quantidadeMinima: number;
+  preco: number;
+}
+
 export interface Product {
   id: string;
   nome: string;
@@ -11,6 +16,7 @@ export interface Product {
   imagemBase64?: string; // Stored as data URL (base64) for robust local storage persistence
   estoqueInfinito?: boolean;
   precoCusto?: number;
+  faixasPreco?: PricingTier[];
 }
 
 export type PaymentMethod = 'Pix' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito';
@@ -78,4 +84,19 @@ export interface StoreInfo {
   telefone: string;
   endereco: string;
   whatsappTemplate?: string;
+}
+
+export function getProductUnitPrice(product: Product, quantity: number): number {
+  if (!product.faixasPreco || product.faixasPreco.length === 0) {
+    return product.preco;
+  }
+  let price = product.preco;
+  let highestMinQty = 0;
+  for (const f of product.faixasPreco) {
+    if (quantity >= f.quantidadeMinima && f.quantidadeMinima > highestMinQty) {
+      price = f.preco;
+      highestMinQty = f.quantidadeMinima;
+    }
+  }
+  return price;
 }

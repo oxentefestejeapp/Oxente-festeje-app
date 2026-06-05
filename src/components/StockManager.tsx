@@ -11,9 +11,10 @@ interface StockManagerProps {
   products: Product[];
   onUpdateStock: (id: string, newStock: number, isInfinite?: boolean) => void;
   onDeleteProduct: (id: string) => void;
+  isAdmin?: boolean;
 }
 
-export function StockManager({ products, onUpdateStock, onDeleteProduct }: StockManagerProps) {
+export function StockManager({ products, onUpdateStock, onDeleteProduct, isAdmin = false }: StockManagerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
 
@@ -233,82 +234,106 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct }: Stock
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <label className="text-xs font-semibold text-zinc-400 block">Estoque Disponível:</label>
-                      <label className="flex items-center gap-1 text-[11px] text-brand-pink font-semibold cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={!!p.estoqueInfinito}
-                          onChange={(e) => onUpdateStock(p.id, p.estoque, e.target.checked)}
-                          className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-3 w-3 cursor-pointer bg-black"
-                        />
-                        <span>Estoque Infinito</span>
-                      </label>
-                    </div>
-                    <div className="flex items-center">
-                      <button
-                        onClick={() => handleDecrement(p.id, p.estoque)}
-                        disabled={p.estoqueInfinito || p.estoque <= 0}
-                        className="p-2 border border-zinc-800 bg-black rounded-l-lg hover:bg-zinc-900 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 font-bold active:scale-95 disabled:opacity-40 select-none cursor-pointer"
-                        title="Remover 1 item"
-                      >
-                        <Minus className="h-4 w-4" />
-                      </button>
-                      {p.estoqueInfinito ? (
-                        <div className="w-full text-center py-1.5 px-2 bg-black border-y border-zinc-800 text-xs font-extrabold text-brand-pink">
-                          ∞ Sem limites
-                        </div>
-                      ) : (
-                        <input
-                          type="number"
-                          min="0"
-                          value={p.estoque}
-                          onChange={(e) => handleStockChange(p.id, p.estoque, e.target.value)}
-                          className="w-full text-center py-1.5 px-2 bg-black border-y border-zinc-800 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-sm font-semibold text-zinc-100"
-                        />
+                      {isAdmin && (
+                        <label className="flex items-center gap-1 text-[11px] text-brand-pink font-semibold cursor-pointer select-none">
+                          <input
+                            type="checkbox"
+                            checked={!!p.estoqueInfinito}
+                            onChange={(e) => onUpdateStock(p.id, p.estoque, e.target.checked)}
+                            className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-3 w-3 cursor-pointer bg-black"
+                          />
+                          <span>Estoque Infinito</span>
+                        </label>
                       )}
-                      <button
-                        onClick={() => handleIncrement(p.id, p.estoque)}
-                        disabled={p.estoqueInfinito}
-                        className="p-2 border border-zinc-800 bg-black rounded-r-lg hover:bg-zinc-900 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 font-bold active:scale-95 select-none cursor-pointer disabled:opacity-40"
-                        title="Adicionar 1 item"
-                      >
-                        <Plus className="h-4 w-4" />
-                      </button>
                     </div>
+                    
+                    {isAdmin ? (
+                      <div className="flex items-center">
+                        <button
+                          onClick={() => handleDecrement(p.id, p.estoque)}
+                          disabled={p.estoqueInfinito || p.estoque <= 0}
+                          className="p-2 border border-zinc-800 bg-black rounded-l-lg hover:bg-zinc-900 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 font-bold active:scale-95 disabled:opacity-40 select-none cursor-pointer"
+                          title="Remover 1 item"
+                        >
+                          <Minus className="h-4 w-4" />
+                        </button>
+                        {p.estoqueInfinito ? (
+                          <div className="w-full text-center py-1.5 px-2 bg-black border-y border-zinc-800 text-xs font-extrabold text-brand-pink">
+                            ∞ Sem limites
+                          </div>
+                        ) : (
+                          <input
+                            type="number"
+                            min="0"
+                            value={p.estoque}
+                            onChange={(e) => handleStockChange(p.id, p.estoque, e.target.value)}
+                            className="w-full text-center py-1.5 px-2 bg-black border-y border-zinc-800 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-sm font-semibold text-zinc-100"
+                          />
+                        )}
+                        <button
+                          onClick={() => handleIncrement(p.id, p.estoque)}
+                          disabled={p.estoqueInfinito}
+                          className="p-2 border border-zinc-800 bg-black rounded-r-lg hover:bg-zinc-900 text-zinc-300 focus:outline-none focus:ring-1 focus:ring-brand-pink/50 font-bold active:scale-95 select-none cursor-pointer disabled:opacity-40"
+                          title="Adicionar 1 item"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div>
+                        {p.estoqueInfinito ? (
+                          <div className="w-full text-center py-2.5 px-4 bg-zinc-950 border border-zinc-850 rounded-xl text-xs font-black text-brand-pink tracking-wider uppercase">
+                            Disponibilidade Ilimitada ∞
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between py-2 px-4 bg-zinc-950 border border-zinc-850 rounded-xl">
+                            <span className="text-sm font-bold text-zinc-100 font-mono">
+                              {p.estoque} {p.estoque === 1 ? 'unidade' : 'unidades'}
+                            </span>
+                            <span className={`h-2.5 w-2.5 rounded-full ${p.estoque === 0 ? 'bg-red-500' : p.estoque <= 5 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
-                  {/* Delete or Confirmation Actions */}
-                  {!isDeleting ? (
-                    <button
-                      onClick={() => setProductToDelete(p.id)}
-                      className="w-full py-2 hover:bg-red-950/20 text-red-450 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 border border-dashed border-red-900/30 focus:border-red-500 transition-colors cursor-pointer"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                      <span>Excluir Produto</span>
-                    </button>
-                  ) : (
-                    <div className="bg-red-950/20 border border-red-900/40 rounded-xl p-3 space-y-2.5 animate-fade-in">
-                      <div className="flex items-start gap-1.5 text-red-300 text-[11px] leading-snug">
-                        <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
-                        <span>Tem certeza que deseja remover este produto? Isso excluirá seus registros de estoque.</span>
-                      </div>
-                      <div className="flex items-center gap-2">
+                  {/* Delete or Confirmation Actions (Admin Only) */}
+                  {isAdmin && (
+                    <>
+                      {!isDeleting ? (
                         <button
-                          onClick={() => {
-                            onDeleteProduct(p.id);
-                            setProductToDelete(null);
-                          }}
-                          className="flex-1 py-1 px-2.5 bg-red-650 hover:bg-red-700 text-white rounded-md text-xs font-semibold shadow-xs select-none cursor-pointer"
+                          onClick={() => setProductToDelete(p.id)}
+                          className="w-full py-2 hover:bg-red-950/20 text-red-450 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 border border-dashed border-red-900/30 focus:border-red-500 transition-colors cursor-pointer"
                         >
-                          Confirmar
+                          <Trash2 className="h-4 w-4" />
+                          <span>Excluir Produto</span>
                         </button>
-                        <button
-                          onClick={() => setProductToDelete(null)}
-                          className="flex-1 py-1 px-2.5 bg-black border border-zinc-800 rounded-md text-zinc-400 text-xs font-semibold hover:bg-zinc-900 cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
+                      ) : (
+                        <div className="bg-red-950/20 border border-red-900/40 rounded-xl p-3 space-y-2.5 animate-fade-in">
+                          <div className="flex items-start gap-1.5 text-red-300 text-[11px] leading-snug">
+                            <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
+                            <span>Tem certeza que deseja remover este produto? Isso excluirá seus registros de estoque.</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => {
+                                onDeleteProduct(p.id);
+                                setProductToDelete(null);
+                              }}
+                              className="flex-1 py-1 px-2.5 bg-red-650 hover:bg-red-700 text-white rounded-md text-xs font-semibold shadow-xs select-none cursor-pointer"
+                            >
+                              Confirmar
+                            </button>
+                            <button
+                              onClick={() => setProductToDelete(null)}
+                              className="flex-1 py-1 px-2.5 bg-black border border-zinc-800 rounded-md text-zinc-400 text-xs font-semibold hover:bg-zinc-900 cursor-pointer"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </>
                   )}
 
                 </div>

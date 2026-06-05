@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Product, Sale, PaymentMethod, StoreInfo, SaleItem } from '../types';
+import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice } from '../types';
 import { Receipt } from './Receipt';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
@@ -247,7 +247,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return cart.reduce((sum, item) => sum + item.total, 0);
     }
     return selectedProduct && typeof quantidade === 'number' 
-      ? selectedProduct.preco * quantidade 
+      ? getProductUnitPrice(selectedProduct, quantidade) * quantidade 
       : 0;
   }, [cart, selectedProduct, quantidade]);
 
@@ -323,17 +323,20 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     const existingIdx = cart.findIndex(c => c.product.id === prod.id);
     if (existingIdx > -1) {
       const updatedCart = [...cart];
-      updatedCart[existingIdx].quantity += qtyNum;
-      updatedCart[existingIdx].total = updatedCart[existingIdx].quantity * prod.preco;
+      const newQuantity = updatedCart[existingIdx].quantity + qtyNum;
+      const unitPrice = getProductUnitPrice(prod, newQuantity);
+      updatedCart[existingIdx].quantity = newQuantity;
+      updatedCart[existingIdx].total = newQuantity * unitPrice;
       setCart(updatedCart);
     } else {
+      const unitPrice = getProductUnitPrice(prod, qtyNum);
       setCart([
         ...cart,
         {
           id: `item-${prod.id}-${Date.now()}`,
           product: prod,
           quantity: qtyNum,
-          total: qtyNum * prod.preco
+          total: qtyNum * unitPrice
         }
       ]);
     }
@@ -365,7 +368,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         id: item.id,
         produtoId: item.product.id,
         produtoNome: item.product.nome,
-        precoUn: item.product.preco,
+        precoUn: getProductUnitPrice(item.product, item.quantity),
         quantidade: item.quantity,
         total: item.total
       }));
@@ -383,13 +386,14 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         setFormError(`Quantidade indisponível no estoque! Estoque atual de "${selectedProduct.nome}": ${selectedProduct.estoque} un.`);
         return;
       }
+      const progressiveUnitPrice = getProductUnitPrice(selectedProduct, qtyNum);
       finalItens = [{
         id: `item-${selectedProduct.id}-${Date.now()}`,
         produtoId: selectedProduct.id,
         produtoNome: selectedProduct.nome,
-        precoUn: selectedProduct.preco,
+        precoUn: progressiveUnitPrice,
         quantidade: qtyNum,
-        total: totalVenda
+        total: progressiveUnitPrice * qtyNum
       }];
     }
 
@@ -877,6 +881,41 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                   className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 text-sm placeholder-zinc-650 font-semibold"
                   placeholder="Ex: 2"
                 />
+                
+                {/* Dynamically display active progressive price tier */}
+                {selectedProduct && (
+                  <div className="mt-2 text-xs">
+                    <span className="text-zinc-450 text-[11px]">Preço Unitário Aplicado: </span>
+                    <span className="font-extrabold text-brand-pink font-mono">
+                      R$ {getProductUnitPrice(selectedProduct, Number(quantidade) || 1).toFixed(2)}
+                    </span>
+                    {selectedProduct.faixasPreco && selectedProduct.faixasPreco.length > 0 && (
+                      <div className="mt-1.5 bg-black border border-zinc-900/80 p-2.5 rounded-lg space-y-1 animate-fade-in">
+                        <span className="block text-[10px] font-bold text-zinc-500 uppercase tracking-wider">
+                          Tabela de Desconto Progressivo:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedProduct.faixasPreco.map((faixa, idx) => {
+                            const isQtyMet = (Number(quantidade) || 1) >= faixa.quantidadeMinima;
+                            return (
+                              <div
+                                key={idx}
+                                className={`px-2 py-1 rounded-md text-[10px] font-medium transition-colors ${
+                                  isQtyMet
+                                    ? 'bg-brand-pink/10 text-brand-pink border border-brand-pink/25 font-bold'
+                                    : 'bg-zinc-950 text-zinc-600 border border-zinc-900/50'
+                                }`}
+                              >
+                                {faixa.quantidadeMinima}+ un: R$ {faixa.preco.toFixed(2)}
+                                {isQtyMet && <span className="ml-1 text-[9px]">✓</span>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div>
