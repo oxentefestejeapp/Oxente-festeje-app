@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { MessageSquare, ExternalLink, Search, Phone, User, Send, Info, AlertCircle, FileText } from 'lucide-react';
+import { MessageSquare, Search, Phone, User, Send, FileText } from 'lucide-react';
 import { Sale, StoreInfo } from '../types';
 
 interface WhatsAppWebTabProps {
@@ -122,129 +122,85 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
     window.open(url, '_blank');
   };
 
-  const handleOpenWhatsAppWebDirectly = () => {
-    window.open('https://web.whatsapp.com/', '_blank');
-  };
-
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch no-print">
+    <div className="bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden shadow-xl no-print max-w-5xl mx-auto animate-in fade-in duration-200">
       
-      {/* COLUMN 1: Direct Integration with official WhatsApp Web (7 cols) */}
-      <div className="lg:col-span-8 flex flex-col bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl min-h-[680px]">
-        
-        {/* Header decoration */}
-        <div className="bg-zinc-950 border-b border-zinc-800 p-4 shrink-0 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl">
-              <MessageSquare className="h-5 w-5" />
-            </div>
-            <div>
-              <h2 className="font-display font-bold text-base text-zinc-100 flex items-center gap-1.5">
-                Painel WhatsApp Web
-                <span className="text-[10px] bg-emerald-500/15 text-emerald-400 px-2 py-0.5 rounded-full font-bold">Oficial</span>
-              </h2>
-              <p className="text-xs text-zinc-400 mt-0.5">Atenda seus clientes de forma sincronizada</p>
-            </div>
-          </div>
-          
-          <button
-            onClick={handleOpenWhatsAppWebDirectly}
-            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-emerald-950/20 active:scale-97"
-            title="Abre o WhatsApp Web em uma janela cheia alternativa de backup"
-          >
-            <span>Abrir WhatsApp Web Oficial</span>
-            <ExternalLink className="h-3.5 w-3.5" />
-          </button>
+      {/* Header decoration */}
+      <div className="bg-zinc-900 border-b border-zinc-850 p-6 flex items-center gap-3">
+        <div className="p-2.5 bg-brand-pink/10 border border-brand-pink/20 text-brand-pink rounded-xl">
+          <MessageSquare className="h-6 w-6" />
         </div>
-
-        {/* Warning Alert banner */}
-        <div className="bg-zinc-950/45 px-5 py-3 border-b border-zinc-850 text-[11px] text-zinc-400 flex items-start gap-2.5">
-          <AlertCircle className="h-4 w-4 text-emerald-500 shrink-0 mt-0.5" />
-          <div>
-            <span className="text-zinc-200 font-bold block mb-0.5">Dica Importante:</span>
-            O WhatsApp Web original bloqueia a exibição em telas internas (frames) em alguns navegadores devido a políticas rígidas de segurança corporativa do Meta. Se a janela abaixo carregar em branco ou com erro, clique em <strong className="text-emerald-400 cursor-pointer hover:underline" onClick={handleOpenWhatsAppWebDirectly}>"Abrir WhatsApp Web Oficial"</strong> logo acima para conectar em uma nova janela de forma segura.
-          </div>
-        </div>
-
-        {/* Frame container */}
-        <div className="flex-1 bg-zinc-950 relative min-h-[500px]">
-          <iframe
-            src="https://web.whatsapp.com/"
-            title="WhatsApp Web Desktop"
-            className="absolute inset-0 w-full h-full border-0 rounded-b-2xl bg-zinc-950"
-            allow="camera; microphone; clipboard-read; clipboard-write; geolocation"
-            referrerPolicy="no-referrer"
-          />
+        <div>
+          <h2 className="font-display font-bold text-lg text-white flex items-center gap-1.5">
+            Assistente de Mensagens WhatsApp
+            <span className="text-[10px] bg-brand-pink/20 text-brand-pink px-2.5 py-0.5 rounded-full font-bold">Oxente</span>
+          </h2>
+          <p className="text-xs text-zinc-400 mt-0.5">Prepare e envie mensagens rápidas para seus clientes de forma simplificada</p>
         </div>
       </div>
 
-      {/* COLUMN 2: Contact Book & Fast Messages Assistant (4 cols) */}
-      <div className="lg:col-span-4 flex flex-col bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden shadow-xl min-h-[680px]">
-        
-        {/* Assistant Header */}
-        <div className="bg-zinc-950 border-b border-zinc-800 p-4">
-          <h2 className="font-display font-semibold text-sm text-zinc-200 flex items-center gap-1.5">
-            <span className="p-1 px-1.5 bg-brand-pink/10 border border-brand-pink/20 rounded-lg text-brand-pink text-[11px] font-black">AI</span>
-            Assistente de Mensagens
-          </h2>
-          <p className="text-[11px] text-zinc-400 mt-0.5">Agilize contatos recolhendo dados das suas vendas</p>
-        </div>
-
-        {/* Action center form */}
-        <div className="p-4 space-y-4 border-b border-zinc-805 bg-zinc-950/25 shrink-0">
+      <div className="grid grid-cols-1 md:grid-cols-12 md:divide-x md:divide-zinc-900">
+        {/* LEFT COLUMN: Message Editor & Actions (7 cols) */}
+        <div className="md:col-span-7 p-6 space-y-5 bg-zinc-950">
           
           {/* Quick client select input */}
-          <div>
-            <label className="block text-[11px] font-bold text-zinc-400 tracking-wide uppercase mb-1.5">
+          <div className="space-y-2">
+            <label className="block text-[11px] font-bold text-zinc-400 tracking-wide uppercase">
               Destinatário
             </label>
             
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="text"
-                placeholder="Nome do cliente"
-                value={selectedClientName}
-                onChange={(e) => setSelectedClientName(e.target.value)}
-                className="px-3 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 focus:border-brand-pink rounded-xl text-xs text-zinc-100 placeholder-zinc-500 focus:outline-hidden transition-all w-full font-medium"
-              />
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <span className="text-[9px] text-zinc-500 font-bold tracking-wide uppercase">Nome do Cliente</span>
+                <input
+                  type="text"
+                  placeholder="Nome do cliente"
+                  value={selectedClientName}
+                  onChange={(e) => setSelectedClientName(e.target.value)}
+                  className="px-3.5 py-2.5 bg-zinc-905 border border-zinc-850 hover:border-zinc-800 focus:border-brand-pink rounded-xl text-xs text-zinc-100 placeholder-zinc-650 focus:ring-1 focus:ring-brand-pink focus:outline-hidden transition-all w-full font-medium"
+                />
+              </div>
               
-              <input
-                type="text"
-                placeholder="Tel (DDD + Número)"
-                value={selectedPhone}
-                onChange={(e) => setSelectedPhone(e.target.value)}
-                className="px-3 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 focus:border-brand-pink rounded-xl text-xs tracking-wide text-zinc-100 placeholder-zinc-500 focus:outline-hidden transition-all font-mono font-medium w-full"
-              />
+              <div className="space-y-1">
+                <span className="text-[9px] text-zinc-500 font-bold tracking-wide uppercase font-mono">Telefone (DDD + Número)</span>
+                <input
+                  type="text"
+                  placeholder="Tel (DDD + Número)"
+                  value={selectedPhone}
+                  onChange={(e) => setSelectedPhone(e.target.value)}
+                  className="px-3.5 py-2.5 bg-zinc-905 border border-zinc-850 hover:border-zinc-800 focus:border-brand-pink rounded-xl text-xs tracking-wide text-zinc-100 placeholder-zinc-650 focus:ring-1 focus:ring-brand-pink focus:outline-hidden transition-all font-mono font-medium w-full"
+                />
+              </div>
             </div>
           </div>
 
           {/* Quick Message Input Area */}
-          <div>
-            <label className="block text-[11px] font-bold text-zinc-400 tracking-wide uppercase mb-1.5">
+          <div className="space-y-2">
+            <label className="block text-[11px] font-bold text-zinc-400 tracking-wide uppercase">
               Mensagem para Enviar
             </label>
             <textarea
-              rows={4}
+              rows={6}
               placeholder="Digite aqui sua mensagem personalizada..."
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
-              className="px-3 py-2 bg-zinc-900 border border-zinc-800 hover:border-zinc-700 focus:border-brand-pink rounded-xl text-xs text-zinc-200 placeholder-zinc-500 focus:outline-hidden transition-all w-full resize-none leading-relaxed"
+              className="px-4 py-3 bg-zinc-905 border border-zinc-855 hover:border-zinc-800 focus:border-brand-pink rounded-xl text-xs text-zinc-200 placeholder-zinc-650 focus:ring-1 focus:ring-brand-pink focus:outline-hidden transition-all w-full resize-none leading-relaxed"
             />
           </div>
 
           {/* Destination Dispatch Selection */}
-          <div>
-            <label className="block text-[11px] font-bold text-zinc-400 tracking-wide uppercase mb-1.5 select-none">
+          <div className="space-y-2">
+            <label className="block text-[11px] font-bold text-zinc-400 tracking-wide uppercase select-none">
               Enviar através do:
             </label>
-            <div className="grid grid-cols-2 gap-1.5 bg-zinc-900 p-1.5 rounded-xl border border-zinc-800">
+            <div className="grid grid-cols-2 gap-2 bg-zinc-905 p-1.5 rounded-xl border border-zinc-850">
               <button
                 type="button"
                 onClick={() => setSendMethod('web')}
-                className={`py-1.5 px-3 rounded-lg text-[10px] font-extrabold tracking-wider uppercase transition-all active:scale-95 cursor-pointer ${
+                className={`py-2 px-3 rounded-lg text-[10px] font-extrabold tracking-wider uppercase transition-all active:scale-95 cursor-pointer ${
                   sendMethod === 'web'
                     ? 'bg-emerald-500 text-black shadow-md shadow-emerald-500/10'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
                 }`}
                 title="Abre a conversa diretamente no WhatsApp Web no seu navegador Chrome/Firefox"
               >
@@ -253,10 +209,10 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
               <button
                 type="button"
                 onClick={() => setSendMethod('api')}
-                className={`py-1.5 px-3 rounded-lg text-[10px] font-extrabold tracking-wider uppercase transition-all active:scale-95 cursor-pointer ${
+                className={`py-2 px-3 rounded-lg text-[10px] font-extrabold tracking-wider uppercase transition-all active:scale-95 cursor-pointer ${
                   sendMethod === 'api'
                     ? 'bg-zinc-800 border border-zinc-700 text-zinc-200'
-                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850'
+                    : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-850/60'
                 }`}
                 title="Dispara o protocolo para abrir o aplicativo nativo instalado no celular ou no computador"
               >
@@ -269,42 +225,45 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
           <button
             onClick={handleSendAndLaunch}
             disabled={!customMessage.trim()}
-            className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-800 disabled:text-zinc-650 text-white font-extrabold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-97 border border-emerald-550/20 disabled:border-transparent"
+            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-900 disabled:text-zinc-650 disabled:border-transparent text-white font-extrabold rounded-xl text-xs transition-all flex items-center justify-center gap-2 cursor-pointer shadow-md active:scale-97 border border-emerald-550/20"
           >
             <Send className="h-3.5 w-3.5" />
             <span>Disparar Mensagem no WhatsApp</span>
           </button>
         </div>
 
-        {/* Quick Contacts Directory */}
-        <div className="flex-1 flex flex-col min-h-0 bg-zinc-900">
+        {/* RIGHT COLUMN: Contact Book & Fast Messages Assistant (5 cols) */}
+        <div className="md:col-span-12 lg:col-span-5 flex flex-col min-h-0 bg-zinc-900/10">
           
-          {/* Tabs switch / title */}
-          <div className="px-4 py-3 border-b border-zinc-800 bg-zinc-950/25 shrink-0 flex items-center justify-between gap-2">
-            <span className="text-[10px] font-bold text-zinc-400 tracking-wider uppercase">Clientes Recentes com Salles</span>
-            <span className="text-[10px] bg-zinc-800 px-2 py-0.5 rounded-full font-bold text-zinc-400">
-              {filteredContacts.length} contatos
-            </span>
-          </div>
-
-          {/* Search Contacts Directory */}
-          <div className="p-3 border-b border-zinc-800/60 bg-zinc-950/10 shrink-0">
-            <div className="relative">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-550" />
+          {/* Customers panel title */}
+          <div className="p-4 bg-zinc-950/45 border-b border-zinc-900">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-[11px] font-bold text-zinc-350 tracking-wider uppercase flex items-center gap-1.5">
+                <User className="h-4 w-4 text-brand-pink" />
+                Clientes Recentes
+              </span>
+              <span className="text-[10px] bg-zinc-805 px-2 py-0.5 rounded-full font-bold text-zinc-400">
+                {filteredContacts.length} contatos
+              </span>
+            </div>
+            
+            {/* Search Contacts Directory */}
+            <div className="relative mt-3">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
               <input
                 type="text"
                 placeholder="Pesquisar cliente ou número..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-3 py-1.5 bg-zinc-950 border border-zinc-800 hover:border-zinc-750 focus:border-brand-pink rounded-lg text-[11px] text-zinc-300 placeholder-zinc-600 focus:outline-hidden transition-all"
+                className="w-full pl-9 pr-3 py-2 bg-zinc-905 border border-zinc-850 hover:border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink rounded-xl text-xs text-zinc-300 placeholder-zinc-600 focus:outline-hidden transition-all"
               />
             </div>
           </div>
 
           {/* Dynamic Scroll Contacts */}
-          <div className="flex-grow overflow-y-auto p-2 space-y-1 max-h-[170px] min-h-[120px] scrollbar-thin border-b border-zinc-800">
+          <div className="flex-1 p-3 space-y-1.5 overflow-y-auto max-h-[280px] min-h-[180px] scrollbar-thin border-b border-zinc-900">
             {filteredContacts.length === 0 ? (
-              <div className="p-6 text-center text-[11px] text-zinc-550">
+              <div className="p-8 text-center text-xs text-zinc-500">
                 Nenhum telefone encontrado nas vendas.
               </div>
             ) : (
@@ -314,23 +273,23 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
                   <button
                     key={`${contact.phone}-${idx}`}
                     onClick={() => handleSelectContact(contact)}
-                    className={`w-full text-left p-2 rounded-lg text-xs transition-all flex items-center justify-between gap-2 cursor-pointer border ${
+                    className={`w-full text-left p-3 rounded-2xl text-xs transition-all flex items-center justify-between gap-2 cursor-pointer border ${
                       isSelected 
                         ? 'bg-brand-pink/10 border-brand-pink/30 text-brand-pink font-semibold' 
-                        : 'bg-zinc-950/25 border-transparent hover:border-zinc-800 hover:bg-zinc-950/45 text-zinc-300'
+                        : 'bg-zinc-900 border-zinc-850/60 hover:border-zinc-800 hover:bg-zinc-900/60 text-zinc-300'
                     }`}
                   >
                     <div className="min-w-0 pr-1">
                       <p className="font-bold truncate text-[11.5px] leading-tight">
                         {contact.name}
                       </p>
-                      <p className="text-[10px] text-zinc-500 font-mono mt-0.5 flex items-center gap-1">
-                        <Phone className="h-2.5 w-2.5 text-zinc-605" />
+                      <p className="text-[10px] text-zinc-550 font-mono mt-1 flex items-center gap-1.5">
+                        <Phone className="h-3 w-3 text-zinc-600" />
                         {contact.phone}
                       </p>
                     </div>
                     {contact.latestOrder && (
-                      <span className="shrink-0 text-[8.5px] bg-zinc-800 border border-zinc-750 text-zinc-400 px-1.5 py-0.5 rounded-md font-mono self-start mt-0.5">
+                      <span className="shrink-0 text-[9px] bg-zinc-905 border border-zinc-850 text-zinc-400 px-2 py-0.5 rounded-md font-mono self-start mt-0.5">
                         {contact.latestOrder}
                       </span>
                     )}
@@ -341,23 +300,23 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
           </div>
 
           {/* Quick Templates container */}
-          <div className="p-4 shrink-0 bg-zinc-950/40">
-            <span className="block text-[10px] font-bold text-zinc-400 tracking-wider uppercase mb-2.5 flex items-center gap-1">
-              <FileText className="h-3 w-3 text-brand-pink" />
-              Modelos Rápidos de Confirmação:
+          <div className="p-4 bg-zinc-950/20">
+            <span className="block text-[11px] font-bold text-zinc-350 tracking-wider uppercase mb-3 flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5 text-brand-pink" />
+              Modelos Rápidos (Clique para aplicar):
             </span>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {templates.map((tmpl) => (
                 <button
                   key={tmpl.title}
                   type="button"
                   onClick={() => handleApplyTemplate(tmpl.text)}
-                  className="p-2 text-left bg-zinc-900 border border-zinc-800/80 hover:border-zinc-700 rounded-xl hover:bg-zinc-950 transition-colors cursor-pointer"
+                  className="p-2.5 text-left bg-zinc-900 border border-zinc-850 hover:border-zinc-800/80 rounded-xl hover:bg-zinc-950 transition-colors cursor-pointer"
                 >
-                  <p className="text-[10px] font-bold text-zinc-350 truncate">
+                  <p className="text-[10px] font-bold text-zinc-300 truncate">
                     {tmpl.title}
                   </p>
-                  <p className="text-[9px] text-zinc-600 line-clamp-1 mt-0.5">
+                  <p className="text-[9px] text-zinc-600 line-clamp-1 mt-1 font-medium">
                     {tmpl.text}
                   </p>
                 </button>

@@ -51,11 +51,34 @@ export function Login({ onLoginSuccess }: LoginProps) {
         } else {
           window.location.reload();
         }
-      } else if (sanitizedUsername === 'colaboradoroxente' && sanitizedPassword === '69app69') {
+      } else if (
+        (sanitizedUsername === 'juan' && sanitizedPassword === '69app69') ||
+        (sanitizedUsername === 'assis' && sanitizedPassword === '69app69') ||
+        (sanitizedUsername === 'clara' && sanitizedPassword === '69app69') ||
+        (sanitizedUsername === 'colaboradoroxente' && sanitizedPassword === '69app69')
+      ) {
+        let dispName = 'Colaborador Oxente';
+        let emailAddress = 'colaborador@oxente.com';
+        let staffUid = 'colaborador-staff';
+
+        if (sanitizedUsername === 'juan') {
+          dispName = 'Juan';
+          emailAddress = 'juan@oxente.com';
+          staffUid = 'juan-staff';
+        } else if (sanitizedUsername === 'assis') {
+          dispName = 'Assis';
+          emailAddress = 'assis@oxente.com';
+          staffUid = 'assis-staff';
+        } else if (sanitizedUsername === 'clara') {
+          dispName = 'Clara';
+          emailAddress = 'clara@oxente.com';
+          staffUid = 'clara-staff';
+        }
+
         const staffUser = {
-          uid: 'colaborador-staff',
-          displayName: 'Colaborador Oxente',
-          email: 'colaborador@oxente.com',
+          uid: staffUid,
+          displayName: dispName,
+          email: emailAddress,
           role: 'colaborador'
         };
         localStorage.setItem('oxente_custom_user', JSON.stringify(staffUser));

@@ -159,6 +159,44 @@ export default function App() {
     };
   }, []);
 
+  // Online heartbeat and status synchronization with Firestore
+  useEffect(() => {
+    if (!firebaseUser || !db || !hasConfig) return;
+
+    let isFirstRun = true;
+
+    const runHeartbeat = async () => {
+      try {
+        const userRef = doc(db, 'users', firebaseUser.uid);
+        if (isFirstRun) {
+          // On first run, create user with createdAt if missing, using merge: true
+          await setDoc(userRef, {
+            id: firebaseUser.uid,
+            name: firebaseUser.displayName || 'Usuário Local',
+            email: firebaseUser.email || '',
+            role: (firebaseUser as any).role || (firebaseUser.email === 'oxentefesteje@gmail.com' ? 'admin' : 'colaborador'),
+            status: 'approved',
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          }, { merge: true });
+          isFirstRun = false;
+        } else {
+          // Subsequent runs only update updatedAt
+          await updateDoc(userRef, {
+            updatedAt: serverTimestamp()
+          });
+        }
+        console.log('Heartbeat synced.');
+      } catch (err) {
+        console.error('Error running online heartbeat:', err);
+      }
+    };
+
+    runHeartbeat();
+    const interval = setInterval(runHeartbeat, 30000); // 30 seconds
+    return () => clearInterval(interval);
+  }, [firebaseUser]);
+
   // Load state on mount (with SWR pull from Supabase Cloud Database)
   useEffect(() => {
     // 1. Initial fast local state loading from Cache
@@ -566,7 +604,8 @@ export default function App() {
             <span className="hidden sm:inline">WhatsApp Web</span>
             <span className="sm:hidden">Whats Web</span>
           </button>
- 
+
+
           {firebaseUser?.email === 'oxentefesteje@gmail.com' && (
             <button
               onClick={() => changeTab('estoque')}
@@ -635,7 +674,7 @@ export default function App() {
               >
                 <Users className="h-4 w-4" />
               </motion.div>
-              <span className="hidden sm:inline">Aprovações</span>
+              <span className="hidden sm:inline">Usuários</span>
               <span className="sm:hidden">Usuários</span>
             </button>
           )}

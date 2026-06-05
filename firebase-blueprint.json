@@ -22,6 +22,11 @@
           "enum": ["pending", "approved", "rejected"],
           "description": "Approval status"
         },
+        "role": {
+          "type": "string",
+          "enum": ["admin", "colaborador"],
+          "description": "User access role"
+        },
         "createdAt": {
           "type": "object",
           "format": "google.protobuf.Timestamp",
@@ -33,7 +38,7 @@
           "description": "Date of last status change"
         }
       },
-      "required": ["id", "name", "email", "status", "createdAt", "updatedAt"]
+      "required": ["id", "name", "email", "status", "role", "createdAt", "updatedAt"]
     }
   },
   "firestore": {

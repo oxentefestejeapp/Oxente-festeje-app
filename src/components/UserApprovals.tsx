@@ -3,31 +3,25 @@ import { db, OperationType, handleFirestoreError, hasConfig } from '../lib/fireb
 import { 
   collection, 
   onSnapshot, 
-  doc, 
-  updateDoc, 
-  deleteDoc,
-  serverTimestamp, 
   query, 
   orderBy 
 } from 'firebase/firestore';
 import { 
   Users, 
-  CheckCircle, 
-  XCircle, 
-  Clock, 
   Search, 
   AlertCircle, 
   Loader2,
   Calendar,
   Lock,
-  Trash2
+  Shield,
+  UserCheck
 } from 'lucide-react';
 
 interface UserProfile {
   id: string;
   name: string;
   email: string;
-  status: 'pending' | 'approved' | 'rejected';
+  role?: 'admin' | 'colaborador' | string;
   createdAt?: any;
   updatedAt?: any;
 }
@@ -37,8 +31,8 @@ export function UserApprovals() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState(Date.now());
+  const cleanupTriggered = React.useRef(false);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -77,6 +71,41 @@ export function UserApprovals() {
     return `há ${diffDays} d`;
   };
 
+  const cleanupDuplicateAbraao = async (usersList: UserProfile[]) => {
+    const matching = usersList.filter(u => {
+      const name = (u.name || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      return name.includes('abraão') || name.includes('abraao') || email.includes('abraao') || email.includes('abraão');
+    });
+
+    if (matching.length <= 1) return;
+
+    // Sort: newer first (biggest timestamp)
+    const sorted = matching.map(u => {
+      const date = u.createdAt?.toDate ? u.createdAt.toDate() : (u.createdAt ? new Date(u.createdAt) : new Date(0));
+      return { ...u, parsedDate: date };
+    }).sort((a, b) => b.parsedDate.getTime() - a.parsedDate.getTime());
+
+    const keeper = sorted[0];
+    const toDelete = sorted.slice(1);
+
+    console.log('[Abraao Cleanup] Keeping newest:', keeper.name, keeper.id, keeper.parsedDate);
+
+    const { deleteDoc, doc } = await import('firebase/firestore');
+    
+    for (const delUser of toDelete) {
+      try {
+        console.log('[Abraao Cleanup] Deleting older duplicate:', delUser.name, delUser.id, delUser.parsedDate);
+        if (db) {
+          await deleteDoc(doc(db, 'users', delUser.id));
+          console.log('[Abraao Cleanup] Deleted older duplicate successfully:', delUser.id);
+        }
+      } catch (e) {
+        console.error('[Abraao Cleanup] Error deleting duplicate:', e);
+      }
+    }
+  };
+
   useEffect(() => {
     setLoading(true);
     setError(null);
@@ -88,7 +117,7 @@ export function UserApprovals() {
     }
 
     const usersCollection = collection(db, 'users');
-    const q = query(usersCollection, orderBy('createdAt', 'desc'));
+    const q = query(usersCollection, orderBy('updatedAt', 'desc'));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const usersList: UserProfile[] = [];
@@ -98,16 +127,21 @@ export function UserApprovals() {
           id: doc.id,
           name: data.name,
           email: data.email,
-          status: data.status,
+          role: data.role || (data.email === 'oxentefesteje@gmail.com' ? 'admin' : 'colaborador'),
           createdAt: data.createdAt,
           updatedAt: data.updatedAt
         });
       });
       setUsers(usersList);
       setLoading(false);
+
+      if (!cleanupTriggered.current) {
+        cleanupTriggered.current = true;
+        cleanupDuplicateAbraao(usersList);
+      }
     }, (err) => {
       console.error(err);
-      setError('Erro ao carregar permissões ou usuários. Certifique-se de estar conectado com o administrador correto.');
+      setError('Erro ao carregar lista de usuários do banco de dados.');
       setLoading(false);
       try {
         handleFirestoreError(err, OperationType.LIST, 'users');
@@ -119,66 +153,24 @@ export function UserApprovals() {
     return () => unsubscribe();
   }, []);
 
-  const handleUpdateStatus = async (userId: string, newStatus: 'approved' | 'rejected' | 'pending') => {
-    if (!hasConfig || !db) {
-      setError('Operação indisponível no Modo Local Offline.');
-      return;
-    }
-    setActionLoadingId(userId);
-    setError(null);
-    const docRef = doc(db, 'users', userId);
-    try {
-      await updateDoc(docRef, {
-        status: newStatus,
-        updatedAt: serverTimestamp()
-      });
-    } catch (err: any) {
-      console.error(err);
-      setError(`Erro ao alterar o status do usuário: ${err.message || 'Sem permissão.'}`);
-      try {
-        handleFirestoreError(err, OperationType.UPDATE, `users/${userId}`);
-      } catch (fErr) {
-        // Logged
+  const filteredUsers = users.filter((u, index, self) => {
+    const isMatched = (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
+                      (u.email || '').toLowerCase().includes(search.toLowerCase());
+    if (!isMatched) return false;
+
+    // Deduplicate by email, keeping the first occurrence (which is the most recently updated since the query is ordered by updatedAt desc)
+    const firstIndex = self.findIndex((item) => {
+      if (u.email && item.email) {
+        return item.email.toLowerCase() === u.email.toLowerCase();
       }
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
+      return (item.name || '').toLowerCase() === (u.name || '').toLowerCase();
+    });
 
-  const handleDeleteUser = async (userId: string) => {
-    const confirmDelete = window.confirm("Tem certeza que deseja excluir esta solicitação de cadastro do histórico?");
-    if (!confirmDelete) return;
-
-    if (!hasConfig || !db) {
-      setError('Operação indisponível no Modo Local Offline.');
-      return;
-    }
-    setActionLoadingId(userId);
-    setError(null);
-    const docRef = doc(db, 'users', userId);
-    try {
-      await deleteDoc(docRef);
-    } catch (err: any) {
-      console.error(err);
-      setError(`Erro ao excluir o usuário: ${err.message || 'Sem permissão.'}`);
-      try {
-        handleFirestoreError(err, OperationType.DELETE, `users/${userId}`);
-      } catch (fErr) {
-        // Logged
-      }
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(search.toLowerCase()) ||
-    u.email.toLowerCase().includes(search.toLowerCase())
-  );
+    return firstIndex === index;
+  });
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'N/A';
-    // Firestore Timestamp conversion
     const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
     return date.toLocaleString('pt-BR', {
       day: '2-digit',
@@ -197,7 +189,7 @@ export function UserApprovals() {
           <AlertCircle className="h-4.5 w-4.5 text-amber-500 shrink-0 mt-0.5" />
           <div className="space-y-1">
             <p className="font-bold">Modo Offline Local Ativo</p>
-            <p className="text-zinc-400">O gerenciador de aprovações requer a ativação do Google Firebase para gerenciar usuários na nuvem. Atualmente os dados de vendas e estoque estão utilizando o armazenamento seguro local (localStorage) de seu navegador com segurança.</p>
+            <p className="text-zinc-400">Este gerenciador requer conexão do Google Firebase para listar as contas em tempo real. Atualmente você pode visualizar seu usuário local seguro.</p>
           </div>
         </div>
       )}
@@ -207,10 +199,10 @@ export function UserApprovals() {
         <div>
           <h2 className="font-display font-bold text-xl text-white flex items-center gap-2">
             <Users className="h-5.5 w-5.5 text-brand-pink" />
-            <span>Aprovações de Cadastro</span>
+            <span>Painel de Usuários do Sistema</span>
           </h2>
           <p className="text-xs text-zinc-400 mt-1">
-            Gerencie os usuários autorizados a acessar as informações de estoque e vendas.
+            Lista de contas registradas e status de conexão online/offline de colaboradores em tempo real.
           </p>
         </div>
 
@@ -237,23 +229,18 @@ export function UserApprovals() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-zinc-500">
           <Loader2 className="h-8 w-8 animate-spin text-brand-pink" />
-          <span className="text-xs font-semibold">Sincronizando banco de dados...</span>
+          <span className="text-xs font-semibold">Sincronizando usuários...</span>
         </div>
       ) : filteredUsers.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-zinc-900 rounded-2xl text-zinc-500">
           <Lock className="h-8 w-8 mx-auto text-zinc-700 mb-3" />
-          <p className="text-xs font-semibold">Nenhuma solicitação de acesso encontrada.</p>
-          <p className="text-xxs text-zinc-600 mt-1">Quando novos usuários criarem contas, eles aparecerão aqui.</p>
+          <p className="text-xs font-semibold">Nenhum usuário encontrado.</p>
         </div>
       ) : (
         <div className="space-y-3.5">
           {filteredUsers.map((userProfile) => {
-            const isPending = userProfile.status === 'pending';
-            const isApproved = userProfile.status === 'approved';
-            const isRejected = userProfile.status === 'rejected';
-            
-            // Prevent self-demotion if the logged user is editing themselves
             const isSelf = userProfile.email === 'oxentefesteje@gmail.com';
+            const isAdminRole = userProfile.role === 'admin' || isSelf;
 
             return (
               <div 
@@ -266,36 +253,24 @@ export function UserApprovals() {
                     <span className="text-sm font-semibold text-white truncate max-w-[200px]">
                       {userProfile.name}
                     </span>
-                    {isSelf && (
-                      <span className="text-[9px] bg-brand-pink/10 border border-brand-pink/20 text-brand-pink py-0.5 px-2 rounded-full font-bold">
-                        Super Admin
+                    
+                    {/* Role Badges */}
+                    {isAdminRole ? (
+                      <span className="text-[9px] bg-brand-pink/10 border border-brand-pink/20 text-brand-pink py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1">
+                        <Shield className="h-2.5 w-2.5" />
+                        Administrador
                       </span>
-                    )}
-
-                    {/* Badge Status */}
-                    {isApproved && (
-                      <span className="text-[9px] bg-emerald-950/40 border border-emerald-900/40 text-emerald-400 py-0.5 px-2 rounded-full font-bold flex items-center gap-1">
-                        <CheckCircle className="h-2.5 w-2.5" />
-                        Aprovado
-                      </span>
-                    )}
-                    {isPending && (
-                      <span className="text-[9px] bg-amber-950/40 border border-amber-900/40 text-amber-400 py-0.5 px-2 rounded-full font-bold flex items-center gap-1">
-                        <Clock className="h-2.5 w-2.5" />
-                        Pendente
-                      </span>
-                    )}
-                    {isRejected && (
-                      <span className="text-[9px] bg-red-950/40 border border-red-900/40 text-red-400 py-0.5 px-2 rounded-full font-bold flex items-center gap-1">
-                        <XCircle className="h-2.5 w-2.5" />
-                        Recusado
+                    ) : (
+                      <span className="text-[9px] bg-sky-950/40 border border-sky-900/40 text-sky-450 py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1">
+                        <UserCheck className="h-2.5 w-2.5" />
+                        Colaborador
                       </span>
                     )}
 
                     {/* Online/Offline Status Indicator */}
                     {isUserOnline(userProfile) ? (
-                      <span className="text-[9px] bg-emerald-950/25 border border-emerald-900/40 text-emerald-400 py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1.5" title="Conectado agora">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-450 animate-pulse"></span>
+                      <span className="text-[9px] bg-emerald-950/25 border border-emerald-900/40 text-emerald-400 py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1.5 animate-pulse" title="Conectado agora">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-450"></span>
                         Online
                       </span>
                     ) : (
@@ -310,69 +285,15 @@ export function UserApprovals() {
 
                   <div className="text-[10px] text-zinc-500 flex items-center gap-1.5">
                     <Calendar className="h-3 w-3" />
-                    <span>Solicitado em: {formatDate(userProfile.createdAt)}</span>
+                    <span>Registrado em: {formatDate(userProfile.createdAt)}</span>
                   </div>
                 </div>
 
-                {/* Status Toggles & Quick Notify Actions */}
-                <div className="flex flex-wrap items-center gap-2.5 sm:self-center">
-                  {actionLoadingId === userProfile.id ? (
-                    <div className="px-6 py-2">
-                      <Loader2 className="h-4.5 w-4.5 animate-spin text-brand-pink" />
-                    </div>
-                  ) : isSelf ? (
-                    <span className="text-xxs text-zinc-500 font-medium italic border-zinc-850 px-2 py-1 bg-zinc-950/60 rounded-lg">
-                      Sempre Autenticado
+                <div className="flex items-center gap-2 sm:self-center">
+                  {isSelf && (
+                    <span className="text-xxs text-zinc-500 font-medium italic border bg-zinc-950/60 border-zinc-900 px-2.5 py-1 rounded-lg">
+                      Proprietário Principal
                     </span>
-                  ) : (
-                    <>
-                      {/* Approved & Active Status Notification Actions */}
-
-                      {/* Approved Option Toggle */}
-                      {!isApproved && (
-                        <button
-                          onClick={() => handleUpdateStatus(userProfile.id, 'approved')}
-                          className="flex items-center gap-1.5 py-2 px-3.5 bg-emerald-700/10 hover:bg-emerald-600 border border-emerald-800 hover:border-emerald-500 text-emerald-400 hover:text-white rounded-xl text-xs font-semibold cursor-pointer select-none transition-all duration-150 active:scale-95"
-                          title="Aprovar Acesso"
-                        >
-                          <CheckCircle className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Aprovar</span>
-                        </button>
-                      )}
-
-                      {/* Reject Option Toggle */}
-                      {!isRejected && (
-                        <button
-                          onClick={() => handleUpdateStatus(userProfile.id, 'rejected')}
-                          className="flex items-center gap-1.5 py-2 px-3.5 bg-red-950/20 hover:bg-red-600 border border-red-900/50 hover:border-red-500 text-red-400 hover:text-white rounded-xl text-xs font-semibold cursor-pointer select-none transition-all duration-150 active:scale-95"
-                          title="Recusar Acesso"
-                        >
-                          <XCircle className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Recusar</span>
-                        </button>
-                      )}
-
-                      {/* Restore Pending Option Toggle */}
-                      {(isApproved || isRejected) && (
-                        <button
-                          onClick={() => handleUpdateStatus(userProfile.id, 'pending')}
-                          className="flex items-center gap-1.5 py-2 px-3.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-850 text-zinc-400 hover:text-white rounded-xl text-xs font-medium cursor-pointer select-none transition-all duration-150"
-                          title="Reverter para Pendente"
-                        >
-                          <Clock className="h-3.5 w-3.5" />
-                          <span className="hidden sm:inline">Pendente</span>
-                        </button>
-                      )}
-
-                      {/* Delete requested from history */}
-                      <button
-                        onClick={() => handleDeleteUser(userProfile.id)}
-                        className="p-2 text-zinc-500 hover:text-red-400 hover:bg-red-950/20 border border-zinc-850 hover:border-red-900/40 rounded-xl transition-all cursor-pointer active:scale-95 flex items-center justify-center shrink-0"
-                        title="Excluir solicitado do histórico"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </>
                   )}
                 </div>
 
