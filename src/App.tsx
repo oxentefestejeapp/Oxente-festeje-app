@@ -133,7 +133,8 @@ export default function App() {
 
   // Monitor Firebase Auth State & Permissions status
   useEffect(() => {
-    if (!hasConfig || !auth) {
+    const isLocalBypass = localStorage.getItem('oxente_local_bypass') === 'true';
+    if (!hasConfig || !auth || isLocalBypass) {
       setFirebaseUser({
         uid: 'local-admin',
         displayName: 'Proprietário Local (Offline)',
@@ -746,10 +747,16 @@ export default function App() {
             onClick={async () => {
               const confirmExit = window.confirm('Tem certeza que deseja sair do sistema?');
               if (confirmExit) {
+                localStorage.removeItem('oxente_local_bypass');
                 if (auth) {
-                  await signOut(auth);
+                  try {
+                    await signOut(auth);
+                  } catch (e) {
+                    console.error('Erro de logout:', e);
+                  }
+                  window.location.reload();
                 } else {
-                  alert('No Modo Local Offline, o login permanece ativo.');
+                  window.location.reload();
                 }
               }
             }}

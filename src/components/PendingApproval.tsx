@@ -19,11 +19,11 @@ interface PendingApprovalProps {
 export function PendingApproval({ userName, userEmail, status }: PendingApprovalProps) {
   const handleLogout = async () => {
     try {
+      localStorage.removeItem('oxente_local_bypass');
       if (auth && hasConfig) {
         await signOut(auth);
-      } else {
-        alert('No Modo Local Offline, você permanece logado.');
       }
+      window.location.reload();
     } catch (err) {
       console.error('Erro ao sair:', err);
     }

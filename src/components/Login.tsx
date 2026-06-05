@@ -231,7 +231,12 @@ export function Login({ onLoginSuccess }: LoginProps) {
       }
     } catch (err: any) {
       console.error(err);
-      setError(getFriendlyError(err.code || '', err.message));
+      const friendlyErr = getFriendlyError(err.code || '', err.message);
+      if (err.code === 'auth/operation-not-allowed' || err.code === 'auth/configuration-not-found' || err.code === 'auth/invalid-api-key') {
+        setError(`${friendlyErr}\n\n💡 DICA DE HOSPEDAGEM: Se este projeto está hospedado fora do Google (ex: na Hostinger), use a alternativa de Contingência abaixo para "Acessar via Modo Local Offline" sem erros.`);
+      } else {
+        setError(friendlyErr);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -389,6 +394,32 @@ export function Login({ onLoginSuccess }: LoginProps) {
             />
           </svg>
           <span>Conectar / Criar Conta com Google</span>
+        </button>
+
+        {/* Local Contingency Bypass Option */}
+        <div className="relative my-7">
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-zinc-900/80" />
+          </div>
+          <div className="relative flex justify-center text-xxs uppercase">
+            <span className="bg-zinc-950 px-3.5 text-zinc-650 font-semibold tracking-wider">Alternativa de Contingência</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            localStorage.setItem('oxente_local_bypass', 'true');
+            if (onLoginSuccess) {
+              onLoginSuccess();
+            } else {
+              window.location.reload();
+            }
+          }}
+          className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-zinc-950 hover:bg-zinc-900 text-zinc-350 hover:text-white font-semibold border border-zinc-900 rounded-2xl text-[11.5px] shadow-sm transition-all transform active:scale-98 cursor-pointer select-none duration-150"
+        >
+          <LogIn className="h-4 w-4 text-brand-pink shrink-0 animate-pulse" />
+          <span>Acessar via Modo Local Offline (Bypass Autônomo)</span>
         </button>
 
         {/* Bottom Toggle */}
