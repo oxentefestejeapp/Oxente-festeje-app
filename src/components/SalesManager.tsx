@@ -167,6 +167,13 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [startDateStr, setStartDateStr] = useState('');
   const [endDateStr, setEndDateStr] = useState('');
 
+  // 10 sales at a time with scrollable dynamic loading
+  const [visibleSalesCount, setVisibleSalesCount] = useState(10);
+
+  useEffect(() => {
+    setVisibleSalesCount(10);
+  }, [salesSearchTerm, dateFilter, startDateStr, endDateStr]);
+
   // Get filtered sales history by client, product name, or receipt order number, and period
   const filteredSales = sales.filter((sale) => {
     // 1. Period Date filtering
@@ -1307,109 +1314,127 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-zinc-300 border-collapse">
-                <thead>
-                  <tr className="border-b border-zinc-800 text-zinc-500 font-medium">
-                    <th className="py-2.5 font-semibold">Cliente</th>
-                    <th className="py-2.5 font-semibold">Produto</th>
-                    <th className="py-2.5 font-semibold text-center">Quant.</th>
-                    <th className="py-2.5 font-semibold text-right">Total</th>
-                    <th className="py-2.5 font-semibold text-right">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-zinc-800/40">
-                  {[...filteredSales].reverse().map((sale) => {
-                    const isActive = viewedSale?.id === sale.id;
-                    return (
-                      <tr 
-                        key={sale.id}
-                        onClick={() => handleSelectSaleForReceipt(sale)}
-                        className={`hover:bg-zinc-800/30 transition-colors cursor-pointer select-none ${
-                          isActive ? 'bg-brand-pink/10 font-semibold text-brand-pink border-l-2 border-brand-pink' : ''
-                        }`}
-                        title="Clique neste pedido para visualizar o recibo térmico"
-                      >
-                        <td className="py-3 max-w-[125px] truncate">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-zinc-100">{sale.cliente}</span>
-                            {sale.numeroPedido && (
-                              <span className="bg-zinc-800 text-brand-pink text-[9px] font-mono px-1 py-0.5 rounded tracking-wider leading-none" title={`Número do Pedido: ${sale.numeroPedido}`}>
-                                #{sale.numeroPedido}
+            <div 
+              className="max-h-[550px] overflow-y-auto pr-1 custom-scrollbar border border-zinc-850/60 rounded-xl bg-black/10"
+              onScroll={(e) => {
+                const target = e.currentTarget;
+                if (target.scrollHeight - target.scrollTop <= target.clientHeight + 60) {
+                  if (visibleSalesCount < filteredSales.length) {
+                    setVisibleSalesCount(prev => Math.min(prev + 10, filteredSales.length));
+                  }
+                }
+              }}
+            >
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-zinc-300 border-collapse">
+                  <thead>
+                    <tr className="border-b border-zinc-800 text-zinc-500 font-medium sticky top-0 bg-zinc-900 z-10">
+                      <th className="py-2.5 px-3 font-semibold">Cliente</th>
+                      <th className="py-2.5 font-semibold">Produto</th>
+                      <th className="py-2.5 font-semibold text-center">Quant.</th>
+                      <th className="py-2.5 font-semibold text-right">Total</th>
+                      <th className="py-2.5 font-semibold text-right pr-3">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-800/40">
+                    {[...filteredSales].reverse().slice(0, visibleSalesCount).map((sale) => {
+                      const isActive = viewedSale?.id === sale.id;
+                      return (
+                        <tr 
+                          key={sale.id}
+                          onClick={() => handleSelectSaleForReceipt(sale)}
+                          className={`hover:bg-zinc-800/30 transition-colors cursor-pointer select-none ${
+                            isActive ? 'bg-brand-pink/10 font-semibold text-brand-pink border-l-2 border-brand-pink' : ''
+                          }`}
+                          title="Clique neste pedido para visualizar o recibo térmico"
+                        >
+                          <td className="py-3 px-3 max-w-[125px] truncate">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-semibold text-zinc-100">{sale.cliente}</span>
+                              {sale.numeroPedido && (
+                                <span className="bg-zinc-800 text-brand-pink text-[9px] font-mono px-1 py-0.5 rounded tracking-wider leading-none" title={`Número do Pedido: ${sale.numeroPedido}`}>
+                                  #{sale.numeroPedido}
+                                </span>
+                              )}
+                            </div>
+                            {sale.telefoneCliente && (
+                              <div className="text-[10px] text-zinc-500 font-mono mt-0.5" title={sale.telefoneCliente}>
+                                {sale.telefoneCliente}
+                              </div>
+                            )}
+                            {sale.dataRetirada && (
+                              <div className="text-[10px] text-amber-500 font-mono font-medium mt-0.5 flex items-center gap-1" title="Data planejada de retirada">
+                                <span>📅</span>
+                                <span>{new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 max-w-[140px] truncate text-zinc-200">
+                            <div>{sale.produtoNome}</div>
+                            {sale.statusProducao && (
+                              <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-1 border border-zinc-800 ${
+                                sale.statusProducao === 'Agendado' ? 'bg-blue-900/10 text-blue-400 border-blue-900/30' :
+                                sale.statusProducao === 'Em Produção' ? 'bg-amber-900/10 text-amber-400 border-amber-900/30' :
+                                sale.statusProducao === 'Pronto para Retirada' ? 'bg-purple-900/10 text-purple-400 border-purple-900/30 animate-pulse-slow' :
+                                'bg-emerald-900/10 text-emerald-400 border-emerald-900/30'
+                              }`}>
+                                {sale.statusProducao === 'Agendado' ? '📅 Agendado' :
+                                 sale.statusProducao === 'Em Produção' ? '🔨 Em Produção' :
+                                 sale.statusProducao === 'Pronto para Retirada' ? '✨ Pronto' :
+                                 '🤝 Entregue'}
                               </span>
                             )}
-                          </div>
-                          {sale.telefoneCliente && (
-                            <div className="text-[10px] text-zinc-500 font-mono mt-0.5" title={sale.telefoneCliente}>
-                              {sale.telefoneCliente}
+                          </td>
+                          <td className="py-3 text-center font-bold">{sale.quantidade}</td>
+                          <td className="py-3 text-right">
+                            <div className="font-bold text-zinc-100">R$ {sale.total.toFixed(2)}</div>
+                            {sale.valorFaltante && sale.valorFaltante > 0 ? (
+                              <div className="text-[10px] text-red-400 font-semibold font-mono" title={`Faltando: R$ ${sale.valorFaltante.toFixed(2)}`}>
+                                Lack: R$ {sale.valorFaltante.toFixed(2)}
+                              </div>
+                            ) : (
+                              <div className="text-[9px] text-emerald-500 opacity-85 font-medium" title="Pago integralmente">
+                                Pago
+                              </div>
+                            )}
+                          </td>
+                          <td className="py-3 text-right pr-3">
+                            <div className="flex flex-col-reverse sm:flex-row gap-1.5 items-end sm:items-center justify-end">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSendPedidoAnotado(sale);
+                                }}
+                                className="px-2 py-1 bg-zinc-950 border border-zinc-800 hover:border-emerald-500 text-zinc-300 hover:text-emerald-400 rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                                title="Mandar confirmação via WhatsApp"
+                              >
+                                <MessageSquare className="h-3 w-3 text-emerald-500" />
+                                <span>Pedido Anotado</span>
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setEditingSale(sale);
+                                }}
+                                className="px-2 py-1 bg-zinc-950 border border-zinc-805 hover:border-brand-pink text-zinc-300 hover:text-brand-pink rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0"
+                              >
+                                <Pencil className="h-3 w-3" />
+                                <span>Editar</span>
+                              </button>
                             </div>
-                          )}
-                          {sale.dataRetirada && (
-                            <div className="text-[10px] text-amber-500 font-mono font-medium mt-0.5 flex items-center gap-1" title="Data planejada de retirada">
-                              <span>📅</span>
-                              <span>{new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-3 max-w-[140px] truncate text-zinc-200">
-                          <div>{sale.produtoNome}</div>
-                          {sale.statusProducao && (
-                            <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-1 border border-zinc-800 ${
-                              sale.statusProducao === 'Agendado' ? 'bg-blue-900/10 text-blue-400 border-blue-900/30' :
-                              sale.statusProducao === 'Em Produção' ? 'bg-amber-900/10 text-amber-400 border-amber-900/30' :
-                              sale.statusProducao === 'Pronto para Retirada' ? 'bg-purple-900/10 text-purple-400 border-purple-900/30 animate-pulse-slow' :
-                              'bg-emerald-900/10 text-emerald-400 border-emerald-900/30'
-                            }`}>
-                              {sale.statusProducao === 'Agendado' ? '📅 Agendado' :
-                               sale.statusProducao === 'Em Produção' ? '🔨 Em Produção' :
-                               sale.statusProducao === 'Pronto para Retirada' ? '✨ Pronto' :
-                               '🤝 Entregue'}
-                            </span>
-                          )}
-                        </td>
-                        <td className="py-3 text-center font-bold">{sale.quantidade}</td>
-                        <td className="py-3 text-right">
-                          <div className="font-bold text-zinc-100">R$ {sale.total.toFixed(2)}</div>
-                          {sale.valorFaltante && sale.valorFaltante > 0 ? (
-                            <div className="text-[10px] text-red-400 font-semibold font-mono" title={`Faltando: R$ ${sale.valorFaltante.toFixed(2)}`}>
-                              Falta: R$ {sale.valorFaltante.toFixed(2)}
-                            </div>
-                          ) : (
-                            <div className="text-[9px] text-emerald-500 opacity-85 font-medium" title="Pago integralmente">
-                              Pago
-                            </div>
-                          )}
-                        </td>
-                        <td className="py-3 text-right">
-                          <div className="flex flex-col-reverse sm:flex-row gap-1.5 items-end sm:items-center justify-end">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleSendPedidoAnotado(sale);
-                              }}
-                              className="px-2 py-1 bg-zinc-950 border border-zinc-800 hover:border-emerald-500 text-zinc-300 hover:text-emerald-400 rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0"
-                              title="Mandar confirmação via WhatsApp"
-                            >
-                              <MessageSquare className="h-3 w-3 text-emerald-500" />
-                              <span>Pedido Anotado</span>
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setEditingSale(sale);
-                              }}
-                              className="px-2 py-1 bg-zinc-950 border border-zinc-800 hover:border-brand-pink text-zinc-300 hover:text-brand-pink rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0"
-                            >
-                              <Pencil className="h-3 w-3" />
-                              <span>Editar</span>
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {filteredSales.length > visibleSalesCount && (
+                <div className="py-3 text-center text-[10px] text-zinc-500 font-bold border-t border-zinc-800/45 bg-zinc-950/20 select-none">
+                  Role para ver mais ({visibleSalesCount} de {filteredSales.length} vendas exibidas)
+                </div>
+              )}
             </div>
           )}
         </div>

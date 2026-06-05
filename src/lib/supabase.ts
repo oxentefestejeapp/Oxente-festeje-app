@@ -254,23 +254,51 @@ export const dbSupabase = {
   async saveProduct(product: Product): Promise<boolean> {
     try {
       const dbRow = mapProductToDb(product);
-      const { error } = await supabase.from('oxente_products').upsert(dbRow);
-      if (error) {
-        if (error.code === '42703') {
-          console.warn('Coluna precos_progressivos ausente no Supabase. Salvando localmente e persistindo os demais dados no banco online:', error.message);
-          const fallbackRow = { ...dbRow };
-          delete (fallbackRow as any).precos_progressivos;
-          const { error: fallbackError } = await supabase.from('oxente_products').upsert(fallbackRow);
-          if (fallbackError) {
-            console.error('Erro no fallback de salvar produto no Supabase:', fallbackError.message);
-            return false;
-          }
-          return true;
+      const currentPayload = { ...dbRow };
+      
+      // Let's attempt to upsert, and if there are missing column errors, we dynamically delete those columns and retry.
+      for (let attempt = 0; attempt < 8; attempt++) {
+        const { error } = await supabase.from('oxente_products').upsert(currentPayload);
+        if (!error) {
+          return true; // Successfully saved!
         }
+        
+        // Check for undefined column error (Code 42703 in Postgres)
+        if (error.code === '42703') {
+          // Parse the column name from the error message. e.g. "column \"preco_custo\" of relation \"oxente_products\" does not exist"
+          const match = error.message.match(/column "([^"]+)"/i) || 
+                        error.message.match(/coluna "([^"]+)"/i) ||
+                        error.message.match(/column ([a-zA-Z_0-9]+) does not exist/i);
+          
+          if (match && match[1]) {
+            const missingColumn = match[1];
+            console.warn(`Dynamic Save Healing: Deleting missing column "${missingColumn}" and retrying product save...`);
+            delete (currentPayload as any)[missingColumn];
+            continue; // Retry with cleaned payload
+          } else {
+            // Fallback: if we can't parse but it's 42703, try to delete potentially missing columns one by one
+            console.warn('Dynamic Save Healing: Code 42703 received but column name not parsed. Trying fallback removal.');
+            const nonEssential = ['precos_progressivos', 'preco_custo', 'estoque_infinito', 'imagem_base64'];
+            let removedAny = false;
+            for (const col of nonEssential) {
+              if (col in currentPayload) {
+                delete (currentPayload as any)[col];
+                removedAny = true;
+                break; // Delete one and retry
+              }
+            }
+            if (!removedAny) {
+              console.error('Dynamic Save Healing: Nothing left to remove. Aborting:', error.message);
+              return false;
+            }
+            continue;
+          }
+        }
+        
         console.error('Erro ao salvar produto no Supabase:', error.message);
         return false;
       }
-      return true;
+      return false;
     } catch (e) {
       console.error('Falha ao conectar com Supabase ao salvar produto:', e);
       return false;
@@ -342,6 +370,29 @@ export const dbSupabase = {
       return true;
     } catch (e) {
       console.error('Falha ao conectar com Supabase ao salvar venda:', e);
+      return false;
+    }
+  },
+
+  async purgeOldDeliveredSales(): Promise<boolean> {
+    try {
+      const fifteenDaysAgo = new Date();
+      fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
+      const dateString = fifteenDaysAgo.toISOString();
+
+      const { error } = await supabase
+        .from('oxente_sales')
+        .delete()
+        .eq('status_producao', 'Entregue')
+        .lt('updated_at', dateString);
+
+      if (error) {
+        console.warn('Erro ao expurgar vendas entregues antigas do Supabase:', error.message);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.warn('Falha ao conectar com Supabase ao expurgar vendas entregues:', e);
       return false;
     }
   },

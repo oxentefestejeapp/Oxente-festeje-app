@@ -60,6 +60,7 @@ export default function App() {
   // 2. Core Persistent State
   const [products, setProducts] = useState<Product[]>([]);
   const pendingStockUpdates = useRef<Record<string, number>>({});
+  const pendingProducts = useRef<Record<string, Product>>({});
   const [sales, setSales] = useState<Sale[]>([]);
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(defaultStoreInfo);
   const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web'>(() => {
@@ -326,6 +327,11 @@ export default function App() {
 
         setSupabaseSyncStatus('synced');
         setSupabaseErrorMsg(null);
+
+        // Executa limpeza automática de pedidos entregues há mais de 15 dias no Supabase
+        dbSupabase.purgeOldDeliveredSales().catch(err => {
+          console.warn('Erro silencioso ao executar autolimpeza de vendas:', err);
+        });
       } catch (err: any) {
         console.error('Falha na sincronização automatizada com Supabase:', err);
         setSupabaseSyncStatus('error');
@@ -352,6 +358,8 @@ export default function App() {
 
       if (eventType === 'INSERT') {
         const prod = mapDbToProduct(newRow);
+        // Clean from pending map as we received official confirmation database-side
+        delete pendingProducts.current[prod.id];
         setProducts((current) => {
           if (current.some(p => p.id === prod.id)) return current;
           const updated = [prod, ...current];
@@ -360,6 +368,8 @@ export default function App() {
         });
       } else if (eventType === 'UPDATE') {
         const prod = mapDbToProduct(newRow);
+        // Clean from pending map as we received official confirmation database-side
+        delete pendingProducts.current[prod.id];
         setProducts((current) => {
           const pendingStock = pendingStockUpdates.current[prod.id];
           const finalProd = pendingStock !== undefined ? { ...prod, estoque: pendingStock } : prod;
@@ -370,6 +380,8 @@ export default function App() {
       } else if (eventType === 'DELETE') {
         const targetId = oldRow?.id || newRow?.id;
         if (targetId) {
+          // Guard/protect if product is still pending upload
+          if (pendingProducts.current[targetId]) return;
           setProducts((current) => {
             const updated = current.filter(p => p.id !== targetId);
             localStorage.setItem('oxente_products', JSON.stringify(updated));
@@ -474,11 +486,24 @@ export default function App() {
 
         if (dbProds && dbProds.length > 0) {
           setProducts((curr) => {
-            const mergedProds = dbProds.map(p => {
+            // Index the database products, applying pending stock changes
+            const mergedProdsMap = new Map(dbProds.map(p => {
               const pendingStock = pendingStockUpdates.current[p.id];
-              return pendingStock !== undefined ? { ...p, estoque: pendingStock } : p;
+              const finalProd = pendingStock !== undefined ? { ...p, estoque: pendingStock } : p;
+              return [finalProd.id, finalProd];
+            }));
+
+            // Re-insert any pending new products that aren't acknowledged in the remote list yet
+            (Object.values(pendingProducts.current) as Product[]).forEach(p => {
+              if (!mergedProdsMap.has(p.id)) {
+                // Keep the locally created pending product
+                mergedProdsMap.set(p.id, p);
+              }
             });
+
+            const mergedProds = Array.from(mergedProdsMap.values());
             const hasChanged = JSON.stringify(curr) !== JSON.stringify(mergedProds);
+            
             if (hasChanged) {
               localStorage.setItem('oxente_products', JSON.stringify(mergedProds));
               return mergedProds;
@@ -558,12 +583,19 @@ export default function App() {
 
   // State mutation actions with automatic remote DB sync
   const handleAddProduct = async (newProduct: Product) => {
+    // Record in local pending products map to survive any background refreshes
+    pendingProducts.current[newProduct.id] = newProduct;
+
     const updated = [newProduct, ...products];
     saveProducts(updated);
     
     // Background sync to Supabase
     try {
-      await dbSupabase.saveProduct(newProduct);
+      const success = await dbSupabase.saveProduct(newProduct);
+      if (success) {
+        // Clear from pending map after successful server save
+        delete pendingProducts.current[newProduct.id];
+      }
     } catch (e) {
       console.warn('Erro ao sincronizar novo produto em segundo plano:', e);
     }
