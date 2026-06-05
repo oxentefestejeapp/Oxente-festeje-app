@@ -25,7 +25,7 @@ const databaseId = import.meta.env.VITE_FIREBASE_DATABASE_ID ||
                    import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID || 
                    fileConfig.firestoreDatabaseId || 
                    fileConfig.databaseId || 
-                   (isAiStudio ? 'ai-studio-d9977160-44d4-41c1-9d78-4c43640d6b79' : '(default)');
+                   'ai-studio-d9977160-44d4-41c1-9d78-4c43640d6b79';
 
 // Check if Firebase has enough configuration to be initialized
 const hasConfig = !!config.apiKey && !!config.projectId;

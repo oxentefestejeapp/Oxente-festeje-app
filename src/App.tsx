@@ -26,7 +26,7 @@ import {
   Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, onSnapshot, updateDoc, serverTimestamp, getDoc, setDoc } from 'firebase/firestore';
 import { db, hasConfig } from './lib/firebase';
 import { supabase, dbSupabase, mapDbToProduct, mapDbToSale } from './lib/supabase';
 
@@ -259,6 +259,60 @@ export default function App() {
     const interval = setInterval(runHeartbeat, 30000); // 30 seconds
     return () => clearInterval(interval);
   }, [firebaseUser?.id, firebaseUser?.uid]);
+
+  // Synchronize Supabase configurations dynamically through Firestore database
+  useEffect(() => {
+    if (!db || !hasConfig) return;
+
+    const syncSupabaseSettings = async () => {
+      try {
+        const configDocRef = doc(db, 'config', 'supabase');
+        
+        if (isAdmin) {
+          // Administrator shares their Supabase credentials to all users
+          const localUrl = localStorage.getItem('supabase_url');
+          const localKey = localStorage.getItem('supabase_anon_key');
+          
+          if (localUrl && localKey) {
+            const docSnap = await getDoc(configDocRef);
+            if (!docSnap.exists() || docSnap.data()?.url !== localUrl || docSnap.data()?.key !== localKey) {
+              await setDoc(configDocRef, {
+                url: localUrl,
+                key: localKey,
+                updatedAt: serverTimestamp()
+              });
+              console.log('Sincronizados detalhes do Supabase do administrador com o Firestore.');
+            }
+          }
+        } else {
+          // Collaborators download the master connection details from Firestore
+          const docSnap = await getDoc(configDocRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.url && data.key) {
+              const localUrl = localStorage.getItem('supabase_url');
+              const localKey = localStorage.getItem('supabase_anon_key');
+              
+              if (localUrl !== data.url || localKey !== data.key) {
+                console.log('Nova configuração de Supabase detectada na nuvem. Atualizando...');
+                localStorage.setItem('supabase_url', data.url);
+                localStorage.setItem('supabase_anon_key', data.key);
+                // Trigger reload to apply connection details globally
+                window.location.reload();
+              }
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao sincronizar chaves do Supabase via Firestore:', err);
+      }
+    };
+
+    // Run once after auth determines role
+    if (firebaseUser) {
+      syncSupabaseSettings();
+    }
+  }, [firebaseUser, isAdmin]);
 
   // Load state on mount (with SWR pull from Supabase Cloud Database)
   useEffect(() => {
