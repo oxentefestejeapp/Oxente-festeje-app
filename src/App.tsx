@@ -407,6 +407,84 @@ export default function App() {
     };
   }, []);
 
+  // Safe Multi-User Background Polling & Focus-Refocus Sync (Resolves real-time refresh lag)
+  useEffect(() => {
+    let intervalId: any;
+
+    const pollCloudUpdates = async () => {
+      // Direct prevention: don't call anything if tab is minimized to save API quota
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      
+      try {
+        const [dbProds, dbSaless, dbStore] = await Promise.all([
+          dbSupabase.fetchProducts(),
+          dbSupabase.fetchSales(),
+          dbSupabase.fetchStoreInfo()
+        ]);
+
+        if (dbProds && dbProds.length > 0) {
+          setProducts((curr) => {
+            const hasChanged = JSON.stringify(curr) !== JSON.stringify(dbProds);
+            if (hasChanged) {
+              localStorage.setItem('oxente_products', JSON.stringify(dbProds));
+              return dbProds;
+            }
+            return curr;
+          });
+        }
+
+        if (dbSaless && dbSaless.length > 0) {
+          setSales((curr) => {
+            const hasChanged = JSON.stringify(curr) !== JSON.stringify(dbSaless);
+            if (hasChanged) {
+              localStorage.setItem('oxente_sales', JSON.stringify(dbSaless));
+              return dbSaless;
+            }
+            return curr;
+          });
+        }
+
+        if (dbStore) {
+          setStoreInfo((curr) => {
+            const hasChanged = JSON.stringify(curr) !== JSON.stringify(dbStore);
+            if (hasChanged) {
+              localStorage.setItem('oxente_store_info', JSON.stringify(dbStore));
+              return dbStore;
+            }
+            return curr;
+          });
+        }
+      } catch (e) {
+        console.warn('Erro ao sincronizar dados em segundo plano:', e);
+      }
+    };
+
+    // Poll every 8 seconds when the tab is visible
+    intervalId = setInterval(pollCloudUpdates, 8000);
+
+    // Refresh instantly whenever tab is focused/visible again
+    const handleVisibilityChange = () => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+        pollCloudUpdates();
+      }
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+    }
+    window.addEventListener('focus', pollCloudUpdates);
+
+    return () => {
+      clearInterval(intervalId);
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+      window.removeEventListener('focus', pollCloudUpdates);
+    };
+  }, []);
+
   // Guarantee that non-admin accounts are immediately kicked back from restricted/admin tabs
   useEffect(() => {
     const restrictedTabs = ['usuarios', 'a_receber', 'cadastro', 'configuracoes', 'auditoria'];
@@ -479,6 +557,44 @@ export default function App() {
   const handleRecordSale = async (newSale: Sale) => {
     const updated = [...sales, newSale];
     saveSales(updated);
+
+    // Atomically decrease stock for each sold item
+    const itemsToDecrease = newSale.itens || [
+      {
+        id: `item-${newSale.produtoId}`,
+        produtoId: newSale.produtoId,
+        produtoNome: newSale.produtoNome,
+        precoUn: newSale.precoUn,
+        quantidade: newSale.quantidade,
+        total: newSale.total
+      }
+    ];
+
+    const productsToSync: Product[] = [];
+    const updatedProducts = products.map((p) => {
+      const soldItem = itemsToDecrease.find((item) => item.produtoId === p.id);
+      if (soldItem && !p.estoqueInfinito) {
+        const updatedProduct = {
+          ...p,
+          estoque: Math.max(0, p.estoque - soldItem.quantidade)
+        };
+        productsToSync.push(updatedProduct);
+        return updatedProduct;
+      }
+      return p;
+    });
+
+    if (productsToSync.length > 0) {
+      saveProducts(updatedProducts);
+      // Async update each product's stock in Supabase
+      try {
+        await Promise.all(
+          productsToSync.map(p => dbSupabase.saveProduct(p))
+        );
+      } catch (e) {
+        console.warn('Erro ao sincronizar estoque atualizado com o Supabase em segundo plano:', e);
+      }
+    }
 
     // Background save to Supabase
     try {

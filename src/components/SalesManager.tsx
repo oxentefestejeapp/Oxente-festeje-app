@@ -430,16 +430,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       statusProducao: statusProducao
     };
 
-    // Subtrair estoque se não for infinito para cada item faturado
-    finalItens.forEach(item => {
-      const dbProd = products.find(p => p.id === item.produtoId);
-      if (dbProd && !dbProd.estoqueInfinito) {
-        const estoqueFinal = dbProd.estoque - item.quantidade;
-        onUpdateStock(dbProd.id, estoqueFinal);
-      }
-    });
-
-    // Salvar venda
+    // Salvar venda (que agora deduz o estoque de forma atômica no pai)
     onRecordSale(newSale);
 
     // Play victory success sound cue

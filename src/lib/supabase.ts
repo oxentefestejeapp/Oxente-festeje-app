@@ -101,6 +101,14 @@ CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_store_info FOR ALL USIN
 INSERT INTO oxente_store_info (key, nome, instagram, telefone, endereco, whatsapp_template)
 VALUES ('default', 'Oxente Festeje', '@oxente_festeje', '(81) 98765-4321', 'Rua Principal, Recife - PE', 'Olá {cliente}, seu pedido {numero} está {status}!')
 ON CONFLICT (key) DO NOTHING;
+
+-- 4. Habilitar Tempo Real (Realtime) para as Tabelas
+-- Caso use o painel web do Supabase, você também pode ativar isso acessando:
+-- Database -> Replication -> Selecione a publicação 'supabase_realtime' e adicione as tabelas.
+-- Ou execute o bloco SQL abaixo para registrar automaticamente:
+alter publication supabase_realtime add table oxente_products;
+alter publication supabase_realtime add table oxente_sales;
+alter publication supabase_realtime add table oxente_store_info;
 `;
 };
 
