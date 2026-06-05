@@ -3,6 +3,7 @@
   "appId": "1:912051653362:web:cb9cdb2a30c0fc1e659e6b",
   "apiKey": "AIzaSyC5Jr4wq2lm_m9XhUIxShpaP1NoP2RgiiE",
   "authDomain": "practical-hue-l8gvj.firebaseapp.com",
+  "firestoreDatabaseId": "ai-studio-d9977160-44d4-41c1-9d78-4c43640d6b79",
   "storageBucket": "practical-hue-l8gvj.firebasestorage.app",
   "messagingSenderId": "912051653362",
   "measurementId": ""
