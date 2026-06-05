@@ -520,7 +520,7 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
                       <span className={`inline-flex items-center gap-1 font-mono text-[9px] font-bold px-2 py-0.5 rounded-full ${
                         isLegacy 
                           ? 'bg-zinc-800/60 text-zinc-400' 
-                          : creator === 'oxentefesteje@gmail.com'
+                          : creator === 'oxentefesteje@gmail.com' || creator === 'abraaoapp@oxente.com' || creator === 'abraaoapp'
                             ? 'bg-brand-pink/10 text-brand-pink border border-brand-pink/20'
                             : 'bg-blue-950/30 text-blue-300 border border-blue-900/20'
                       }`}>

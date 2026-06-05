@@ -130,7 +130,7 @@ export function UserApprovals() {
           id: doc.id,
           name: data.name,
           email: data.email,
-          role: data.role || (data.email === 'oxentefesteje@gmail.com' ? 'admin' : 'colaborador'),
+          role: data.role || (data.email === 'oxentefesteje@gmail.com' || data.email === 'abraaoapp@oxente.com' || doc.id === 'abraaoapp' ? 'admin' : 'colaborador'),
           status: data.status || 'approved',
           createdAt: data.createdAt,
           updatedAt: data.updatedAt
@@ -243,7 +243,7 @@ export function UserApprovals() {
       ) : (
         <div className="space-y-3.5">
           {filteredUsers.map((userProfile) => {
-            const isSelf = userProfile.email === 'oxentefesteje@gmail.com';
+            const isSelf = userProfile.email === 'oxentefesteje@gmail.com' || userProfile.email === 'abraaoapp@oxente.com' || userProfile.id === 'abraaoapp';
             const isAdminRole = userProfile.role === 'admin' || isSelf;
             const currentStatus = userProfile.status || 'approved';
 
@@ -299,7 +299,9 @@ export function UserApprovals() {
                     )}
                   </div>
 
-                  <div className="text-xs text-zinc-400 truncate select-text">{userProfile.email}</div>
+                  <div className="text-xs text-zinc-400 truncate select-text">
+                    {userProfile.email?.endsWith('@oxente.com') ? `Login: ${userProfile.email.split('@')[0]}` : `E-mail: ${userProfile.email}`}
+                  </div>
 
                   <div className="text-[10px] text-zinc-500 flex items-center gap-1.5">
                     <Calendar className="h-3 w-3" />
@@ -346,22 +348,6 @@ export function UserApprovals() {
                           Recusar
                         </button>
                       )}
-
-                      {/* Role Toggle Button */}
-                      <button
-                        onClick={async () => {
-                          if (!db) return;
-                          try {
-                            const newRole = userProfile.role === 'admin' ? 'colaborador' : 'admin';
-                            await updateDoc(doc(db, 'users', userProfile.id), { role: newRole });
-                          } catch (e) {
-                            console.error('Error toggling role:', e);
-                          }
-                        }}
-                        className="bg-zinc-905 hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100 text-xxs font-bold px-3 py-1.5 rounded-xl border border-zinc-800 cursor-pointer transition-all animate-none duration-150 active:scale-95"
-                      >
-                        {userProfile.role === 'admin' ? 'Tornar Colaborador' : 'Tornar Admin'}
-                      </button>
                     </>
                   )}
                 </div>

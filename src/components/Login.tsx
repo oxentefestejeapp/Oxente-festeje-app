@@ -1,220 +1,262 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Lock, 
-  Mail, 
   User as UserIcon, 
   LogIn, 
-  UserPlus,
   AlertCircle, 
   Loader2, 
   ShieldCheck,
-  Sparkles
+  Sparkles,
+  AlertTriangle,
+  X
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import { BrandLogo } from './BrandLogo';
-import { auth, db, hasConfig, googleProvider } from '../lib/firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile, signInWithPopup } from 'firebase/auth';
-import { setDoc, doc, serverTimestamp } from 'firebase/firestore';
+import { db, hasConfig } from '../lib/firebase';
+import { playAppSound } from '../lib/audio';
 
 interface LoginProps {
   onLoginSuccess?: () => void;
 }
 
+export const INITIAL_USERS = [
+  { id: 'abraaoapp', name: 'Abraão', email: 'abraaoapp@oxente.com', role: 'admin', status: 'approved', password: '65196519' },
+  { id: 'juan', name: 'Juan', email: 'juan@oxente.com', role: 'colaborador', status: 'approved', password: '69app69' },
+  { id: 'assis', name: 'Assis', email: 'assis@oxente.com', role: 'colaborador', status: 'approved', password: '69app69' },
+  { id: 'ana_clara', name: 'Ana Clara', email: 'anaclara@oxente.com', role: 'colaborador', status: 'approved', password: '69app69' }
+];
+
+export const normalizeUsername = (username: string): string => {
+  return username.trim().toLowerCase().replace(/\s+/g, '_');
+};
+
 export function Login({ onLoginSuccess }: LoginProps) {
-  const [activeMode, setActiveMode] = useState<'login' | 'register'>('login');
-  const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [showPasswordErrorToast, setShowPasswordErrorToast] = useState(false);
 
-  // Local offline mode state (in case Firebase credentials aren't initialized yet)
-  const [offlineUsername, setOfflineUsername] = useState('');
-  const [offlinePassword, setOfflinePassword] = useState('');
+  // Auto-dismiss the password mismatch error toast after 5 seconds
+  useEffect(() => {
+    if (showPasswordErrorToast) {
+      const timer = setTimeout(() => {
+        setShowPasswordErrorToast(false);
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [showPasswordErrorToast]);
+
+  // Guarantee that default users exist in the Firestore database on load
+  useEffect(() => {
+    const ensureDefaultUsersExistInDb = async () => {
+      if (!db || !hasConfig) return;
+      try {
+        const { getDoc, setDoc, doc, serverTimestamp } = await import('firebase/firestore');
+        for (const user of INITIAL_USERS) {
+          const userRef = doc(db, 'users', user.id);
+          const snap = await getDoc(userRef);
+          if (!snap.exists()) {
+            await setDoc(userRef, {
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              status: user.status,
+              password: user.password,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+            console.log(`Padrão ${user.name} garantido no banco.`);
+          }
+        }
+      } catch (e) {
+        console.warn('Erro ao sincronizar usuários iniciais no Firebase:', e);
+      }
+    };
+    ensureDefaultUsersExistInDb();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-    setSuccessMsg(null);
 
-    const sanitizedEmail = email.trim();
-    const sanitizedPassword = password.trim();
-    const sanitizedName = name.trim();
+    const inputNameOrig = email.trim(); 
+    const pWord = password.trim();
 
-    // 1. If Firebase is offline/missing credentials, use the local offline fallback mechanism
-    if (!hasConfig || !auth) {
-      setTimeout(() => {
-        const u = offlineUsername.trim().toLowerCase();
-        const p = offlinePassword.trim();
-        if (u === 'admin' && p === 'admin') {
-          const mockUser = {
-            uid: 'local-offline-admin',
-            displayName: 'Propretário Offline',
-            email: 'offline-admin@oxente.com',
-            role: 'admin'
-          };
-          localStorage.setItem('oxente_custom_user', JSON.stringify(mockUser));
-          setIsLoading(false);
-          const event = new Event('oxente_auth_change');
-          window.dispatchEvent(event);
-          if (onLoginSuccess) onLoginSuccess();
-        } else {
-          setError('Modo Offline: Use usuário "admin" e senha "admin" para acessar o painel de testes.');
-          setIsLoading(false);
-        }
-      }, 400);
+    if (!inputNameOrig || !pWord) {
+      setError('Por favor, preencha todos os campos.');
+      setIsLoading(false);
       return;
     }
 
-    // 2. Online Authentication Flow using Firebase Auth
+    const usernameId = normalizeUsername(inputNameOrig);
+
+    // Initial search matches
+    const defaultMatch = INITIAL_USERS.find(
+      (u) => u.id === usernameId || u.name.toLowerCase() === inputNameOrig.toLowerCase()
+    );
+
     try {
-      if (activeMode === 'login') {
-        // --- SIGN IN FLOW ---
-        if (!sanitizedEmail || !sanitizedPassword) {
-          setError('Por favor, preencha todos os campos.');
-          setIsLoading(false);
-          return;
-        }
+      let userProfile: any = null;
 
-        await signInWithEmailAndPassword(auth, sanitizedEmail, sanitizedPassword);
-        setIsLoading(false);
+      // 1. Search in live Firestore database if accessible with graceful local fallback on error/offline
+      if (db && hasConfig) {
+        try {
+          const { getDoc, doc, setDoc, serverTimestamp } = await import('firebase/firestore');
+          const userRef = doc(db, 'users', usernameId);
+          const docSnap = await getDoc(userRef);
+
+          if (docSnap.exists()) {
+            userProfile = docSnap.data();
+          } else if (defaultMatch) {
+            // If they entered a valid login username but the db doc was deleted or empty, seed it
+            userProfile = {
+              id: defaultMatch.id,
+              name: defaultMatch.name,
+              email: defaultMatch.email,
+              role: defaultMatch.role,
+              status: defaultMatch.status,
+              password: defaultMatch.password,
+            };
+            await setDoc(userRef, {
+              ...userProfile,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp()
+            });
+          }
+        } catch (dbErr) {
+          console.warn('Erro ao consultar banco online durante login. Prosseguindo com autenticação local segura:', dbErr);
+        }
+      }
+
+      // 2. Fallback check inside cached custom list or default match list
+      if (!userProfile) {
+        const localUsersStr = localStorage.getItem('oxente_custom_users_local');
+        const localUsers = localUsersStr ? JSON.parse(localUsersStr) : [];
+        const localMatch = localUsers.find((u: any) => u.id === usernameId);
         
-        // Let the state listener in App.tsx handle redirection automatically upon auth change!
-        if (onLoginSuccess) {
-          onLoginSuccess();
-        }
-      } else {
-        // --- REGISTRATION / SIGN UP FLOW ---
-        if (!sanitizedName || !sanitizedEmail || !sanitizedPassword) {
-          setError('Por favor, preencha todos os campos para se cadastrar.');
-          setIsLoading(false);
-          return;
-        }
+        userProfile = localMatch || defaultMatch;
+      }
 
-        if (sanitizedPassword.length < 6) {
-          setError('A senha deve ter no mínimo 6 caracteres.');
-          setIsLoading(false);
-          return;
-        }
+      if (!userProfile) {
+        setError('Usuário não cadastrado. Verifique o seu usuário de login.');
+        setIsLoading(false);
+        playAppSound('alert');
+        return;
+      }
 
-        // Create Authenticated Auth Account
-        const userCredential = await createUserWithEmailAndPassword(auth, sanitizedEmail, sanitizedPassword);
-        const firebaseUser = userCredential.user;
+      // 3. Password match comparison check
+      if (pWord !== userProfile.password) {
+        setError('Senha inválida para este usuário. Tente novamente.');
+        setShowPasswordErrorToast(true);
+        setIsLoading(false);
+        playAppSound('alert');
+        return;
+      }
 
-        // Apply display name to Auth account
-        await updateProfile(firebaseUser, { displayName: sanitizedName });
+      // 4. Status restriction check
+      if (userProfile.status === 'rejected') {
+        setError('Acesso recusado pelo administrador do painel.');
+        setIsLoading(false);
+        playAppSound('alert');
+        return;
+      }
 
-        // Save real-time user profile database document in Firestore 'users/{id}'
-        // If they sign up with the main system address 'oxentefesteje@gmail.com', auto-approve them as Admin
-        const isAdminEmail = sanitizedEmail.toLowerCase() === 'oxentefesteje@gmail.com';
-        const userRole = isAdminEmail ? 'admin' : 'colaborador';
-        const userStatus = isAdminEmail ? 'approved' : 'pending';
+      if (userProfile.status === 'pending') {
+        setError('Seu cadastro está aguardando liberação do administrador.');
+        setIsLoading(false);
+        playAppSound('alert');
+        return;
+      }
 
-        if (db) {
-          await setDoc(doc(db, 'users', firebaseUser.uid), {
-            id: firebaseUser.uid,
-            name: sanitizedName,
-            email: sanitizedEmail.toLowerCase(),
-            role: userRole,
-            status: userStatus,
-            createdAt: serverTimestamp(),
+      // 5. Successful Login Session setup
+      if (db && hasConfig) {
+        const { updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
+        try {
+          await updateDoc(doc(db, 'users', userProfile.id), {
             updatedAt: serverTimestamp()
           });
+        } catch (dbErr) {
+          console.warn('Erro ao registrar heartbeat online:', dbErr);
         }
-
-        setIsLoading(false);
-        setSuccessMsg(
-          isAdminEmail 
-            ? 'Conta de Administrador criada com sucesso! Redirecionando...' 
-            : 'Seu cadastro foi realizado! Aguarde a aprovação do administrador para obter acesso ao painel.'
-        );
-
-        // Reset fields
-        setName('');
-        setEmail('');
-        setPassword('');
-
-        // Switch to login tab in 4 seconds if not auto-directed
-        setTimeout(() => {
-          setActiveMode('login');
-          setSuccessMsg(null);
-        }, 4500);
       }
-    } catch (err: any) {
-      console.error('Erro de autenticação:', err);
-      setIsLoading(false);
+
+      const loggedSession = {
+        id: userProfile.id,
+        uid: userProfile.id, 
+        name: userProfile.name,
+        displayName: userProfile.name, 
+        email: userProfile.email,
+        role: userProfile.role,
+        status: userProfile.status
+      };
+
+      // Cache login session
+      localStorage.setItem('oxente_custom_user', JSON.stringify(loggedSession));
       
-      // Localized Portuguese friendly error messages
-      let message = 'Ocorreu um erro ao processar sua solicitação. Tente novamente.';
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-        message = 'E-mail ou senha inválidos. Verifique os dados.';
-      } else if (err.code === 'auth/email-already-in-use') {
-        message = 'Este endereço de e-mail já está sendo utilizado por outra conta.';
-      } else if (err.code === 'auth/invalid-email') {
-        message = 'Formato de e-mail inválido.';
-      } else if (err.code === 'auth/weak-password') {
-        message = 'A senha fornecida é muito fraca. Escolha uma senha mais forte.';
-      } else if (err.message) {
-        message = err.message;
+      // Also cache in custom users local cache
+      const localUsersStr = localStorage.getItem('oxente_custom_users_local');
+      let localList = localUsersStr ? JSON.parse(localUsersStr) : [];
+      const hasId = localList.findIndex((u: any) => u.id === userProfile.id);
+      if (hasId >= 0) {
+        localList[hasId] = { ...localList[hasId], ...userProfile };
+      } else {
+        localList.push(userProfile);
       }
-      setError(message);
-    }
-  };
-
-  const handleGoogleLogin = async () => {
-    setIsLoading(true);
-    setError(null);
-    setSuccessMsg(null);
-
-    try {
-      if (!hasConfig || !auth) {
-        throw new Error('Firebase não configurado.');
-      }
-
-      const result = await signInWithPopup(auth, googleProvider);
-      const firebaseUser = result.user;
-
-      // Validate or create document in users collection
-      const isAdminEmail = firebaseUser.email?.toLowerCase() === 'oxentefesteje@gmail.com';
-      const userRole = isAdminEmail ? 'admin' : 'colaborador';
-      const userStatus = isAdminEmail ? 'approved' : 'pending';
-
-      if (db) {
-        await setDoc(doc(db, 'users', firebaseUser.uid), {
-          id: firebaseUser.uid,
-          name: firebaseUser.displayName || 'Usuário Google',
-          email: firebaseUser.email?.toLowerCase() || '',
-          role: userRole,
-          status: userStatus,
-          updatedAt: serverTimestamp()
-        }, { merge: true });
-      }
+      localStorage.setItem('oxente_custom_users_local', JSON.stringify(localList));
 
       setIsLoading(false);
-      if (isAdminEmail) {
-        setSuccessMsg('Bem-vindo Proprietário Principal! Redirecionando...');
-      } else {
-        setSuccessMsg('Autenticação via Google realizada! Verificando permissões de acesso do colaborador...');
-      }
+      playAppSound('success');
+
+      // Dispatch change event to App.tsx
+      const authEvent = new Event('oxente_auth_change');
+      window.dispatchEvent(authEvent);
 
       if (onLoginSuccess) {
         onLoginSuccess();
       }
-    } catch (err: any) {
-      console.error('Erro de login Google:', err);
+    } catch (err) {
+      console.error(err);
+      setError('Falha geral no sistema de autenticação local segura.');
       setIsLoading(false);
-      if (err.code === 'auth/popup-closed-by-user') {
-        setError('O login foi cancelado ou a janela de login do Google foi fechada.');
-      } else {
-        setError('Falha na autenticação do Google: ' + (err.message || err));
-      }
     }
   };
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 flex items-center justify-center px-4 py-12 font-sans select-none antialiased">
+    <div className="min-h-screen bg-black text-zinc-100 flex items-center justify-center px-4 py-12 font-sans select-none antialiased relative overflow-x-hidden">
+      {/* Dynamic Animated Floating Password Error Notification Toast */}
+      <AnimatePresence>
+        {showPasswordErrorToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, scale: 0.95, x: '-50%' }}
+            transition={{ type: 'spring', damping: 25, stiffness: 350 }}
+            className="fixed top-6 left-1/2 z-50 flex items-center gap-3 bg-zinc-950/95 backdrop-blur-md border border-red-500/30 text-white px-5 py-4 rounded-2xl shadow-xl shadow-red-950/20 max-w-sm w-[90%] select-text"
+          >
+            <div className="p-2 bg-red-500/15 border border-red-500/30 text-red-550 rounded-xl shrink-0">
+              <AlertTriangle className="h-4.5 w-4.5 animate-pulse" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <h4 className="font-bold text-sm text-red-200">Senha Incorreta</h4>
+              <p className="text-xs text-zinc-350 mt-0.5 leading-relaxed">
+                A senha inserida para <strong className="text-white font-semibold">{email || 'este usuário'}</strong> está incorreta.
+              </p>
+            </div>
+            <button
+              onClick={() => setShowPasswordErrorToast(false)}
+              className="p-1 hover:bg-zinc-900 text-zinc-500 hover:text-zinc-300 rounded-lg transition-colors shrink-0 cursor-pointer"
+              title="Fechar"
+              type="button"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       <div className="w-full max-w-md bg-zinc-950 border border-zinc-900 rounded-3xl p-8 shadow-2xl relative overflow-hidden">
         
         {/* Subtle Decorative Aura */}
@@ -222,7 +264,7 @@ export function Login({ onLoginSuccess }: LoginProps) {
         <div className="absolute bottom-0 left-0 w-32 h-32 bg-brand-pink/5 rounded-full blur-3xl pointer-events-none" />
 
         {/* Logo/Brand Title */}
-        <div className="text-center mb-6 relative">
+        <div className="text-center mb-8 relative">
           <div className="flex justify-center mb-4">
             <BrandLogo size="lg" />
           </div>
@@ -230,51 +272,10 @@ export function Login({ onLoginSuccess }: LoginProps) {
             Oxente Festeje
           </h1>
           <p className="text-xs text-zinc-400 max-w-xs mx-auto">
-            {hasConfig 
-              ? 'Painel corporativo oficial integrado ao banco de dados do Firebase.' 
-              : 'Modo Offline: Credenciais locais ativadas.'}
+            Acesso administrativo ao painel corporativo do negócio.
           </p>
         </div>
 
-        {/* Dynamic Tab Selector for Login/Registration */}
-        {hasConfig && (
-          <div className="flex bg-zinc-900 border border-zinc-850 p-1.5 rounded-2xl mb-6">
-            <button
-              type="button"
-              onClick={() => {
-                setActiveMode('login');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeMode === 'login' 
-                  ? 'bg-zinc-800 text-white shadow-sm' 
-                  : 'text-zinc-450 hover:text-zinc-200'
-              }`}
-            >
-              <LogIn className="h-4 w-4" />
-              Entrar
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setActiveMode('register');
-                setError(null);
-                setSuccessMsg(null);
-              }}
-              className={`flex-1 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                activeMode === 'register' 
-                  ? 'bg-brand-pink text-black shadow-sm font-extrabold' 
-                  : 'text-zinc-450 hover:text-zinc-200'
-              }`}
-            >
-              <UserPlus className="h-4 w-4" />
-              Criar Conta
-            </button>
-          </div>
-        )}
-
-        {/* Error / Success Alert Banners */}
         {error && (
           <div className="mb-6 p-4 bg-red-950/40 border border-red-900/60 rounded-2xl flex items-start gap-2.5 text-xs text-red-350 animate-in fade-in duration-200">
             <AlertCircle className="h-4.5 w-4.5 text-red-400 shrink-0 mt-0.5" />
@@ -282,196 +283,68 @@ export function Login({ onLoginSuccess }: LoginProps) {
           </div>
         )}
 
-        {successMsg && (
-          <div className="mb-6 p-4 bg-emerald-955/20 border border-emerald-900/40 rounded-2xl flex items-start gap-2.5 text-xs text-emerald-350 animate-in fade-in duration-200">
-            <ShieldCheck className="h-4.5 w-4.5 text-emerald-450 shrink-0 mt-0.5" />
-            <span>{successMsg}</span>
-          </div>
-        )}
-
-        {/* Auth Forms */}
+        {/* Custom Authenticated Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
           
-          {/* STANDARD FIREBASE AUTENTICATION MODE */}
-          {hasConfig ? (
-            <>
-              {activeMode === 'register' && (
-                <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-200">
-                  <label className="text-xs font-semibold text-zinc-400 block px-0.5">Nome Completo</label>
-                  <div className="relative">
-                    <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-                    <input
-                      type="text"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      placeholder="Ex: Clara de Assis"
-                      autoComplete="name"
-                      className="w-full bg-zinc-900 border border-zinc-850 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-sm rounded-2xl py-3.5 pl-10 pr-4 outline-none transition-all text-white placeholder:text-zinc-600"
-                      required
-                    />
-                  </div>
-                </div>
-              )}
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-400 block px-0.5">Usuário (Login)</label>
+            <div className="relative">
+              <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <input
+                type="text"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Digite seu login"
+                autoComplete="username"
+                className="w-full bg-zinc-900 border border-zinc-850 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-sm rounded-2xl py-3.5 pl-10 pr-4 outline-none transition-all text-white placeholder:text-zinc-650"
+                required
+              />
+            </div>
+          </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400 block px-0.5">E-mail de Acesso</label>
-                <div className="relative">
-                  <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="exemplo@oxente.com"
-                    autoComplete="email"
-                    autoCapitalize="none"
-                    className="w-full bg-zinc-900 border border-zinc-850 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-sm rounded-2xl py-3.5 pl-10 pr-4 outline-none transition-all text-white placeholder:text-zinc-600"
-                    required
-                  />
-                </div>
-              </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-semibold text-zinc-400 block px-0.5">Senha</label>
+            <div className="relative">
+              <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Digite sua senha de acesso"
+                className="w-full bg-zinc-900 border border-zinc-850 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-sm rounded-2xl py-3.5 pl-10 pr-4 outline-none transition-all text-white placeholder:text-zinc-650"
+                required
+              />
+            </div>
+          </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400 block px-0.5">Senha</label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder={activeMode === 'register' ? 'Mínimo 6 caracteres' : 'Digite sua senha'}
-                    className="w-full bg-zinc-900 border border-zinc-850 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-sm rounded-2xl py-3.5 pl-10 pr-4 outline-none transition-all text-white placeholder:text-zinc-600"
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Action Button */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className={`w-full flex items-center justify-center gap-2 mt-6 py-3.5 px-4 font-extrabold rounded-2xl text-xs sm:text-sm shadow-lg transition-all transform active:scale-98 cursor-pointer select-none duration-150 disabled:opacity-50 ${
-                  activeMode === 'register' 
-                    ? 'bg-brand-pink hover:bg-brand-pink/90 text-black' 
-                    : 'bg-white hover:bg-white/90 text-black'
-                }`}
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4.5 w-4.5 animate-spin" />
-                ) : activeMode === 'login' ? (
-                  <>
-                    <LogIn className="h-4.5 w-4.5" />
-                    <span>Entrar no Painel</span>
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-4.5 w-4.5" />
-                    <span>Solicitar Cadastro</span>
-                  </>
-                )}
-              </button>
-            </>
-          ) : (
-            /* LOCAL OFFLINE MODE IN DEVELOPMENT */
-            <>
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400 block px-0.5">Usuário Offline</label>
-                <div className="relative">
-                  <UserIcon className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-                  <input
-                    type="text"
-                    value={offlineUsername}
-                    onChange={(e) => setOfflineUsername(e.target.value)}
-                    placeholder="Digite 'admin'"
-                    autoCapitalize="none"
-                    autoComplete="off"
-                    className="w-full bg-zinc-900 border border-zinc-850 text-sm rounded-2xl py-3.5 pl-10 pr-4 outline-none transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-semibold text-zinc-400 block px-0.5">Senha Offline</label>
-                <div className="relative">
-                  <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
-                  <input
-                    type="password"
-                    value={offlinePassword}
-                    onChange={(e) => setOfflinePassword(e.target.value)}
-                    placeholder="Digite 'admin'"
-                    className="w-full bg-zinc-900 border border-zinc-850 text-sm rounded-2xl py-3.5 pl-10 pr-4 outline-none transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full flex items-center justify-center gap-2 mt-6 py-3.5 px-4 bg-brand-pink hover:bg-brand-pink/90 text-black font-extrabold rounded-2xl text-xs sm:text-sm shadow-lg transition-all"
-              >
-                {isLoading ? (
-                  <Loader2 className="h-4.5 w-4.5 animate-spin" />
-                ) : (
-                  <>
-                    <LogIn className="h-4.5 w-4.5" />
-                    <span>Entrar (Local)</span>
-                  </>
-                )}
-              </button>
-            </>
-          )}
+          {/* Action Login Button */}
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full flex items-center justify-center gap-2 mt-6 py-4 px-4 bg-white hover:bg-white/90 text-black font-extrabold rounded-2xl text-xs sm:text-sm shadow-lg transition-all transform active:scale-98 cursor-pointer select-none disabled:opacity-50"
+          >
+            {isLoading ? (
+              <Loader2 className="h-4.5 w-4.5 animate-spin" />
+            ) : (
+              <>
+                 <LogIn className="h-4.5 w-4.5" />
+                <span>Entrar no Painel</span>
+              </>
+            )}
+          </button>
         </form>
 
-        {hasConfig && activeMode === 'login' && (
-          <div className="mt-5 space-y-4 animate-in fade-in duration-200">
-            <div className="flex items-center gap-3">
-              <div className="flex-1 h-[1px] bg-zinc-900" />
-              <span className="text-[10px] uppercase tracking-wider text-zinc-500 font-bold select-none">ou acesse com</span>
-              <div className="flex-1 h-[1px] bg-zinc-900" />
-            </div>
-
-            <button
-              type="button"
-              onClick={handleGoogleLogin}
-              disabled={isLoading}
-              className="w-full flex items-center justify-center gap-2.5 py-3.5 px-4 bg-zinc-900 hover:bg-zinc-850 text-white font-bold rounded-2xl text-xs sm:text-sm border border-zinc-900 hover:border-zinc-800 transition-all cursor-pointer select-none active:scale-98 disabled:opacity-50"
-            >
-              <svg className="h-4.5 w-4.5 shrink-0" viewBox="0 0 24 24">
-                <path
-                  fill="#EA4335"
-                  d="M12 5.04c1.66 0 3.2.57 4.38 1.69l3.27-3.27C17.67 1.48 14.98 1 12 1 7.35 1 3.37 3.68 1.41 7.57l3.79 2.94C6.1 7.53 8.84 5.04 12 5.04z"
-                />
-                <path
-                  fill="#4285F4"
-                  d="M23.49 12.27c0-.81-.07-1.59-.2-2.36H12v4.47h6.47c-.28 1.48-1.12 2.74-2.38 3.58l3.7 2.87c2.16-1.99 3.42-4.91 3.42-8.56z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.21 14.97c-.24-.72-.37-1.49-.37-2.3s.13-1.58.37-2.3L1.41 7.57C.51 9.36 0 11.45 0 13.67s.51 4.31 1.41 6.1l3.8-2.8z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 22.18c3.21 0 5.91-1.06 7.88-2.89l-3.7-2.87c-1.02.68-2.33 1.09-4.18 1.09-3.16 0-5.9-2.49-6.8-5.47L1.41 14.97c1.96 3.89 5.94 6.57 10.59 6.57z"
-                />
-              </svg>
-              <span>Entrar com o Google (Gmail)</span>
-            </button>
-          </div>
-        )}
-
-        {/* Footer/Info Details and Quick Tips */}
+        {/* Footer info details */}
         <div className="mt-8 pt-5 border-t border-zinc-900 flex flex-col items-center gap-2 text-center">
-          <div className="flex items-center gap-1.5 text-xxs text-zinc-500">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-555 shrink-0" />
-            <span>Autenticação Oficial Google Firebase ativa</span>
+          <div className="flex items-center gap-1.5 text-xxs text-zinc-550">
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+            <span>Sessão Local Segura Ativa</span>
           </div>
           <div className="flex items-center gap-1 text-[10px] text-zinc-600">
             <Sparkles className="h-3 w-3 text-brand-pink" />
-            <span>Hospedado via Hostinger / Chaves de Acesso Seguras</span>
+            <span>Hospedado via Hostinger / Código Limpo e Rápido</span>
           </div>
         </div>
-
       </div>
     </div>
   );

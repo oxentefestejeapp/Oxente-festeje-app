@@ -17,6 +17,7 @@ interface HeaderProps {
 
 export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) {
   const [audioMuted, setAudioMutedState] = useState(() => getIsAudioMuted());
+  const isAdmin = currentUserEmail === 'oxentefesteje@gmail.com' || currentUserEmail === 'abraaoapp@oxente.com';
 
   useEffect(() => {
     const handleMute = (e: any) => {
@@ -88,7 +89,7 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
         </div>
       )}
 
-      <div className={`${currentUserEmail === 'oxentefesteje@gmail.com' ? 'max-w-7xl' : 'max-w-5xl'} mx-auto flex flex-col md:flex-row items-center justify-between gap-6`}>
+      <div className={`${isAdmin ? 'max-w-7xl' : 'max-w-5xl'} mx-auto flex flex-col md:flex-row items-center justify-between gap-6`}>
         
         {/* Logo and Brand */}
         <div className="flex items-center gap-3 text-center md:text-left">
@@ -108,7 +109,7 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
 
         {/* Real-time stats indicators */}
         <div className={`grid gap-3 w-full md:w-auto ${
-          currentUserEmail === 'oxentefesteje@gmail.com' 
+          isAdmin 
             ? 'grid-cols-2 lg:grid-cols-4' 
             : 'grid-cols-1 sm:grid-cols-3'
         }`}>
@@ -143,7 +144,7 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
             </div>
           </div>
 
-          {currentUserEmail === 'oxentefesteje@gmail.com' && (
+          {isAdmin && (
             <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 flex items-center gap-3">
               <div className="p-2 bg-zinc-950 border border-zinc-800 rounded-lg text-emerald-450 shadow-xs">
                 <DollarSign className="h-5 w-5" />

@@ -22,12 +22,12 @@ import {
   Bell,
   ArrowRight,
   Palette,
-  MessageSquare
+  MessageSquare,
+  Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { onAuthStateChanged, signOut, User } from 'firebase/auth';
-import { doc, onSnapshot, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db, hasConfig } from './lib/firebase';
+import { doc, onSnapshot, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db, hasConfig } from './lib/firebase';
 import { dbSupabase } from './lib/supabase';
 
 import { Header } from './components/Header';
@@ -44,15 +44,18 @@ import { SalesAudit } from './components/SalesAudit';
 import { RemindersManager } from './components/RemindersManager';
 import { ClosedOrdersManager } from './components/ClosedOrdersManager';
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
+import { ChangePassword } from './components/ChangePassword';
 
 import { Product, Sale, StoreInfo } from './types';
 import { defaultProducts, defaultSales, defaultStoreInfo } from './defaultData';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from './lib/audio';
 
 export default function App() {
-  // 1. Firebase Auth and DB state
-  const [firebaseUser, setFirebaseUser] = useState<User | null>(null);
+  // 1. Custom Secure Credentials Auth State
+  const [firebaseUser, setFirebaseUser] = useState<any | null>(null);
   const [userStatus, setUserStatus] = useState<'loading' | 'unauthenticated' | 'pending' | 'approved' | 'rejected'>('loading');
+
+  const isAdmin = firebaseUser?.email === 'oxentefesteje@gmail.com' || firebaseUser?.email === 'abraaoapp@oxente.com' || firebaseUser?.id === 'abraaoapp' || firebaseUser?.role === 'admin';
 
   // 2. Core Persistent State
   const [products, setProducts] = useState<Product[]>([]);
@@ -131,104 +134,79 @@ export default function App() {
     return sales.filter(s => isSalePending(s) && (s.valorFaltante !== undefined ? s.valorFaltante > 0 : (s.total - (s.valorPago ?? 0)) > 0)).length;
   }, [sales]);
 
-  // Monitor Authentication State
+  // Monitor Authentication State (Custom Code-Based Authenticated User)
   useEffect(() => {
-    if (!hasConfig || !auth) {
-      // Offline fallback
-      const checkLocalAuth = () => {
-        const savedUserStr = localStorage.getItem('oxente_custom_user');
-        if (savedUserStr) {
-          try {
-            const userObj = JSON.parse(savedUserStr);
-            setFirebaseUser(userObj);
-            setUserStatus('approved');
-          } catch (e) {
-            setFirebaseUser(null);
-            setUserStatus('unauthenticated');
-          }
-        } else {
-          setFirebaseUser(null);
-          setUserStatus('unauthenticated');
-        }
-      };
-      checkLocalAuth();
-      window.addEventListener('oxente_auth_change', checkLocalAuth);
-      return () => {
-        window.removeEventListener('oxente_auth_change', checkLocalAuth);
-      };
-    }
-
-    // Direct Firebase Authentication Listener
     let unsubscribeDoc: (() => void) | null = null;
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const checkLocalAuth = () => {
       // Clean up previous Firestore listener if exists
       if (unsubscribeDoc) {
         unsubscribeDoc();
         unsubscribeDoc = null;
       }
 
-      if (user) {
-        setFirebaseUser(user);
-        
-        // Listen to their user profile document in Firestore for real-time status changes
-        if (db) {
-          const userDocRef = doc(db, 'users', user.uid);
-          unsubscribeDoc = onSnapshot(userDocRef, (docSnap) => {
-            if (docSnap.exists()) {
-              const uData = docSnap.data();
-              
-              // Enhance the firebase user with role and offline fields
-              const enhancedUser = {
-                ...user,
-                displayName: uData.name || user.displayName || 'Colaborador',
-                role: uData.role || (user.email === 'oxentefesteje@gmail.com' ? 'admin' : 'colaborador')
-              } as any;
-              
-              setFirebaseUser(enhancedUser);
-              
-              const statusValue = uData.status || (user.email === 'oxentefesteje@gmail.com' ? 'approved' : 'pending');
-              if (statusValue === 'approved' || user.email === 'oxentefesteje@gmail.com') {
-                setUserStatus('approved');
-              } else if (statusValue === 'rejected') {
-                setUserStatus('rejected');
+      const savedUserStr = localStorage.getItem('oxente_custom_user');
+      if (savedUserStr) {
+        try {
+          const userObj = JSON.parse(savedUserStr);
+          const userIdNormal = userObj.id || userObj.uid || '';
+
+          if (db && hasConfig && userIdNormal) {
+            // Read Firestore real-time snaps for this user
+            const userDocRef = doc(db, 'users', userIdNormal);
+            unsubscribeDoc = onSnapshot(userDocRef, (docSnap) => {
+              if (docSnap.exists()) {
+                const uData = docSnap.data();
+                const enhancedUser = {
+                  ...userObj,
+                  id: uData.id || userIdNormal,
+                  uid: uData.id || userIdNormal,
+                  name: uData.name || userObj.name || 'Colaborador',
+                  displayName: uData.name || userObj.name || 'Colaborador',
+                  email: uData.email || userObj.email || '',
+                  role: uData.role || (uData.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+                  status: uData.status || 'approved'
+                };
+                setFirebaseUser(enhancedUser);
+
+                const statusValue = uData.status || 'approved';
+                if (statusValue === 'approved') {
+                  setUserStatus('approved');
+                } else if (statusValue === 'rejected') {
+                  setUserStatus('rejected');
+                } else {
+                  setUserStatus('pending');
+                }
               } else {
-                setUserStatus('pending');
+                // Not found on DB yet - use local details
+                setFirebaseUser(userObj);
+                setUserStatus(userObj.status || 'approved');
               }
-            } else {
-              // If document doesn't exist in Firestore yet (e.g., they registered in Auth but profile creation hasn't completed or was slow),
-              // fallback to admin auto-approval or default pending.
-              if (user.email === 'oxentefesteje@gmail.com') {
-                setUserStatus('approved');
-              } else {
-                setUserStatus('pending');
-              }
-            }
-          }, (err) => {
-            console.error('Error fetching user snapshot status from Firestore:', err);
-            // Permissions issue or network error
-            if (user.email === 'oxentefesteje@gmail.com') {
-              setUserStatus('approved'); // Admin can bypass
-            } else {
-              setUserStatus('pending');
-            }
-          });
-        } else {
-          // If Firestore DB object is missing for some reason
-          if (user.email === 'oxentefesteje@gmail.com') {
-            setUserStatus('approved');
+            }, (err) => {
+              console.error('Error fetching real-time snapshot status:', err);
+              setFirebaseUser(userObj);
+              setUserStatus(userObj.status || 'approved');
+            });
           } else {
-            setUserStatus('pending');
+            // Local offline fallback
+            setFirebaseUser(userObj);
+            setUserStatus('approved');
           }
+        } catch (e) {
+          setFirebaseUser(null);
+          setUserStatus('unauthenticated');
         }
       } else {
         setFirebaseUser(null);
         setUserStatus('unauthenticated');
       }
-    });
+    };
+
+    checkLocalAuth();
+    window.addEventListener('oxente_auth_change', checkLocalAuth);
 
     return () => {
-      unsubscribeAuth();
+      window.removeEventListener('oxente_auth_change', checkLocalAuth);
       if (unsubscribeDoc) {
         unsubscribeDoc();
       }
@@ -237,33 +215,15 @@ export default function App() {
 
   // Online heartbeat and status synchronization with Firestore
   useEffect(() => {
-    const uid = firebaseUser?.uid;
+    const uid = firebaseUser?.id || firebaseUser?.uid;
     if (!uid || !db || !hasConfig) return;
-
-    let isFirstRun = true;
 
     const runHeartbeat = async () => {
       try {
         const userRef = doc(db, 'users', uid);
-        if (isFirstRun) {
-          // On first run, create user with createdAt if missing, using merge: true
-          const currentUser = auth?.currentUser;
-          await setDoc(userRef, {
-            id: uid,
-            name: currentUser?.displayName || firebaseUser?.displayName || 'Usuário Local',
-            email: currentUser?.email || firebaseUser?.email || '',
-            role: (firebaseUser as any)?.role || (currentUser?.email === 'oxentefesteje@gmail.com' ? 'admin' : 'colaborador'),
-            status: 'approved',
-            createdAt: serverTimestamp(),
-            updatedAt: serverTimestamp()
-          }, { merge: true });
-          isFirstRun = false;
-        } else {
-          // Subsequent runs only update updatedAt
-          await updateDoc(userRef, {
-            updatedAt: serverTimestamp()
-          });
-        }
+        await updateDoc(userRef, {
+          updatedAt: serverTimestamp()
+        });
       } catch (err) {
         console.error('Error running online heartbeat:', err);
       }
@@ -272,7 +232,7 @@ export default function App() {
     runHeartbeat();
     const interval = setInterval(runHeartbeat, 30000); // 30 seconds
     return () => clearInterval(interval);
-  }, [firebaseUser?.uid]);
+  }, [firebaseUser?.id, firebaseUser?.uid]);
 
   // Load state on mount (with SWR pull from Supabase Cloud Database)
   useEffect(() => {
@@ -374,10 +334,10 @@ export default function App() {
   // Guarantee that non-admin accounts are immediately kicked back from restricted/admin tabs
   useEffect(() => {
     const restrictedTabs = ['usuarios', 'a_receber', 'estoque', 'cadastro', 'configuracoes', 'auditoria'];
-    if (restrictedTabs.includes(activeTab) && firebaseUser?.email !== 'oxentefesteje@gmail.com') {
+    if (restrictedTabs.includes(activeTab) && !isAdmin) {
       setActiveTab('vendas');
     }
-  }, [activeTab, firebaseUser]);
+  }, [activeTab, isAdmin]);
 
   // Synchronizers
   const saveProducts = (updatedProducts: Product[]) => {
@@ -523,8 +483,6 @@ export default function App() {
     );
   }
 
-  const isAdmin = firebaseUser?.email === 'oxentefesteje@gmail.com';
-
   const getTabClass = (tabKey: string) => {
     return `w-full flex items-center justify-center gap-2 rounded-xl font-semibold transition-all cursor-pointer select-none whitespace-nowrap min-w-0 ${
       activeTab === tabKey
@@ -547,7 +505,7 @@ export default function App() {
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 pb-16">
 
         {/* Dynamic Receivables Summary Banner - Exclusive to oxentefesteje@gmail.com */}
-        {firebaseUser?.email === 'oxentefesteje@gmail.com' && totalFaltante > 0 && (
+        {isAdmin && totalFaltante > 0 && (
           <div className="no-print mb-6 bg-red-950/10 border border-red-900/30 rounded-2xl p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-sm animate-fade-in select-text max-w-5xl mx-auto w-full">
             <div className="flex items-center gap-3.5">
               <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 rounded-xl flex items-center justify-center shrink-0">
@@ -575,7 +533,7 @@ export default function App() {
         <div className={`no-print bg-zinc-900 rounded-2xl border border-zinc-800 mb-8 shadow-lg ${
           isAdmin 
             ? 'p-4 sm:p-5 md:p-6 pb-6 md:pb-8 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-12 gap-3.5 sm:gap-4 md:gap-5 w-full' 
-            : 'p-3 grid grid-cols-2 sm:grid-cols-6 gap-3 w-full'
+            : 'p-3 grid grid-cols-2 sm:grid-cols-7 gap-3 w-full'
         }`}>
           
           <button
@@ -594,7 +552,7 @@ export default function App() {
             <span className="sm:hidden">Venda</span>
           </button>
  
-          {firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+          {isAdmin && (
             <button
               onClick={() => changeTab('a_receber')}
               className={getTabClass('a_receber')}
@@ -683,7 +641,7 @@ export default function App() {
           </button>
 
 
-          {firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+          {isAdmin && (
             <button
               onClick={() => changeTab('estoque')}
               className={getTabClass('estoque')}
@@ -701,7 +659,7 @@ export default function App() {
             </button>
           )}
  
-          {firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+          {isAdmin && (
             <button
               onClick={() => changeTab('cadastro')}
               className={getTabClass('cadastro')}
@@ -719,7 +677,7 @@ export default function App() {
             </button>
           )}
  
-          {firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+          {isAdmin && (
             <button
               onClick={() => changeTab('configuracoes')}
               className={getTabClass('configuracoes')}
@@ -738,7 +696,7 @@ export default function App() {
           )}
  
           {/* Exclusive Users Approval Dashboard for Admin */}
-          {firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+          {isAdmin && (
             <button
               onClick={() => changeTab('usuarios')}
               className={getTabClass('usuarios')}
@@ -757,7 +715,7 @@ export default function App() {
           )}
  
           {/* Exclusive Sales Audit Trails Log for Admin */}
-          {firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+          {isAdmin && (
             <button
               onClick={() => changeTab('auditoria')}
               className={getTabClass('auditoria')}
@@ -775,22 +733,33 @@ export default function App() {
             </button>
           )}
  
+          {/* User Change Password Tab */}
+          <button
+            onClick={() => changeTab('alterar_senha')}
+            className={getTabClass('alterar_senha')}
+          >
+            <motion.div
+              animate={activeTab === 'alterar_senha' ? { scale: [1, 1.3, 1], rotate: [0, 8, -8, 0] } : { scale: 1, rotate: 0 }}
+              whileHover={{ scale: 1.25 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+            >
+              <Key className="h-4 w-4 text-brand-pink" />
+            </motion.div>
+            <span className="hidden sm:inline">Minha Senha</span>
+            <span className="sm:hidden">Senha</span>
+          </button>
+
           {/* Quick Sign Out Action Trigger */}
           <button
-            onClick={async () => {
-              const confirmExit = window.confirm('Tem certeza que deseja sair do sistema?');
-              if (confirmExit) {
-                localStorage.removeItem('oxente_local_bypass');
-                localStorage.removeItem('oxente_custom_user');
-                if (hasConfig && auth) {
-                  try {
-                    await signOut(auth);
-                  } catch (e) {
-                    console.error('Error signing out:', e);
-                  }
-                }
-                window.location.reload();
-              }
+            onClick={() => {
+              localStorage.removeItem('oxente_local_bypass');
+              localStorage.removeItem('oxente_custom_user');
+              setFirebaseUser(null);
+              setUserStatus('unauthenticated');
+              setActiveTab('vendas');
+              window.dispatchEvent(new Event('oxente_auth_change'));
+              window.location.reload();
             }}
             className={`flex items-center justify-center gap-1.5 rounded-xl font-semibold transition-all cursor-pointer text-zinc-400 hover:bg-red-950/20 hover:text-red-450 border border-transparent shadow-sm w-full shrink-0 ${
               isAdmin 
@@ -820,11 +789,11 @@ export default function App() {
             exit={{ opacity: 0, y: -12 }}
             transition={{ duration: 0.18, ease: 'easeInOut' }}
           >
-            {activeTab === 'cadastro' && firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+            {activeTab === 'cadastro' && isAdmin && (
               <ProductForm onAddProduct={handleAddProduct} />
             )}
 
-            {activeTab === 'estoque' && firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+            {activeTab === 'estoque' && isAdmin && (
               <StockManager
                 products={products}
                 onUpdateStock={handleUpdateStock}
@@ -844,7 +813,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'a_receber' && firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+            {activeTab === 'a_receber' && isAdmin && (
               <ReceivablesManager
                 sales={sales}
                 storeInfo={storeInfo}
@@ -894,7 +863,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'configuracoes' && firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+            {activeTab === 'configuracoes' && isAdmin && (
               <SettingsManager
                 products={products}
                 sales={sales}
@@ -906,12 +875,16 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'usuarios' && firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+            {activeTab === 'usuarios' && isAdmin && (
               <UserApprovals />
             )}
 
-            {activeTab === 'auditoria' && firebaseUser?.email === 'oxentefesteje@gmail.com' && (
+            {activeTab === 'auditoria' && isAdmin && (
               <SalesAudit sales={sales} storeInfo={storeInfo} onUpdateSale={handleUpdateSale} />
+            )}
+
+            {activeTab === 'alterar_senha' && (
+              <ChangePassword currentUser={firebaseUser} />
             )}
           </motion.div>
         </AnimatePresence>

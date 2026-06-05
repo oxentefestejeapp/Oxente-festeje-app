@@ -217,7 +217,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   // User simple display label from email
   const getUserFriendlyName = (email: string) => {
     if (!email) return 'Sistema';
-    if (email === 'oxentefesteje@gmail.com') return 'Dona / Admin';
+    if (email === 'oxentefesteje@gmail.com' || email === 'abraaoapp@oxente.com') return 'Dona / Admin';
     return email.split('@')[0];
   };
 

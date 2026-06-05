@@ -44,7 +44,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 };
 
 export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdateStock, onUpdateSale, currentUserEmail = '' }: SalesManagerProps) {
-  const isAdmin = currentUserEmail.trim().toLowerCase() === 'oxentefesteje@gmail.com';
+  const isAdmin = currentUserEmail.trim().toLowerCase() === 'oxentefesteje@gmail.com' || currentUserEmail.trim().toLowerCase() === 'abraaoapp@oxente.com';
   const [selectedProductId, setSelectedProductId] = useState('');
   const [cliente, setCliente] = useState('Consumidor');
   const [telefoneCliente, setTelefoneCliente] = useState('');

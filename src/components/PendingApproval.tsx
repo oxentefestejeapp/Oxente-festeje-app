@@ -1,6 +1,4 @@
 import React from 'react';
-import { signOut } from 'firebase/auth';
-import { auth, hasConfig } from '../lib/firebase';
 import { 
   Hourglass, 
   LogOut, 
@@ -17,13 +15,11 @@ interface PendingApprovalProps {
 }
 
 export function PendingApproval({ userName, userEmail, status }: PendingApprovalProps) {
-  const handleLogout = async () => {
+  const handleLogout = () => {
     try {
       localStorage.removeItem('oxente_local_bypass');
       localStorage.removeItem('oxente_custom_user');
-      if (hasConfig && auth) {
-        await signOut(auth);
-      }
+      window.dispatchEvent(new Event('oxente_auth_change'));
       window.location.reload();
     } catch (err) {
       console.error('Erro ao sair:', err);
