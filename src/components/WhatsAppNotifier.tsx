@@ -21,7 +21,7 @@ export function WhatsAppNotifier({ sale, isOpen, onClose, onUpdateSale, storeInf
   useEffect(() => {
     if (sale) {
       setPhone(sale.telefoneCliente || '');
-      setOrderNumber(sale.numeroPedido || '');
+      setOrderNumber(sale.numeroPedido || sale.id.substring(0, 5).toUpperCase());
       setClientName(sale.cliente || 'Consumidor');
       setSuccess(false);
     }
@@ -61,10 +61,13 @@ Sábados de 8:30h às 12h
     
     const clientVal = clientName.trim() || 'Consumidor';
     const orderVal = orderNumber.trim() ? ` (Pedido #${orderNumber.trim()})` : '';
+    const statusVal = sale?.statusProducao || 'Pronto para Retirada';
     
     return rawTemplate
       .replace(/{cliente}/g, clientVal)
-      .replace(/{pedido}/g, orderVal);
+      .replace(/{pedido}/g, orderVal)
+      .replace(/{status_producao}/g, statusVal)
+      .replace(/{status}/g, statusVal);
   };
 
   const getWhatsAppLink = () => {

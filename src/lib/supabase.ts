@@ -239,7 +239,7 @@ export const mapDbToSale = (dbItem: any): Sale => ({
   itens: dbItem.itens ? (typeof dbItem.itens === 'string' ? JSON.parse(dbItem.itens) : dbItem.itens) : undefined,
   criadoPorEmail: dbItem.criado_por_email || undefined,
   dataRetirada: dbItem.data_retirada || undefined,
-  statusProducao: dbItem.status_producao || undefined,
+  statusProducao: (dbItem.status_producao as any) || 'Agendado',
   designerId: dbItem.designer_id || undefined,
   statusArte: dbItem.status_arte || undefined,
   puxadoPor: dbItem.puxado_por || undefined,

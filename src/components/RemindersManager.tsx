@@ -288,19 +288,17 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                     
                     {/* Top detail indicators */}
                     <div className="flex items-center gap-2 flex-wrap">
-                      {sale.numeroPedido && (
-                        <span className="text-[10px] bg-zinc-950 border border-zinc-850 text-zinc-400 font-mono font-bold px-2 py-0.5 rounded-md">
-                          Pedido #{sale.numeroPedido}
-                        </span>
-                      )}
+                      <span className="text-[10px] bg-zinc-950 border border-zinc-850 text-zinc-400 font-mono font-bold px-2 py-0.5 rounded-md">
+                        Pedido #{sale.numeroPedido || sale.id.substring(0, 5).toUpperCase()}
+                      </span>
                       
                       <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border inline-flex items-center gap-1.5 ${
-                        sale.statusProducao === 'Agendado' ? 'bg-blue-900/10 text-blue-400 border-blue-900/20' :
+                        (!sale.statusProducao || sale.statusProducao === 'Agendado') ? 'bg-blue-900/10 text-blue-400 border-blue-900/20' :
                         sale.statusProducao === 'Em Produção' ? 'bg-amber-900/10 text-amber-400 border-amber-900/20 animate-pulse' :
                         sale.statusProducao === 'Pronto para Retirada' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-extrabold' :
                         'bg-emerald-900/10 text-emerald-450 border-emerald-900/20'
                       }`}>
-                        {sale.statusProducao === 'Agendado' && (
+                        {(!sale.statusProducao || sale.statusProducao === 'Agendado') && (
                           <>
                             <span>📅 Agendado</span>
                           </>
@@ -316,7 +314,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                             <span>✨ Pronto para Retirada</span>
                           </>
                         )}
-                        {sale.statusProducao !== 'Agendado' && sale.statusProducao !== 'Em Produção' && sale.statusProducao !== 'Pronto para Retirada' && (
+                        {sale.statusProducao === 'Entregue' && (
                           <>
                             <span>🤝 Entregue ao Cliente</span>
                           </>

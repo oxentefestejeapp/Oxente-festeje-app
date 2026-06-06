@@ -361,6 +361,10 @@ export default function App() {
 
     if (cachedStoreInfo) {
       loadedStoreInfo = JSON.parse(cachedStoreInfo);
+      if (!loadedStoreInfo.whatsappTemplate || !loadedStoreInfo.whatsappTemplate.includes('Josina Lessa')) {
+        loadedStoreInfo.whatsappTemplate = defaultStoreInfo.whatsappTemplate;
+        localStorage.setItem('oxente_store_info', JSON.stringify(loadedStoreInfo));
+      }
       setStoreInfo(loadedStoreInfo);
     } else {
       setStoreInfo(defaultStoreInfo);
@@ -450,6 +454,10 @@ export default function App() {
 
         // Sync Store Info
         if (dbStore) {
+          if (!dbStore.whatsappTemplate || !dbStore.whatsappTemplate.includes('Josina Lessa')) {
+            dbStore.whatsappTemplate = defaultStoreInfo.whatsappTemplate;
+            dbSupabase.saveStoreInfo(dbStore).catch((err: any) => console.warn('Erro ao atualizar whatsappTemplate no Supabase:', err));
+          }
           setStoreInfo(dbStore);
           localStorage.setItem('oxente_store_info', JSON.stringify(dbStore));
         } else if (loadedStoreInfo) {
