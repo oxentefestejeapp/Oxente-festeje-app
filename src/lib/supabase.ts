@@ -499,6 +499,49 @@ export const dbSupabase = {
     }
   },
 
+  async purgeOldEstimates(): Promise<boolean> {
+    try {
+      const oneDayAgo = new Date();
+      oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+      const dateString = oneDayAgo.toISOString();
+
+      const { error } = await supabase
+        .from('oxente_sales')
+        .delete()
+        .eq('status', 'Orçamento')
+        .lt('data', dateString);
+
+      if (error) {
+        lastSupabaseError = error;
+        console.warn('Erro ao expurgar orçamentos antigos do Supabase:', error.message);
+        return false;
+      }
+      lastSupabaseError = null;
+      return true;
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
+      console.warn('Falha ao conectar com Supabase ao expurgar orçamentos antigos:', e);
+      return false;
+    }
+  },
+
+  async clearAllSales(): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('oxente_sales').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (error) {
+        lastSupabaseError = error;
+        console.error('Erro ao limpar todas as vendas no Supabase:', error.message);
+        return false;
+      }
+      lastSupabaseError = null;
+      return true;
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
+      console.error('Falha ao conectar com Supabase ao limpar todas as vendas:', e);
+      return false;
+    }
+  },
+
   async saveStoreInfo(storeInfo: StoreInfo): Promise<boolean> {
     try {
       const { error } = await supabase.from('oxente_store_info').upsert({

@@ -130,7 +130,7 @@ export default function App() {
 
   const todayRemindersCount = React.useMemo(() => {
     const todayStr = getTodayString();
-    return sales.filter(s => s.dataRetirada === todayStr && s.statusProducao !== 'Entregue' && s.status !== 'Concluído').length;
+    return sales.filter(s => s.dataRetirada === todayStr && s.statusProducao !== 'Entregue' && s.status !== 'Concluído' && s.status !== 'Orçamento').length;
   }, [sales]);
 
   const totalFaltante = React.useMemo(() => {
@@ -327,7 +327,7 @@ export default function App() {
     const cachedStoreInfo = localStorage.getItem('oxente_store_info');
 
     let loadedProducts = defaultProducts;
-    let loadedSales = defaultSales;
+    let loadedSales: Sale[] = [];
     let loadedStoreInfo = defaultStoreInfo;
 
     if (cachedProducts) {
@@ -339,11 +339,24 @@ export default function App() {
     }
 
     if (cachedSales) {
-      loadedSales = JSON.parse(cachedSales);
-      setSales(loadedSales);
+      const parsedSales = JSON.parse(cachedSales) as Sale[];
+      const oneDayAgoTime = new Date().getTime() - (24 * 60 * 60 * 1000);
+      const filteredSales = parsedSales.filter(s => {
+        if (s.status === 'Orçamento') {
+          const sTime = new Date(s.data).getTime();
+          if (isNaN(sTime)) return true;
+          return sTime >= oneDayAgoTime;
+        }
+        return true;
+      });
+      loadedSales = filteredSales;
+      setSales(filteredSales);
+      if (filteredSales.length !== parsedSales.length) {
+        localStorage.setItem('oxente_sales', JSON.stringify(filteredSales));
+      }
     } else {
-      setSales(defaultSales);
-      localStorage.setItem('oxente_sales', JSON.stringify(defaultSales));
+      setSales([]);
+      localStorage.setItem('oxente_sales', JSON.stringify([]));
     }
 
     if (cachedStoreInfo) {
@@ -419,8 +432,17 @@ export default function App() {
 
         // Sync Sales
         if (dbSaless && dbSaless.length > 0) {
-          setSales(dbSaless);
-          localStorage.setItem('oxente_sales', JSON.stringify(dbSaless));
+          const oneDayAgoTime = new Date().getTime() - (24 * 60 * 60 * 1000);
+          const filteredSaless = dbSaless.filter(s => {
+            if (s.status === 'Orçamento') {
+              const sTime = new Date(s.data).getTime();
+              if (isNaN(sTime)) return true;
+              return sTime >= oneDayAgoTime;
+            }
+            return true;
+          });
+          setSales(filteredSaless);
+          localStorage.setItem('oxente_sales', JSON.stringify(filteredSaless));
         } else if (dbSaless && dbSaless.length === 0 && loadedSales.length > 0) {
           console.log('Populando vendas locais para o Supabase pela primeira vez...');
           await Promise.all(loadedSales.map(s => dbSupabase.saveSale(s)));
@@ -440,6 +462,11 @@ export default function App() {
         // Executa limpeza automática de pedidos entregues há mais de 15 dias no Supabase
         dbSupabase.purgeOldDeliveredSales().catch(err => {
           console.warn('Erro silencioso ao executar autolimpeza de vendas:', err);
+        });
+
+        // Executa limpeza automática de orçamentos gerados há mais de 1 dia no Supabase
+        dbSupabase.purgeOldEstimates().catch(err => {
+          console.warn('Erro silencioso ao executar autolimpeza de orçamentos:', err);
         });
       } catch (err: any) {
         console.error('Falha na sincronização automatizada com Supabase:', err);
@@ -921,6 +948,21 @@ export default function App() {
     }
   };
 
+  const handleClearAllSales = async (): Promise<boolean> => {
+    try {
+      const success = await dbSupabase.clearAllSales();
+      if (success) {
+        setSales([]);
+        localStorage.setItem('oxente_sales', JSON.stringify([]));
+        return true;
+      }
+      return false;
+    } catch (e: any) {
+      console.error('Erro ao realizar limpeza de vendas:', e);
+      return false;
+    }
+  };
+
   if (userStatus === 'loading') {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center font-sans select-none antialiased">
@@ -1330,6 +1372,7 @@ export default function App() {
                 storeInfo={storeInfo}
                 onRestoreBackup={handleRestoreBackup}
                 onUpdateStoreInfo={handleUpdateStoreInfo}
+                onClearAllSales={handleClearAllSales}
                 supabaseSyncStatus={supabaseSyncStatus}
                 supabaseErrorMsg={supabaseErrorMsg}
               />

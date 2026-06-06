@@ -52,14 +52,14 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
   const todayStr = useMemo(() => getTodayString(), []);
   const tomorrowStr = useMemo(() => getTomorrowString(), []);
 
-  // Filter sales that are scheduled for pickup today
+  // Filter sales that are scheduled for pickup today (excluding estimates)
   const todaySales = useMemo(() => {
-    return sales.filter(s => s.dataRetirada === todayStr);
+    return sales.filter(s => s.dataRetirada === todayStr && s.status !== 'Orçamento');
   }, [sales, todayStr]);
 
-  // Filter sales scheduled for pickup tomorrow
+  // Filter sales scheduled for pickup tomorrow (excluding estimates)
   const tomorrowSales = useMemo(() => {
-    return sales.filter(s => s.dataRetirada === tomorrowStr);
+    return sales.filter(s => s.dataRetirada === tomorrowStr && s.status !== 'Orçamento');
   }, [sales, tomorrowStr]);
 
   // Apply visual status filters on today's sales

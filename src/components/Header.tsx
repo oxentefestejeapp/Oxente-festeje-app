@@ -40,8 +40,9 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
 
   const totalProducts = products.length;
   const totalStock = products.reduce((acc, curr) => acc + curr.estoque, 0);
-  const totalSalesCount = sales.length;
-  const totalRevenue = sales.reduce((acc, curr) => acc + curr.total, 0);
+  const actualSales = sales.filter(s => s.status !== 'Orçamento');
+  const totalSalesCount = actualSales.length;
+  const totalRevenue = actualSales.reduce((acc, curr) => acc + curr.total, 0);
 
   // Products with stock less than 3 units
   const criticalProducts = products.filter(p => p.estoque < 3);

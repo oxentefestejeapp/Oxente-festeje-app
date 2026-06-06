@@ -29,6 +29,10 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
   const [deliverySearchTerm, setDeliverySearchTerm] = useState('');
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
 
+  const actualSales = useMemo(() => {
+    return sales.filter(s => s.status !== 'Orçamento');
+  }, [sales]);
+
   const deliveryReceiptRef = React.useRef<HTMLDivElement>(null);
 
   const handleSelectDeliverySale = (saleId: string) => {
@@ -42,7 +46,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
   React.useEffect(() => {
     if (preselectedSaleId) {
       setSelectedSaleId(preselectedSaleId);
-      const sale = sales.find(s => s.id === preselectedSaleId);
+      const sale = actualSales.find(s => s.id === preselectedSaleId);
       if (sale) {
         if (sale.status === 'Pendente') {
           setCategory('Pendentes');
@@ -58,7 +62,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
         deliveryReceiptRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, 250);
     }
-  }, [preselectedSaleId, sales, onClearPreselectedSaleId]);
+  }, [preselectedSaleId, actualSales, onClearPreselectedSaleId]);
   
   // Deliver balance custom status states
   const [deliveryPaymentMethod, setDeliveryPaymentMethod] = useState<PaymentMethod>('Pix');
@@ -96,8 +100,8 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
   };
 
   const forgottenCount = useMemo(() => {
-    return sales.filter(s => isForgottenSale(s)).length;
-  }, [sales]);
+    return actualSales.filter(s => isForgottenSale(s)).length;
+  }, [actualSales]);
 
   const pipelineMetrics = useMemo(() => {
     let rawScheduled = 0;
@@ -105,7 +109,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
     let rawReadyForPickup = 0;
     let rawDeliveredTotal = 0;
 
-    sales.forEach(s => {
+    actualSales.forEach(s => {
       const prod = s.statusProducao || 'Agendado';
       if (prod === 'Agendado') {
         rawScheduled++;
@@ -124,16 +128,16 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
       ready: rawReadyForPickup,
       delivered: rawDeliveredTotal
     };
-  }, [sales]);
+  }, [actualSales]);
 
   // Divide sales into Pending and Concluded
   const pendingSales = useMemo(() => {
-    return sales.filter(s => isSalePending(s));
-  }, [sales]);
+    return actualSales.filter(s => isSalePending(s));
+  }, [actualSales]);
 
   const concludedSales = useMemo(() => {
-    return sales.filter(s => !isSalePending(s));
-  }, [sales]);
+    return actualSales.filter(s => !isSalePending(s));
+  }, [actualSales]);
 
   // Handle filtering by order number, client name, or telephone number
   const getFilteredList = () => {
@@ -154,8 +158,8 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
   // Find the currently active selected sale
   const selectedSale = useMemo(() => {
     if (!selectedSaleId) return null;
-    return sales.find(s => s.id === selectedSaleId) || null;
-  }, [selectedSaleId, sales]);
+    return actualSales.find(s => s.id === selectedSaleId) || null;
+  }, [selectedSaleId, actualSales]);
 
   // Apply default delivery details when the selected sale changes
   React.useEffect(() => {

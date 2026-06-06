@@ -177,6 +177,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   // Get filtered sales history by client, product name, or receipt order number, and period
   const filteredSales = sales.filter((sale) => {
+    if (sale.status === 'Orçamento') return false;
     // 1. Period Date filtering
     try {
       const saleDate = new Date(sale.data);

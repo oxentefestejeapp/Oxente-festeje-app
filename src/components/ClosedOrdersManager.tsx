@@ -276,6 +276,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   // Pre-filter database to only active or closed orders that are registered (all registered orders/sales are fechados)
   const filteredSales = useMemo(() => {
     return sales.filter(sale => {
+      if (sale.status === 'Orçamento') return false;
       if (sale.removerDoDesign && !showRemovedFromDesign) return false;
 
       const isMatch = 

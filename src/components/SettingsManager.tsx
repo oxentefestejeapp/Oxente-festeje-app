@@ -52,6 +52,7 @@ interface SettingsManagerProps {
   storeInfo: StoreInfo;
   onRestoreBackup: (products: Product[], sales: Sale[], storeInfo: StoreInfo) => void;
   onUpdateStoreInfo?: (updated: StoreInfo) => void;
+  onClearAllSales?: () => Promise<boolean>;
   supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error' | 'tables_missing';
   supabaseErrorMsg?: string | null;
 }
@@ -62,11 +63,14 @@ export function SettingsManager({
   storeInfo, 
   onRestoreBackup, 
   onUpdateStoreInfo,
+  onClearAllSales,
   supabaseSyncStatus = 'idle',
   supabaseErrorMsg = null
 }: SettingsManagerProps) {
   const [downloadSuccess, setDownloadSuccess] = useState(false);
   const [selectedTipId, setSelectedTipId] = useState<number | null>(null);
+  const [isClearingSales, setIsClearingSales] = useState(false);
+  const [clearStep, setClearStep] = useState<'idle' | 'confirming'>('idle');
 
   // States and effects for 1-Click PWA Installation on Android/Mobile
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -144,6 +148,38 @@ export function SettingsManager({
   const [storeEndereco, setStoreEndereco] = useState(storeInfo.endereco || '');
   const [storeTemplate, setStoreTemplate] = useState(storeInfo.whatsappTemplate || '');
   const [saveStoreSuccess, setSaveStoreSuccess] = useState(false);
+
+  // Danger Zone state and handlers
+  const [clearSuccess, setClearSuccess] = useState(false);
+
+  const handleClearSales = async () => {
+    if (clearStep === 'idle') {
+      setClearStep('confirming');
+      return;
+    }
+
+    setIsClearingSales(true);
+    setClearSuccess(false);
+    try {
+      if (onClearAllSales) {
+        const success = await onClearAllSales();
+        if (success) {
+          setClearSuccess(true);
+          setTimeout(() => setClearSuccess(false), 5000);
+        } else {
+          alert('Erro no banco de dados do Supabase ao tentar apagar os pedidos.');
+        }
+      } else {
+        alert('Ação onClearAllSales não configurada!');
+      }
+    } catch (err: any) {
+      console.error('Erro ao limpar pedidos:', err);
+      alert('Falha interna ao tentar limpar pedidos.');
+    } finally {
+      setIsClearingSales(false);
+      setClearStep('idle');
+    }
+  };
 
   // Supabase state handlers and clipboard integration
   const [supConfig, setSupConfig] = useState(() => getSupabaseConfig());
@@ -1156,6 +1192,74 @@ export function SettingsManager({
             );
           })}
         </div>
+      </div>
+
+      {/* ZONA DE PERIGO: APAGAR PEDIDOS */}
+      <div className="bg-red-950/10 rounded-2xl border border-red-900/30 p-6 shadow-md space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-red-950/40 border border-red-950 text-red-400 rounded-xl">
+            <Trash className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="font-display font-semibold text-base text-red-200">Zona de Perigo (Ação Irreversível)</h3>
+            <p className="text-xs text-red-300/80 mt-1">Apagar todos os pedidos já feitos no aplicativo para reiniciar o sistema do zero.</p>
+          </div>
+        </div>
+
+        <div className="text-xs text-red-350 bg-red-950/15 p-4 rounded-xl border border-red-910/30">
+          Esta ação apagará permanentemente todos os lançamentos de vendas, orçamentos e históricos da nuvem (Supabase) e do seu dispositivo. Esta ação não afetará seu cadastro de produtos ou as informações de contato da loja.
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 pt-1">
+          {clearStep === 'idle' ? (
+            <button
+              onClick={handleClearSales}
+              disabled={isClearingSales}
+              className="flex-1 flex items-center justify-center gap-2 py-3 px-4 bg-red-950 hover:bg-red-900 text-red-200 font-bold border border-red-900/40 hover:border-red-500 rounded-xl text-sm transition-all cursor-pointer select-none"
+            >
+              <Trash className="h-4 w-4" />
+              <span>Desejo Apagar Todos os Pedidos</span>
+            </button>
+          ) : (
+            <div className="flex-1 flex flex-col gap-3">
+              <p className="text-xs text-red-300 font-semibold text-center sm:text-left">
+                ⚠️ Tem certeza absoluta? Essa ação não pode ser desfeita! Clique abaixo para confirmar e apagar todos os pedidos.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <button
+                  onClick={handleClearSales}
+                  disabled={isClearingSales}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-red-650 hover:bg-red-750 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer select-none disabled:opacity-50"
+                >
+                  {isClearingSales ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin text-white" />
+                      <span>Processando Limpeza...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash className="h-4 w-4 text-white" />
+                      <span>Sim, Apagar Tudo Agora!</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => setClearStep('idle')}
+                  disabled={isClearingSales}
+                  className="flex-1 py-2.5 px-4 bg-zinc-805 hover:bg-zinc-705 text-zinc-300 font-semibold rounded-xl text-xs sm:text-sm border border-zinc-750 transition-all cursor-pointer select-none"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {clearSuccess && (
+          <div className="p-3.5 bg-emerald-950/30 border border-emerald-900/40 rounded-xl text-emerald-350 text-xs font-semibold animate-fade-in flex items-center justify-center gap-2 text-center">
+            <span>🎉 Sucesso! Todos os pedidos foram apagados e o sistema está limpo.</span>
+          </div>
+        )}
       </div>
 
     </div>

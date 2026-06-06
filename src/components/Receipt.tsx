@@ -4,11 +4,10 @@
  */
 
 import React, { useState } from 'react';
-import { Printer, Calendar, User, CreditCard, ShoppingBag, Eye, MessageSquare, FileImage, Loader2, Pencil } from 'lucide-react';
+import { Printer, Calendar, User, CreditCard, ShoppingBag, Eye, MessageSquare, Pencil } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Sale, StoreInfo } from '../types';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
-import html2canvas from 'html2canvas';
 
 interface ReceiptProps {
   sale: Sale;
@@ -18,88 +17,10 @@ interface ReceiptProps {
 }
 
 export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps) {
-  const [isGeneratingJPEG, setIsGeneratingJPEG] = useState(false);
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
 
   const handlePrint = () => {
     window.print();
-  };
-
-  const handleSaveAsJPEG = async () => {
-    setIsGeneratingJPEG(true);
-    try {
-      const element = document.getElementById('printable-receipt');
-      if (!element) {
-        alert('Erro: Recibo não encontrado para salvar.');
-        return;
-      }
-
-      // Capture the styled thermal receipt element
-      const canvas = await html2canvas(element, {
-        scale: 2, // Perfect balance of image resolution and performance file sizing
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-        onclone: (clonedDoc) => {
-          // Clean up modern CSS features in stylesheets that crash html2canvas parser
-          const styles = clonedDoc.querySelectorAll('style');
-          styles.forEach((style) => {
-            if (style.textContent) {
-              style.textContent = style.textContent
-                // Replace modern color-mix definitions with oklab/oklch which crash html2canvas parser
-                .replace(/color-mix\(in oklab, (?:[^)(]|\([^)]*\))*\)/gi, '#000000')
-                .replace(/color-mix\(in oklch, (?:[^)(]|\([^)]*\))*\)/gi, '#000000')
-                .replace(/oklch\((?:[^)(]|\([^)]*\))*\)/gi, '#000000')
-                .replace(/oklab\((?:[^)(]|\([^)]*\))*\)/gi, '#000000');
-            }
-          });
-        }
-      });
-
-      if (!canvas || canvas.width === 0 || canvas.height === 0) {
-        alert('Erro: Não foi possível obter as dimensões da imagem do recibo.');
-        return;
-      }
-
-      // Convert captured canvas to JPEG
-      const imgData = canvas.toDataURL('image/jpeg', 0.9);
-
-      let safeDateStr = 'sem_data';
-      try {
-        if (sale.data) {
-          const d = new Date(sale.data);
-          if (!isNaN(d.getTime())) {
-            safeDateStr = d.toISOString().split('T')[0];
-          }
-        }
-      } catch (e) {
-        console.warn('Erro ao obter data da venda para o arquivo.', e);
-      }
-
-      const safeClientName = sale.cliente
-        ? sale.cliente.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, '_')
-        : 'cliente';
-
-      const filename = `recibo_oxente_${safeClientName}_${safeDateStr}.jpg`;
-
-      // Download the JPEG
-      const link = document.createElement('a');
-      link.href = imgData;
-      link.download = filename;
-      document.body.appendChild(link);
-      link.click();
-      
-      setTimeout(() => {
-        if (document.body.contains(link)) {
-          document.body.removeChild(link);
-        }
-      }, 200);
-    } catch (err) {
-      console.error('Error generating JPEG:', err);
-      alert('Erro inesperado ao gerar ou salvar imagem JPEG.');
-    } finally {
-      setIsGeneratingJPEG(false);
-    }
   };
 
   const handleSendWhatsAppOrcamento = () => {
@@ -164,7 +85,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
           {sale.status === 'Orçamento' ? 'Visualização do Orçamento' : 'Visualização do Recibo'}
         </h3>
         <p className="text-xs text-zinc-500">
-          Você pode imprimir o documento abaixo ou salvar como imagem JPEG.
+          Você pode imprimir o documento abaixo diretamente.
         </p>
       </div>
 
@@ -336,33 +257,13 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
 
 
 
-        <div className="flex gap-3">
-          <button
-            onClick={handlePrint}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-brand-pink hover:bg-brand-pink-hover text-white font-semibold rounded-xl text-xs sm:text-sm shadow-sm transition-all transform active:scale-98 cursor-pointer select-none"
-          >
-            <Printer className="h-4 w-4" />
-            <span>Imprimir</span>
-          </button>
-
-          <button
-            onClick={handleSaveAsJPEG}
-            disabled={isGeneratingJPEG}
-            className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-zinc-100 hover:bg-zinc-200 text-zinc-700 font-semibold rounded-xl text-xs sm:text-sm transition-all transform active:scale-98 cursor-pointer select-none disabled:opacity-50"
-          >
-            {isGeneratingJPEG ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
-                <span>Gerando...</span>
-              </>
-            ) : (
-              <>
-                <FileImage className="h-4 w-4 text-zinc-500" />
-                <span>Salvar em JPEG</span>
-              </>
-            )}
-          </button>
-        </div>
+        <button
+          onClick={handlePrint}
+          className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-brand-pink hover:bg-brand-pink-hover text-white font-bold rounded-xl text-sm shadow-md transition-all transform active:scale-98 cursor-pointer select-none"
+        >
+          <Printer className="h-4.5 w-4.5" />
+          <span>{sale.status === 'Orçamento' ? 'Imprimir Orçamento' : 'Imprimir Recibo'}</span>
+        </button>
       </div>
 
       <WhatsAppNotifier

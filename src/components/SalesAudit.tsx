@@ -155,6 +155,7 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
     const stats: Record<string, { count: number; totalValue: number }> = {};
     
     sales.forEach(sale => {
+      if (sale.status === 'Orçamento') return;
       const email = sale.criadoPorEmail || 'Sistema/Legado';
       if (!stats[email]) {
         stats[email] = { count: 0, totalValue: 0 };
@@ -169,7 +170,7 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
   // Filter Sales list based on search term, date, user filter, and special audit filter
   const auditLogs = useMemo(() => {
     // We sort sales to show the latest created orders first (Audit Timeline descending)
-    const sortedSales = [...sales].sort((a, b) => {
+    const sortedSales = sales.filter(s => s.status !== 'Orçamento').sort((a, b) => {
       return parseSaleDate(b.data).getTime() - parseSaleDate(a.data).getTime();
     });
 
