@@ -134,16 +134,41 @@ INSERT INTO oxente_store_info (key, nome, instagram, telefone, endereco, whatsap
 VALUES ('default', 'Oxente Festeje', '@oxente_festeje', '(83) 98885-9302', 'Rua Josina Lessa feitosa 176', 'Olá {cliente}, seu pedido {numero} está {status}!')
 ON CONFLICT (key) DO NOTHING;
 
--- 4. Habilitar Tempo Real (Realtime) para as Tabelas
--- Caso use o painel web do Supabase, você também pode ativar isso acessando:
--- Database -> Replication -> Selecione a publicação 'supabase_realtime' e adicione as tabelas.
--- Ou execute o bloco SQL abaixo para registrar automaticamente:
-alter publication supabase_realtime add table oxente_products;
-alter publication supabase_realtime add table oxente_sales;
-alter publication supabase_realtime add table oxente_store_info;
+-- 4. Ajustar Réplica de Identidade (Garante payload completo em UPDATES e DELETES no canais Realtime)
+ALTER TABLE oxente_products REPLICA IDENTITY FULL;
+ALTER TABLE oxente_sales REPLICA IDENTITY FULL;
+ALTER TABLE oxente_store_info REPLICA IDENTITY FULL;
 
--- 5. FORÇAR RECARREGAMENTO DO CACHE DE SCHEMA DO SUPABASE (Diferencial Crucial!)
--- Execute esta linha para limpar qualquer cache atrasado e atualizar o PostGREST de imediato!
+-- 5. Habilitar Tempo Real (Realtime) para as Tabelas
+-- Usamos um bloco PL/pgSQL seguro para evitar erros de tabela já cadastrada ao reexecutar o script
+DO $$
+BEGIN
+  -- Habilitar replicação para 'oxente_products' se não estiver cadastrada
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'oxente_products'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE oxente_products;
+  END IF;
+
+  -- Habilitar replicação para 'oxente_sales' se não estiver cadastrada
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'oxente_sales'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE oxente_sales;
+  END IF;
+
+  -- Habilitar replicação para 'oxente_store_info' se não estiver cadastrada
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'oxente_store_info'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE oxente_store_info;
+  END IF;
+END $$;
+
+-- 6. FORÇAR RECARREGAMENTO DO CACHE DE SCHEMA DO SUPABASE (Diferencial Crucial!)
 NOTIFY pgrst, 'reload schema';
 `;
 };

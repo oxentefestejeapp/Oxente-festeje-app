@@ -589,17 +589,23 @@ export default function App() {
     const productsChannel = supabase
       .channel('oxente_products_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_products' }, handleProductsChange)
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 [Supabase Realtime] Canal de Produtos:', status);
+      });
 
     const salesChannel = supabase
       .channel('oxente_sales_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_sales' }, handleSalesChange)
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 [Supabase Realtime] Canal de Vendas:', status);
+      });
 
     const storeChannel = supabase
       .channel('oxente_store_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_store_info' }, handleStoreChange)
-      .subscribe();
+      .subscribe((status) => {
+        console.log('📡 [Supabase Realtime] Canal da Loja:', status);
+      });
 
     return () => {
       active = false;
