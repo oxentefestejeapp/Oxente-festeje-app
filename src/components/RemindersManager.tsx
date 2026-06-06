@@ -386,13 +386,21 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                           type="button"
                           onClick={() => handleReminderAction(sale)}
                           className={`flex-1 py-2.5 px-4 font-extrabold rounded-xl text-[11px] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-95 ${
-                            isReadyForPickup
-                              ? 'bg-emerald-600 hover:bg-emerald-555 text-white shadow-emerald-950/40'
-                              : 'bg-brand-pink hover:bg-brand-pink/90 text-black shadow-black/45'
+                            sale.avisoProntoSended
+                              ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-950/45'
+                              : isReadyForPickup
+                                ? 'bg-emerald-600 hover:bg-emerald-555 text-white shadow-emerald-950/40'
+                                : 'bg-brand-pink hover:bg-brand-pink/90 text-black shadow-black/45'
                           }`}
                         >
                           <MessageSquare className="h-4 w-4 shrink-0" />
-                          <span>{isReadyForPickup ? 'Compartilhar Mensagem' : 'Avisar Pronto & Contatar'}</span>
+                          <span>
+                            {sale.avisoProntoSended
+                              ? 'Aviso Pronto Enviado 🍊'
+                              : isReadyForPickup
+                                ? 'Compartilhar Mensagem'
+                                : 'Avisar Pronto & Contatar'}
+                          </span>
                           <ArrowRight className="h-3 w-3 shrink-0 animate-bounce-horizontal" />
                         </button>
 
@@ -545,10 +553,14 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                       <button
                         type="button"
                         onClick={() => handleReminderAction(sale)}
-                        className="py-1 px-2.5 bg-brand-pink/15 hover:bg-brand-pink text-brand-pink hover:text-black transition-all font-black text-[9px] rounded-md flex items-center gap-1 cursor-pointer select-none"
+                        className={`py-1 px-2.5 transition-all font-black text-[9px] rounded-md flex items-center gap-1 cursor-pointer select-none ${
+                          sale.avisoProntoSended
+                            ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-600 hover:text-white border border-orange-500/30'
+                            : 'bg-brand-pink/15 hover:bg-brand-pink text-brand-pink hover:text-black'
+                        }`}
                         title="Diga que está pronto preventivamente e envie WhatsApp"
                       >
-                        <span>WhatsApp</span>
+                        <span>{sale.avisoProntoSended ? 'Zap Enviado 🍊' : 'WhatsApp'}</span>
                         <ArrowRight className="h-2.5 w-2.5" />
                       </button>
                     ) : (

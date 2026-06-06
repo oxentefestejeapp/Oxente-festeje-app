@@ -11,6 +11,7 @@ import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice 
 import { Receipt } from './Receipt';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
+import { dbSupabase } from '../lib/supabase';
 
 interface SalesManagerProps {
   products: Product[];
@@ -99,6 +100,29 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   
   // Cart state for multi-product orders
   const [cart, setCart] = useState<{ id: string; product: Product; quantity: number; total: number }[]>([]);
+
+  // Track annotated (notified) sales via localStorage key for cross-session consistency on their device
+  const [annotatedSaleIds, setAnnotatedSaleIds] = useState<string[]>(() => {
+    try {
+      const stored = localStorage.getItem('oxente_annotated_sale_ids');
+      return stored ? JSON.parse(stored) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const markSaleAsAnnotated = (saleId: string) => {
+    setAnnotatedSaleIds(prev => {
+      if (prev.includes(saleId)) return prev;
+      const next = [...prev, saleId];
+      try {
+        localStorage.setItem('oxente_annotated_sale_ids', JSON.stringify(next));
+      } catch (e) {
+        console.error(e);
+      }
+      return next;
+    });
+  };
 
   // States for editing a sale
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
@@ -361,7 +385,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setTimeout(() => setSuccessMsg(''), 2500);
   };
 
-  const handleRegisterSale = (e: React.FormEvent) => {
+  const handleRegisterSale = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError('');
     setSuccessMsg('');
@@ -419,6 +443,25 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     const mainPrecoUn = mainItem.precoUn;
     const mainQuantidade = finalItens.reduce((sum, item) => sum + item.quantidade, 0);
 
+    // Buscar vendas frescas da nuvem para garantir numeração de pedidos sem conflitos (conexão certa)
+    let finalSalesList = sales;
+    try {
+      const dbSaless = await dbSupabase.fetchSales();
+      if (dbSaless && dbSaless.length > 0) {
+        finalSalesList = dbSaless;
+      }
+    } catch (err) {
+      console.warn('Erro ao carregar vendas frescas da nuvem:', err);
+    }
+
+    // Gerar número de pedido sequencial automaticamente a partir de 30000
+    const numericPedidoNumbers = finalSalesList
+      .map(s => parseInt(s.numeroPedido || '', 10))
+      .filter(num => !isNaN(num));
+    const nextPedidoNumber = numericPedidoNumbers.length > 0 
+      ? Math.max(...numericPedidoNumbers, 29999) + 1 
+      : 30000;
+
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
       cliente: cliente.trim() || 'Consumidor',
@@ -432,8 +475,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       data: new Date().toISOString(),
       valorPago: finalValorPago,
       valorFaltante: finalValorFaltante,
-      numeroPedido: numeroPedido.trim() ? numeroPedido.trim() : undefined,
-      status: registroTipo === 'Orçamento' ? 'Orçamento' : ((finalValorFaltante > 0 || numeroPedido.trim() !== '') ? 'Pendente' : 'Concluído'),
+      numeroPedido: String(nextPedidoNumber),
+      status: registroTipo === 'Orçamento' ? 'Orçamento' : ((finalValorFaltante > 0 || statusProducao !== 'Entregue') ? 'Pendente' : 'Concluído'),
       itens: finalItens,
       criadoPorEmail: currentUserEmail || 'Desconhecido',
       dataRetirada: dataRetirada || undefined,
@@ -602,6 +645,19 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
         window.open(`https://api.whatsapp.com/send?text=${encodedText}`, '_blank');
       } else {
         window.location.href = `whatsapp://send?text=${encodedText}`;
+      }
+    }
+    
+    // Mark the sale as annotated (notified)
+    markSaleAsAnnotated(sale.id);
+    
+    // Also save in the cloud database so all online users see it
+    if (!sale.pedidoAnotado) {
+      if (onUpdateSale) {
+        onUpdateSale({
+          ...sale,
+          pedidoAnotado: true
+        });
       }
     }
   };
@@ -904,8 +960,8 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
               </div>
             </div>
 
-            {/* Quantity and Order Number row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Quantity row */}
+            <div className="w-full">
               <div>
                 <label htmlFor="sale-qty" className="block text-sm font-medium text-zinc-300 mb-1.5">
                   Quantidade Vendida <span className="text-brand-pink font-bold">*</span>
@@ -955,25 +1011,6 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                     )}
                   </div>
                 )}
-              </div>
-
-              <div>
-                <label htmlFor="sale-order-num" className="block text-sm font-medium text-zinc-300 mb-1.5">
-                  Número do Pedido
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-3.5 text-zinc-500 font-bold text-xs select-none">
-                    #
-                  </span>
-                  <input
-                    id="sale-order-num"
-                    type="text"
-                    value={numeroPedido}
-                    onChange={(e) => setNumeroPedido(e.target.value)}
-                    className="w-full pl-8 pr-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 text-sm placeholder-zinc-650 font-mono"
-                    placeholder="Ex: 2548"
-                  />
-                </div>
               </div>
             </div>
 
@@ -1463,17 +1500,26 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                           </td>
                           <td className="py-3 text-right pr-3">
                             <div className="flex flex-col-reverse sm:flex-row gap-1.5 items-end sm:items-center justify-end">
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleSendPedidoAnotado(sale);
-                                }}
-                                className="px-2 py-1 bg-zinc-950 border border-zinc-800 hover:border-emerald-500 text-zinc-300 hover:text-emerald-400 rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0"
-                                title="Mandar confirmação via WhatsApp"
-                              >
-                                <MessageSquare className="h-3 w-3 text-emerald-500" />
-                                <span>Pedido Anotado</span>
-                              </button>
+                              {(() => {
+                                const isAnnotated = sale.pedidoAnotado || annotatedSaleIds.includes(sale.id);
+                                return (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleSendPedidoAnotado(sale);
+                                    }}
+                                    className={`px-2 py-1 border rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0 ${
+                                      isAnnotated
+                                        ? 'bg-orange-950/20 border-orange-550 text-orange-400 hover:text-orange-300 hover:border-orange-400'
+                                        : 'bg-zinc-950 border-zinc-800 hover:border-emerald-500 text-zinc-300 hover:text-emerald-400'
+                                    }`}
+                                    title={isAnnotated ? "Aviso enviado! Clique novamente para reenviar se desejar" : "Mandar confirmação via WhatsApp"}
+                                  >
+                                    <MessageSquare className={`h-3 w-3 ${isAnnotated ? 'text-orange-500' : 'text-emerald-500'}`} />
+                                    <span>{isAnnotated ? 'Avisado / Anotado' : 'Pedido Anotado'}</span>
+                                  </button>
+                                );
+                              })()}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();

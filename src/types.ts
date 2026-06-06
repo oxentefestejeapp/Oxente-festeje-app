@@ -76,6 +76,8 @@ export interface Sale {
   arteFinalizadaEm?: string;
   valoresOriginais?: SaleOriginalValues;
   notasInternas?: string;
+  pedidoAnotado?: boolean;
+  avisoProntoSended?: boolean;
 }
 
 export interface StoreInfo {

@@ -1,6 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+import { initializeFirestore } from 'firebase/firestore';
 
 // Safely probe the JSON configuration using import.meta.glob to avoid build errors if the file is missing outside of the AI Studio environment
 const configs = import.meta.glob('../../firebase-applet-config.json', { eager: true });
@@ -38,7 +38,9 @@ const googleProvider = new GoogleAuthProvider();
 if (hasConfig) {
   try {
     app = getApps().length === 0 ? initializeApp(config) : getApp();
-    db = databaseId && databaseId !== '(default)' ? getFirestore(app, databaseId) : getFirestore(app);
+    db = databaseId && databaseId !== '(default)' 
+      ? initializeFirestore(app, { experimentalForceLongPolling: true }, databaseId) 
+      : initializeFirestore(app, { experimentalForceLongPolling: true });
     auth = getAuth(app);
   } catch (error) {
     console.error('Erro de inicialização do Firebase:', error);

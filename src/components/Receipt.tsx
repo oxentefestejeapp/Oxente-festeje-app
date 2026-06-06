@@ -39,7 +39,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
       itensDetail = `• ${sale.produtoNome} (x${sale.quantidade}) - R$ ${sale.total.toFixed(2)}`;
     }
 
-    const message = `Olá, *${sale.cliente || 'Consumidor'}*! Segue o seu orçamento solicitado da *${storeInfo.nome || 'Oxente Festeje'}* 📄🎈\n\n*Item(ns) orçado(s):*\n${itensDetail}\n\n*Valor Total:* R$ ${sale.total.toFixed(2)}\n*Forma de Pagamento sugerida:* ${sale.formaPagamento}\n\nCaso queira aprovar este orçamento e iniciar a produção, é só mandar uma mensagem por aqui! Ficaremos muito felizes em atendê-lo(a). 😊✨`;
+    const message = `Olá, *${sale.cliente || 'Consumidor'}*! Segue o seu orçamento solicitado da *${storeInfo.nome || 'Oxente Festeje'}* 📄🎈\n\n*Item(ns) orçado(s):*\n${itensDetail}\n\n*Valor Total:* R$ ${sale.total.toFixed(2)}\n*Forma de Pagamento sugerida:* ${sale.formaPagamento}\n\nCaso queira aprovar este orçamento e iniciar o seu pedido, é só mandar uma mensagem por aqui! Trabalhamos com 50% de entrada.\nFicaremos muito felizes em atendê-lo(a). 😊✨`;
 
     const encodedText = encodeURIComponent(message);
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);

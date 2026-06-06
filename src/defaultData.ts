@@ -83,9 +83,9 @@ Mangabeira 1
 
 *Ponto de referência* 
 
-Entrando a direita da Boticário da Av Josefa Taveira, pega a primeira rua à direita.
+Entrando a direta da Boticário da Av Josefa Taveira, pega a primeira rua à direita.
 
-*🚨 Horário de atendimento e retirada de produtos 🚨*
+*🚨Horário  de atendimento e retirada de produtos🚨*
 
 Segunda a Sexta de 8:30h às 12h das 13:00h às 17:00h
 

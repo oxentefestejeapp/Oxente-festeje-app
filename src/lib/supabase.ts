@@ -101,8 +101,14 @@ CREATE TABLE IF NOT EXISTS oxente_sales (
   arte_finalizada_em TEXT,
   valores_originais JSONB,
   notas_internas TEXT,
+  pedido_anotado BOOLEAN DEFAULT FALSE,
+  aviso_pronto_sended BOOLEAN DEFAULT FALSE,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Garantir que as colunas de pedido anotado e aviso de pronto existam caso a tabela já tenha sido criada anteriormente
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS pedido_anotado BOOLEAN DEFAULT FALSE;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS aviso_pronto_sended BOOLEAN DEFAULT FALSE;
 
 ALTER TABLE oxente_sales ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_sales;
@@ -210,6 +216,8 @@ const mapSaleToDb = (sale: Sale) => ({
   arte_finalizada_em: sale.arteFinalizadaEm || null,
   valores_originais: sale.valoresOriginais ? JSON.stringify(sale.valoresOriginais) : null,
   notas_internas: sale.notasInternas || null,
+  pedido_anotado: sale.pedidoAnotado || false,
+  aviso_pronto_sended: sale.avisoProntoSended || false,
   updated_at: new Date().toISOString()
 });
 
@@ -244,7 +252,9 @@ export const mapDbToSale = (dbItem: any): Sale => ({
   arteFinalizadaPorEmail: dbItem.arte_finalizada_por_email || undefined,
   arteFinalizadaEm: dbItem.arte_finalizada_em || undefined,
   valoresOriginais: dbItem.valores_originais ? (typeof dbItem.valores_originais === 'string' ? JSON.parse(dbItem.valores_originais) : dbItem.valores_originais) : undefined,
-  notasInternas: dbItem.notas_internas || undefined
+  notasInternas: dbItem.notas_internas || undefined,
+  pedidoAnotado: dbItem.pedido_anotado || false,
+  avisoProntoSended: dbItem.aviso_pronto_sended || false
 });
 
 // MAIN INTERACTION METHODS WITH GRACEFUL FALLBACKS
@@ -457,15 +467,27 @@ export const dbSupabase = {
 
   async saveSale(sale: Sale): Promise<boolean> {
     try {
-      const dbRow = mapSaleToDb(sale);
-      const { error } = await supabase.from('oxente_sales').upsert(dbRow);
-      if (error) {
-        lastSupabaseError = error;
-        console.error('Erro ao salvar venda no Supabase:', error.message);
-        return false;
+      const dbRow = mapSaleToDb(sale) as any;
+      let attempt = 0;
+      while (attempt < 2) {
+        const { error } = await supabase.from('oxente_sales').upsert(dbRow);
+        if (error) {
+          lastSupabaseError = error;
+          // Se as colunas novas 'pedido_anotado' ou 'aviso_pronto_sended' não existirem no banco (erro 42703), omitimos e tentamos de novo
+          if (error.code === '42703') {
+            console.warn('Colunas novas podem não existir no Supabase, tentando salvar sem elas.');
+            delete dbRow.pedido_anotado;
+            delete dbRow.aviso_pronto_sended;
+            attempt++;
+            continue;
+          }
+          console.error('Erro ao salvar venda no Supabase:', error.message);
+          return false;
+        }
+        lastSupabaseError = null;
+        return true;
       }
-      lastSupabaseError = null;
-      return true;
+      return false;
     } catch (e: any) {
       lastSupabaseError = { message: e.message || String(e) };
       console.error('Falha ao conectar com Supabase ao salvar venda:', e);
