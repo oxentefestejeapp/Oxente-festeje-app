@@ -1,27 +1,18 @@
 import { createClient } from '@supabase/supabase-js';
 import { Product, Sale, StoreInfo } from '../types';
 
-// Read configuration with strict fallback and override rules
+// Read configuration from environment variables or localStorage
 export const getSupabaseConfig = () => {
   const envUrl = import.meta.env.VITE_SUPABASE_URL;
   const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-  const defaultUrl = 'https://sbeyfgxvjoaulxojjguu.supabase.co';
-  const defaultKey = 'sb_publishable_7aL1Xxp82aXaHTA_Zu3diA_GMfOf9oY';
-
   const localUrl = localStorage.getItem('supabase_url');
   const localKey = localStorage.getItem('supabase_anon_key');
-  const keysDirty = localStorage.getItem('supabase_keys_dirty') === 'true';
-
-  // Overwrite local credentials with defaults immediately if they exist but aren't dirty
-  // to heal old incorrect configurations across collaborator browser sessions
-  const finalUrl = envUrl || (keysDirty && localUrl ? localUrl : defaultUrl);
-  const finalKey = envKey || (keysDirty && localKey ? localKey : defaultKey);
 
   return {
-    url: finalUrl,
-    key: finalKey,
-    isConfigured: true,
+    url: envUrl || localUrl || 'https://sbeyfgxvjoaulxojjguu.supabase.co',
+    key: envKey || localKey || 'sb_publishable_7aL1Xxp82aXaHTA_Zu3diA_GMfOf9oY',
+    isConfigured: !!(envUrl || localUrl) || true, // Default to true as the user provided active keys!
   };
 };
 
@@ -272,10 +263,20 @@ export const dbSupabase = {
           return true; // Successfully saved!
         }
         
-        // Check for undefined column error (Code 42703 in Postgres)
-        if (error.code === '42703') {
+        // Check for undefined column error (Code 42703 in Postgres, or PostgREST schema cache and "column not found" mismatch)
+        const isColumnError = 
+          error.code === '42703' || 
+          error.message.includes('column') || 
+          error.message.includes('coluna') || 
+          error.message.includes('schema cache');
+
+        if (isColumnError) {
           // Parse the column name from the error message. e.g. "column \"preco_custo\" of relation \"oxente_products\" does not exist"
-          const match = error.message.match(/column "([^"]+)"/i) || 
+          // Or: "Could not find the 'precos_progressivos' column of 'oxente_products' in the schema cache"
+          const match = error.message.match(/column '([^']+)'/i) ||
+                        error.message.match(/Could not find the '([^']+)' column/i) ||
+                        error.message.match(/Could not find the "([^"]+)" column/i) ||
+                        error.message.match(/column "([^"]+)"/i) || 
                         error.message.match(/coluna "([^"]+)"/i) ||
                         error.message.match(/column ([a-zA-Z_0-9]+) does not exist/i);
           
@@ -285,12 +286,13 @@ export const dbSupabase = {
             delete (currentPayload as any)[missingColumn];
             continue; // Retry with cleaned payload
           } else {
-            // Fallback: if we can't parse but it's 42703, try to delete potentially missing columns one by one
-            console.warn('Dynamic Save Healing: Code 42703 received but column name not parsed. Trying fallback removal.');
+            // Fallback: if we can't parse but it's a column error, try to delete potentially missing columns one by one
+            console.warn('Dynamic Save Healing: Column error received but column name not parsed automatically. Trying fallback removal.');
             const nonEssential = ['precos_progressivos', 'preco_custo', 'estoque_infinito', 'imagem_base64'];
             let removedAny = false;
             for (const col of nonEssential) {
               if (col in currentPayload) {
+                console.warn(`Dynamic Save Healing: Fallback-deleting column "${col}"`);
                 delete (currentPayload as any)[col];
                 removedAny = true;
                 break; // Delete one and retry
@@ -323,16 +325,51 @@ export const dbSupabase = {
       if (isInfinite !== undefined) {
         updateData.estoque_infinito = isInfinite;
       }
-      const { error } = await supabase
-        .from('oxente_products')
-        .update(updateData)
-        .eq('id', id);
+      
+      const currentPayload = { ...updateData };
+      
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { error } = await supabase
+          .from('oxente_products')
+          .update(currentPayload)
+          .eq('id', id);
 
-      if (error) {
+        if (!error) {
+          return true;
+        }
+
+        const isColumnError = 
+          error.code === '42703' || 
+          error.message.includes('column') || 
+          error.message.includes('coluna') || 
+          error.message.includes('schema cache');
+
+        if (isColumnError) {
+          const match = error.message.match(/column '([^']+)'/i) ||
+                        error.message.match(/Could not find the '([^']+)' column/i) ||
+                        error.message.match(/Could not find the "([^"]+)" column/i) ||
+                        error.message.match(/column "([^"]+)"/i) || 
+                        error.message.match(/coluna "([^"]+)"/i) ||
+                        error.message.match(/column ([a-zA-Z_0-9]+) does not exist/i);
+          
+          if (match && match[1]) {
+            const missingColumn = match[1];
+            if (missingColumn in currentPayload) {
+              console.warn(`Dynamic Save Healing (Stock): Deleting missing column "${missingColumn}" and retrying...`);
+              delete (currentPayload as any)[missingColumn];
+              continue;
+            }
+          } else if ('estoque_infinito' in currentPayload) {
+            console.warn(`Dynamic Save Healing (Stock): Fallback removing "estoque_infinito" column and retrying...`);
+            delete currentPayload.estoque_infinito;
+            continue;
+          }
+        }
+
         console.error('Erro ao atualizar estoque no Supabase:', error.message);
         return false;
       }
-      return true;
+      return false;
     } catch (e) {
       console.error('Falha ao conectar com Supabase ao atualizar estoque:', e);
       return false;

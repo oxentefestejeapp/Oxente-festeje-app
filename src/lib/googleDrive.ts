@@ -3,91 +3,101 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-// Simulated local/offline Google Drive backup orchestrator
-// Keeps matching interfaces and signatures so zero edits are needed in SettingsManager.tsx
+import { signInWithPopup, GoogleAuthProvider, onAuthStateChanged, User, Auth } from 'firebase/auth';
+import { auth } from './firebase';
 
-let simulatedUser: any = null;
-let simulatedToken: string | null = null;
+const provider = new GoogleAuthProvider();
+// Request Google Drive access
+provider.addScope('https://www.googleapis.com/auth/drive');
 
-// Initialize simulated authorization listener
+let isSigningIn = false;
+let cachedAccessToken: string | null = null;
+
+// Initialize auth state listener
 export const initAuth = (
-  onAuthSuccess: (user: any, token: string) => void,
+  onAuthSuccess: (user: User, token: string) => void,
   onAuthFailure: () => void
 ) => {
-  const getSaved = localStorage.getItem('oxente_google_drive_simulated_user');
-  if (getSaved) {
-    try {
-      const parsed = JSON.parse(getSaved);
-      simulatedUser = parsed.user;
-      simulatedToken = parsed.accessToken;
-      onAuthSuccess(simulatedUser, simulatedToken || 'mock-drive-token');
-    } catch {
+  return onAuthStateChanged(auth, async (user: User | null) => {
+    if (user) {
+      if (cachedAccessToken) {
+        onAuthSuccess(user, cachedAccessToken);
+      } else if (!isSigningIn) {
+        cachedAccessToken = null;
+        onAuthFailure();
+      }
+    } else {
+      cachedAccessToken = null;
       onAuthFailure();
     }
-  } else {
-    onAuthFailure();
-  }
-  // Return dummy unsubscribe callback
-  return () => {};
+  });
 };
 
-// Start Google sign-in simulation
-export const googleSignIn = async (): Promise<{ user: any; accessToken: string } | null> => {
-  const mockUser = {
-    uid: 'abraao-mock-drive-id',
-    displayName: 'Abraão Festeje (Drive Local)',
-    email: 'oxentefesteje@gmail.com',
-    photoURL: null
-  };
-  const mockToken = 'mock-drive-access-token-oxente';
-
-  simulatedUser = mockUser;
-  simulatedToken = mockToken;
-
-  localStorage.setItem('oxente_google_drive_simulated_user', JSON.stringify({
-    user: mockUser,
-    accessToken: mockToken
-  }));
-
-  return { user: mockUser, accessToken: mockToken };
+// Start Google sign-in popup
+export const googleSignIn = async (): Promise<{ user: User; accessToken: string } | null> => {
+  try {
+    isSigningIn = true;
+    const result = await signInWithPopup(auth, provider);
+    const credential = GoogleAuthProvider.credentialFromResult(result);
+    if (!credential?.accessToken) {
+      throw new Error('Failed to get access token from Firebase Auth');
+    }
+    cachedAccessToken = credential.accessToken;
+    return { user: result.user, accessToken: cachedAccessToken };
+  } catch (error: any) {
+    console.error('Sign in error:', error);
+    throw error;
+  } finally {
+    isSigningIn = false;
+  }
 };
 
 export const getAccessToken = async (): Promise<string | null> => {
-  return simulatedToken || 'mock-drive-access-token-oxente';
+  return cachedAccessToken;
 };
 
 export const logout = async () => {
-  simulatedUser = null;
-  simulatedToken = null;
-  localStorage.removeItem('oxente_google_drive_simulated_user');
+  await auth.signOut();
+  cachedAccessToken = null;
 };
 
-// Interfaces for local-simulated Drive files
+// Interfaces for Google Drive files
 export interface DriveBackupFile {
   id: string;
   name: string;
   createdTime: string;
   size?: string;
-  content?: string; // Store serialized backup
 }
 
 /**
- * Lists backups in simulated storage
+ * Lists backups in Google Drive
  */
 export const listDriveBackups = async (accessToken: string): Promise<DriveBackupFile[]> => {
   try {
-    const listStr = localStorage.getItem('oxente_drive_backups_simulated');
-    if (!listStr) return [];
-    const list: DriveBackupFile[] = JSON.parse(listStr);
-    return list;
+    // q: search for name starting with backup_oxente_festeje
+    const q = "name contains 'backup_oxente_festeje_' and mimeType = 'application/json' and trashed = false";
+    const url = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name,createdTime,size)&orderBy=createdTime desc`;
+
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to list backups: ${res.statusText}`);
+    }
+
+    const data = await res.json();
+    return data.files || [];
   } catch (error) {
     console.error('Error listing Drive backups:', error);
-    return [];
+    throw error;
   }
 };
 
 /**
- * Uploads a backup file to simulated cloud (localStorage) and triggers browser file download for peace of mind
+ * Uploads a backup file to Google Drive using a multipart body
  */
 export const uploadBackupToDrive = async (
   accessToken: string,
@@ -95,84 +105,102 @@ export const uploadBackupToDrive = async (
 ): Promise<DriveBackupFile> => {
   try {
     const today = new Date().toISOString().split('T')[0];
-    const time = new Date().toTimeString().split(' ')[0].replace(/:/g, '-');
-    const fileName = `backup_oxente_festeje_${today}_${time}.json`;
-    const fileContent = JSON.stringify(backupData, null, 2);
+    const fileName = `backup_oxente_festeje_${today}.json`;
 
-    const newBackup: DriveBackupFile = {
-      id: `bkp-${Date.now()}`,
+    const metadata = {
       name: fileName,
-      createdTime: new Date().toISOString(),
-      size: `${(fileContent.length / 1024).toFixed(1)} KB`,
-      content: fileContent
+      mimeType: 'application/json',
+      description: 'Oxente Festeje App Backup',
     };
 
-    // Save to list
-    const listStr = localStorage.getItem('oxente_drive_backups_simulated');
-    const list: DriveBackupFile[] = listStr ? JSON.parse(listStr) : [];
-    list.unshift(newBackup);
-    localStorage.setItem('oxente_drive_backups_simulated', JSON.stringify(list));
+    const fileContent = JSON.stringify(backupData, null, 2);
+    const boundary = 'oxente_backup_boundary';
+    const delimiter = `\r\n--${boundary}\r\n`;
+    const close_delim = `\r\n--${boundary}--`;
 
-    // Also trigger beautiful native file download in browser so user gets physical backup file!
-    try {
-      const blob = new Blob([fileContent], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      console.warn('File auto download was blocked or failed, backup stored in browser local state.');
+    const body =
+      delimiter +
+      'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+      JSON.stringify(metadata) +
+      delimiter +
+      'Content-Type: application/json\r\n\r\n' +
+      fileContent +
+      close_delim;
+
+    const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`,
+      },
+      body,
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to upload backup: ${res.statusText}`);
     }
 
-    return newBackup;
+    const data = await res.json();
+    return {
+      id: data.id,
+      name: data.name || fileName,
+      createdTime: new Date().toISOString(),
+    };
   } catch (error) {
-    console.error('Error saving backup:', error);
+    console.error('Error uploading backup to Drive:', error);
     throw error;
   }
 };
 
 /**
- * Downloads/restores a backup from simulated cloud memory
+ * Downloads a backup from Google Drive and parses its JSON content
  */
 export const downloadBackupFromDrive = async (
   accessToken: string,
   fileId: string
 ): Promise<any> => {
   try {
-    const listStr = localStorage.getItem('oxente_drive_backups_simulated');
-    if (!listStr) throw new Error('No backups list found');
-    const list: DriveBackupFile[] = JSON.parse(listStr);
-    const found = list.find(b => b.id === fileId);
-    if (!found || !found.content) {
-      throw new Error('Backup content not found or corrupted.');
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to download backup: ${res.statusText}`);
     }
-    return JSON.parse(found.content);
+
+    return await res.json();
   } catch (error) {
-    console.error('Error downloading backup:', error);
+    console.error('Error downloading backup from Drive:', error);
     throw error;
   }
 };
 
 /**
- * Deletes a file from simulated cloud memory
+ * Deletes a file from Google Drive (Requires explicit confirmation from user before calling)
  */
 export const deleteBackupFromDrive = async (
   accessToken: string,
   fileId: string
 ): Promise<boolean> => {
   try {
-    const listStr = localStorage.getItem('oxente_drive_backups_simulated');
-    if (!listStr) return false;
-    let list: DriveBackupFile[] = JSON.parse(listStr);
-    list = list.filter(b => b.id !== fileId);
-    localStorage.setItem('oxente_drive_backups_simulated', JSON.stringify(list));
+    const url = `https://www.googleapis.com/drive/v3/files/${fileId}`;
+    const res = await fetch(url, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!res.ok) {
+      throw new Error(`Failed to delete backup: ${res.statusText}`);
+    }
+
     return true;
   } catch (error) {
-    console.error('Error deleting backup:', error);
+    console.error('Error deleting backup from Drive:', error);
     throw error;
   }
 };

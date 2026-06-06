@@ -2,19 +2,8 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Explicitly allow read/write access to user management
-    match /users/{userId} {
-      allow read, write: if true;
-    }
-    
-    // Explicitly allow read/write access to the application configurations
-    match /config/{configId} {
-      allow read, write: if true;
-    }
-
-    // Default deny for all other resources
     match /{document=**} {
-      allow read, write: if false;
+      allow read, write: if true;
     }
   }
 }

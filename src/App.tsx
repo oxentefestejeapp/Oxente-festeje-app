@@ -26,6 +26,8 @@ import {
   Key
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { doc, onSnapshot, updateDoc, serverTimestamp, getDoc, setDoc } from 'firebase/firestore';
+import { db, hasConfig } from './lib/firebase';
 import { supabase, dbSupabase, mapDbToProduct, mapDbToSale } from './lib/supabase';
 
 import { Header } from './components/Header';
@@ -158,15 +160,64 @@ export default function App() {
     return sales.filter(s => isSalePending(s) && (s.valorFaltante !== undefined ? s.valorFaltante > 0 : (s.total - (s.valorPago ?? 0)) > 0)).length;
   }, [sales]);
 
-  // Monitor Authentication State (Custom Code-Based Authenticated User) Local Security
+  // Monitor Authentication State (Custom Code-Based Authenticated User)
   useEffect(() => {
+    let unsubscribeDoc: (() => void) | null = null;
+
     const checkLocalAuth = () => {
+      // Clean up previous Firestore listener if exists
+      if (unsubscribeDoc) {
+        unsubscribeDoc();
+        unsubscribeDoc = null;
+      }
+
       const savedUserStr = localStorage.getItem('oxente_custom_user');
       if (savedUserStr) {
         try {
           const userObj = JSON.parse(savedUserStr);
-          setFirebaseUser(userObj);
-          setUserStatus(userObj.status || 'approved');
+          const userIdNormal = userObj.id || userObj.uid || '';
+
+          if (db && hasConfig && userIdNormal) {
+            // Read Firestore real-time snaps for this user
+            const userDocRef = doc(db, 'users', userIdNormal);
+            unsubscribeDoc = onSnapshot(userDocRef, (docSnap) => {
+              if (docSnap.exists()) {
+                const uData = docSnap.data();
+                const enhancedUser = {
+                  ...userObj,
+                  id: uData.id || userIdNormal,
+                  uid: uData.id || userIdNormal,
+                  name: uData.name || userObj.name || 'Colaborador',
+                  displayName: uData.name || userObj.name || 'Colaborador',
+                  email: uData.email || userObj.email || '',
+                  role: uData.role || (uData.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+                  status: uData.status || 'approved'
+                };
+                setFirebaseUser(enhancedUser);
+
+                const statusValue = uData.status || 'approved';
+                if (statusValue === 'approved') {
+                  setUserStatus('approved');
+                } else if (statusValue === 'rejected') {
+                  setUserStatus('rejected');
+                } else {
+                  setUserStatus('pending');
+                }
+              } else {
+                // Not found on DB yet - use local details
+                setFirebaseUser(userObj);
+                setUserStatus(userObj.status || 'approved');
+              }
+            }, (err) => {
+              console.error('Error fetching real-time snapshot status:', err);
+              setFirebaseUser(userObj);
+              setUserStatus(userObj.status || 'approved');
+            });
+          } else {
+            // Local offline fallback
+            setFirebaseUser(userObj);
+            setUserStatus('approved');
+          }
         } catch (e) {
           setFirebaseUser(null);
           setUserStatus('unauthenticated');
@@ -182,8 +233,91 @@ export default function App() {
 
     return () => {
       window.removeEventListener('oxente_auth_change', checkLocalAuth);
+      if (unsubscribeDoc) {
+        unsubscribeDoc();
+      }
     };
   }, []);
+
+  // Online heartbeat and status synchronization with Firestore
+  useEffect(() => {
+    const uid = firebaseUser?.id || firebaseUser?.uid;
+    if (!uid || !db || !hasConfig) return;
+
+    const runHeartbeat = async () => {
+      try {
+        const userRef = doc(db, 'users', uid);
+        await updateDoc(userRef, {
+          updatedAt: serverTimestamp()
+        });
+      } catch (err) {
+        console.error('Error running online heartbeat:', err);
+      }
+    };
+
+    runHeartbeat();
+    const interval = setInterval(runHeartbeat, 30000); // 30 seconds
+    return () => clearInterval(interval);
+  }, [firebaseUser?.id, firebaseUser?.uid]);
+
+  // Synchronize Supabase configurations dynamically through Firestore database
+  useEffect(() => {
+    if (!db || !hasConfig) return;
+
+    const syncSupabaseSettings = async () => {
+      try {
+        const configDocRef = doc(db, 'config', 'supabase');
+        const docSnap = await getDoc(configDocRef);
+        
+        const localUrl = localStorage.getItem('supabase_url');
+        const localKey = localStorage.getItem('supabase_anon_key');
+        const isDirty = localStorage.getItem('supabase_keys_dirty') === 'true';
+
+        if (isAdmin && isDirty) {
+          // Administrator manually entered keys via configuration tab -> upload to Firestore
+          if (localUrl && localKey) {
+            await setDoc(configDocRef, {
+              url: localUrl,
+              key: localKey,
+              updatedAt: serverTimestamp()
+            });
+            localStorage.removeItem('supabase_keys_dirty');
+            console.log('Sincronizados detalhes do Supabase do administrador com o Firestore.');
+          }
+        } else {
+          // Both collaborators and administrator (on other devices/browsers) pull the keys from Firestore
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.url && data.key) {
+              if (localUrl !== data.url || localKey !== data.key) {
+                console.log('Nova configuração de Supabase detectada na nuvem. Atualizando localmente...');
+                localStorage.setItem('supabase_url', data.url);
+                localStorage.setItem('supabase_anon_key', data.key);
+                localStorage.removeItem('supabase_keys_dirty');
+                // Trigger reload to apply connection details globally
+                window.location.reload();
+              }
+            }
+          } else if (isAdmin && localUrl && localKey) {
+            // First time running or Firestore document doesn't exist yet, bootstrap Firestore config
+            await setDoc(configDocRef, {
+              url: localUrl,
+              key: localKey,
+              updatedAt: serverTimestamp()
+            });
+            console.log('Inicializada configuração do Supabase no Firestore.');
+          }
+        }
+      } catch (err) {
+        console.warn('Erro ao sincronizar chaves do Supabase via Firestore:', err);
+      }
+    };
+
+    // Run once after auth determines role
+    if (firebaseUser) {
+      syncSupabaseSettings();
+    }
+  }, [firebaseUser, isAdmin]);
 
   // Load state on mount (with SWR pull from Supabase Cloud Database)
   useEffect(() => {
@@ -223,29 +357,19 @@ export default function App() {
     // 2. Asynchronous remote cloud pull using SWR (Stale-While-Revalidate)
     const syncDataWithSupabase = async () => {
       setSupabaseSyncStatus('syncing');
-      console.log('🔄 [INICIALIZAÇÃO SUPABASE] Iniciando conexão integrativa e verificação de dados...');
-      console.log('📍 Host ou Localização Atual:', typeof window !== 'undefined' ? window.location.href : 'N/A');
-      console.log('👤 Usuário Atual Logado:', { email: firebaseUser?.email, id: firebaseUser?.id, isAdmin });
-      console.log('🔑 Supabase URL Configurativa:', localStorage.getItem('supabase_url'));
-      console.log('🔑 Supabase Anon Key (Primeiros 15 caracteres):', localStorage.getItem('supabase_anon_key')?.substring(0, 15) + '...');
-
       try {
         const testRes = await dbSupabase.testConnection();
         if (!testRes.success) {
-          console.error('❌ Falha na conexão de teste com o Supabase:', testRes.error);
           setSupabaseSyncStatus('error');
           setSupabaseErrorMsg(testRes.error || 'Erro ao conectar no Supabase.');
           return;
         }
 
         if (testRes.tablesConfigured === false) {
-          console.error('⚠️ Tabelas do Oxente Festeje estão ausentes no banco de dados Supabase.');
           setSupabaseSyncStatus('tables_missing');
           setSupabaseErrorMsg(testRes.error || 'Tabelas do aplicativo ausentes no Supabase.');
           return;
         }
-
-        console.log('✅ Conexão bem-sucedida! Canal de dados ativo. Carregando dados...');
 
         // Parallel load of remote data
         const [dbProds, dbSaless, dbStore] = await Promise.all([
@@ -254,78 +378,43 @@ export default function App() {
           dbSupabase.fetchStoreInfo()
         ]);
 
-        // Sync Products with strict Integrity Check & Verification Flow
-        if (dbProds) {
-          console.log(`📦 [PRODUTOS SUPABASE] Tabela "oxente_products" lida com sucesso! Total de registros em nuvem: ${dbProds.length}`);
+        // Sync Products
+        if (dbProds && dbProds.length > 0) {
+          // Merge local loadedProducts or pendingProducts with database dbProds to avoid losing locally registered products
+          const mergedProdsMap = new Map(dbProds.map(p => [p.id, p]));
           
-          if (dbProds.length > 0) {
-            // Log sample product names for diagnostics
-            console.log('Amostra de Produtos na Nuvem:', dbProds.slice(0, 3).map(p => ({ nome: p.nome, preco: p.preco, estoque: p.estoque })));
-            
-            // Merge local loadedProducts or pendingProducts with database dbProds to avoid losing locally registered products
-            const mergedProdsMap = new Map(dbProds.map(p => [p.id, p]));
-            
-            // Guarantee any pending stock updates are merged
-            mergedProdsMap.forEach((p, id) => {
-              const pendingStock = pendingStockUpdates.current[id];
-              if (pendingStock !== undefined) {
-                p.estoque = pendingStock;
-              }
-            });
-
-            // Ensure pending products are merged and kept safe
-            const updatedPendingObj = { ...pendingProducts.current };
-            let pendingChanged = false;
-
-            (Object.values(updatedPendingObj) as Product[]).forEach(p => {
-              if (!mergedProdsMap.has(p.id)) {
-                mergedProdsMap.set(p.id, p);
-              } else {
-                delete updatedPendingObj[p.id];
-                pendingChanged = true;
-              }
-            });
-
-            if (pendingChanged) {
-              pendingProducts.current = updatedPendingObj;
-              localStorage.setItem('oxente_pending_products', JSON.stringify(updatedPendingObj));
+          // Guarantee any pending stock updates are merged
+          mergedProdsMap.forEach((p, id) => {
+            const pendingStock = pendingStockUpdates.current[id];
+            if (pendingStock !== undefined) {
+              p.estoque = pendingStock;
             }
+          });
 
-            const mergedProds = Array.from(mergedProdsMap.values());
-            setProducts(mergedProds);
-            localStorage.setItem('oxente_products', JSON.stringify(mergedProds));
-            console.log('✅ Lista de produtos em sincronia e persistida localmente (Tamanho:', mergedProds.length, ')');
-          } else {
-            // dbProds.length === 0 (Empty database!)
-            console.warn('⚠️ ALERTA DE INTEGRIDADE: A tabela "oxente_products" retornou ZERO registros ou vazia!');
-            
-            if (isAdmin && loadedProducts.length > 0) {
-              console.log('👉 Perfil Administrativo detectado. Populando banco de dados com produtos iniciais...');
-              // Upload local products to server
-              await Promise.all(loadedProducts.map(async (p) => {
-                const ok = await dbSupabase.saveProduct(p);
-                if (ok) {
-                  console.log(`+ Sincronizado: ${p.nome}`);
-                } else {
-                  console.error(`- Falha ao sincronizar: ${p.nome}`);
-                }
-              }));
-              
-              // Refetch to certify propagation
-              const refreshedProds = await dbSupabase.fetchProducts();
-              if (refreshedProds && refreshedProds.length > 0) {
-                setProducts(refreshedProds);
-                localStorage.setItem('oxente_products', JSON.stringify(refreshedProds));
-                console.log('✅ Sincronização inicial finalizada com sucesso! Produtos carregados:', refreshedProds.length);
-              }
+          // Ensure pending products are merged and kept safe
+          const updatedPendingObj = { ...pendingProducts.current };
+          let pendingChanged = false;
+
+          (Object.values(updatedPendingObj) as Product[]).forEach(p => {
+            if (!mergedProdsMap.has(p.id)) {
+              mergedProdsMap.set(p.id, p);
             } else {
-              console.log('👉 Perfil Colaborador detectado. O banco está autenticamente limpo no Supabase. Zerando lista local para consistência.');
-              setProducts([]);
-              localStorage.setItem('oxente_products', JSON.stringify([]));
+              delete updatedPendingObj[p.id];
+              pendingChanged = true;
             }
+          });
+
+          if (pendingChanged) {
+            pendingProducts.current = updatedPendingObj;
+            localStorage.setItem('oxente_pending_products', JSON.stringify(updatedPendingObj));
           }
-        } else {
-          console.error('❌ ERRO INTEGRAL: Supabase retornou NULL ao ler a tabela "oxente_products". Isso geralmente indica políticas de RLS bloqueando acessos ou erros na URL/Key.');
+
+          const mergedProds = Array.from(mergedProdsMap.values());
+          setProducts(mergedProds);
+          localStorage.setItem('oxente_products', JSON.stringify(mergedProds));
+        } else if (dbProds && dbProds.length === 0 && loadedProducts.length > 0) {
+          console.log('Populando produtos locais para o Supabase pela primeira vez...');
+          await Promise.all(loadedProducts.map(p => dbSupabase.saveProduct(p)));
         }
 
         // Sync Sales
@@ -502,60 +591,44 @@ export default function App() {
           dbSupabase.fetchStoreInfo()
         ]);
 
-        // Sync products with strict integrity checks for both empty and populated states
-        if (dbProds) {
-          if (dbProds.length > 0) {
-            setProducts((curr) => {
-              // Index the database products, applying pending stock changes
-              const mergedProdsMap = new Map(dbProds.map(p => {
-                const pendingStock = pendingStockUpdates.current[p.id];
-                const finalProd = pendingStock !== undefined ? { ...p, estoque: pendingStock } : p;
-                return [finalProd.id, finalProd];
-              }));
+        if (dbProds && dbProds.length > 0) {
+          setProducts((curr) => {
+            // Index the database products, applying pending stock changes
+            const mergedProdsMap = new Map(dbProds.map(p => {
+              const pendingStock = pendingStockUpdates.current[p.id];
+              const finalProd = pendingStock !== undefined ? { ...p, estoque: pendingStock } : p;
+              return [finalProd.id, finalProd];
+            }));
 
-              // Re-insert any pending new products that aren't acknowledged in the remote list yet
-              let pendingChanged = false;
-              const updatedPending = { ...pendingProducts.current };
+            // Re-insert any pending new products that aren't acknowledged in the remote list yet
+            let pendingChanged = false;
+            const updatedPending = { ...pendingProducts.current };
 
-              (Object.values(updatedPending) as Product[]).forEach(p => {
-                if (!mergedProdsMap.has(p.id)) {
-                  // Keep the locally created pending product
-                  mergedProdsMap.set(p.id, p);
-                } else {
-                  // Confirmed in the database! Safe to remove from pending map.
-                  delete updatedPending[p.id];
-                  pendingChanged = true;
-                }
-              });
-
-              if (pendingChanged) {
-                pendingProducts.current = updatedPending;
-                localStorage.setItem('oxente_pending_products', JSON.stringify(updatedPending));
+            (Object.values(updatedPending) as Product[]).forEach(p => {
+              if (!mergedProdsMap.has(p.id)) {
+                // Keep the locally created pending product
+                mergedProdsMap.set(p.id, p);
+              } else {
+                // Confirmed in the database! Safe to remove from pending map.
+                delete updatedPending[p.id];
+                pendingChanged = true;
               }
-
-              const mergedProds = Array.from(mergedProdsMap.values());
-              const hasChanged = JSON.stringify(curr) !== JSON.stringify(mergedProds);
-              
-              if (hasChanged) {
-                localStorage.setItem('oxente_products', JSON.stringify(mergedProds));
-                return mergedProds;
-              }
-              return curr;
             });
-          } else {
-            // Table is cleanly read but has zero products. Force integrity update.
-            console.warn('🔄 [POLLING INTEGRIDADE] Tabela "oxente_products" lida com sucesso, mas retornou 0 produtos no Supabase. Atualizando estado local...');
-            setProducts((curr) => {
-              const pendingItems = Object.values(pendingProducts.current) as Product[];
-              if (curr.length !== pendingItems.length) {
-                localStorage.setItem('oxente_products', JSON.stringify(pendingItems));
-                return pendingItems;
-              }
-              return curr;
-            });
-          }
-        } else {
-          console.error('❌ [POLLING ERRO] fetchProducts retornou null durante verificação de segundo plano. Possível instabilidade de conexão ou política RLS ativa.');
+
+            if (pendingChanged) {
+              pendingProducts.current = updatedPending;
+              localStorage.setItem('oxente_pending_products', JSON.stringify(updatedPending));
+            }
+
+            const mergedProds = Array.from(mergedProdsMap.values());
+            const hasChanged = JSON.stringify(curr) !== JSON.stringify(mergedProds);
+            
+            if (hasChanged) {
+              localStorage.setItem('oxente_products', JSON.stringify(mergedProds));
+              return mergedProds;
+            }
+            return curr;
+          });
         }
 
         if (dbSaless && dbSaless.length > 0) {
