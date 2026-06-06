@@ -71,6 +71,7 @@ export function SettingsManager({
   const [selectedTipId, setSelectedTipId] = useState<number | null>(null);
   const [isClearingSales, setIsClearingSales] = useState(false);
   const [clearStep, setClearStep] = useState<'idle' | 'confirming'>('idle');
+  const [dangerPassword, setDangerPassword] = useState('');
 
   // States and effects for 1-Click PWA Installation on Android/Mobile
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -158,6 +159,11 @@ export function SettingsManager({
       return;
     }
 
+    if (dangerPassword !== '69apagar69') {
+      alert('Senha incorreta! Não foi possível apagar os dados.');
+      return;
+    }
+
     setIsClearingSales(true);
     setClearSuccess(false);
     try {
@@ -165,6 +171,7 @@ export function SettingsManager({
         const success = await onClearAllSales();
         if (success) {
           setClearSuccess(true);
+          setDangerPassword('');
           setTimeout(() => setClearSuccess(false), 5000);
         } else {
           alert('Erro no banco de dados do Supabase ao tentar apagar os pedidos.');
@@ -1223,13 +1230,28 @@ export function SettingsManager({
           ) : (
             <div className="flex-1 flex flex-col gap-3">
               <p className="text-xs text-red-300 font-semibold text-center sm:text-left">
-                ⚠️ Tem certeza absoluta? Essa ação não pode ser desfeita! Clique abaixo para confirmar e apagar todos os pedidos.
+                ⚠️ Tem certeza absoluta? Essa ação não pode ser desfeita! Para prosseguir, insira a senha de confirmação abaixo.
               </p>
+              
+              <div className="flex flex-col gap-1.5 max-w-sm">
+                <label className="text-[11px] font-bold text-red-400 uppercase tracking-wider">
+                  Senha de Confirmação
+                </label>
+                <input
+                  type="password"
+                  placeholder="Digite a senha de segurança"
+                  value={dangerPassword}
+                  onChange={(e) => setDangerPassword(e.target.value)}
+                  disabled={isClearingSales}
+                  className="w-full py-2 px-3.5 bg-red-950/20 text-red-200 border border-red-900/40 rounded-xl text-xs font-semibold font-mono focus:border-red-500/80 focus:ring-1 focus:ring-red-550/30 outline-none transition-all placeholder:text-red-900/40"
+                />
+              </div>
+
               <div className="flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={handleClearSales}
-                  disabled={isClearingSales}
-                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-red-650 hover:bg-red-750 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer select-none disabled:opacity-50"
+                  disabled={isClearingSales || dangerPassword !== '69apagar69'}
+                  className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 bg-red-650 hover:bg-red-750 text-white font-bold rounded-xl text-xs sm:text-sm shadow-md transition-all cursor-pointer select-none disabled:opacity-30 disabled:cursor-not-allowed"
                 >
                   {isClearingSales ? (
                     <>
@@ -1244,7 +1266,10 @@ export function SettingsManager({
                   )}
                 </button>
                 <button
-                  onClick={() => setClearStep('idle')}
+                  onClick={() => {
+                    setClearStep('idle');
+                    setDangerPassword('');
+                  }}
                   disabled={isClearingSales}
                   className="flex-1 py-2.5 px-4 bg-zinc-805 hover:bg-zinc-705 text-zinc-300 font-semibold rounded-xl text-xs sm:text-sm border border-zinc-750 transition-all cursor-pointer select-none"
                 >
