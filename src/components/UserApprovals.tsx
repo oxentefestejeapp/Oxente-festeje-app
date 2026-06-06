@@ -158,6 +158,12 @@ export function UserApprovals() {
   }, []);
 
   const filteredUsers = users.filter((u, index, self) => {
+    // Exclude users registered by normal email (only keep system usernames ending with @oxente.com and the owner)
+    const isEmailRegistered = u.email && 
+                              !u.email.toLowerCase().endsWith('@oxente.com') && 
+                              u.email.toLowerCase() !== 'oxentefesteje@gmail.com';
+    if (isEmailRegistered) return false;
+
     const isMatched = (u.name || '').toLowerCase().includes(search.toLowerCase()) ||
                       (u.email || '').toLowerCase().includes(search.toLowerCase());
     if (!isMatched) return false;
