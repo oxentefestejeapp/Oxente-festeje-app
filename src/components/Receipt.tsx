@@ -102,7 +102,44 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
     }
   };
 
+  const handleSendWhatsAppOrcamento = () => {
+    const cleanPhone = (sale.telefoneCliente || '').replace(/\D/g, '');
+    let finalPhone = cleanPhone;
+    if (cleanPhone.length > 0) {
+      if (!cleanPhone.startsWith('55') && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
+        finalPhone = `55${cleanPhone}`;
+      }
+    }
 
+    let itensDetail = '';
+    if (sale.itens && sale.itens.length > 0) {
+      itensDetail = sale.itens.map(item => `• ${item.produtoNome} (x${item.quantidade}) - R$ ${item.total.toFixed(2)}`).join('\n');
+    } else {
+      itensDetail = `• ${sale.produtoNome} (x${sale.quantidade}) - R$ ${sale.total.toFixed(2)}`;
+    }
+
+    const message = `Olá, *${sale.cliente || 'Consumidor'}*! Segue o seu orçamento solicitado da *${storeInfo.nome || 'Oxente Festeje'}* 📄🎈\n\n*Item(ns) orçado(s):*\n${itensDetail}\n\n*Valor Total:* R$ ${sale.total.toFixed(2)}\n*Forma de Pagamento sugerida:* ${sale.formaPagamento}\n\nCaso queira aprovar este orçamento e iniciar a produção, é só mandar uma mensagem por aqui! Ficaremos muito felizes em atendê-lo(a). 😊✨`;
+
+    const encodedText = encodeURIComponent(message);
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+    
+    let destUrl = '';
+    if (finalPhone) {
+      if (isMobile) {
+        destUrl = `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodedText}`;
+      } else {
+        destUrl = `whatsapp://send?phone=${finalPhone}&text=${encodedText}`;
+      }
+    } else {
+      if (isMobile) {
+        destUrl = `https://api.whatsapp.com/send?text=${encodedText}`;
+      } else {
+        destUrl = `whatsapp://send?text=${encodedText}`;
+      }
+    }
+    
+    window.open(destUrl, '_blank');
+  };
 
   const formattedDate = new Date(sale.data).toLocaleString('pt-BR', {
     day: '2-digit',
@@ -123,9 +160,11 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
       
       {/* Title with printable warning info */}
       <div className="no-print text-center mb-6 w-full">
-        <h3 className="font-display font-semibold text-lg text-brand-dark mb-1">Visualização do Recibo</h3>
+        <h3 className="font-display font-semibold text-lg text-brand-dark mb-1">
+          {sale.status === 'Orçamento' ? 'Visualização do Orçamento' : 'Visualização do Recibo'}
+        </h3>
         <p className="text-xs text-zinc-500">
-          Você pode imprimir o recibo abaixo ou salvar como imagem JPEG.
+          Você pode imprimir o documento abaixo ou salvar como imagem JPEG.
         </p>
       </div>
 
@@ -137,6 +176,11 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
       >
         {/* Receipt Header */}
         <div className="text-center space-y-1 mb-4 select-none">
+          {sale.status === 'Orçamento' && (
+            <div className="bg-amber-100 border border-amber-350 text-amber-950 py-1.5 px-3 rounded-lg font-bold text-[10px] uppercase mb-4 text-center tracking-wider">
+              📄 Orçamento / Cotação
+            </div>
+          )}
           <h2 className="text-xl font-extrabold tracking-tight text-black select-text">{storeInfo.nome}</h2>
           <p className="text-[10px] uppercase tracking-wider text-black font-bold select-text">Brindes Personalizados</p>
           <p className="text-[10px] text-black font-bold select-text">CNPJ: 26.051.478/0001-34</p>
@@ -167,12 +211,16 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
             </div>
           )}
           <div className="flex justify-between">
-            <span className="text-black font-bold uppercase select-none">Pagamento:</span>
+            <span className="text-black font-bold uppercase select-none">
+              {sale.status === 'Orçamento' ? 'Forma Sugerida:' : 'Pagamento:'}
+            </span>
             <span className="font-extrabold text-right select-text text-black">{sale.formaPagamento}</span>
           </div>
           {sale.dataRetirada && (
             <div className="flex justify-between text-black">
-              <span className="text-black font-bold uppercase select-none">Retirada:</span>
+              <span className="text-black font-bold uppercase select-none">
+                {sale.status === 'Orçamento' ? 'Prazo Pretendido:' : 'Retirada:'}
+              </span>
               <span className="font-extrabold text-right select-text text-black border-b border-black">
                 {new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}
               </span>
@@ -217,29 +265,41 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
         {/* Pricing Subtotal & Payment Breakdown */}
         <div className="border-t-2 border-dashed border-black mt-4 pt-3 space-y-1 bg-white select-text text-xs text-black">
           <div className="flex justify-between items-center text-black font-bold">
-            <span className="select-none uppercase text-[10px]">Total Geral:</span>
+            <span className="select-none uppercase text-[10px]">
+              {sale.status === 'Orçamento' ? 'Valor Estimado:' : 'Total Geral:'}
+            </span>
             <span className="font-extrabold">R$ {sale.total.toFixed(2)}</span>
           </div>
-          <div className="flex justify-between items-center text-black font-bold">
-            <span className="select-none uppercase text-[10px]">Valor Pago:</span>
-            <span className="font-extrabold">R$ {(sale.valorPago !== undefined ? sale.valorPago : sale.total).toFixed(2)}</span>
-          </div>
-          {(sale.valorFaltante !== undefined ? sale.valorFaltante : 0) > 0 ? (
-            <div className="flex justify-between items-center text-black font-bold border-t border-dashed border-black pt-1.5 mt-1">
-              <span className="uppercase text-[9px] select-none">Restante a Pagar:</span>
-              <span className="text-sm font-extrabold">R$ {sale.valorFaltante?.toFixed(2)}</span>
-            </div>
-          ) : (
-            <div className="flex justify-between items-center text-black font-bold border-t border-dashed border-black pt-1 mt-1 uppercase text-[9px] select-none">
-              <span>Status:</span>
-              <span className="font-extrabold">Pago Integralmente</span>
-            </div>
+          {sale.status !== 'Orçamento' && (
+            <>
+              <div className="flex justify-between items-center text-black font-bold">
+                <span className="select-none uppercase text-[10px]">Valor Pago:</span>
+                <span className="font-extrabold">R$ {(sale.valorPago !== undefined ? sale.valorPago : sale.total).toFixed(2)}</span>
+              </div>
+              {(sale.valorFaltante !== undefined ? sale.valorFaltante : 0) > 0 ? (
+                <div className="flex justify-between items-center text-black font-bold border-t border-dashed border-black pt-1.5 mt-1">
+                  <span className="uppercase text-[9px] select-none">Restante a Pagar:</span>
+                  <span className="text-sm font-extrabold">R$ {sale.valorFaltante?.toFixed(2)}</span>
+                </div>
+              ) : (
+                <div className="flex justify-between items-center text-black font-bold border-t border-dashed border-black pt-1 mt-1 uppercase text-[9px] select-none">
+                  <span>Status:</span>
+                  <span className="font-extrabold">Pago Integralmente</span>
+                </div>
+              )}
+            </>
           )}
         </div>
 
         {/* Footer Messages */}
         <div className="text-center mt-6 space-y-1.5 pt-3 border-t-2 border-dashed border-black">
-          <p className="text-xs font-bold text-black select-text">Muito obrigado pela preferência!</p>
+          {sale.status === 'Orçamento' ? (
+            <p className="text-[10px] text-amber-900 font-extrabold select-text bg-amber-50 py-1.5 border border-amber-300 rounded mb-2 uppercase leading-relaxed">
+              Proposta válida por 15 dias.<br/>Sujeito a alteração de estoque.
+            </p>
+          ) : (
+            <p className="text-xs font-bold text-black select-text">Muito obrigado pela preferência!</p>
+          )}
           <p className="text-[10px] text-black font-bold select-text">Siga no Instagram: {storeInfo.instagram}</p>
         </div>
       </div>
@@ -256,13 +316,23 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
           </button>
         )}
 
-        <button
-          onClick={() => setWhatsAppOpen(true)}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 font-bold rounded-xl text-sm shadow-xs transition-all transform active:scale-98 cursor-pointer select-none"
-        >
-          <MessageSquare className="h-4.5 w-4.5" />
-          <span>Avisar que está Pronto (WhatsApp)</span>
-        </button>
+        {sale.status === 'Orçamento' ? (
+          <button
+            onClick={handleSendWhatsAppOrcamento}
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-md transition-all transform active:scale-98 cursor-pointer select-none"
+          >
+            <MessageSquare className="h-4.5 w-4.5" />
+            <span>Enviar Orçamento pelo WhatsApp</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => setWhatsAppOpen(true)}
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 hover:border-emerald-500 text-emerald-400 font-bold rounded-xl text-sm shadow-xs transition-all transform active:scale-98 cursor-pointer select-none"
+          >
+            <MessageSquare className="h-4.5 w-4.5" />
+            <span>Avisar que está Pronto (WhatsApp)</span>
+          </button>
+        )}
 
 
 

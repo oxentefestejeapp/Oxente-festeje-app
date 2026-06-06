@@ -55,6 +55,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [salesSearchTerm, setSalesSearchTerm] = useState('');
   const [dataRetirada, setDataRetirada] = useState('');
   const [statusProducao, setStatusProducao] = useState<'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Entregue'>('Agendado');
+  const [registroTipo, setRegistroTipo] = useState<'Venda' | 'Orçamento'>('Venda');
   
   // Advanced plugins: Sound effects (synchronized with master mute), Preset Discounts, and Catalog Filters
   const [soundEnabled, setSoundEnabled] = useState(() => !getIsAudioMuted());
@@ -277,6 +278,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     
     // Preencher as vendas reais
     sales.forEach(sale => {
+      if (sale.status === 'Orçamento') return;
       try {
         const saleDate = new Date(sale.data);
         if (!isNaN(saleDate.getTime())) {
@@ -320,7 +322,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       .filter(item => item.product.id === prod.id)
       .reduce((sum, item) => sum + item.quantity, 0);
 
-    if (!prod.estoqueInfinito && (qtyNum + alreadyInCartQty) > prod.estoque) {
+    if (registroTipo !== 'Orçamento' && !prod.estoqueInfinito && (qtyNum + alreadyInCartQty) > prod.estoque) {
       setFormError(`Quantidade indisponível no estoque! Estoque atual de "${prod.nome}": ${prod.estoque} un. (Já possui ${alreadyInCartQty} no carrinho).`);
       return;
     }
@@ -389,7 +391,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         setFormError('A quantidade da venda precisa ser de no mínimo 1 item.');
         return;
       }
-      if (!selectedProduct.estoqueInfinito && qtyNum > selectedProduct.estoque) {
+      if (registroTipo !== 'Orçamento' && !selectedProduct.estoqueInfinito && qtyNum > selectedProduct.estoque) {
         setFormError(`Quantidade indisponível no estoque! Estoque atual de "${selectedProduct.nome}": ${selectedProduct.estoque} un.`);
         return;
       }
@@ -405,8 +407,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }
 
     const valPagoNum = valorPagoInput.trim() === '' ? totalVenda : parseFloat(valorPagoInput);
-    const finalValorPago = isNaN(valPagoNum) ? totalVenda : valPagoNum;
-    const finalValorFaltante = Math.max(0, totalVenda - finalValorPago);
+    const finalValorPago = registroTipo === 'Orçamento' ? 0 : (isNaN(valPagoNum) ? totalVenda : valPagoNum);
+    const finalValorFaltante = registroTipo === 'Orçamento' ? totalVenda : Math.max(0, totalVenda - finalValorPago);
 
     const mainItem = finalItens[0];
     const mainProdutoId = mainItem.produtoId;
@@ -430,11 +432,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       valorPago: finalValorPago,
       valorFaltante: finalValorFaltante,
       numeroPedido: numeroPedido.trim() ? numeroPedido.trim() : undefined,
-      status: (finalValorFaltante > 0 || numeroPedido.trim() !== '') ? 'Pendente' : 'Concluído',
+      status: registroTipo === 'Orçamento' ? 'Orçamento' : ((finalValorFaltante > 0 || numeroPedido.trim() !== '') ? 'Pendente' : 'Concluído'),
       itens: finalItens,
       criadoPorEmail: currentUserEmail || 'Desconhecido',
       dataRetirada: dataRetirada || undefined,
-      statusProducao: statusProducao
+      statusProducao: registroTipo === 'Orçamento' ? undefined : statusProducao
     };
 
     // Salvar venda (que agora deduz o estoque de forma atômica no pai)
@@ -448,7 +450,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setTimeout(() => {
       receiptColRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }, 150);
-    setSuccessMsg('Estoque atualizado e venda processada com sucesso!');
+    setSuccessMsg(registroTipo === 'Orçamento' ? 'Orçamento gerado com sucesso! Verifique a folha de recibo ao lado.' : 'Estoque atualizado e venda processada com sucesso!');
 
     // Reset fields (keeping client as Consumidor)
     setSelectedProductId('');
@@ -608,6 +610,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
     let totalEstimatedCost = 0;
 
     filteredSales.forEach(sale => {
+      if (sale.status === 'Orçamento') return;
       totalRevenue += sale.total;
       
       let saleCost = 0;
@@ -725,6 +728,43 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                 <span>{successMsg}</span>
               </div>
             )}
+
+            {/* Segmented control for Type of Registration: Venda vs Orçamento */}
+            <div className="space-y-2 bg-zinc-950/40 p-3 rounded-xl border border-zinc-800/60 max-w-md">
+              <span className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 select-none">
+                Tipo de Lançamento
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegistroTipo('Venda');
+                    playSound('add');
+                  }}
+                  className={`py-2 px-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    registroTipo === 'Venda'
+                      ? 'bg-emerald-950/20 text-emerald-400 border-emerald-500/30 shadow-[0_0_10px_rgba(16,185,129,0.05)]'
+                      : 'border-zinc-850 text-zinc-500 bg-black/20 hover:text-zinc-300'
+                  }`}
+                >
+                  <span>🛒 Pedido / Venda</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRegistroTipo('Orçamento');
+                    playSound('add');
+                  }}
+                  className={`py-2 px-3 rounded-lg border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                    registroTipo === 'Orçamento'
+                      ? 'bg-amber-950/20 text-amber-500 border-amber-500/30 shadow-[0_0_10px_rgba(245,158,11,0.05)]'
+                      : 'border-zinc-850 text-zinc-500 bg-black/20 hover:text-zinc-300'
+                  }`}
+                >
+                  <span>📄 Orçamento Sem Compromisso</span>
+                </button>
+              </div>
+            </div>
 
             {/* Choose Product select box and Audio Trigger toggle */}
             <div className="space-y-3 bg-zinc-950/25 p-4 border border-zinc-900 rounded-xl">
@@ -1146,9 +1186,23 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
             <button
               type="submit"
               disabled={!selectedProductId && cart.length === 0}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-md transition-all transform active:scale-98 cursor-pointer"
+              className={`w-full flex items-center justify-center gap-2 py-3 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl shadow-md transition-all transform active:scale-98 cursor-pointer ${
+                registroTipo === 'Orçamento'
+                  ? 'bg-amber-600 hover:bg-amber-700 shadow-amber-955'
+                  : 'bg-emerald-600 hover:bg-emerald-700'
+              }`}
             >
-              🤝<span>Finalizar Venda</span>
+              {registroTipo === 'Orçamento' ? (
+                <>
+                  <span>📄</span>
+                  <span>Gerar e Salvar Orçamento</span>
+                </>
+              ) : (
+                <>
+                  <span>🤝</span>
+                  <span>Finalizar Venda</span>
+                </>
+              )}
             </button>
 
           </form>
@@ -1371,7 +1425,11 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                           </td>
                           <td className="py-3 max-w-[140px] truncate text-zinc-200">
                             <div>{sale.produtoNome}</div>
-                            {sale.statusProducao && (
+                            {sale.status === 'Orçamento' ? (
+                              <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-1 border border-amber-950/40 bg-amber-955/20 text-amber-400">
+                                📄 Orçamento
+                              </span>
+                            ) : sale.statusProducao ? (
                               <span className={`inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-1 border border-zinc-800 ${
                                 sale.statusProducao === 'Agendado' ? 'bg-blue-900/10 text-blue-400 border-blue-900/30' :
                                 sale.statusProducao === 'Em Produção' ? 'bg-amber-900/10 text-amber-400 border-amber-900/30' :
@@ -1383,12 +1441,16 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                                  sale.statusProducao === 'Pronto para Retirada' ? '✨ Pronto' :
                                  '🤝 Entregue'}
                               </span>
-                            )}
+                            ) : null}
                           </td>
                           <td className="py-3 text-center font-bold">{sale.quantidade}</td>
                           <td className="py-3 text-right">
                             <div className="font-bold text-zinc-100">R$ {sale.total.toFixed(2)}</div>
-                            {sale.valorFaltante && sale.valorFaltante > 0 ? (
+                            {sale.status === 'Orçamento' ? (
+                              <div className="text-[10px] text-zinc-500 font-medium font-mono">
+                                Proposta
+                              </div>
+                            ) : sale.valorFaltante && sale.valorFaltante > 0 ? (
                               <div className="text-[10px] text-red-400 font-semibold font-mono" title={`Faltando: R$ ${sale.valorFaltante.toFixed(2)}`}>
                                 Lack: R$ {sale.valorFaltante.toFixed(2)}
                               </div>

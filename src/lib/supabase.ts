@@ -1,6 +1,25 @@
 import { createClient } from '@supabase/supabase-js';
 import { Product, Sale, StoreInfo } from '../types';
 
+export interface SupabaseErrorDetail {
+  message: string;
+  code?: string;
+  details?: string;
+  hint?: string;
+}
+
+export let lastSupabaseError: SupabaseErrorDetail | null = null;
+
+export function getFormattedSupabaseError(fallback = 'Erro desconhecido'): string {
+  if (!lastSupabaseError) return fallback;
+  const parts = [];
+  if (lastSupabaseError.code) parts.push(`[Código: ${lastSupabaseError.code}]`);
+  parts.push(lastSupabaseError.message);
+  if (lastSupabaseError.details) parts.push(` - Detalhes: ${lastSupabaseError.details}`);
+  if (lastSupabaseError.hint) parts.push(` - Dica: ${lastSupabaseError.hint}`);
+  return parts.join(' ');
+}
+
 // Read configuration from environment variables or localStorage
 export const getSupabaseConfig = () => {
   const envUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -235,14 +254,17 @@ export const dbSupabase = {
     try {
       const { data, error } = await supabase.from('oxente_store_info').select('*').limit(1);
       if (error) {
+        lastSupabaseError = error;
         // Handle specifically "relation does not exist" error
         if (error.code === '42P01') {
           return { success: true, tablesConfigured: false, error: 'As tabelas do Oxente Festeje ainda não foram criadas no banco de dados do Supabase. Execute o script de configuração abaixo!' };
         }
-        return { success: false, error: error.message };
+        return { success: false, error: `[Código: ${error.code || 'Desconhecido'}] ${error.message}` };
       }
+      lastSupabaseError = null;
       return { success: true, tablesConfigured: true };
     } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
       return { success: false, error: e.message || String(e) };
     }
   },
@@ -252,11 +274,14 @@ export const dbSupabase = {
     try {
       const { data, error } = await supabase.from('oxente_products').select('*').order('nome', { ascending: true });
       if (error) {
+        lastSupabaseError = error;
         console.warn('Erro ao carregar produtos do Supabase:', error.message);
         return null;
       }
+      lastSupabaseError = null;
       return data.map(mapDbToProduct);
-    } catch (e) {
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
       console.warn('Erro geral de conexão com Supabase:', e);
       return null;
     }
@@ -271,9 +296,12 @@ export const dbSupabase = {
       for (let attempt = 0; attempt < 8; attempt++) {
         const { error } = await supabase.from('oxente_products').upsert(currentPayload);
         if (!error) {
+          lastSupabaseError = null;
           return true; // Successfully saved!
         }
         
+        lastSupabaseError = error;
+
         // Check for undefined column error (Code 42703 in Postgres, or PostgREST schema cache and "column not found" mismatch)
         const isColumnError = 
           error.code === '42703' || 
@@ -321,7 +349,8 @@ export const dbSupabase = {
         return false;
       }
       return false;
-    } catch (e) {
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
       console.error('Falha ao conectar com Supabase ao salvar produto:', e);
       return false;
     }
@@ -346,8 +375,11 @@ export const dbSupabase = {
           .eq('id', id);
 
         if (!error) {
+          lastSupabaseError = null;
           return true;
         }
+
+        lastSupabaseError = error;
 
         const isColumnError = 
           error.code === '42703' || 
@@ -381,7 +413,8 @@ export const dbSupabase = {
         return false;
       }
       return false;
-    } catch (e) {
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
       console.error('Falha ao conectar com Supabase ao atualizar estoque:', e);
       return false;
     }
@@ -391,11 +424,14 @@ export const dbSupabase = {
     try {
       const { error } = await supabase.from('oxente_products').delete().eq('id', id);
       if (error) {
+        lastSupabaseError = error;
         console.error('Erro ao deletar produto no Supabase:', error.message);
         return false;
       }
+      lastSupabaseError = null;
       return true;
-    } catch (e) {
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
       console.error('Falha ao conectar com Supabase ao deletar produto:', e);
       return false;
     }
@@ -406,11 +442,14 @@ export const dbSupabase = {
     try {
       const { data, error } = await supabase.from('oxente_sales').select('*').order('data', { ascending: false });
       if (error) {
+        lastSupabaseError = error;
         console.warn('Erro ao carregar vendas do Supabase:', error.message);
         return null;
       }
+      lastSupabaseError = null;
       return data.map(mapDbToSale);
-    } catch (e) {
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
       console.warn('Erro geral de conexão de vendas com Supabase:', e);
       return null;
     }
@@ -421,11 +460,14 @@ export const dbSupabase = {
       const dbRow = mapSaleToDb(sale);
       const { error } = await supabase.from('oxente_sales').upsert(dbRow);
       if (error) {
+        lastSupabaseError = error;
         console.error('Erro ao salvar venda no Supabase:', error.message);
         return false;
       }
+      lastSupabaseError = null;
       return true;
-    } catch (e) {
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
       console.error('Falha ao conectar com Supabase ao salvar venda:', e);
       return false;
     }
@@ -444,11 +486,14 @@ export const dbSupabase = {
         .lt('updated_at', dateString);
 
       if (error) {
+        lastSupabaseError = error;
         console.warn('Erro ao expurgar vendas entregues antigas do Supabase:', error.message);
         return false;
       }
+      lastSupabaseError = null;
       return true;
-    } catch (e) {
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
       console.warn('Falha ao conectar com Supabase ao expurgar vendas entregues:', e);
       return false;
     }
@@ -466,11 +511,14 @@ export const dbSupabase = {
         updated_at: new Date().toISOString()
       });
       if (error) {
+        lastSupabaseError = error;
         console.error('Erro ao salvar loja no Supabase:', error.message);
         return false;
       }
+      lastSupabaseError = null;
       return true;
-    } catch (e) {
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
       console.error('Falha ao conectar com Supabase ao salvar dados da loja:', e);
       return false;
     }
@@ -480,9 +528,11 @@ export const dbSupabase = {
     try {
       const { data, error } = await supabase.from('oxente_store_info').select('*').eq('key', 'default').single();
       if (error) {
+        lastSupabaseError = error;
         console.warn('Erro ao carregar dados da loja do Supabase:', error.message);
         return null;
       }
+      lastSupabaseError = null;
       return {
         nome: data.nome,
         instagram: data.instagram || '',

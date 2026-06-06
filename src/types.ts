@@ -58,7 +58,7 @@ export interface Sale {
   valorPago?: number;
   valorFaltante?: number;
   numeroPedido?: string;
-  status?: 'Pendente' | 'Concluído';
+  status?: 'Pendente' | 'Concluído' | 'Orçamento';
   itens?: SaleItem[];
   criadoPorEmail?: string;
   dataRetirada?: string; // Format YYYY-MM-DD

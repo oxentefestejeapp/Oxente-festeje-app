@@ -28,7 +28,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, onSnapshot, updateDoc, serverTimestamp, getDoc, setDoc } from 'firebase/firestore';
 import { db, hasConfig } from './lib/firebase';
-import { supabase, dbSupabase, mapDbToProduct, mapDbToSale } from './lib/supabase';
+import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError } from './lib/supabase';
 
 import { Header } from './components/Header';
 import { ProductForm } from './components/ProductForm';
@@ -444,7 +444,7 @@ export default function App() {
       } catch (err: any) {
         console.error('Falha na sincronização automatizada com Supabase:', err);
         setSupabaseSyncStatus('error');
-        setSupabaseErrorMsg(err.message || String(err));
+        setSupabaseErrorMsg(getFormattedSupabaseError(err.message || String(err)));
       }
     };
 
@@ -760,15 +760,37 @@ export default function App() {
 
     // Background delete in Supabase
     try {
-      await dbSupabase.deleteProduct(id);
-    } catch (e) {
+      const success = await dbSupabase.deleteProduct(id);
+      if (!success) {
+        setSupabaseSyncStatus('error');
+        setSupabaseErrorMsg(`Erro ao deletar produto do Supabase: ${getFormattedSupabaseError()}`);
+      }
+    } catch (e: any) {
       console.warn('Erro ao deletar produto do Supabase:', e);
+      setSupabaseSyncStatus('error');
+      setSupabaseErrorMsg(`Erro ao deletar produto do Supabase: ${e.message || String(e)}`);
     }
   };
 
   const handleRecordSale = async (newSale: Sale) => {
     const updated = [...sales, newSale];
     saveSales(updated);
+
+    // If it is an estimate, do not deduct from product inventory stock
+    if (newSale.status === 'Orçamento') {
+      try {
+        const success = await dbSupabase.saveSale(newSale);
+        if (!success) {
+          setSupabaseSyncStatus('error');
+          setSupabaseErrorMsg(`Erro ao sincronizar orçamento no Supabase: ${getFormattedSupabaseError()}`);
+        }
+      } catch (e: any) {
+        console.warn('Erro ao sincronizar orçamento no Supabase:', e);
+        setSupabaseSyncStatus('error');
+        setSupabaseErrorMsg(`Erro ao sincronizar orçamento no Supabase: ${e.message || String(e)}`);
+      }
+      return;
+    }
 
     // Atomically decrease stock for each sold item
     const itemsToDecrease = newSale.itens || [
@@ -806,11 +828,17 @@ export default function App() {
 
       // Async update each product's stock in Supabase using the fast optimized method
       try {
-        await Promise.all(
+        const results = await Promise.all(
           productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito))
         );
-      } catch (e) {
+        if (results.some(r => !r)) {
+          setSupabaseSyncStatus('error');
+          setSupabaseErrorMsg(`Erro ao sincronizar atualização de estoque no Supabase: ${getFormattedSupabaseError()}`);
+        }
+      } catch (e: any) {
         console.warn('Erro ao sincronizar estoque atualizado com o Supabase em segundo plano:', e);
+        setSupabaseSyncStatus('error');
+        setSupabaseErrorMsg(`Erro ao sincronizar atualização de estoque no Supabase: ${e.message || String(e)}`);
       } finally {
         // Clear pending states after sync completes
         productsToSync.forEach((p) => {
@@ -821,9 +849,15 @@ export default function App() {
 
     // Background save to Supabase
     try {
-      await dbSupabase.saveSale(newSale);
-    } catch (e) {
+      const success = await dbSupabase.saveSale(newSale);
+      if (!success) {
+        setSupabaseSyncStatus('error');
+        setSupabaseErrorMsg(`Erro ao sincronizar venda/pedido no Supabase: ${getFormattedSupabaseError()}`);
+      }
+    } catch (e: any) {
       console.warn('Erro ao sincronizar venda/pedido no Supabase:', e);
+      setSupabaseSyncStatus('error');
+      setSupabaseErrorMsg(`Erro ao sincronizar venda/pedido no Supabase: ${e.message || String(e)}`);
     }
   };
 
@@ -833,9 +867,15 @@ export default function App() {
 
     // Background save to Supabase
     try {
-      await dbSupabase.saveSale(updatedSale);
-    } catch (e) {
+      const success = await dbSupabase.saveSale(updatedSale);
+      if (!success) {
+        setSupabaseSyncStatus('error');
+        setSupabaseErrorMsg(`Erro ao sincronizar alteração de venda no Supabase: ${getFormattedSupabaseError()}`);
+      }
+    } catch (e: any) {
       console.warn('Erro ao sincronizar alteração de venda no Supabase:', e);
+      setSupabaseSyncStatus('error');
+      setSupabaseErrorMsg(`Erro ao sincronizar alteração de venda no Supabase: ${e.message || String(e)}`);
     }
   };
 
@@ -859,7 +899,7 @@ export default function App() {
     } catch (err: any) {
       console.error('Falha de restauração de backup no Supabase:', err);
       setSupabaseSyncStatus('error');
-      setSupabaseErrorMsg(err.message || 'Erro ao sincronizar backup.');
+      setSupabaseErrorMsg(getFormattedSupabaseError(err.message || 'Erro ao sincronizar backup.'));
     }
   };
 
@@ -869,9 +909,15 @@ export default function App() {
 
     // Async save to Supabase
     try {
-      await dbSupabase.saveStoreInfo(newStoreInfo);
-    } catch (e) {
+      const success = await dbSupabase.saveStoreInfo(newStoreInfo);
+      if (!success) {
+        setSupabaseSyncStatus('error');
+        setSupabaseErrorMsg(`Erro ao atualizar dados da loja no Supabase: ${getFormattedSupabaseError()}`);
+      }
+    } catch (e: any) {
       console.warn('Erro ao atualizar dados da loja no Supabase:', e);
+      setSupabaseSyncStatus('error');
+      setSupabaseErrorMsg(`Erro ao atualizar dados da loja no Supabase: ${e.message || String(e)}`);
     }
   };
 
