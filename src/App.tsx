@@ -28,7 +28,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, onSnapshot, updateDoc, serverTimestamp, getDoc, setDoc } from 'firebase/firestore';
 import { db, hasConfig } from './lib/firebase';
-import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError } from './lib/supabase';
+import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig } from './lib/supabase';
 
 import { Header } from './components/Header';
 import { ProductForm } from './components/ProductForm';
@@ -273,39 +273,61 @@ export default function App() {
         const localKey = localStorage.getItem('supabase_anon_key');
         const isDirty = localStorage.getItem('supabase_keys_dirty') === 'true';
 
-        if (isAdmin && isDirty) {
-          // Administrator manually entered keys via configuration tab -> upload to Firestore
+        if (isAdmin) {
+          // O Administrador é a fonte da verdade absoluta de credenciais.
+          // Se o Administrador tem chaves salvas localmente, garantimos que elas estejam guardadas na nuvem do Firestore
+          // para interligar todos os funcionários à mesma base de dados instantaneamente.
           if (localUrl && localKey) {
-            await setDoc(configDocRef, {
-              url: localUrl,
-              key: localKey,
-              updatedAt: serverTimestamp()
-            });
-            localStorage.removeItem('supabase_keys_dirty');
-            console.log('Sincronizados detalhes do Supabase do administrador com o Firestore.');
+            const firestoreUrl = docSnap.exists() ? docSnap.data().url : null;
+            const firestoreKey = docSnap.exists() ? docSnap.data().key : null;
+
+            if (localUrl !== firestoreUrl || localKey !== firestoreKey || isDirty) {
+              await setDoc(configDocRef, {
+                url: localUrl,
+                key: localKey,
+                updatedAt: serverTimestamp()
+              });
+              localStorage.removeItem('supabase_keys_dirty');
+              console.log('📡 [Supabase Interligado] Novas credenciais do Administrador salvas na nuvem compartilhada do Firestore.');
+            }
+          } else {
+            // Se o Administrador não tem chaves locais mas elas existem na nuvem, puxa para interligar
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              if (data.url && data.key) {
+                console.log('Puxando credenciais existentes do Supabase do Firestore para sincronizar.');
+                localStorage.setItem('supabase_url', data.url);
+                localStorage.setItem('supabase_anon_key', data.key);
+                localStorage.removeItem('supabase_keys_dirty');
+                window.location.reload();
+              }
+            } else {
+              // Inicializa o Firestore com as chaves padrão do aplicativo para garantir o primeiro acesso integrado
+              const defaultCfg = getSupabaseConfig();
+              await setDoc(configDocRef, {
+                url: defaultCfg.url,
+                key: defaultCfg.key,
+                updatedAt: serverTimestamp()
+              });
+              console.log('Banco de dados padrão registrado no Firestore para início unificado.');
+            }
           }
         } else {
-          // Both collaborators and administrator (on other devices/browsers) pull the keys from Firestore
+          // Funcionários (não-admin) SEMPRE puxam as credenciais em tempo real do banco do Firestore do Administrador.
+          // Isso garante que todos estejam interligados na MESMA base de dados do Supabase na nuvem sem falha!
           if (docSnap.exists()) {
             const data = docSnap.data();
             if (data.url && data.key) {
               if (localUrl !== data.url || localKey !== data.key) {
-                console.log('Nova configuração de Supabase detectada na nuvem. Atualizando localmente...');
+                console.log('📡 [Supabase Interligado] Alinhando credenciais do funcionário ao Supabase do Administrador...');
                 localStorage.setItem('supabase_url', data.url);
                 localStorage.setItem('supabase_anon_key', data.key);
                 localStorage.removeItem('supabase_keys_dirty');
-                // Trigger reload to apply connection details globally
+                
+                // Reinicia a página para que o cliente do Supabase conecte na nova base correta.
                 window.location.reload();
               }
             }
-          } else if (isAdmin && localUrl && localKey) {
-            // First time running or Firestore document doesn't exist yet, bootstrap Firestore config
-            await setDoc(configDocRef, {
-              url: localUrl,
-              key: localKey,
-              updatedAt: serverTimestamp()
-            });
-            console.log('Inicializada configuração do Supabase no Firestore.');
           }
         }
       } catch (err) {
