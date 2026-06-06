@@ -40,8 +40,13 @@ CREATE TABLE IF NOT EXISTS oxente_products (
 -- Garantir que a coluna de preços progressivos exista se a tabela já foi criada anteriormente
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS precos_progressivos TEXT;
 
+-- Garantir que a coluna de imagem esteja presente também
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS imagem_base64 TEXT;
+
 -- Habilitar leitura/escrita aberta para simplificar (ajuste as políticas RLS como preferir em produção)
 ALTER TABLE oxente_products ENABLE ROW LEVEL SECURITY;
+-- Remove existing simple policy to avoid duplication errors and recreate cleanly
+DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_products;
 CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_products FOR ALL USING (true) WITH CHECK (true);
 
 -- 2. Tabela de Vendas e Pedidos (Sales)
@@ -81,6 +86,7 @@ CREATE TABLE IF NOT EXISTS oxente_sales (
 );
 
 ALTER TABLE oxente_sales ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_sales;
 CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_sales FOR ALL USING (true) WITH CHECK (true);
 
 -- 3. Tabela de Configurações da Loja (Store Info)
@@ -95,11 +101,12 @@ CREATE TABLE IF NOT EXISTS oxente_store_info (
 );
 
 ALTER TABLE oxente_store_info ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_store_info;
 CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_store_info FOR ALL USING (true) WITH CHECK (true);
 
 -- Inserir dados de configuração padrão da loja se não existirem
 INSERT INTO oxente_store_info (key, nome, instagram, telefone, endereco, whatsapp_template)
-VALUES ('default', 'Oxente Festeje', '@oxente_festeje', '(81) 98765-4321', 'Rua Principal, Recife - PE', 'Olá {cliente}, seu pedido {numero} está {status}!')
+VALUES ('default', 'Oxente Festeje', '@oxente_festeje', '(83) 98885-9302', 'Rua Josina Lessa feitosa 176', 'Olá {cliente}, seu pedido {numero} está {status}!')
 ON CONFLICT (key) DO NOTHING;
 
 -- 4. Habilitar Tempo Real (Realtime) para as Tabelas
@@ -109,6 +116,10 @@ ON CONFLICT (key) DO NOTHING;
 alter publication supabase_realtime add table oxente_products;
 alter publication supabase_realtime add table oxente_sales;
 alter publication supabase_realtime add table oxente_store_info;
+
+-- 5. FORÇAR RECARREGAMENTO DO CACHE DE SCHEMA DO SUPABASE (Diferencial Crucial!)
+-- Execute esta linha para limpar qualquer cache atrasado e atualizar o PostGREST de imediato!
+NOTIFY pgrst, 'reload schema';
 `;
 };
 
