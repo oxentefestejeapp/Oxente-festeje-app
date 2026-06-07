@@ -128,6 +128,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   // States for editing a sale
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [saleIdToDelete, setSaleIdToDelete] = useState<string | null>(null);
+  const [saleDeletePassword, setSaleDeletePassword] = useState('');
   const [isDeletingSaleId, setIsDeletingSaleId] = useState<string | null>(null);
   const [editCliente, setEditCliente] = useState('');
   const [editTelefone, setEditTelefone] = useState('');
@@ -609,6 +610,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       const success = await onDeleteSale(saleId);
       if (success) {
         setSaleIdToDelete(null);
+        setSaleDeletePassword('');
         // If the deleted sale is the one currently viewed on the receipt, clear it
         if (viewedSale && viewedSale.id === saleId) {
           setViewedSale(null);
@@ -1557,13 +1559,23 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                               {isAdmin && (
                                 <>
                                   {saleIdToDelete === sale.id ? (
-                                    <div className="flex items-center gap-1 bg-red-950/40 border border-red-900/60 rounded px-1.5 py-0.5 animate-fade-in shrink-0">
-                                      <span className="text-[9px] text-red-200 font-bold mr-1">Certeza?</span>
+                                    <div 
+                                      className="flex items-center gap-1.5 bg-red-950/40 border border-red-900/60 rounded px-2 py-0.5 animate-fade-in shrink-0"
+                                      onClick={(e) => e.stopPropagation()}
+                                    >
+                                      <input
+                                        type="password"
+                                        placeholder="Senha"
+                                        value={saleDeletePassword}
+                                        onChange={(e) => setSaleDeletePassword(e.target.value)}
+                                        className="w-16 px-1.5 py-0.5 bg-black border border-red-950 focus:border-red-905 rounded text-[9.5px] font-mono focus:outline-none text-zinc-100 placeholder-red-900/40"
+                                        title="Insira a senha de administrador"
+                                      />
                                       <button
                                         onClick={(e) => handleDeleteSaleSubmit(e, sale.id)}
-                                        disabled={isDeletingSaleId === sale.id}
-                                        className="p-1 hover:bg-black/40 text-emerald-400 hover:text-emerald-300 rounded cursor-pointer disabled:opacity-40"
-                                        title="Confirmar exclusão definitiva do banco"
+                                        disabled={isDeletingSaleId === sale.id || saleDeletePassword !== '69apagar69'}
+                                        className="p-1 hover:bg-black/40 text-emerald-400 hover:text-emerald-350 rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                                        title={saleDeletePassword === '69apagar69' ? "Confirmar exclusão definitiva do banco" : "Digite a senha correta para destravar"}
                                       >
                                         <Check className="h-3.5 w-3.5" />
                                       </button>
@@ -1571,9 +1583,10 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setSaleIdToDelete(null);
+                                          setSaleDeletePassword('');
                                         }}
                                         disabled={isDeletingSaleId === sale.id}
-                                        className="p-1 hover:bg-black/40 text-red-400 hover:text-red-300 rounded cursor-pointer disabled:opacity-40"
+                                        className="p-1 hover:bg-black/40 text-red-500 hover:text-red-400 rounded cursor-pointer"
                                         title="Cancelar"
                                       >
                                         <X className="h-3.5 w-3.5" />
@@ -1584,6 +1597,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         setSaleIdToDelete(sale.id);
+                                        setSaleDeletePassword('');
                                       }}
                                       className="px-2 py-1 bg-zinc-950 border border-zinc-805 hover:border-red-500 text-zinc-400 hover:text-red-400 rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0 active:scale-95"
                                       title="Excluir este pedido permanentemente do sistema"
