@@ -96,6 +96,24 @@ export default function App() {
 
   useEffect(() => {
     initOneSignal();
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('action') === 'subscribe-push') {
+      console.log('Detectado pedido de inscrição de push nativo via URL param. Solicitando autorização em 2.5 segundos...');
+      setTimeout(() => {
+        import('./lib/notifications').then(({ optInOneSignal }) => {
+          optInOneSignal();
+        });
+      }, 2500);
+
+      // Clean up the URL to keep it pristine and prevent prompt loops on manual F5
+      try {
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      } catch (err) {
+        console.warn('Erro ao limpar query parameters:', err);
+      }
+    }
   }, []);
 
   const addPendingProduct = (product: Product) => {

@@ -102,6 +102,9 @@ export function SettingsManager({
   const [oneSignalAppId, setOneSignalAppId] = useState(() => localStorage.getItem('oxente_onesignal_app_id') || '');
   const [oneSignalRestKey, setOneSignalRestKey] = useState(() => localStorage.getItem('oxente_onesignal_rest_key') || '');
   const [oneSignalSavedMessage, setOneSignalSavedMessage] = useState<string | null>(null);
+  const [popupBlockedLink, setPopupBlockedLink] = useState<string | null>(null);
+
+  const isIframe = typeof window !== 'undefined' && window.self !== window.top;
 
   const handleSaveOneSignal = () => {
     localStorage.setItem('oxente_onesignal_app_id', oneSignalAppId.trim());
@@ -117,10 +120,27 @@ export function SettingsManager({
     localStorage.removeItem('oxente_onesignal_rest_key');
     setOneSignalAppId('');
     setOneSignalRestKey('');
+    setPopupBlockedLink(null);
     setOneSignalSavedMessage('Configurações do OneSignal removidas. Recarregando...');
     setTimeout(() => {
       window.location.reload();
     }, 1500);
+  };
+
+  const handleOptIn = () => {
+    if (isIframe) {
+      const subscribeUrl = `${window.location.origin}${window.location.pathname}?action=subscribe-push`;
+      setOneSignalSavedMessage("Abrindo o aplicativo em uma nova aba externa para liberar as limitações do iFrame de testes... O prompt do OneSignal surgirá lá automaticamente em 3 segundos! 📡");
+      setPopupBlockedLink(subscribeUrl);
+      
+      const newTab = window.open(subscribeUrl, '_blank');
+      if (!newTab) {
+        setOneSignalSavedMessage("Seu navegador impediu a abertura automática da nova aba! Clique no link especial abaixo para abrir e ativar suas notificações nativas com total facilidade:");
+      }
+    } else {
+      setOneSignalSavedMessage("Abrindo diálogo do OneSignal para inscrição nativa em 2º plano no dispositivo...");
+      optInOneSignal();
+    }
   };
 
   useEffect(() => {
@@ -847,6 +867,11 @@ export function SettingsManager({
 
         <p className="text-[11.5px] text-zinc-400 font-medium leading-relaxed bg-black/20 p-3 rounded-xl border border-zinc-850 text-left">
           Para garantir que as notificações de vendas cheguem a todos os celulares mesmo com o aplicativo 100% fechado, minimizado ou com a tela bloqueada, integramos os serviços gratuitos do OneSignal. O navegador requer que cada fone/computador seja inscrito manualmente uma única vez após configurar as chaves abaixo.
+          {isIframe && (
+            <span className="block mt-2 text-amber-400 font-semibold">
+              ⚠️ Observação: Você está testando o app dentro do iFrame da plataforma. Os navegadores bloqueiam notificações de segundo plano em iFrames. Clique no botão de Inscrição para que o app abra automaticamente em nova aba externa para concluir com Sucesso! 📱
+            </span>
+          )}
         </p>
 
         <div className="space-y-4">
@@ -886,12 +911,12 @@ export function SettingsManager({
 
             {oneSignalAppId && (
               <button
-                onClick={optInOneSignal}
+                onClick={handleOptIn}
                 type="button"
                 className="flex items-center gap-2 px-5 py-2.5 bg-zinc-800 hover:bg-zinc-750 text-emerald-400 border border-emerald-400/20 hover:border-emerald-400/40 font-bold text-xs rounded-xl shadow transition-all active:scale-95 cursor-pointer"
               >
-                <Smartphone className="h-4 w-4" />
-                <span>Inscrever este Celular 📱</span>
+                <Smartphone className="h-4 w-4 animate-bounce" />
+                <span>{isIframe ? "Inscrição Rápida (Abrir Nova Aba) 📱" : "Inscrever este Celular 📱"}</span>
               </button>
             )}
 
@@ -908,8 +933,22 @@ export function SettingsManager({
           </div>
 
           {oneSignalSavedMessage && (
-            <div className="p-3 bg-emerald-950/20 border border-emerald-900/30 rounded-xl text-center text-xs font-bold text-emerald-400 animate-pulse">
+            <div className="p-3 bg-emerald-950/20 border border-emerald-900/30 rounded-xl text-center text-xs font-bold text-emerald-400 animate-pulse col-span-full">
               {oneSignalSavedMessage}
+            </div>
+          )}
+
+          {popupBlockedLink && (
+            <div className="p-4 bg-zinc-950 border border-zinc-800 rounded-2xl text-center space-y-3 col-span-full">
+              <p className="text-[11px] text-zinc-300 font-medium">Se a nova aba não abriu automaticamente de forma instantânea, use o link no botão abaixo para concluir a inscrição do seu celular:</p>
+              <a
+                href={popupBlockedLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-6 py-3 bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl shadow-lg transition-all animate-pulse"
+              >
+                🔗 ABRIR CANAL EXTERNO E INSCREVER
+              </a>
             </div>
           )}
         </div>
