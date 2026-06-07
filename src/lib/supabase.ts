@@ -589,6 +589,23 @@ export const dbSupabase = {
     }
   },
 
+  async deleteSale(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('oxente_sales').delete().eq('id', id);
+      if (error) {
+        lastSupabaseError = error;
+        console.error('Erro ao excluir venda no Supabase:', error.message);
+        return false;
+      }
+      lastSupabaseError = null;
+      return true;
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
+      console.error('Falha ao conectar com Supabase ao excluir venda:', e);
+      return false;
+    }
+  },
+
   async saveStoreInfo(storeInfo: StoreInfo): Promise<boolean> {
     try {
       const { error } = await supabase.from('oxente_store_info').upsert({

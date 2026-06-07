@@ -962,6 +962,26 @@ export default function App() {
     }
   };
 
+  const handleDeleteSale = async (id: string): Promise<boolean> => {
+    const updated = sales.filter((s) => s.id !== id);
+    saveSales(updated);
+
+    try {
+      const success = await dbSupabase.deleteSale(id);
+      if (!success) {
+        setSupabaseSyncStatus('error');
+        setSupabaseErrorMsg(`Erro ao excluir venda no Supabase: ${getFormattedSupabaseError()}`);
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      console.warn('Erro ao excluir venda no Supabase:', e);
+      setSupabaseSyncStatus('error');
+      setSupabaseErrorMsg(`Erro ao excluir venda no Supabase: ${e.message || String(e)}`);
+      return false;
+    }
+  };
+
   const handleRestoreBackup = async (newProducts: Product[], newSales: Sale[], newStoreInfo: StoreInfo) => {
     setProducts(newProducts);
     setSales(newSales);
@@ -1368,6 +1388,7 @@ export default function App() {
                 onRecordSale={handleRecordSale}
                 onUpdateStock={handleUpdateStock}
                 onUpdateSale={handleUpdateSale}
+                onDeleteSale={handleDeleteSale}
                 currentUserEmail={firebaseUser?.email || ''}
               />
             )}

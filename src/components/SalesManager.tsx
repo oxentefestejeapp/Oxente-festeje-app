@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare } from 'lucide-react';
+import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice } from '../types';
@@ -20,6 +20,7 @@ interface SalesManagerProps {
   onRecordSale: (sale: Sale) => void;
   onUpdateStock: (id: string, newStock: number) => void;
   onUpdateSale?: (updatedSale: Sale) => void;
+  onDeleteSale?: (id: string) => Promise<boolean>;
   currentUserEmail?: string;
 }
 
@@ -44,7 +45,7 @@ const CustomTooltip = ({ active, payload }: any) => {
   return null;
 };
 
-export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdateStock, onUpdateSale, currentUserEmail = '' }: SalesManagerProps) {
+export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdateStock, onUpdateSale, onDeleteSale, currentUserEmail = '' }: SalesManagerProps) {
   const isAdmin = currentUserEmail.trim().toLowerCase() === 'oxentefesteje@gmail.com' || currentUserEmail.trim().toLowerCase() === 'abraaoapp@oxente.com';
   const [selectedProductId, setSelectedProductId] = useState('');
   const [cliente, setCliente] = useState('Consumidor');
@@ -126,6 +127,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   // States for editing a sale
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
+  const [saleIdToDelete, setSaleIdToDelete] = useState<string | null>(null);
+  const [isDeletingSaleId, setIsDeletingSaleId] = useState<string | null>(null);
   const [editCliente, setEditCliente] = useState('');
   const [editTelefone, setEditTelefone] = useState('');
   const [editNumeroPedido, setEditNumeroPedido] = useState('');
@@ -595,6 +598,27 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }
 
     setEditingSale(null);
+  };
+
+  const handleDeleteSaleSubmit = async (e: React.MouseEvent, saleId: string) => {
+    e.stopPropagation();
+    if (!onDeleteSale) return;
+    setIsDeletingSaleId(saleId);
+    try {
+      playSound('remove');
+      const success = await onDeleteSale(saleId);
+      if (success) {
+        setSaleIdToDelete(null);
+        // If the deleted sale is the one currently viewed on the receipt, clear it
+        if (viewedSale && viewedSale.id === saleId) {
+          setViewedSale(null);
+        }
+      }
+    } catch (err) {
+      console.error('Erro ao excluir venda:', err);
+    } finally {
+      setIsDeletingSaleId(null);
+    }
   };
 
   const handleSendPedidoAnotado = (sale: Sale) => {
@@ -1530,6 +1554,46 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                                 <Pencil className="h-3 w-3" />
                                 <span>Editar</span>
                               </button>
+                              {isAdmin && (
+                                <>
+                                  {saleIdToDelete === sale.id ? (
+                                    <div className="flex items-center gap-1 bg-red-950/40 border border-red-900/60 rounded px-1.5 py-0.5 animate-fade-in shrink-0">
+                                      <span className="text-[9px] text-red-200 font-bold mr-1">Certeza?</span>
+                                      <button
+                                        onClick={(e) => handleDeleteSaleSubmit(e, sale.id)}
+                                        disabled={isDeletingSaleId === sale.id}
+                                        className="p-1 hover:bg-black/40 text-emerald-400 hover:text-emerald-300 rounded cursor-pointer disabled:opacity-40"
+                                        title="Confirmar exclusão definitiva do banco"
+                                      >
+                                        <Check className="h-3.5 w-3.5" />
+                                      </button>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setSaleIdToDelete(null);
+                                        }}
+                                        disabled={isDeletingSaleId === sale.id}
+                                        className="p-1 hover:bg-black/40 text-red-400 hover:text-red-300 rounded cursor-pointer disabled:opacity-40"
+                                        title="Cancelar"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSaleIdToDelete(sale.id);
+                                      }}
+                                      className="px-2 py-1 bg-zinc-950 border border-zinc-805 hover:border-red-500 text-zinc-400 hover:text-red-400 rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0 active:scale-95"
+                                      title="Excluir este pedido permanentemente do sistema"
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                      <span>Excluir</span>
+                                    </button>
+                                  )}
+                                </>
+                              )}
                             </div>
                           </td>
                         </tr>
