@@ -835,6 +835,26 @@ export default function App() {
     }
   };
 
+  const handleUpdateProduct = async (updatedProduct: Product): Promise<boolean> => {
+    const updated = products.map((p) => p.id === updatedProduct.id ? updatedProduct : p);
+    saveProducts(updated);
+
+    try {
+      const success = await dbSupabase.saveProduct(updatedProduct);
+      if (!success) {
+        setSupabaseSyncStatus('error');
+        setSupabaseErrorMsg(`Erro ao sincronizar atualização do produto no Supabase: ${getFormattedSupabaseError()}`);
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      console.warn('Erro ao atualizar produto no Supabase:', e);
+      setSupabaseSyncStatus('error');
+      setSupabaseErrorMsg(`Erro ao atualizar produto no Supabase: ${e.message || String(e)}`);
+      return false;
+    }
+  };
+
   const handleRecordSale = async (newSale: Sale) => {
     const updated = [...sales, newSale];
     saveSales(updated);
@@ -1335,6 +1355,7 @@ export default function App() {
                 products={products}
                 onUpdateStock={handleUpdateStock}
                 onDeleteProduct={handleDeleteProduct}
+                onUpdateProduct={handleUpdateProduct}
                 isAdmin={isAdmin}
               />
             )}

@@ -3,21 +3,255 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo } from 'react';
-import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box, Check, X } from 'lucide-react';
-import { Product } from '../types';
+import React, { useState, useMemo, useRef, DragEvent, ChangeEvent } from 'react';
+import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box, Check, X, Pencil, Upload, Loader2, Sparkles, AlertCircle, Layers } from 'lucide-react';
+import { Product, PricingTier } from '../types';
+
+// Client-side image compression using HTML5 Canvas to keep Base64 strings tiny (~30KB-50KB)
+const compressImage = (file: File, maxWidth = 480, maxHeight = 480, quality = 0.6): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+
+        // Keep aspect ratio
+        if (width > height) {
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+        } else {
+          if (height > maxHeight) {
+            width = Math.round((width * maxHeight) / height);
+            height = maxHeight;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          resolve(e.target?.result as string || '');
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+        const dataUrl = canvas.toDataURL('image/jpeg', quality);
+        resolve(dataUrl);
+      };
+      img.onerror = () => {
+        reject(new Error('Erro ao processar imagem para compressão. Verifique o formato.'));
+      };
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+};
 
 interface StockManagerProps {
   products: Product[];
   onUpdateStock: (id: string, newStock: number, isInfinite?: boolean) => void;
   onDeleteProduct: (id: string) => void;
+  onUpdateProduct?: (updatedProduct: Product) => Promise<boolean>;
   isAdmin?: boolean;
 }
 
-export function StockManager({ products, onUpdateStock, onDeleteProduct, isAdmin = false }: StockManagerProps) {
+export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdateProduct, isAdmin = false }: StockManagerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [editedStocks, setEditedStocks] = useState<Record<string, number>>({});
+
+  // Edit Modal State
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editNome, setEditNome] = useState('');
+  const [editPreco, setEditPreco] = useState<number | ''>('');
+  const [editPrecoCusto, setEditPrecoCusto] = useState<number | ''>('');
+  const [editEstoque, setEditEstoque] = useState<number | ''>('');
+  const [editEstoqueInfinito, setEditEstoqueInfinito] = useState(false);
+  const [editPhoto, setEditPhoto] = useState<string>('');
+  const [editDragActive, setEditDragActive] = useState(false);
+  const [editError, setEditError] = useState('');
+  const [editSuccess, setEditSuccess] = useState('');
+  const [isEditCompressing, setIsEditCompressing] = useState(false);
+  const [isEditSaving, setIsEditSaving] = useState(false);
+  
+  // Progressive Pricing Tiers State for Edit
+  const [editFaixasPreco, setEditFaixasPreco] = useState<PricingTier[]>([]);
+  const [editNovaQuantidadeMinima, setEditNovaQuantidadeMinima] = useState<number | ''>('');
+  const [editNovoPrecoFaixa, setEditNovoPrecoFaixa] = useState<number | ''>('');
+  
+  const editFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleOpenEditModal = (product: Product) => {
+    setEditingProduct(product);
+    setEditNome(product.nome);
+    setEditPreco(product.preco);
+    setEditPrecoCusto(product.precoCusto !== undefined ? product.precoCusto : '');
+    setEditEstoque(product.estoque);
+    setEditEstoqueInfinito(!!product.estoqueInfinito);
+    setEditPhoto(product.imagemBase64 || '');
+    setEditFaixasPreco(product.faixasPreco ? [...product.faixasPreco] : []);
+    setEditNovaQuantidadeMinima('');
+    setEditNovoPrecoFaixa('');
+    setEditError('');
+    setEditSuccess('');
+  };
+
+  const handleAddEditFaixa = () => {
+    if (editNovaQuantidadeMinima === '' || editNovoPrecoFaixa === '') {
+      setEditError('Por favor, informe a quantidade mínima e o preço da faixa.');
+      return;
+    }
+    const qMin = Number(editNovaQuantidadeMinima);
+    const pFaixa = Number(editNovoPrecoFaixa);
+    if (isNaN(qMin) || qMin <= 0) {
+      setEditError('A quantidade mínima deve ser maior que zero.');
+      return;
+    }
+    if (isNaN(pFaixa) || pFaixa <= 0) {
+      setEditError('O preço para a faixa deve ser maior que zero.');
+      return;
+    }
+    
+    if (editFaixasPreco.some(f => f.quantidadeMinima === qMin)) {
+      setEditError(`Já existe um valor configurado para a quantidade mínima de ${qMin}.`);
+      return;
+    }
+
+    const updated = [...editFaixasPreco, { quantidadeMinima: qMin, preco: pFaixa }]
+      .sort((a, b) => a.quantidadeMinima - b.quantidadeMinima);
+
+    setEditFaixasPreco(updated);
+    setEditNovaQuantidadeMinima('');
+    setEditNovoPrecoFaixa('');
+    setEditError('');
+  };
+
+  const handleRemoveEditFaixa = (index: number) => {
+    const updated = editFaixasPreco.filter((_, i) => i !== index);
+    setEditFaixasPreco(updated);
+  };
+
+  const processEditFile = async (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setEditError('Por favor, selecione apenas arquivos de imagem.');
+      return;
+    }
+
+    setIsEditCompressing(true);
+    setEditError('');
+    try {
+      const compressedBase64 = await compressImage(file);
+      setEditPhoto(compressedBase64);
+    } catch (err: any) {
+      console.error('Erro de compressão de imagem de edição:', err);
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        if (e.target?.result) {
+          setEditPhoto(e.target.result as string);
+        }
+      };
+      reader.readAsDataURL(file);
+    } finally {
+      setIsEditCompressing(false);
+    }
+  };
+
+  const handleEditDrag = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setEditDragActive(true);
+    } else if (e.type === "dragleave") {
+      setEditDragActive(false);
+    }
+  };
+
+  const handleEditDrop = (e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setEditDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      processEditFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleEditFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    if (e.target.files && e.target.files[0]) {
+      processEditFile(e.target.files[0]);
+    }
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isEditSaving || isEditCompressing || !editingProduct) return;
+
+    setEditError('');
+    setEditSuccess('');
+
+    if (!editNome.trim()) {
+      setEditError('O nome do produto é obrigatório.');
+      return;
+    }
+
+    const precoNum = Number(editPreco);
+    if (editPreco === '' || isNaN(precoNum) || precoNum < 0) {
+      setEditError('Digite um preço de venda válido.');
+      return;
+    }
+
+    const precoCustoNum = editPrecoCusto !== '' ? Number(editPrecoCusto) : undefined;
+    if (precoCustoNum !== undefined && (isNaN(precoCustoNum) || precoCustoNum < 0)) {
+      setEditError('Digite um preço de custo válido.');
+      return;
+    }
+
+    const estoqueNum = editEstoqueInfinito ? 0 : Number(editEstoque);
+    if (!editEstoqueInfinito && (editEstoque === '' || isNaN(estoqueNum) || estoqueNum < 0)) {
+      setEditError('O estoque precisa ser maior ou igual a zero.');
+      return;
+    }
+
+    const updatedProduct: Product = {
+      ...editingProduct,
+      nome: editNome.trim(),
+      preco: precoNum,
+      precoCusto: precoCustoNum,
+      estoque: Math.floor(estoqueNum),
+      imagemBase64: editPhoto || undefined,
+      estoqueInfinito: editEstoqueInfinito || undefined,
+      faixasPreco: editFaixasPreco.length > 0 ? editFaixasPreco : undefined,
+    };
+
+    setIsEditSaving(true);
+    try {
+      if (onUpdateProduct) {
+        const success = await onUpdateProduct(updatedProduct);
+        if (success) {
+          setEditSuccess('Produto atualizado e sincronizado na nuvem com sucesso!');
+          setTimeout(() => {
+            setEditingProduct(null);
+          }, 1500);
+        } else {
+          setEditError('Erro ao salvar as alterações no banco de dados.');
+        }
+      } else {
+        setEditError('Ação de atualização indisponível no momento.');
+      }
+    } catch (err: any) {
+      console.error('Erro de salvamento de produto editado:', err);
+      setEditError(`Erro ao salvar produto: ${err?.message || String(err)}`);
+    } finally {
+      setIsEditSaving(false);
+    }
+  };
 
   const stockMetrics = useMemo(() => {
     let totalStockVolume = 0;
@@ -352,13 +586,22 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, isAdmin
                   {isAdmin && (
                     <>
                       {!isDeleting ? (
-                        <button
-                          onClick={() => setProductToDelete(p.id)}
-                          className="w-full py-2 hover:bg-red-950/20 text-red-450 text-xs font-semibold rounded-lg flex items-center justify-center gap-2 border border-dashed border-red-900/30 focus:border-red-500 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          <span>Excluir Produto</span>
-                        </button>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => handleOpenEditModal(p)}
+                            className="flex-1 py-1.5 px-3 bg-zinc-800 hover:bg-zinc-750 text-brand-pink text-xs font-bold rounded-lg flex items-center justify-center gap-1.5 border border-zinc-700/50 hover:border-brand-pink/50 transition-all cursor-pointer active:scale-95"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                            <span>Editar</span>
+                          </button>
+                          <button
+                            onClick={() => setProductToDelete(p.id)}
+                            className="p-1 px-2.5 bg-zinc-950 hover:bg-red-950/25 text-red-400 hover:text-red-300 rounded-lg border border-zinc-850 hover:border-red-900/40 transition-colors cursor-pointer"
+                            title="Excluir Produto"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       ) : (
                         <div className="bg-red-950/20 border border-red-900/40 rounded-xl p-3 space-y-2.5 animate-fade-in">
                           <div className="flex items-start gap-1.5 text-red-300 text-[11px] leading-snug">
@@ -391,6 +634,318 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, isAdmin
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* ✏️ MODAL DE EDIÇÃO DE PRODUTO COMPLETA (ADMINISTRADOR) */}
+      {editingProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-zinc-900 rounded-2xl border border-zinc-800 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto flex flex-col my-8 animate-fade-in">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between p-5 border-b border-zinc-800 shrink-0">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-brand-pink/10 border border-brand-pink/20 rounded-lg text-brand-pink">
+                  <Pencil className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-semibold text-lg text-zinc-100">Editar Detalhes do Produto</h3>
+                  <p className="text-[10px] font-mono text-zinc-500">ID: {editingProduct.id}</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingProduct(null)}
+                className="p-1 px-2 bg-zinc-850 hover:bg-zinc-800 text-zinc-400 hover:text-zinc-100 rounded-lg transition-colors cursor-pointer"
+                title="Fechar formulário"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Modal Body / Form */}
+            <form onSubmit={handleEditSubmit} className="p-6 space-y-5 overflow-y-auto">
+              
+              {/* Msg de erro */}
+              {editError && (
+                <div className="p-4 bg-red-950/30 border-l-4 border-red-650 rounded-r-xl flex items-start gap-2.5 text-red-300 text-sm animate-fade-in">
+                  <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                  <span>{editError}</span>
+                </div>
+              )}
+
+              {/* Msg de sucesso */}
+              {editSuccess && (
+                <div className="p-4 bg-emerald-950/30 border-l-4 border-emerald-650 rounded-r-xl flex items-start gap-2.5 text-emerald-300 text-sm animate-fade-in">
+                  <Sparkles className="h-5 w-5 text-emerald-400 shrink-0 mt-0.5" />
+                  <span>{editSuccess}</span>
+                </div>
+              )}
+
+              {/* Product Nome */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                  Nome do Produto <span className="text-brand-pink font-bold">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex: Caneca Porcelana, Brinco Acrílico"
+                  value={editNome}
+                  onChange={(e) => setEditNome(e.target.value)}
+                  className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-sm"
+                />
+              </div>
+
+              {/* Price rows */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                      Preço de Venda <span className="text-brand-pink font-bold">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-zinc-500 font-medium text-xs">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0,00"
+                        value={editPreco}
+                        onChange={(e) => setEditPreco(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                        className="w-full pl-8 pr-3 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                      Preço de Custo <span className="text-zinc-500 text-xs font-normal">(Margem)</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-zinc-500 font-medium text-xs">R$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0,00"
+                        value={editPrecoCusto}
+                        onChange={(e) => setEditPrecoCusto(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                        className="w-full pl-8 pr-3 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-xs"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="block text-sm font-medium text-zinc-300">
+                      Estoque Atual <span className="text-brand-pink font-bold">*</span>
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-brand-pink font-semibold cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={editEstoqueInfinito}
+                        onChange={(e) => {
+                          setEditEstoqueInfinito(e.target.checked);
+                          if (e.target.checked) setEditEstoque('');
+                        }}
+                        className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-3.5 w-3.5 cursor-pointer bg-black"
+                      />
+                      <span>Estoque Infinito</span>
+                    </label>
+                  </div>
+                  <input
+                    type="number"
+                    disabled={editEstoqueInfinito}
+                    min="0"
+                    step="1"
+                    placeholder={editEstoqueInfinito ? "Sem limites (Estoque Infinito)" : "Ex: 50"}
+                    value={editEstoqueInfinito ? "" : editEstoque}
+                    onChange={(e) => setEditEstoque(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                    className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-sm disabled:opacity-50 disabled:text-zinc-500"
+                  />
+                </div>
+              </div>
+
+              {/* Progressive price list */}
+              <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800/65 space-y-4">
+                <div className="flex items-center gap-2 border-b border-zinc-850 pb-2.5">
+                  <Layers className="h-4 w-4 text-brand-pink" />
+                  <h4 className="text-xs font-bold tracking-wider uppercase text-zinc-100">
+                    Preços Progressivos (Kits & Atacado)
+                  </h4>
+                </div>
+                <p className="text-[11px] text-zinc-500 leading-snug">
+                  Configure preços diferenciados por quantidade mínima. O sistema aplicará este preço se a quantidade de itens for igual ou superior.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+                  <div className="sm:col-span-5">
+                    <label className="block text-[11px] font-semibold text-zinc-450 mb-1">
+                      Qtd Mínima (A partir de)
+                    </label>
+                    <input
+                      type="number"
+                      min="2"
+                      placeholder="Ex: 10"
+                      value={editNovaQuantidadeMinima}
+                      onChange={(e) => setEditNovaQuantidadeMinima(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                      className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-xs text-zinc-105 placeholder-zinc-700"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-4">
+                    <label className="block text-[11px] font-semibold text-zinc-450 mb-1">
+                      Preço Unitário (R$)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0,00"
+                      value={editNovoPrecoFaixa}
+                      onChange={(e) => setEditNovoPrecoFaixa(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      className="w-full px-3 py-2 bg-black border border-zinc-900 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-xs text-zinc-105 placeholder-zinc-700"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-3">
+                    <button
+                      type="button"
+                      onClick={handleAddEditFaixa}
+                      className="w-full py-2 bg-zinc-800 hover:bg-zinc-700 text-brand-pink hover:text-zinc-100 text-xs font-bold rounded-lg flex items-center justify-center gap-1 transition-colors cursor-pointer border border-zinc-700/50"
+                    >
+                      <Plus className="h-3 w-3" />
+                      <span>Adicionar</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Listing of tiers */}
+                {editFaixasPreco.length > 0 ? (
+                  <div className="mt-3 space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                    {editFaixasPreco.map((faixa, i) => (
+                      <div
+                        key={i}
+                        className="flex items-center justify-between px-3 py-1.5 bg-black border border-zinc-900 rounded-lg text-xs"
+                      >
+                        <div className="flex items-center gap-2 text-zinc-350">
+                          <span className="h-1.5 w-1.5 bg-brand-pink rounded-full" />
+                          <span>A partir de <strong>{faixa.quantidadeMinima}</strong> itens:</span>
+                          <span className="font-mono font-bold text-brand-pink">R$ {faixa.preco.toFixed(2)} /un</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveEditFaixa(i)}
+                          className="p-1 hover:bg-zinc-900 rounded-md text-red-400 hover:text-red-300 transition-colors cursor-pointer"
+                          title="Remover faixa"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-2.5 border border-dashed border-zinc-850 rounded-xl text-zinc-650 text-[11px]">
+                    Nenhum preço progressivo cadastrado para este item.
+                  </div>
+                )}
+              </div>
+
+              {/* Product Photo drag-drop with canvas preview */}
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center justify-between">
+                  <span>Foto do Produto (Arrastar ou selecionar nova)</span>
+                  {isEditCompressing && (
+                    <span className="text-xs text-brand-pink flex items-center gap-1 animate-pulse">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span>Otimizando imagem...</span>
+                    </span>
+                  )}
+                </label>
+                <input
+                  type="file"
+                  ref={editFileInputRef}
+                  onChange={handleEditFileChange}
+                  accept="image/*"
+                  className="hidden"
+                  disabled={isEditSaving || isEditCompressing}
+                />
+
+                {!editPhoto ? (
+                  <button
+                    type="button"
+                    onDragEnter={handleEditDrag}
+                    onDragOver={handleEditDrag}
+                    onDragLeave={handleEditDrag}
+                    onDrop={handleEditDrop}
+                    onClick={() => editFileInputRef.current?.click()}
+                    disabled={isEditSaving || isEditCompressing}
+                    className={`w-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                      editDragActive
+                        ? 'border-brand-pink bg-brand-pink/10'
+                        : 'border-zinc-800 hover:border-brand-pink hover:bg-zinc-950'
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      <Upload className="h-5 w-5 text-brand-pink" />
+                      <p className="font-medium text-zinc-300 text-xs">
+                        Arraste uma nova imagem aqui ou clique para selecionar
+                      </p>
+                    </div>
+                  </button>
+                ) : (
+                  <div className="relative border border-zinc-800 rounded-xl overflow-hidden bg-black p-4 flex items-center justify-center">
+                    <div className="relative h-32 w-32 rounded-lg overflow-hidden border border-zinc-805 bg-zinc-950">
+                      <img
+                        src={editPhoto}
+                        alt="Previa da Edição"
+                        className="h-full w-full object-contain"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditPhoto('')}
+                        disabled={isEditSaving || isEditCompressing}
+                        className="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-650 text-white rounded-full shadow cursor-pointer"
+                        title="Remover imagem"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Submit triggers */}
+              <div className="flex items-center gap-3 pt-4 border-t border-zinc-850 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setEditingProduct(null)}
+                  disabled={isEditSaving || isEditCompressing}
+                  className="flex-1 py-2.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 rounded-xl text-sm font-semibold transition-colors cursor-pointer active:scale-98"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isEditSaving || isEditCompressing}
+                  className="flex-1 py-2.5 bg-brand-pink hover:bg-brand-pink-hover text-black font-bold rounded-xl shadow-md transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-98"
+                >
+                  {isEditSaving ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Sincronizando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Check className="h-4 w-4" />
+                      <span>Salvar Alterações</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </form>
+          </div>
         </div>
       )}
     </div>
