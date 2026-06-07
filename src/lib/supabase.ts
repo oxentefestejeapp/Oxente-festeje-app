@@ -522,9 +522,9 @@ export const dbSupabase = {
 
   async purgeOldDeliveredSales(): Promise<boolean> {
     try {
-      const fifteenDaysAgo = new Date();
-      fifteenDaysAgo.setDate(fifteenDaysAgo.getDate() - 15);
-      const dateString = fifteenDaysAgo.toISOString();
+      const tenDaysAgo = new Date();
+      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+      const dateString = tenDaysAgo.toISOString();
 
       const { error } = await supabase
         .from('oxente_sales')

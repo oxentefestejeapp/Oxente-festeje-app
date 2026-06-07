@@ -489,7 +489,7 @@ export default function App() {
         setSupabaseSyncStatus('synced');
         setSupabaseErrorMsg(null);
 
-        // Executa limpeza automática de pedidos entregues há mais de 15 dias no Supabase
+        // Executa limpeza automática de pedidos entregues há mais de 10 dias no Supabase
         dbSupabase.purgeOldDeliveredSales().catch(err => {
           console.warn('Erro silencioso ao executar autolimpeza de vendas:', err);
         });
@@ -963,8 +963,67 @@ export default function App() {
   };
 
   const handleDeleteSale = async (id: string): Promise<boolean> => {
+    const saleToDelete = sales.find((s) => s.id === id);
+    if (!saleToDelete) return false;
+
     const updated = sales.filter((s) => s.id !== id);
     saveSales(updated);
+
+    // Se não for um orçamento, devolva os itens do pedido ao estoque
+    if (saleToDelete.status !== 'Orçamento') {
+      const itemsToRestore = saleToDelete.itens || [
+        {
+          id: `item-${saleToDelete.produtoId}`,
+          produtoId: saleToDelete.produtoId,
+          produtoNome: saleToDelete.produtoNome,
+          precoUn: saleToDelete.precoUn,
+          quantidade: saleToDelete.quantidade,
+          total: saleToDelete.total
+        }
+      ];
+
+      const productsToSync: Product[] = [];
+      const updatedProducts = products.map((p) => {
+        const restoredItem = itemsToRestore.find((item) => item.produtoId === p.id);
+        if (restoredItem && !p.estoqueInfinito) {
+          const updatedProduct = {
+            ...p,
+            estoque: p.estoque + restoredItem.quantidade
+          };
+          productsToSync.push(updatedProduct);
+          return updatedProduct;
+        }
+        return p;
+      });
+
+      if (productsToSync.length > 0) {
+        // Registrar atualizações pendentes para proteger o estado local
+        productsToSync.forEach((p) => {
+          pendingStockUpdates.current[p.id] = p.estoque;
+        });
+
+        saveProducts(updatedProducts);
+
+        // Atualizar estoque no Supabase de forma assíncrona/otimizada
+        try {
+          const results = await Promise.all(
+            productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito))
+          );
+          if (results.some(r => !r)) {
+            setSupabaseSyncStatus('error');
+            setSupabaseErrorMsg(`Erro ao sincronizar devolução de estoque no Supabase: ${getFormattedSupabaseError()}`);
+          }
+        } catch (e: any) {
+          console.warn('Erro ao restaurar estoque no Supabase:', e);
+          setSupabaseSyncStatus('error');
+          setSupabaseErrorMsg(`Erro ao restaurar estoque no Supabase: ${e.message || String(e)}`);
+        } finally {
+          productsToSync.forEach((p) => {
+            delete pendingStockUpdates.current[p.id];
+          });
+        }
+      }
+    }
 
     try {
       const success = await dbSupabase.deleteSale(id);

@@ -65,6 +65,21 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
   const [searchTerm, setSearchTerm] = useState('');
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [editedStocks, setEditedStocks] = useState<Record<string, number>>({});
+  const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
+
+  const scrollToProduct = (id: string) => {
+    setSearchTerm('');
+    setTimeout(() => {
+      const element = document.getElementById(`product-card-${id}`);
+      if (element) {
+        element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setHighlightedProductId(id);
+        setTimeout(() => {
+          setHighlightedProductId(null);
+        }, 3000);
+      }
+    }, 100);
+  };
 
   // Edit Modal State
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -269,7 +284,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
 
       if (p.estoque === 0) {
         outOfStockCount++;
-      } else if (p.estoque <= 5) {
+      } else if (p.estoque < 10) {
         lowStockCount++;
       }
     });
@@ -347,26 +362,57 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
           </div>
 
           {/* Critical low alert warnings */}
-          <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs">
-            <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Alertas Críticos de Estoque</span>
-            <div className="flex items-center gap-1.5 mt-2">
-              {stockMetrics.outOfStockCount > 0 ? (
-                <span className="text-xs font-bold font-mono px-2 py-0.5 bg-red-950 text-red-400 border border-red-900/40 rounded flex items-center gap-1">
-                  {stockMetrics.outOfStockCount} Esgotado
-                </span>
-              ) : null}
-              {stockMetrics.lowStockCount > 0 ? (
-                <span className="text-xs font-bold font-mono px-2 py-0.5 bg-amber-950 text-amber-400 border border-amber-900/40 rounded flex items-center gap-1">
-                  {stockMetrics.lowStockCount} Crítico
-                </span>
-              ) : null}
-              {stockMetrics.outOfStockCount === 0 && stockMetrics.lowStockCount === 0 && (
-                <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
-                  ✔️ Todos niveis ótimos
-                </span>
+          <div className="bg-zinc-900 border border-zinc-850 p-4.5 rounded-2xl shadow-xs flex flex-col justify-between">
+            <div>
+              <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block">Alertas Críticos de Estoque</span>
+              <div className="flex items-center gap-1.5 mt-2 flex-wrap">
+                {stockMetrics.outOfStockCount > 0 ? (
+                  <span className="text-xs font-bold font-mono px-2 py-0.5 bg-red-950 text-red-400 border border-red-900/40 rounded flex items-center gap-1">
+                    {stockMetrics.outOfStockCount} Esgotado
+                  </span>
+                ) : null}
+                {stockMetrics.lowStockCount > 0 ? (
+                  <span className="text-xs font-bold font-mono px-2 py-0.5 bg-amber-950 text-amber-400 border border-amber-900/40 rounded flex items-center gap-1">
+                    {stockMetrics.lowStockCount} Crítico
+                  </span>
+                ) : null}
+                {stockMetrics.outOfStockCount === 0 && stockMetrics.lowStockCount === 0 && (
+                  <span className="text-xs font-semibold text-emerald-400 flex items-center gap-1">
+                    ✔️ Todos níveis ótimos
+                  </span>
+                )}
+              </div>
+
+              {/* Listagem de link interativo para o estoque baixo */}
+              {(stockMetrics.outOfStockCount > 0 || stockMetrics.lowStockCount > 0) && (
+                <div className="mt-3.5 space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
+                  <p className="text-[9px] text-zinc-500 uppercase tracking-widest font-extrabold mb-1">Localizar no Estoque:</p>
+                  {products
+                    .filter(p => !p.estoqueInfinito && p.estoque < 10)
+                    .map(p => {
+                      const isZero = p.estoque === 0;
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => scrollToProduct(p.id)}
+                          className={`w-full text-left text-[11px] font-medium leading-tight px-2 py-1.5 rounded-lg transition-all cursor-pointer flex items-center justify-between border ${
+                            isZero 
+                              ? 'bg-red-950/15 hover:bg-red-950/30 text-red-400 border-red-900/20 hover:border-red-900/50' 
+                              : 'bg-amber-950/15 hover:bg-amber-950/30 text-amber-400 border-amber-900/20 hover:border-amber-900/50'
+                          }`}
+                          title={`Clique para ir até ${p.nome}`}
+                        >
+                          <span className="truncate max-w-[130px] font-semibold">{p.nome}</span>
+                          <span className="font-mono text-[10px] font-bold shrink-0 bg-black/40 px-1.5 py-0.5 rounded border border-zinc-850">
+                            {p.estoque} un.
+                          </span>
+                        </button>
+                      );
+                    })}
+                </div>
               )}
             </div>
-            <p className="text-[10px] text-zinc-500 mt-1.5">Produtos com estoque menor que 5!</p>
+            <p className="text-[10px] text-zinc-500 mt-2 pt-2 border-t border-zinc-850/60 font-medium">Produtos com estoque menor que 10!</p>
           </div>
 
         </div>
@@ -409,7 +455,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
           {filteredProducts.map((p) => {
             const isDeleting = productToDelete === p.id;
             const isOutOfStock = !p.estoqueInfinito && p.estoque === 0;
-            const isLowStock = !p.estoqueInfinito && p.estoque > 0 && p.estoque <= 5;
+            const isLowStock = !p.estoqueInfinito && p.estoque > 0 && p.estoque < 10;
             const hasDraft = editedStocks[p.id] !== undefined;
             const draftVal = hasDraft ? editedStocks[p.id] : p.estoque;
             const isChanged = hasDraft && editedStocks[p.id] !== p.estoque;
@@ -417,12 +463,15 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
             return (
               <div 
                 key={p.id} 
-                className={`bg-zinc-900 rounded-xl border transition-all overflow-hidden shadow-sm hover:shadow-lg ${
-                  isOutOfStock 
-                    ? 'border-zinc-800/80 bg-zinc-950/40' 
-                    : isDeleting 
-                      ? 'border-red-900 ring-2 ring-red-950/50'
-                      : 'border-zinc-850'
+                id={`product-card-${p.id}`}
+                className={`bg-zinc-900 rounded-xl border transition-all duration-500 overflow-hidden shadow-sm hover:shadow-lg ${
+                  highlightedProductId === p.id
+                    ? 'ring-2 ring-brand-pink border-brand-pink shadow-[0_0_15px_rgba(219,39,119,0.35)] scale-[1.02] bg-zinc-850'
+                    : isOutOfStock 
+                      ? 'border-zinc-800/80 bg-zinc-950/40' 
+                      : isDeleting 
+                        ? 'border-red-900 ring-2 ring-red-950/50'
+                        : 'border-zinc-850'
                 }`}
               >
                 {/* Product Thumbnail Banner */}
@@ -575,7 +624,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                             <span className="text-sm font-bold text-zinc-100 font-mono">
                               {p.estoque} {p.estoque === 1 ? 'unidade' : 'unidades'}
                             </span>
-                            <span className={`h-2.5 w-2.5 rounded-full ${p.estoque === 0 ? 'bg-red-500' : p.estoque <= 5 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                            <span className={`h-2.5 w-2.5 rounded-full ${p.estoque === 0 ? 'bg-red-500' : p.estoque < 10 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
                           </div>
                         )}
                       </div>
