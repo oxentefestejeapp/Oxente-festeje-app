@@ -85,7 +85,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
       setEditStatusProducao(editingSale.statusProducao || 'Agendado');
 
       if (editingSale.itens && editingSale.itens.length > 0) {
-        setEditItens([...editingSale.itens]);
+        setEditItens(editingSale.itens.map(item => ({ ...item })));
       } else {
         setEditItens([{
           id: `item-${editingSale.produtoId || '1'}-${Date.now()}`,
@@ -1131,14 +1131,13 @@ ${produtosTexto}`;
                                   const selectedId = e.target.value;
                                   const dbProd = products.find(p => p.id === selectedId);
                                   if (dbProd) {
-                                    const updated = [...editItens];
-                                    updated[idx] = {
-                                      ...updated[idx],
+                                    const updated = editItens.map((item, i) => i === idx ? {
+                                      ...item,
                                       produtoId: dbProd.id,
                                       produtoNome: dbProd.nome,
                                       precoUn: dbProd.preco,
-                                      total: dbProd.preco * updated[idx].quantidade
-                                    };
+                                      total: dbProd.preco * item.quantidade
+                                    } : item);
                                     setEditItens(updated);
                                   }
                                 }}
@@ -1159,10 +1158,12 @@ ${produtosTexto}`;
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const updated = [...editItens];
-                                  if (updated[idx].quantidade > 1) {
-                                    updated[idx].quantidade -= 1;
-                                    updated[idx].total = updated[idx].precoUn * updated[idx].quantidade;
+                                  if (editItens[idx].quantidade > 1) {
+                                    const updated = editItens.map((item, i) => i === idx ? {
+                                      ...item,
+                                      quantidade: item.quantidade - 1,
+                                      total: item.precoUn * (item.quantidade - 1)
+                                    } : item);
                                     setEditItens(updated);
                                   }
                                 }}
@@ -1176,9 +1177,11 @@ ${produtosTexto}`;
                                 value={item.quantidade}
                                 onChange={(e) => {
                                   const val = parseInt(e.target.value) || 1;
-                                  const updated = [...editItens];
-                                  updated[idx].quantidade = val;
-                                  updated[idx].total = updated[idx].precoUn * val;
+                                  const updated = editItens.map((item, i) => i === idx ? {
+                                    ...item,
+                                    quantidade: val,
+                                    total: item.precoUn * val
+                                  } : item);
                                   setEditItens(updated);
                                 }}
                                 className="w-9 text-center bg-transparent text-xs font-semibold text-zinc-150 h-full border-none focus:outline-none font-mono"
@@ -1186,9 +1189,11 @@ ${produtosTexto}`;
                               <button
                                 type="button"
                                 onClick={() => {
-                                  const updated = [...editItens];
-                                  updated[idx].quantidade += 1;
-                                  updated[idx].total = updated[idx].precoUn * updated[idx].quantidade;
+                                  const updated = editItens.map((item, i) => i === idx ? {
+                                    ...item,
+                                    quantidade: item.quantidade + 1,
+                                    total: item.precoUn * (item.quantidade + 1)
+                                  } : item);
                                   setEditItens(updated);
                                 }}
                                 className="px-2 h-full hover:bg-zinc-800 border-l border-zinc-800 text-zinc-400 font-bold hover:text-zinc-250 select-none cursor-pointer"
@@ -1206,9 +1211,11 @@ ${produtosTexto}`;
                                 value={item.precoUn}
                                 onChange={(e) => {
                                   const pVal = parseFloat(e.target.value) || 0;
-                                  const updated = [...editItens];
-                                  updated[idx].precoUn = pVal;
-                                  updated[idx].total = pVal * updated[idx].quantidade;
+                                  const updated = editItens.map((item, i) => i === idx ? {
+                                    ...item,
+                                    precoUn: pVal,
+                                    total: pVal * item.quantidade
+                                  } : item);
                                   setEditItens(updated);
                                 }}
                                 className="w-full bg-black border border-zinc-800 rounded-lg pl-5 pr-1 py-1 text-right text-xs font-semibold text-zinc-200 focus:outline-none focus:border-brand-pink font-mono"
@@ -1260,9 +1267,11 @@ ${produtosTexto}`;
                           if (dbProd) {
                             const existingIdx = editItens.findIndex(item => item.produtoId === dbProd.id);
                             if (existingIdx > -1) {
-                              const updated = [...editItens];
-                              updated[existingIdx].quantidade += 1;
-                              updated[existingIdx].total = updated[existingIdx].precoUn * updated[existingIdx].quantidade;
+                              const updated = editItens.map((item, i) => i === existingIdx ? {
+                                ...item,
+                                quantidade: item.quantidade + 1,
+                                total: item.precoUn * (item.quantidade + 1)
+                              } : item);
                               setEditItens(updated);
                             } else {
                               setEditItens([

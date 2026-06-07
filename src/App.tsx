@@ -70,6 +70,17 @@ export default function App() {
   })());
   const [sales, setSales] = useState<Sale[]>([]);
 
+  const productsRef = useRef<Product[]>([]);
+  const salesRef = useRef<Sale[]>([]);
+
+  useEffect(() => {
+    productsRef.current = products;
+  }, [products]);
+
+  useEffect(() => {
+    salesRef.current = sales;
+  }, [sales]);
+
   const addPendingProduct = (product: Product) => {
     const updated = { ...pendingProducts.current, [product.id]: product };
     pendingProducts.current = updated;
@@ -789,8 +800,9 @@ export default function App() {
     // Record in local pending stock map
     pendingStockUpdates.current[id] = newStock;
 
+    const currentProducts = productsRef.current;
     let itemToSync: Product | null = null;
-    const updated = products.map((p) => {
+    const updated = currentProducts.map((p) => {
       if (p.id === id) {
         itemToSync = { 
           ...p, 
@@ -809,8 +821,10 @@ export default function App() {
     } catch (e) {
       console.warn('Erro ao sincronizar estoque em segundo plano:', e);
     } finally {
-      // Clear pending state after sync completes
-      delete pendingStockUpdates.current[id];
+      // Clear pending state after sync completes with safe buffer delay
+      setTimeout(() => {
+        delete pendingStockUpdates.current[id];
+      }, 3000);
     }
   };
 
@@ -818,7 +832,8 @@ export default function App() {
     // Also remove from pending local products to prevent reviving this product
     removePendingProduct(id);
 
-    const updated = products.filter((p) => p.id !== id);
+    const currentProducts = productsRef.current;
+    const updated = currentProducts.filter((p) => p.id !== id);
     saveProducts(updated);
 
     // Background delete in Supabase
@@ -836,7 +851,8 @@ export default function App() {
   };
 
   const handleUpdateProduct = async (updatedProduct: Product): Promise<boolean> => {
-    const updated = products.map((p) => p.id === updatedProduct.id ? updatedProduct : p);
+    const currentProducts = productsRef.current;
+    const updated = currentProducts.map((p) => p.id === updatedProduct.id ? updatedProduct : p);
     saveProducts(updated);
 
     try {
@@ -856,7 +872,10 @@ export default function App() {
   };
 
   const handleRecordSale = async (newSale: Sale) => {
-    const updated = [...sales, newSale];
+    const currentSales = salesRef.current;
+    const currentProducts = productsRef.current;
+
+    const updated = [...currentSales, newSale];
     saveSales(updated);
 
     // If it is an estimate, do not deduct from product inventory stock
@@ -888,7 +907,7 @@ export default function App() {
     ];
 
     const productsToSync: Product[] = [];
-    const updatedProducts = products.map((p) => {
+    const updatedProducts = currentProducts.map((p) => {
       const soldItem = itemsToDecrease.find((item) => item.produtoId === p.id);
       if (soldItem && !p.estoqueInfinito) {
         const updatedProduct = {
@@ -923,10 +942,12 @@ export default function App() {
         setSupabaseSyncStatus('error');
         setSupabaseErrorMsg(`Erro ao sincronizar atualização de estoque no Supabase: ${e.message || String(e)}`);
       } finally {
-        // Clear pending states after sync completes
-        productsToSync.forEach((p) => {
-          delete pendingStockUpdates.current[p.id];
-        });
+        // Clear pending states after sync completes, giving a safe buffer for async realtime echoes
+        setTimeout(() => {
+          productsToSync.forEach((p) => {
+            delete pendingStockUpdates.current[p.id];
+          });
+        }, 3000);
       }
     }
 
@@ -945,10 +966,110 @@ export default function App() {
   };
 
   const handleUpdateSale = async (updatedSale: Sale) => {
-    const updated = sales.map((s) => (s.id === updatedSale.id ? updatedSale : s));
+    const currentSales = salesRef.current;
+    const currentProducts = productsRef.current;
+
+    // 1. Encontrar o pedido original antes da alteração usando o valor mais atualizado do ref
+    const oldSale = currentSales.find((s) => s.id === updatedSale.id);
+
+    // 2. Atualizar a lista de vendas localmente
+    const updated = currentSales.map((s) => (s.id === updatedSale.id ? updatedSale : s));
     saveSales(updated);
 
-    // Background save to Supabase
+    // 3. Se temos o pedido original, calcular as diferenças de estoque
+    if (oldSale) {
+      // Função auxiliar para consolidar os itens de uma venda
+      const getSaleItems = (sale: Sale): { produtoId: string; quantidade: number }[] => {
+        if (sale.itens && sale.itens.length > 0) {
+          return sale.itens.map(item => ({
+            produtoId: item.produtoId,
+            quantidade: item.quantidade || 0
+          }));
+        }
+        if (sale.produtoId) {
+          return [{
+            produtoId: sale.produtoId,
+            quantidade: sale.quantidade || 0
+          }];
+        }
+        return [];
+      };
+
+      const oldItems = getSaleItems(oldSale);
+      const newItems = getSaleItems(updatedSale);
+
+      // Mapear quantidades de produtos no pedido antigo e novo
+      // Nota: o estoque só é afetado se o status NÃO for 'Orçamento'
+      const oldQtyMap: Record<string, number> = {};
+      if (oldSale.status !== 'Orçamento') {
+        oldItems.forEach(item => {
+          oldQtyMap[item.produtoId] = (oldQtyMap[item.produtoId] || 0) + item.quantidade;
+        });
+      }
+
+      const newQtyMap: Record<string, number> = {};
+      if (updatedSale.status !== 'Orçamento') {
+        newItems.forEach(item => {
+          newQtyMap[item.produtoId] = (newQtyMap[item.produtoId] || 0) + item.quantidade;
+        });
+      }
+
+      // Reunir todos os IDs de produtos afetados
+      const affectedProductIds = new Set([
+        ...Object.keys(oldQtyMap),
+        ...Object.keys(newQtyMap)
+      ]);
+
+      const productsToSync: Product[] = [];
+      const updatedProducts = currentProducts.map((p) => {
+        if (affectedProductIds.has(p.id) && !p.estoqueInfinito) {
+          const oldQty = oldQtyMap[p.id] || 0;
+          const newQty = newQtyMap[p.id] || 0;
+          const diff = newQty - oldQty; // se diff > 0, vendeu mais (diminuir estoque); se diff < 0, retirou itens (devolver estoque)
+          
+          const updatedProduct = {
+            ...p,
+            estoque: Math.max(0, p.estoque - diff)
+          };
+          productsToSync.push(updatedProduct);
+          return updatedProduct;
+        }
+        return p;
+      });
+
+      if (productsToSync.length > 0) {
+        // Registrar atualizações pendentes para proteger o estado local
+        productsToSync.forEach((p) => {
+          pendingStockUpdates.current[p.id] = p.estoque;
+        });
+
+        saveProducts(updatedProducts);
+
+        // Atualizar estoque no Supabase de forma assíncrona/otimizada
+        try {
+          const results = await Promise.all(
+            productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito))
+          );
+          if (results.some(r => !r)) {
+            setSupabaseSyncStatus('error');
+            setSupabaseErrorMsg(`Erro ao sincronizar atualização de estoque pós alteração de pedido no Supabase: ${getFormattedSupabaseError()}`);
+          }
+        } catch (e: any) {
+          console.warn('Erro ao restaurar/atualizar estoque no Supabase:', e);
+          setSupabaseSyncStatus('error');
+          setSupabaseErrorMsg(`Erro ao restaurar/atualizar estoque no Supabase: ${e.message || String(e)}`);
+        } finally {
+          // Mantém as atualizações de estoque pendentes protegidas de ecos de conexões por 3 segundos
+          setTimeout(() => {
+            productsToSync.forEach((p) => {
+              delete pendingStockUpdates.current[p.id];
+            });
+          }, 3000);
+        }
+      }
+    }
+
+    // Salvamento em plano de fundo no Supabase
     try {
       const success = await dbSupabase.saveSale(updatedSale);
       if (!success) {
@@ -963,10 +1084,13 @@ export default function App() {
   };
 
   const handleDeleteSale = async (id: string): Promise<boolean> => {
-    const saleToDelete = sales.find((s) => s.id === id);
+    const currentSales = salesRef.current;
+    const currentProducts = productsRef.current;
+
+    const saleToDelete = currentSales.find((s) => s.id === id);
     if (!saleToDelete) return false;
 
-    const updated = sales.filter((s) => s.id !== id);
+    const updated = currentSales.filter((s) => s.id !== id);
     saveSales(updated);
 
     // Se não for um orçamento, devolva os itens do pedido ao estoque
@@ -983,7 +1107,7 @@ export default function App() {
       ];
 
       const productsToSync: Product[] = [];
-      const updatedProducts = products.map((p) => {
+      const updatedProducts = currentProducts.map((p) => {
         const restoredItem = itemsToRestore.find((item) => item.produtoId === p.id);
         if (restoredItem && !p.estoqueInfinito) {
           const updatedProduct = {
@@ -1018,9 +1142,12 @@ export default function App() {
           setSupabaseSyncStatus('error');
           setSupabaseErrorMsg(`Erro ao restaurar estoque no Supabase: ${e.message || String(e)}`);
         } finally {
-          productsToSync.forEach((p) => {
-            delete pendingStockUpdates.current[p.id];
-          });
+          // Mantém pendentes protegidos de sincronizações concorrentes por 3 segundos
+          setTimeout(() => {
+            productsToSync.forEach((p) => {
+              delete pendingStockUpdates.current[p.id];
+            });
+          }, 3000);
         }
       }
     }
