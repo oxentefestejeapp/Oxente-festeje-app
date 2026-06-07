@@ -1514,7 +1514,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                               </div>
                             ) : sale.valorFaltante && sale.valorFaltante > 0 ? (
                               <div className="text-[10px] text-red-400 font-semibold font-mono" title={`Faltando: R$ ${sale.valorFaltante.toFixed(2)}`}>
-                                Lack: R$ {sale.valorFaltante.toFixed(2)}
+                                Falta: R$ {sale.valorFaltante.toFixed(2)}
                               </div>
                             ) : (
                               <div className="text-[9px] text-emerald-500 opacity-85 font-medium" title="Pago integralmente">
