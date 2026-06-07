@@ -608,6 +608,20 @@ export default function App() {
           const updated = current.map(s => s.id === sale.id ? sale : s);
           updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
           localStorage.setItem('oxente_sales', JSON.stringify(updated));
+
+          // Notificar sobre pedidos editados em tempo real no celular se veio de outro usuário
+          const isMyEdit = sale.editadoPorEmail === currentUserEmailRef.current;
+          if (!isMyEdit) {
+            dispatchOrderEditedNotification(
+              sale.cliente,
+              sale.total,
+              sale.numeroPedido,
+              () => {
+                setActiveTab('vendas');
+              }
+            );
+          }
+
           return updated;
         });
       } else if (eventType === 'DELETE') {
