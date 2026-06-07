@@ -34,6 +34,21 @@
   --color-rose-700: #825908;
   --color-rose-800: #5c3d21;
   --color-rose-900: #4a2e16;
+
+  --animate-blink-red: blink-red 0.4s ease-in-out infinite;
+
+  @keyframes blink-red {
+    0%, 100% {
+      border-color: #ef4444;
+      background-color: rgba(239, 68, 68, 0.25);
+      box-shadow: 0 0 15px rgba(239, 68, 68, 0.5);
+    }
+    50% {
+      border-color: #7f1d1d;
+      background-color: rgba(24, 9, 9, 0.8);
+      box-shadow: 0 0 2px rgba(239, 68, 68, 0.05);
+    }
+  }
 }
 
 /* Custom styles for receipt printing */

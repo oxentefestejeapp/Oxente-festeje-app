@@ -466,7 +466,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                 id={`product-card-${p.id}`}
                 className={`bg-zinc-900 rounded-xl border transition-all duration-500 overflow-hidden shadow-sm hover:shadow-lg ${
                   highlightedProductId === p.id
-                    ? 'ring-2 ring-brand-pink border-brand-pink shadow-[0_0_15px_rgba(219,39,119,0.35)] scale-[1.02] bg-zinc-850'
+                    ? 'animate-blink-red scale-[1.02] border-red-500'
                     : isOutOfStock 
                       ? 'border-zinc-800/80 bg-zinc-950/40' 
                       : isDeleting 
