@@ -44,7 +44,7 @@ import { UserApprovals } from './components/UserApprovals';
 import { SalesAudit } from './components/SalesAudit';
 import { RemindersManager } from './components/RemindersManager';
 import { ClosedOrdersManager } from './components/ClosedOrdersManager';
-import { dispatchNewOrderNotification, dispatchOrderEditedNotification, sendBackgroundPushNotification, initOneSignal } from './lib/notifications';
+import { dispatchNewOrderNotification, dispatchOrderEditedNotification } from './lib/notifications';
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
 import { ChangePassword } from './components/ChangePassword';
 import InstallAppTab from './components/InstallAppTab';
@@ -93,28 +93,6 @@ export default function App() {
   useEffect(() => {
     currentUserEmailRef.current = firebaseUser?.email || '';
   }, [firebaseUser]);
-
-  useEffect(() => {
-    initOneSignal();
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('action') === 'subscribe-push') {
-      console.log('Detectado pedido de inscrição de push nativo via URL param. Solicitando autorização em 2.5 segundos...');
-      setTimeout(() => {
-        import('./lib/notifications').then(({ optInOneSignal }) => {
-          optInOneSignal();
-        });
-      }, 2500);
-
-      // Clean up the URL to keep it pristine and prevent prompt loops on manual F5
-      try {
-        const cleanUrl = window.location.pathname;
-        window.history.replaceState({}, document.title, cleanUrl);
-      } catch (err) {
-        console.warn('Erro ao limpar query parameters:', err);
-      }
-    }
-  }, []);
 
   const addPendingProduct = (product: Product) => {
     const updated = { ...pendingProducts.current, [product.id]: product };
@@ -1009,9 +987,6 @@ export default function App() {
         if (!success) {
           setSupabaseSyncStatus('error');
           setSupabaseErrorMsg(`Erro ao sincronizar orçamento no Supabase: ${getFormattedSupabaseError()}`);
-        } else {
-          // Enviar push notification nativo OneSignal
-          sendBackgroundPushNotification(newSale.cliente, newSale.total, 'new', newSale.numeroPedido);
         }
       } catch (e: any) {
         console.warn('Erro ao sincronizar orçamento no Supabase:', e);
@@ -1084,9 +1059,6 @@ export default function App() {
       if (!success) {
         setSupabaseSyncStatus('error');
         setSupabaseErrorMsg(`Erro ao sincronizar venda/pedido no Supabase: ${getFormattedSupabaseError()}`);
-      } else {
-        // Enviar push notification nativo OneSignal
-        sendBackgroundPushNotification(newSale.cliente, newSale.total, 'new', newSale.numeroPedido);
       }
     } catch (e: any) {
       console.warn('Erro ao sincronizar venda/pedido no Supabase:', e);
@@ -1205,9 +1177,6 @@ export default function App() {
       if (!success) {
         setSupabaseSyncStatus('error');
         setSupabaseErrorMsg(`Erro ao sincronizar alteração de venda no Supabase: ${getFormattedSupabaseError()}`);
-      } else {
-        // Enviar push notification nativo OneSignal
-        sendBackgroundPushNotification(updatedSale.cliente, updatedSale.total, 'edit', updatedSale.numeroPedido);
       }
     } catch (e: any) {
       console.warn('Erro ao sincronizar alteração de venda no Supabase:', e);
