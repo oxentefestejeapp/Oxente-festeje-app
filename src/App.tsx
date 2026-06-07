@@ -605,13 +605,17 @@ export default function App() {
       } else if (eventType === 'UPDATE') {
         const sale = mapDbToSale(newRow);
         setSales((current) => {
+          const localSale = current.find(s => s.id === sale.id);
+          // Only trigger if the manual edit timestamp (editadoEm) actually changed
+          const isManualEditSaved = localSale && sale.editadoEm && sale.editadoEm !== localSale.editadoEm;
+
           const updated = current.map(s => s.id === sale.id ? sale : s);
           updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
           localStorage.setItem('oxente_sales', JSON.stringify(updated));
 
-          // Notificar sobre pedidos editados em tempo real no celular se veio de outro usuário
+          // Notificar sobre pedidos editados em tempo real no celular se veio de outro usuário e foi um salvamento de edição manual
           const isMyEdit = sale.editadoPorEmail === currentUserEmailRef.current;
-          if (!isMyEdit) {
+          if (!isMyEdit && isManualEditSaved) {
             dispatchOrderEditedNotification(
               sale.cliente,
               sale.total,
@@ -768,12 +772,12 @@ export default function App() {
 
               // 2. Identify and notify about edited existing orders
               const currentSalesMap = new Map(curr.map(s => [s.id, s]));
-              const editedSalesOnServer = dbSaless.filter(s => {
-                const localSale = currentSalesMap.get(s.id);
+              const editedSalesOnServer = dbSaless.filter((s: any) => {
+                const localSale = currentSalesMap.get(s.id) as any;
                 if (!localSale) return false;
-                // Check if anything has structurally changed
-                const hasChanged = JSON.stringify(localSale) !== JSON.stringify(s);
-                return hasChanged;
+                // Only notify if the manual edit timestamp (editadoEm) has actually changed
+                const isManualEditSaved = s.editadoEm && s.editadoEm !== localSale.editadoEm;
+                return isManualEditSaved;
               });
 
               if (editedSalesOnServer.length > 0) {
