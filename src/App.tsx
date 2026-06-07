@@ -23,7 +23,8 @@ import {
   ArrowRight,
   Palette,
   MessageSquare,
-  Key
+  Key,
+  Smartphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, onSnapshot, updateDoc, serverTimestamp, getDoc, setDoc } from 'firebase/firestore';
@@ -46,6 +47,7 @@ import { ClosedOrdersManager } from './components/ClosedOrdersManager';
 import { dispatchNewOrderNotification } from './lib/notifications';
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
 import { ChangePassword } from './components/ChangePassword';
+import InstallAppTab from './components/InstallAppTab';
 
 import { Product, Sale, StoreInfo } from './types';
 import { defaultProducts, defaultSales, defaultStoreInfo } from './defaultData';
@@ -100,9 +102,9 @@ export default function App() {
     localStorage.setItem('oxente_pending_products', JSON.stringify(updated));
   };
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(defaultStoreInfo);
-  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web'>(() => {
+  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web' | 'instalar_app'>(() => {
     const saved = localStorage.getItem('oxente_active_tab');
-    const allowedTabs = ['vendas', 'a_receber', 'entregas', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'lembretes', 'pedidos_fechados', 'whatsapp_web'];
+    const allowedTabs = ['vendas', 'a_receber', 'entregas', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'lembretes', 'pedidos_fechados', 'whatsapp_web', 'instalar_app'];
     return (allowedTabs.includes(saved || '') ? saved : 'vendas') as any;
   });
   const [preselectedSaleId, setPreselectedSaleId] = useState<string | null>(null);
@@ -1339,7 +1341,7 @@ export default function App() {
         <div className={`no-print bg-zinc-900 rounded-2xl border border-zinc-800 mb-8 shadow-lg ${
           isAdmin 
             ? 'p-4 sm:p-5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3 md:gap-4 w-full' 
-            : 'p-3 grid grid-cols-2 sm:grid-cols-7 gap-3 w-full'
+            : 'p-3 grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3 w-full'
         }`}>
           
           <button
@@ -1537,6 +1539,25 @@ export default function App() {
             </button>
           )}
  
+          {/* Install Mobile App Tab (Hidden for Admins) */}
+          {!isAdmin && (
+            <button
+              onClick={() => changeTab('instalar_app')}
+              className={getTabClass('instalar_app')}
+            >
+              <motion.div
+                animate={activeTab === 'instalar_app' ? { scale: [1, 1.3, 1], rotate: [0, 8, -8, 0] } : { scale: 1, rotate: 0 }}
+                whileHover={{ scale: 1.25 }}
+                whileTap={{ scale: 0.9 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Smartphone className="h-4 w-4 text-brand-pink" />
+              </motion.div>
+              <span className="hidden sm:inline">Instalar no Celular</span>
+              <span className="sm:hidden">Instalar</span>
+            </button>
+          )}
+
           {/* User Change Password Tab */}
           <button
             onClick={() => changeTab('alterar_senha')}
@@ -1689,6 +1710,10 @@ export default function App() {
 
             {activeTab === 'auditoria' && isAdmin && (
               <SalesAudit sales={sales} storeInfo={storeInfo} onUpdateSale={handleUpdateSale} />
+            )}
+
+            {activeTab === 'instalar_app' && !isAdmin && (
+              <InstallAppTab />
             )}
 
             {activeTab === 'alterar_senha' && (
