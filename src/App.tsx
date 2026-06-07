@@ -727,6 +727,27 @@ export default function App() {
 
         if (dbSaless && dbSaless.length > 0) {
           setSales((curr) => {
+            // Find newly added sales that are not in our current state (curr)
+            const currentIds = new Set(curr.map(s => s.id));
+            const newSalesOnServer = dbSaless.filter(s => !currentIds.has(s.id));
+
+            // To prevent a flood of notifications on first load, only alert if we already had a local list
+            if (curr.length > 0 && newSalesOnServer.length > 0) {
+              newSalesOnServer.forEach(sale => {
+                const isMySale = sale.criadoPorEmail === currentUserEmailRef.current;
+                if (!isMySale) {
+                  dispatchNewOrderNotification(
+                    sale.cliente,
+                    sale.total,
+                    sale.numeroPedido,
+                    () => {
+                      setActiveTab('vendas');
+                    }
+                  );
+                }
+              });
+            }
+
             const hasChanged = JSON.stringify(curr) !== JSON.stringify(dbSaless);
             if (hasChanged) {
               localStorage.setItem('oxente_sales', JSON.stringify(dbSaless));
@@ -751,8 +772,8 @@ export default function App() {
       }
     };
 
-    // Poll every 30 seconds when the tab is visible
-    intervalId = setInterval(pollCloudUpdates, 30000);
+    // Poll every 15 seconds when the tab is visible
+    intervalId = setInterval(pollCloudUpdates, 15000);
 
     // Refresh instantly whenever tab is focused/visible again
     const handleVisibilityChange = () => {
