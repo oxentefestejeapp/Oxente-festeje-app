@@ -43,6 +43,7 @@ import { UserApprovals } from './components/UserApprovals';
 import { SalesAudit } from './components/SalesAudit';
 import { RemindersManager } from './components/RemindersManager';
 import { ClosedOrdersManager } from './components/ClosedOrdersManager';
+import { dispatchNewOrderNotification } from './lib/notifications';
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
 import { ChangePassword } from './components/ChangePassword';
 
@@ -72,6 +73,7 @@ export default function App() {
 
   const productsRef = useRef<Product[]>([]);
   const salesRef = useRef<Sale[]>([]);
+  const currentUserEmailRef = useRef<string>('');
 
   useEffect(() => {
     productsRef.current = products;
@@ -80,6 +82,10 @@ export default function App() {
   useEffect(() => {
     salesRef.current = sales;
   }, [sales]);
+
+  useEffect(() => {
+    currentUserEmailRef.current = firebaseUser?.email || '';
+  }, [firebaseUser]);
 
   const addPendingProduct = (product: Product) => {
     const updated = { ...pendingProducts.current, [product.id]: product };
@@ -578,6 +584,20 @@ export default function App() {
           const updated = [sale, ...current];
           updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
           localStorage.setItem('oxente_sales', JSON.stringify(updated));
+
+          // Notificar sobre novos pedidos em tempo real no celular se veio de outro usuário
+          const isMySale = sale.criadoPorEmail === currentUserEmailRef.current;
+          if (!isMySale) {
+            dispatchNewOrderNotification(
+              sale.cliente,
+              sale.total,
+              sale.numeroPedido,
+              () => {
+                setActiveTab('vendas');
+              }
+            );
+          }
+
           return updated;
         });
       } else if (eventType === 'UPDATE') {

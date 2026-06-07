@@ -30,7 +30,11 @@ import {
   Cloud,
   Terminal,
   Copy,
-  CheckCircle
+  CheckCircle,
+  Bell,
+  Volume2,
+  VolumeX,
+  Megaphone
 } from 'lucide-react';
 import { Product, Sale, StoreInfo } from '../types';
 import { 
@@ -45,6 +49,15 @@ import {
 } from '../lib/googleDrive';
 import { User } from 'firebase/auth';
 import { getSupabaseConfig, getSupabaseMigrationSQL } from '../lib/supabase';
+import { 
+  getNotificationPermissionStatus,
+  requestNotificationPermission,
+  isNotificationsEnabled,
+  setNotificationsEnabled,
+  isTtsEnabled,
+  setTtsEnabled,
+  dispatchNewOrderNotification
+} from '../lib/notifications';
 
 interface SettingsManagerProps {
   products: Product[];
@@ -77,6 +90,54 @@ export function SettingsManager({
   const [installPrompt, setInstallPrompt] = useState<any>(null);
   const [isPWAInstalled, setIsPWAInstalled] = useState(false);
   const [showPwaInstructions, setShowPwaInstructions] = useState(false);
+
+  // States and effects for Push Notifications and TTS Alerts on Mobile / Desktop
+  const [isNotificationsSupported, setIsNotificationsSupported] = useState(false);
+  const [permissionStatus, setPermissionStatus] = useState<NotificationPermission>('default');
+  const [notificationsPref, setNotificationsPref] = useState(true);
+  const [ttsPref, setTtsPref] = useState(true);
+  const [testNotificationStatus, setTestNotificationStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setIsNotificationsSupported('Notification' in window);
+      setPermissionStatus(getNotificationPermissionStatus());
+      setNotificationsPref(isNotificationsEnabled());
+      setTtsPref(isTtsEnabled());
+    }
+  }, []);
+
+  const handleToggleNotifications = (val: boolean) => {
+    setNotificationsEnabled(val);
+    setNotificationsPref(val);
+  };
+
+  const handleToggleTts = (val: boolean) => {
+    setTtsEnabled(val);
+    setTtsPref(val);
+  };
+
+  const handleRequestPermission = async () => {
+    const granted = await requestNotificationPermission();
+    setPermissionStatus(getNotificationPermissionStatus());
+    if (granted) {
+      setNotificationsEnabled(true);
+      setNotificationsPref(true);
+    }
+  };
+
+  const handleTestNotification = () => {
+    setTestNotificationStatus('Disparando...');
+    dispatchNewOrderNotification(
+      "Maria das Neves",
+      125.80,
+      "9999"
+    );
+    setTimeout(() => {
+      setTestNotificationStatus('Alerta enviado com sucesso! Verifique seu celular.');
+      setTimeout(() => setTestNotificationStatus(null), 4000);
+    }, 800);
+  };
 
   useEffect(() => {
     // Check if install prompt is already globally accessible in window
@@ -605,6 +666,148 @@ export function SettingsManager({
               </div>
             </div>
           ) : null}
+        </div>
+      </div>
+
+      {/* 🔔 HIGH-PERFORMANCE REALTIME MOBILE/DESKTOP NOTIFICATIONS PANEL */}
+      <div className="bg-zinc-900 rounded-2xl border border-zinc-800/80 p-6 shadow-md space-y-5 animate-fade-in text-xs">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-b border-zinc-850 pb-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="p-2.5 bg-brand-pink/10 border border-brand-pink/20 rounded-xl text-brand-pink shrink-0">
+              <Bell className="h-6 w-6" />
+            </div>
+            <div>
+              <h3 className="font-display font-semibold text-base text-zinc-100">Configurações de Alertas & Notificações</h3>
+              <p className="text-xs text-zinc-400 mt-1">Receba avisos instantâneos com chimes e voz em tempo real no seu celular ao receber um novo pedido.</p>
+            </div>
+          </div>
+          
+          <div className="shrink-0 max-sm:self-start">
+            {permissionStatus === 'granted' ? (
+              <span className="text-[10px] font-black uppercase tracking-wider text-emerald-400 bg-emerald-950/40 border border-emerald-900/30 px-2.5 py-1 rounded-full">
+                ● Ativo no Celular
+              </span>
+            ) : permissionStatus === 'denied' ? (
+              <span className="text-[10px] font-black uppercase tracking-wider text-pink-500 bg-pink-950/20 border border-pink-900/30 px-2.5 py-1 rounded-full">
+                ● Bloqueado
+              </span>
+            ) : (
+              <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 bg-amber-950/20 border border-amber-900/30 px-2.5 py-1 rounded-full">
+                ● Configurar
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Informative notification context banner */}
+        <div className="text-xs text-zinc-350 leading-relaxed bg-black/40 p-4.5 rounded-xl border border-zinc-850 space-y-3">
+          <p>
+            Este aplicativo utiliza sincronização em nuvem ultrarápida. Toda vez que um atendente, parceiro de equipe ou cliente cadastrar um pedido, seu dispositivo emitirá um alerta sonoro instantâneo e uma chamada de voz, mesmo se o aplicativo estiver trabalhando em segundo plano ou com a tela apagada!
+          </p>
+
+          {!isNotificationsSupported && (
+            <div className="text-[11px] font-semibold text-pink-400 bg-pink-950/10 border border-pink-900/20 p-2.5 rounded-lg flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0" />
+              <span>Aviso: Seu navegador ou iFrame restrito não suporta notificações de Push do sistema. Para melhor experiência, abra o app em uma aba separada!</span>
+            </div>
+          )}
+        </div>
+
+        {/* Main interactive controls */}
+        <div className="space-y-4">
+          
+          {/* Permission Requester if needed */}
+          {isNotificationsSupported && permissionStatus !== 'granted' && (
+            <div className="bg-amber-950/10 border border-amber-900/30 p-4 rounded-xl flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="space-y-0.5">
+                <h4 className="text-xs font-bold text-amber-300">Permissão de Notificação Necessária</h4>
+                <p className="text-[11px] text-zinc-400 font-medium">O navegador precisa de autorização para mostrar alertas em tela no celular.</p>
+              </div>
+              <button
+                onClick={handleRequestPermission}
+                type="button"
+                className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-extrabold text-xs rounded-lg transition-all active:scale-95 cursor-pointer block sm:inline-block shrink-0"
+              >
+                Ativar Notificações 🔔
+              </button>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            
+            {/* Toggle Browser push notifications */}
+            <div className="bg-black/20 border border-zinc-850 p-4 rounded-xl flex items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  {notificationsPref ? (
+                    <Bell className="h-4 w-4 text-emerald-400" />
+                  ) : (
+                    <Bell className="h-4 w-4 text-zinc-550" />
+                  )}
+                  <h4 className="text-xs font-bold text-zinc-150">Notificações Push do Sistema</h4>
+                </div>
+                <p className="text-[10.5px] text-zinc-400">Exibir balões de alerta pop-up no aparelho celular.</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                <input 
+                  type="checkbox" 
+                  checked={notificationsPref} 
+                  onChange={(e) => handleToggleNotifications(e.target.checked)}
+                  disabled={permissionStatus !== 'granted'}
+                  className="sr-only peer" 
+                />
+                <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 peer-checked:after:bg-black after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-pink"></div>
+              </label>
+            </div>
+
+            {/* Toggle TTS announcements */}
+            <div className="bg-black/20 border border-zinc-850 p-4 rounded-xl flex items-center justify-between gap-3">
+              <div className="space-y-0.5">
+                <div className="flex items-center gap-2">
+                  {ttsPref ? (
+                    <Megaphone className="h-4 w-4 text-[#ec4899] animate-pulse" />
+                  ) : (
+                    <Megaphone className="h-4 w-4 text-zinc-550" />
+                  )}
+                  <h4 className="text-xs font-bold text-zinc-150">Alerta de Voz Sintetizada (TTS)</h4>
+                </div>
+                <p className="text-[10.5px] text-zinc-400">Falar o nome do cliente e o valor total do pedido alto em voz.</p>
+              </div>
+              <label className="relative inline-flex items-center cursor-pointer select-none shrink-0">
+                <input 
+                  type="checkbox" 
+                  checked={ttsPref} 
+                  onChange={(e) => handleToggleTts(e.target.checked)}
+                  className="sr-only peer" 
+                />
+                <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 peer-checked:after:bg-black after:border-zinc-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-pink"></div>
+              </label>
+            </div>
+
+          </div>
+
+          {/* Tester trigger button */}
+          <div className="pt-2 border-t border-zinc-850 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="text-[11px] text-zinc-400 font-medium text-center sm:text-left">
+              🚀 Quer experimentar a mágica de voz em tempo real agora mesmo? Clique ao lado para testar:
+            </div>
+            <div className="w-full sm:w-auto shrink-0 flex flex-col items-center">
+              <button
+                onClick={handleTestNotification}
+                type="button"
+                className="w-full sm:w-auto flex items-center justify-center gap-2 py-2 px-5 bg-zinc-800 hover:bg-zinc-750 text-brand-pink border border-brand-pink/30 hover:border-brand-pink text-xs font-bold rounded-xl shadow transition-all active:scale-95 cursor-pointer"
+              >
+                <span>Despertar Alerta de Teste 🧪</span>
+              </button>
+            </div>
+          </div>
+
+          {testNotificationStatus && (
+            <div className="p-3 bg-brand-pink/5 border border-brand-pink/20 rounded-xl text-center text-xs font-bold text-brand-pink animate-fade-in">
+              {testNotificationStatus}
+            </div>
+          )}
+
         </div>
       </div>
 
