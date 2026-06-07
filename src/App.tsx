@@ -44,7 +44,7 @@ import { UserApprovals } from './components/UserApprovals';
 import { SalesAudit } from './components/SalesAudit';
 import { RemindersManager } from './components/RemindersManager';
 import { ClosedOrdersManager } from './components/ClosedOrdersManager';
-import { dispatchNewOrderNotification } from './lib/notifications';
+import { dispatchNewOrderNotification, dispatchOrderEditedNotification } from './lib/notifications';
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
 import { ChangePassword } from './components/ChangePassword';
 import InstallAppTab from './components/InstallAppTab';
@@ -734,20 +734,49 @@ export default function App() {
             const newSalesOnServer = dbSaless.filter(s => !currentIds.has(s.id));
 
             // To prevent a flood of notifications on first load, only alert if we already had a local list
-            if (curr.length > 0 && newSalesOnServer.length > 0) {
-              newSalesOnServer.forEach(sale => {
-                const isMySale = sale.criadoPorEmail === currentUserEmailRef.current;
-                if (!isMySale) {
-                  dispatchNewOrderNotification(
-                    sale.cliente,
-                    sale.total,
-                    sale.numeroPedido,
-                    () => {
-                      setActiveTab('vendas');
-                    }
-                  );
-                }
+            if (curr.length > 0) {
+              // 1. Notify newly added orders
+              if (newSalesOnServer.length > 0) {
+                newSalesOnServer.forEach(sale => {
+                  const isMySale = sale.criadoPorEmail === currentUserEmailRef.current;
+                  if (!isMySale) {
+                    dispatchNewOrderNotification(
+                      sale.cliente,
+                      sale.total,
+                      sale.numeroPedido,
+                      () => {
+                        setActiveTab('vendas');
+                      }
+                    );
+                  }
+                });
+              }
+
+              // 2. Identify and notify about edited existing orders
+              const currentSalesMap = new Map(curr.map(s => [s.id, s]));
+              const editedSalesOnServer = dbSaless.filter(s => {
+                const localSale = currentSalesMap.get(s.id);
+                if (!localSale) return false;
+                // Check if anything has structurally changed
+                const hasChanged = JSON.stringify(localSale) !== JSON.stringify(s);
+                return hasChanged;
               });
+
+              if (editedSalesOnServer.length > 0) {
+                editedSalesOnServer.forEach(sale => {
+                  const isMyEdit = sale.editadoPorEmail === currentUserEmailRef.current;
+                  if (!isMyEdit) {
+                    dispatchOrderEditedNotification(
+                      sale.cliente,
+                      sale.total,
+                      sale.numeroPedido,
+                      () => {
+                        setActiveTab('vendas');
+                      }
+                    );
+                  }
+                });
+              }
             }
 
             const hasChanged = JSON.stringify(curr) !== JSON.stringify(dbSaless);

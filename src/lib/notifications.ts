@@ -195,3 +195,63 @@ export function dispatchNewOrderNotification(clientName: string, total: number, 
 
   triggerSystemNotification(title, body, onClick);
 }
+
+/**
+ * Synthesizes speech to speak out loud when an existing order is updated/edited.
+ */
+export function announceEditedSaleVoice(clientName: string, total: number) {
+  try {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      return;
+    }
+
+    if (!isTtsEnabled()) return;
+
+    // Fast cleanup to prevent audio queue build-up / lagging Speak queue
+    window.speechSynthesis.cancel();
+
+    const formattedTotal = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    const cleanClient = clientName && clientName.trim() !== 'Consumidor' ? clientName : 'Consumidor Geral';
+    
+    // Warm and friendly audio copy in Portuguese
+    const msg = `Pedido de ${cleanClient} foi alterado! Novo valor de ${formattedTotal}!`;
+    
+    const utterance = new SpeechSynthesisUtterance(msg);
+    utterance.lang = 'pt-BR';
+    utterance.rate = 1.05; // Slightly faster to sound crisp
+    utterance.pitch = 1.0;  // Natural pitch
+    
+    // Find a proper Brazilian Portuguese voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const ptVoice = voices.find(v => v.lang.includes('pt-BR') || v.lang.includes('pt_BR'));
+    if (ptVoice) {
+      utterance.voice = ptVoice;
+    }
+
+    window.speechSynthesis.speak(utterance);
+  } catch (err) {
+    console.warn('Erro ao processar síntese de voz (TTS) para alteração:', err);
+  }
+}
+
+/**
+ * Master controller executed whenever a sale is updated/edited.
+ * Triggers chime alert, speaks text-to-speech voice announcer, and creates system push.
+ */
+export function dispatchOrderEditedNotification(clientName: string, total: number, orderNum?: string, onClick?: () => void) {
+  // 1. Play premium order completion synthesized chime
+  playNewOrderChime();
+
+  // 2. Speak via Voice Synthesis
+  announceEditedSaleVoice(clientName, total);
+
+  // 3. Spawns standard OS notification using custom title for edits
+  const displayNum = orderNum ? `(Nº ${orderNum})` : '';
+  const title = `✏️ Pedido Alterado! ${displayNum}`;
+  const totalFormatted = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const cleanClient = clientName && clientName.trim() !== 'Consumidor' ? clientName : 'Consumidor Geral';
+  const body = `Cliente: ${cleanClient}\nNovo Valor: ${totalFormatted}`;
+
+  triggerSystemNotification(title, body, onClick);
+}
+
