@@ -56,7 +56,8 @@ import {
   setNotificationsEnabled,
   isTtsEnabled,
   setTtsEnabled,
-  dispatchNewOrderNotification
+  dispatchNewOrderNotification,
+  optInOneSignal
 } from '../lib/notifications';
 
 interface SettingsManagerProps {
@@ -97,6 +98,30 @@ export function SettingsManager({
   const [notificationsPref, setNotificationsPref] = useState(true);
   const [ttsPref, setTtsPref] = useState(true);
   const [testNotificationStatus, setTestNotificationStatus] = useState<string | null>(null);
+
+  const [oneSignalAppId, setOneSignalAppId] = useState(() => localStorage.getItem('oxente_onesignal_app_id') || '');
+  const [oneSignalRestKey, setOneSignalRestKey] = useState(() => localStorage.getItem('oxente_onesignal_rest_key') || '');
+  const [oneSignalSavedMessage, setOneSignalSavedMessage] = useState<string | null>(null);
+
+  const handleSaveOneSignal = () => {
+    localStorage.setItem('oxente_onesignal_app_id', oneSignalAppId.trim());
+    localStorage.setItem('oxente_onesignal_rest_key', oneSignalRestKey.trim());
+    setOneSignalSavedMessage('Configurações salvas! Recarregando aplicação para registrar canais de rádio 📡...');
+    setTimeout(() => {
+      window.location.reload();
+    }, 2000);
+  };
+
+  const handleClearOneSignal = () => {
+    localStorage.removeItem('oxente_onesignal_app_id');
+    localStorage.removeItem('oxente_onesignal_rest_key');
+    setOneSignalAppId('');
+    setOneSignalRestKey('');
+    setOneSignalSavedMessage('Configurações do OneSignal removidas. Recarregando...');
+    setTimeout(() => {
+      window.location.reload();
+    }, 1500);
+  };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -808,6 +833,85 @@ export function SettingsManager({
             </div>
           )}
 
+        </div>
+      </div>
+
+      {/* Seção das Notificações em Segundo Plano (OneSignal) */}
+      <div className="bg-zinc-900 rounded-2xl border border-zinc-800/80 p-6 shadow-md space-y-6">
+        <div className="flex items-center justify-between border-b border-zinc-800 pb-4">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🔔</span>
+            <h3 className="font-display font-semibold text-base text-zinc-100 text-left">Notificações em Segundo Plano (Via OneSignal)</h3>
+          </div>
+        </div>
+
+        <p className="text-[11.5px] text-zinc-400 font-medium leading-relaxed bg-black/20 p-3 rounded-xl border border-zinc-850 text-left">
+          Para garantir que as notificações de vendas cheguem a todos os celulares mesmo com o aplicativo 100% fechado, minimizado ou com a tela bloqueada, integramos os serviços gratuitos do OneSignal. O navegador requer que cada fone/computador seja inscrito manualmente uma única vez após configurar as chaves abaixo.
+        </p>
+
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1.5 text-left">
+              <label className="text-[11px] font-bold text-zinc-350 uppercase tracking-wider block">OneSignal App ID</label>
+              <input
+                type="text"
+                placeholder="Ex: 12345678-abcd-1234-abcd-123456789abc"
+                value={oneSignalAppId}
+                onChange={(e) => setOneSignalAppId(e.target.value)}
+                className="w-full bg-black/40 border border-zinc-800 focus:border-[#ec4899] text-xs font-mono text-zinc-100 rounded-xl px-4 py-2.5 outline-none transition-all placeholder:text-zinc-650"
+              />
+            </div>
+
+            <div className="space-y-1.5 text-left">
+              <label className="text-[11px] font-bold text-zinc-350 uppercase tracking-wider block">REST API Key (Chave Secreta)</label>
+              <input
+                type="password"
+                placeholder="Basic REST API Key (Mantenha em segredo)"
+                value={oneSignalRestKey}
+                onChange={(e) => setOneSignalRestKey(e.target.value)}
+                className="w-full bg-black/40 border border-zinc-800 focus:border-[#ec4899] text-xs font-mono text-zinc-100 rounded-xl px-4 py-2.5 outline-none transition-all placeholder:text-zinc-650"
+              />
+            </div>
+          </div>
+
+          <div className="flex flex-wrap gap-3 pt-2">
+            <button
+              onClick={handleSaveOneSignal}
+              type="button"
+              className="flex items-center gap-2 px-5 py-2.5 bg-brand-pink hover:bg-brand-pink/90 text-white font-bold text-xs rounded-xl shadow transition-all active:scale-95 cursor-pointer"
+            >
+              <Save className="h-4 w-4" />
+              <span>Salvar Configurações</span>
+            </button>
+
+            {oneSignalAppId && (
+              <button
+                onClick={optInOneSignal}
+                type="button"
+                className="flex items-center gap-2 px-5 py-2.5 bg-zinc-800 hover:bg-zinc-750 text-emerald-400 border border-emerald-400/20 hover:border-emerald-400/40 font-bold text-xs rounded-xl shadow transition-all active:scale-95 cursor-pointer"
+              >
+                <Smartphone className="h-4 w-4" />
+                <span>Inscrever este Celular 📱</span>
+              </button>
+            )}
+
+            {(localStorage.getItem('oxente_onesignal_app_id') || localStorage.getItem('oxente_onesignal_rest_key')) && (
+              <button
+                onClick={handleClearOneSignal}
+                type="button"
+                className="flex items-center gap-2 px-4 py-2.5 bg-red-950/20 hover:bg-red-950/40 text-red-400 border border-red-900/30 font-bold text-xs rounded-xl transition-all active:scale-95 cursor-pointer sm:ml-auto"
+              >
+                <Trash className="h-4 w-4" />
+                <span>Limpar Credenciais</span>
+              </button>
+            )}
+          </div>
+
+          {oneSignalSavedMessage && (
+            <div className="p-3 bg-emerald-950/20 border border-emerald-900/30 rounded-xl text-center text-xs font-bold text-emerald-400 animate-pulse">
+              {oneSignalSavedMessage}
+            </div>
+          )}
         </div>
       </div>
 

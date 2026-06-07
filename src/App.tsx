@@ -44,7 +44,7 @@ import { UserApprovals } from './components/UserApprovals';
 import { SalesAudit } from './components/SalesAudit';
 import { RemindersManager } from './components/RemindersManager';
 import { ClosedOrdersManager } from './components/ClosedOrdersManager';
-import { dispatchNewOrderNotification, dispatchOrderEditedNotification } from './lib/notifications';
+import { dispatchNewOrderNotification, dispatchOrderEditedNotification, sendBackgroundPushNotification, initOneSignal } from './lib/notifications';
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
 import { ChangePassword } from './components/ChangePassword';
 import InstallAppTab from './components/InstallAppTab';
@@ -59,6 +59,11 @@ export default function App() {
   const [userStatus, setUserStatus] = useState<'loading' | 'unauthenticated' | 'pending' | 'approved' | 'rejected'>('loading');
 
   const isAdmin = firebaseUser?.email === 'oxentefesteje@gmail.com' || firebaseUser?.email === 'abraaoapp@oxente.com' || firebaseUser?.id === 'abraaoapp' || firebaseUser?.role === 'admin';
+
+  const isAnaClara = firebaseUser?.id === 'ana_clara' || 
+                     firebaseUser?.email === 'anaclara@oxente.com' || 
+                     (firebaseUser?.name && firebaseUser.name.toLowerCase().includes('ana clara')) || 
+                     (firebaseUser?.displayName && firebaseUser.displayName.toLowerCase().includes('ana clara'));
 
   // 2. Core Persistent State
   const [products, setProducts] = useState<Product[]>([]);
@@ -88,6 +93,10 @@ export default function App() {
   useEffect(() => {
     currentUserEmailRef.current = firebaseUser?.email || '';
   }, [firebaseUser]);
+
+  useEffect(() => {
+    initOneSignal();
+  }, []);
 
   const addPendingProduct = (product: Product) => {
     const updated = { ...pendingProducts.current, [product.id]: product };
@@ -124,6 +133,13 @@ export default function App() {
       window.removeEventListener('oxente_app_audio_mute_changed', handleMute);
     };
   }, []);
+
+  // Redirect unallowed users who try to access the install tab
+  useEffect(() => {
+    if (activeTab === 'instalar_app' && !isAnaClara && !isAdmin) {
+      setActiveTab('vendas');
+    }
+  }, [activeTab, isAnaClara, isAdmin]);
 
   const toggleGlobalMute = () => {
     const nextVal = !globalMuted;
@@ -975,6 +991,9 @@ export default function App() {
         if (!success) {
           setSupabaseSyncStatus('error');
           setSupabaseErrorMsg(`Erro ao sincronizar orçamento no Supabase: ${getFormattedSupabaseError()}`);
+        } else {
+          // Enviar push notification nativo OneSignal
+          sendBackgroundPushNotification(newSale.cliente, newSale.total, 'new', newSale.numeroPedido);
         }
       } catch (e: any) {
         console.warn('Erro ao sincronizar orçamento no Supabase:', e);
@@ -1047,6 +1066,9 @@ export default function App() {
       if (!success) {
         setSupabaseSyncStatus('error');
         setSupabaseErrorMsg(`Erro ao sincronizar venda/pedido no Supabase: ${getFormattedSupabaseError()}`);
+      } else {
+        // Enviar push notification nativo OneSignal
+        sendBackgroundPushNotification(newSale.cliente, newSale.total, 'new', newSale.numeroPedido);
       }
     } catch (e: any) {
       console.warn('Erro ao sincronizar venda/pedido no Supabase:', e);
@@ -1165,6 +1187,9 @@ export default function App() {
       if (!success) {
         setSupabaseSyncStatus('error');
         setSupabaseErrorMsg(`Erro ao sincronizar alteração de venda no Supabase: ${getFormattedSupabaseError()}`);
+      } else {
+        // Enviar push notification nativo OneSignal
+        sendBackgroundPushNotification(updatedSale.cliente, updatedSale.total, 'edit', updatedSale.numeroPedido);
       }
     } catch (e: any) {
       console.warn('Erro ao sincronizar alteração de venda no Supabase:', e);
@@ -1586,8 +1611,8 @@ export default function App() {
             </button>
           )}
  
-          {/* Install Mobile App Tab (Hidden for Admins) */}
-          {!isAdmin && (
+          {/* Install Mobile App Tab (Hidden for Admins, visible ONLY for Ana Clara) */}
+          {!isAdmin && isAnaClara && (
             <button
               onClick={() => changeTab('instalar_app')}
               className={getTabClass('instalar_app')}
@@ -1759,7 +1784,7 @@ export default function App() {
               <SalesAudit sales={sales} storeInfo={storeInfo} onUpdateSale={handleUpdateSale} />
             )}
 
-            {activeTab === 'instalar_app' && !isAdmin && (
+            {activeTab === 'instalar_app' && !isAdmin && isAnaClara && (
               <InstallAppTab />
             )}
 
