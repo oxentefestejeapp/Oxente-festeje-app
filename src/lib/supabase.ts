@@ -20,18 +20,12 @@ export function getFormattedSupabaseError(fallback = 'Erro desconhecido'): strin
   return parts.join(' ');
 }
 
-// Read configuration from environment variables or localStorage (prioritizing local/Firestore synchronized keys)
+// Read configuration directly and unalterably (guaranteeing that all employees and the admin connect solely to the production Supabase database).
 export const getSupabaseConfig = () => {
-  const localUrl = localStorage.getItem('supabase_url');
-  const localKey = localStorage.getItem('supabase_anon_key');
-
-  const envUrl = import.meta.env.VITE_SUPABASE_URL;
-  const envKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-
   return {
-    url: localUrl || envUrl || 'https://sbeyfgxvjoaulxojjguu.supabase.co',
-    key: localKey || envKey || 'sb_publishable_7aL1Xxp82aXaHTA_Zu3diA_GMfOf9oY',
-    isConfigured: !!(localUrl || envUrl) || true, // Default to true as the user provided active keys!
+    url: 'https://sbeyfgxvjoaulxojjguu.supabase.co',
+    key: 'sb_publishable_7aL1Xxp82aXaHTA_Zu3diA_GMfOf9oY',
+    isConfigured: true,
   };
 };
 
@@ -159,12 +153,31 @@ INSERT INTO oxente_store_info (key, nome, instagram, telefone, endereco, whatsap
 VALUES ('default', 'Oxente Festeje', '@oxente_festeje', '(83) 98885-9302', 'Rua Josina Lessa feitosa 176', 'Olá {cliente}, seu pedido {numero} está {status}!')
 ON CONFLICT (key) DO NOTHING;
 
--- 4. Ajustar Réplica de Identidade (Garante payload completo em UPDATES e DELETES no canais Realtime)
+-- 4. Tabela de Usuários (Users)
+CREATE TABLE IF NOT EXISTS oxente_users (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT,
+  role TEXT NOT NULL DEFAULT 'colaborador',
+  status TEXT NOT NULL DEFAULT 'approved',
+  password TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE oxente_users ADD COLUMN IF NOT EXISTS password TEXT;
+
+ALTER TABLE oxente_users ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_users;
+CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_users FOR ALL USING (true) WITH CHECK (true);
+
+-- 5. Ajustar Réplica de Identidade (Garante payload completo em UPDATES e DELETES no canais Realtime)
 ALTER TABLE oxente_products REPLICA IDENTITY FULL;
 ALTER TABLE oxente_sales REPLICA IDENTITY FULL;
 ALTER TABLE oxente_store_info REPLICA IDENTITY FULL;
+ALTER TABLE oxente_users REPLICA IDENTITY FULL;
 
--- 5. Habilitar Tempo Real (Realtime) para as Tabelas
+-- 6. Habilitar Tempo Real (Realtime) para as Tabelas
 -- Usamos um bloco PL/pgSQL seguro para evitar erros de tabela já cadastrada ao reexecutar o script
 DO $$
 BEGIN
@@ -191,9 +204,17 @@ BEGIN
   ) THEN
     ALTER PUBLICATION supabase_realtime ADD TABLE oxente_store_info;
   END IF;
+
+  -- Habilitar replicação para 'oxente_users' se não estiver cadastrada
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables 
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'oxente_users'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE oxente_users;
+  END IF;
 END $$;
 
--- 6. FORÇAR RECARREGAMENTO DO CACHE DE SCHEMA DO SUPABASE (Diferencial Crucial!)
+-- 7. FORÇAR RECARREGAMENTO DO CACHE DE SCHEMA DO SUPABASE (Diferencial Crucial!)
 NOTIFY pgrst, 'reload schema';
 `;
 };
@@ -680,6 +701,109 @@ const realDbSupabase = {
       console.warn('Erro geral de conexão de dados de loja com Supabase:', e);
       return null;
     }
+  },
+
+  async fetchUsers(): Promise<any[] | null> {
+    try {
+      const { data, error } = await supabase.from('oxente_users').select('*').order('updated_at', { ascending: false });
+      if (error) {
+        lastSupabaseError = error;
+        console.warn('Erro ao carregar usuários do Supabase:', error.message);
+        return null;
+      }
+      return data;
+    } catch (e) {
+      console.warn('Erro geral de conexão com Supabase ao buscar usuários:', e);
+      return null;
+    }
+  },
+
+  async saveUser(user: any): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('oxente_users').upsert({
+        id: user.id || user.uid,
+        name: user.name || 'Colaborador',
+        email: user.email || '',
+        role: user.role || 'colaborador',
+        status: user.status || 'approved',
+        password: user.password || null,
+        updated_at: new Date().toISOString()
+      });
+      if (error) {
+        lastSupabaseError = error;
+        console.error('Erro ao salvar usuário no Supabase:', error.message);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('Falha ao salvar usuário no Supabase:', e);
+      return false;
+    }
+  },
+
+  async deleteUser(id: string): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('oxente_users').delete().eq('id', id);
+      if (error) {
+        lastSupabaseError = error;
+        console.error('Erro ao excluir usuário no Supabase:', error.message);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('Falha ao excluir usuário no Supabase:', e);
+      return false;
+    }
+  },
+
+  async updateUserStatus(id: string, status: string): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('oxente_users').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
+      if (error) {
+        lastSupabaseError = error;
+        console.error('Erro ao atualizar status do usuário no Supabase:', error.message);
+        return false;
+      }
+      return true;
+    } catch (e) {
+      console.error('Falha ao atualizar status no Supabase:', e);
+      return false;
+    }
+  },
+
+  async updateUserHeartbeat(id: string): Promise<boolean> {
+    try {
+      const savedUserStr = localStorage.getItem('oxente_custom_user');
+      let name = 'Colaborador';
+      let email = '';
+      let role = 'colaborador';
+      let status = 'approved';
+      if (savedUserStr) {
+        try {
+          const parsed = JSON.parse(savedUserStr);
+          name = parsed.name || name;
+          email = parsed.email || email;
+          role = parsed.role || role;
+          status = parsed.status || status;
+        } catch {}
+      }
+
+      const { error } = await supabase.from('oxente_users').upsert({
+        id,
+        name,
+        email,
+        role,
+        status,
+        updated_at: new Date().toISOString()
+      });
+      if (error) {
+        lastSupabaseError = error;
+        return false;
+      }
+      return true;
+    } catch (e) {
+      return false;
+    }
   }
 };
 
@@ -793,6 +917,62 @@ const sandboxDbSupabase = {
       endereco: 'Rua Josina Lessa feitosa 176',
       whatsappTemplate: 'Olá {cliente}, seu pedido {numero} está {status}!'
     };
+  },
+
+  fetchUsers: async (): Promise<any[]> => {
+    const cached = localStorage.getItem('oxente_custom_users_local');
+    return cached ? JSON.parse(cached) : [];
+  },
+
+  saveUser: async (user: any): Promise<boolean> => {
+    const cached = localStorage.getItem('oxente_custom_users_local');
+    const list: any[] = cached ? JSON.parse(cached) : [];
+    const id = user.id || user.uid;
+    const index = list.findIndex(u => u.id === id);
+    if (index >= 0) {
+      list[index] = { ...list[index], ...user, updatedAt: new Date().toISOString() };
+    } else {
+      list.push({ ...user, id, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+    }
+    localStorage.setItem('oxente_custom_users_local', JSON.stringify(list));
+    return true;
+  },
+
+  deleteUser: async (id: string): Promise<boolean> => {
+    const cached = localStorage.getItem('oxente_custom_users_local');
+    if (cached) {
+      const list: any[] = JSON.parse(cached);
+      const filtered = list.filter(u => u.id !== id);
+      localStorage.setItem('oxente_custom_users_local', JSON.stringify(filtered));
+    }
+    return true;
+  },
+
+  updateUserStatus: async (id: string, status: string): Promise<boolean> => {
+    const cached = localStorage.getItem('oxente_custom_users_local');
+    if (cached) {
+      const list: any[] = JSON.parse(cached);
+      const user = list.find(u => u.id === id);
+      if (user) {
+        user.status = status;
+        user.updatedAt = new Date().toISOString();
+        localStorage.setItem('oxente_custom_users_local', JSON.stringify(list));
+      }
+    }
+    return true;
+  },
+
+  updateUserHeartbeat: async (id: string): Promise<boolean> => {
+    const cached = localStorage.getItem('oxente_custom_users_local');
+    if (cached) {
+      const list: any[] = JSON.parse(cached);
+      const user = list.find(u => u.id === id);
+      if (user) {
+        user.updatedAt = new Date().toISOString();
+        localStorage.setItem('oxente_custom_users_local', JSON.stringify(list));
+      }
+    }
+    return true;
   }
 };
 

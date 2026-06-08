@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BrandLogo } from './BrandLogo';
-import { db, hasConfig } from '../lib/firebase';
+import { supabase, dbSupabase } from '../lib/supabase';
 import { playAppSound } from '../lib/audio';
 
 interface LoginProps {
@@ -47,31 +47,23 @@ export function Login({ onLoginSuccess }: LoginProps) {
     }
   }, [showPasswordErrorToast]);
 
-  // Guarantee that default users exist in the Firestore database on load
+  // Guarantee that default users exist in the Supabase database on load
   useEffect(() => {
     const ensureDefaultUsersExistInDb = async () => {
-      if (!db || !hasConfig) return;
       try {
-        const { getDoc, setDoc, doc, serverTimestamp } = await import('firebase/firestore');
         for (const user of INITIAL_USERS) {
-          const userRef = doc(db, 'users', user.id);
-          const snap = await getDoc(userRef);
-          if (!snap.exists()) {
-            await setDoc(userRef, {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              status: user.status,
-              password: user.password,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            });
-            console.log(`Padrão ${user.name} garantido no banco.`);
-          }
+          await supabase.from('oxente_users').upsert({
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            role: user.role,
+            status: user.status,
+            updated_at: new Date().toISOString()
+          });
         }
+        console.log('Usuários padrão garantidos no Supabase cloud.');
       } catch (e) {
-        console.warn('Erro ao sincronizar usuários iniciais no Firebase:', e);
+        console.warn('Erro ao sincronizar usuários iniciais no Supabase:', e);
       }
     };
     ensureDefaultUsersExistInDb();
@@ -101,34 +93,35 @@ export function Login({ onLoginSuccess }: LoginProps) {
     try {
       let userProfile: any = null;
 
-      // 1. Search in live Firestore database if accessible with graceful local fallback on error/offline
-      if (db && hasConfig) {
-        try {
-          const { getDoc, doc, setDoc, serverTimestamp } = await import('firebase/firestore');
-          const userRef = doc(db, 'users', usernameId);
-          const docSnap = await getDoc(userRef);
-
-          if (docSnap.exists()) {
-            userProfile = docSnap.data();
-          } else if (defaultMatch) {
-            // If they entered a valid login username but the db doc was deleted or empty, seed it
-            userProfile = {
-              id: defaultMatch.id,
-              name: defaultMatch.name,
-              email: defaultMatch.email,
-              role: defaultMatch.role,
-              status: defaultMatch.status,
-              password: defaultMatch.password,
-            };
-            await setDoc(userRef, {
-              ...userProfile,
-              createdAt: serverTimestamp(),
-              updatedAt: serverTimestamp()
-            });
-          }
-        } catch (dbErr) {
-          console.warn('Erro ao consultar banco online durante login. Prosseguindo com autenticação local segura:', dbErr);
+      // 1. Search in live Supabase database
+      try {
+        const { data: dbUser, error: dbErr } = await supabase.from('oxente_users').select('*').eq('id', usernameId).maybeSingle();
+        if (dbUser && !dbErr) {
+          // Keep preset password check or any custom password if stored
+          const presetMatch = INITIAL_USERS.find(u => u.id === dbUser.id);
+          userProfile = {
+            id: dbUser.id,
+            uid: dbUser.id,
+            name: dbUser.name,
+            email: dbUser.email,
+            role: dbUser.role,
+            status: dbUser.status,
+            password: presetMatch ? presetMatch.password : '69app69' // Default fallback pass for custom users
+          };
+        } else if (defaultMatch) {
+          // Seed the user if they entered a valid login username but it's not in DB yet
+          userProfile = {
+            id: defaultMatch.id,
+            name: defaultMatch.name,
+            email: defaultMatch.email,
+            role: defaultMatch.role,
+            status: defaultMatch.status,
+            password: defaultMatch.password,
+          };
+          await dbSupabase.saveUser(userProfile);
         }
+      } catch (dbErr) {
+        console.warn('Erro ao consultar Supabase durante login. Prosseguindo localmente:', dbErr);
       }
 
       // 2. Fallback check inside cached custom list or default match list
@@ -172,15 +165,10 @@ export function Login({ onLoginSuccess }: LoginProps) {
       }
 
       // 5. Successful Login Session setup
-      if (db && hasConfig) {
-        const { updateDoc, doc, serverTimestamp } = await import('firebase/firestore');
-        try {
-          await updateDoc(doc(db, 'users', userProfile.id), {
-            updatedAt: serverTimestamp()
-          });
-        } catch (dbErr) {
-          console.warn('Erro ao registrar heartbeat online:', dbErr);
-        }
+      try {
+        await dbSupabase.updateUserHeartbeat(userProfile.id);
+      } catch (dbErr) {
+        console.warn('Erro ao registrar heartbeat no Supabase:', dbErr);
       }
 
       const loggedSession = {

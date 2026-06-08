@@ -1,13 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { db, OperationType, handleFirestoreError, hasConfig } from '../lib/firebase';
-import { 
-  collection, 
-  onSnapshot, 
-  query, 
-  orderBy,
-  doc,
-  updateDoc
-} from 'firebase/firestore';
+import { dbSupabase, supabase } from '../lib/supabase';
 import { 
   Users, 
   Search, 
@@ -46,7 +38,7 @@ export function UserApprovals() {
 
   const isUserOnline = (userProfile: UserProfile) => {
     if (!userProfile.updatedAt) return false;
-    const date = userProfile.updatedAt.toDate ? userProfile.updatedAt.toDate() : new Date(userProfile.updatedAt);
+    const date = new Date(userProfile.updatedAt);
     const diffMs = currentTime - date.getTime();
     // Consider online if active in the last 75 seconds (heartbeat is 30s)
     return diffMs < 75000;
@@ -54,7 +46,7 @@ export function UserApprovals() {
 
   const getLastSeenText = (userProfile: UserProfile) => {
     if (!userProfile.updatedAt) return '';
-    const date = userProfile.updatedAt.toDate ? userProfile.updatedAt.toDate() : new Date(userProfile.updatedAt);
+    const date = new Date(userProfile.updatedAt);
     const diffMs = currentTime - date.getTime();
     
     const diffMins = Math.floor(diffMs / 60000);
@@ -85,7 +77,7 @@ export function UserApprovals() {
 
     // Sort: newer first (biggest timestamp)
     const sorted = matching.map(u => {
-      const date = u.createdAt?.toDate ? u.createdAt.toDate() : (u.createdAt ? new Date(u.createdAt) : new Date(0));
+      const date = u.createdAt ? new Date(u.createdAt) : new Date(0);
       return { ...u, parsedDate: date };
     }).sort((a, b) => b.parsedDate.getTime() - a.parsedDate.getTime());
 
@@ -94,15 +86,11 @@ export function UserApprovals() {
 
     console.log('[Abraao Cleanup] Keeping newest:', keeper.name, keeper.id, keeper.parsedDate);
 
-    const { deleteDoc, doc } = await import('firebase/firestore');
-    
     for (const delUser of toDelete) {
       try {
-        console.log('[Abraao Cleanup] Deleting older duplicate:', delUser.name, delUser.id, delUser.parsedDate);
-        if (db) {
-          await deleteDoc(doc(db, 'users', delUser.id));
-          console.log('[Abraao Cleanup] Deleted older duplicate successfully:', delUser.id);
-        }
+        console.log('[Abraao Cleanup] Deleting older duplicate from Supabase:', delUser.name, delUser.id, delUser.parsedDate);
+        await dbSupabase.deleteUser(delUser.id);
+        console.log('[Abraao Cleanup] Deleted older duplicate successfully from Supabase:', delUser.id);
       } catch (e) {
         console.error('[Abraao Cleanup] Error deleting duplicate:', e);
       }
@@ -113,48 +101,80 @@ export function UserApprovals() {
     setLoading(true);
     setError(null);
     
-    if (!hasConfig || !db) {
-      setUsers([]);
-      setLoading(false);
-      return;
-    }
-
-    const usersCollection = collection(db, 'users');
-    const q = query(usersCollection, orderBy('updatedAt', 'desc'));
-
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const usersList: UserProfile[] = [];
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        usersList.push({
-          id: doc.id,
-          name: data.name,
-          email: data.email,
-          role: data.role || (data.email === 'oxentefesteje@gmail.com' || data.email === 'abraaoapp@oxente.com' || doc.id === 'abraaoapp' ? 'admin' : 'colaborador'),
-          status: data.status || 'approved',
-          createdAt: data.createdAt,
-          updatedAt: data.updatedAt
-        });
-      });
-      setUsers(usersList);
-      setLoading(false);
-
-      if (!cleanupTriggered.current) {
-        cleanupTriggered.current = true;
-        cleanupDuplicateAbraao(usersList);
-      }
-    }, (err) => {
-      console.error(err);
-      setError('Erro ao carregar lista de usuários do banco de dados.');
-      setLoading(false);
+    const loadUsers = async () => {
       try {
-        handleFirestoreError(err, OperationType.LIST, 'users');
-      } catch (firestoreErr) {
-        // Logged
+        const list = await dbSupabase.fetchUsers();
+        if (list) {
+          const formattedList = list.map((u: any) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            role: u.role || (u.email === 'oxentefesteje@gmail.com' || u.email === 'abraaoapp@oxente.com' || u.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+            status: u.status || 'approved',
+            createdAt: u.created_at || u.createdAt || new Date().toISOString(),
+            updatedAt: u.updated_at || u.updatedAt || new Date().toISOString()
+          }));
+          setUsers(formattedList);
+          
+          if (!cleanupTriggered.current) {
+            cleanupTriggered.current = true;
+            cleanupDuplicateAbraao(formattedList);
+          }
+        } else {
+          setUsers([]);
+        }
+        setLoading(false);
+      } catch (err: any) {
+        console.error(err);
+        setError('Erro ao carregar lista de usuários do banco de dados do Supabase.');
+        setLoading(false);
       }
-    });
+    };
 
-    return () => unsubscribe();
+    loadUsers();
+
+    // Subscribe to real-time changes inside table 'oxente_users'
+    const channel = supabase
+      .channel('oxente_users_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_users' }, (payload: any) => {
+        const { eventType, new: newRow, old: oldRow } = payload;
+        console.log('Real-time Users Update:', eventType, payload);
+        
+        if (eventType === 'INSERT' || eventType === 'UPDATE') {
+          setUsers((current) => {
+            const index = current.findIndex(u => u.id === newRow.id);
+            const mappedUser: UserProfile = {
+              id: newRow.id,
+              name: newRow.name,
+              email: newRow.email,
+              role: newRow.role || (newRow.email === 'oxentefesteje@gmail.com' || newRow.email === 'abraaoapp@oxente.com' || newRow.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+              status: newRow.status || 'approved',
+              createdAt: newRow.created_at || newRow.createdAt || new Date().toISOString(),
+              updatedAt: newRow.updated_at || newRow.updatedAt || new Date().toISOString()
+            };
+            
+            if (index >= 0) {
+              const updated = [...current];
+              updated[index] = mappedUser;
+              return updated;
+            } else {
+              return [mappedUser, ...current];
+            }
+          });
+        } else if (eventType === 'DELETE') {
+          const targetId = oldRow?.id || newRow?.id;
+          if (targetId) {
+            setUsers((current) => current.filter(u => u.id !== targetId));
+          }
+        }
+      })
+      .subscribe((status) => {
+        console.log('📡 [Supabase Realtime] Canal de Usuários:', status);
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const filteredUsers = users.filter((u, index, self) => {
@@ -168,7 +188,7 @@ export function UserApprovals() {
                       (u.email || '').toLowerCase().includes(search.toLowerCase());
     if (!isMatched) return false;
 
-    // Deduplicate by email, keeping the first occurrence (which is the most recently updated since the query is ordered by updatedAt desc)
+    // Deduplicate by email
     const firstIndex = self.findIndex((item) => {
       if (u.email && item.email) {
         return item.email.toLowerCase() === u.email.toLowerCase();
@@ -181,7 +201,7 @@ export function UserApprovals() {
 
   const formatDate = (timestamp: any) => {
     if (!timestamp) return 'N/A';
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+    const date = new Date(timestamp);
     return date.toLocaleString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
@@ -194,22 +214,12 @@ export function UserApprovals() {
   return (
     <div className="bg-zinc-950 border border-zinc-900 rounded-3xl p-6 sm:p-8 shadow-xl animate-in fade-in duration-200">
       
-      {!hasConfig && (
-        <div className="mb-6 p-4 bg-amber-950/20 border border-amber-900/40 rounded-2xl flex items-start gap-2.5 text-xs text-amber-300 animate-in fade-in duration-200">
-          <AlertCircle className="h-4.5 w-4.5 text-amber-500 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="font-bold">Modo Offline Local Ativo</p>
-            <p className="text-zinc-400">Este gerenciador requer conexão do Google Firebase para listar as contas em tempo real. Atualmente você pode visualizar seu usuário local seguro.</p>
-          </div>
-        </div>
-      )}
-
       {/* Container Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6 pb-6 border-b border-zinc-900">
         <div>
           <h2 className="font-display font-bold text-xl text-white flex items-center gap-2">
             <Users className="h-5.5 w-5.5 text-brand-pink" />
-            <span>Painel de Usuários do Sistema</span>
+            <span>Painel de Usuários do Sistema (Supabase Cloud Sync)</span>
           </h2>
           <p className="text-xs text-zinc-400 mt-1">
             Lista de contas registradas e status de conexão online/offline de colaboradores em tempo real.
@@ -239,7 +249,7 @@ export function UserApprovals() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-zinc-500">
           <Loader2 className="h-8 w-8 animate-spin text-brand-pink" />
-          <span className="text-xs font-semibold">Sincronizando usuários...</span>
+          <span className="text-xs font-semibold">Sincronizando usuários via Supabase...</span>
         </div>
       ) : filteredUsers.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-zinc-900 rounded-2xl text-zinc-500">
@@ -259,12 +269,12 @@ export function UserApprovals() {
               'rejected': { text: 'Recusado', style: 'bg-red-950/30 text-red-400 border border-red-900/30' }
             };
 
-            const statusInfo = statusLabelMap[currentStatus] || { text: currentStatus, style: 'bg-zinc-805 text-zinc-400' };
+            const statusInfo = statusLabelMap[currentStatus] || { text: currentStatus, style: 'bg-zinc-800 text-zinc-400' };
 
             return (
               <div 
                 key={userProfile.id}
-                className="p-5 bg-zinc-900 border border-zinc-905 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-zinc-900/80"
+                className="p-5 bg-zinc-900 border border-zinc-800/50 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all hover:bg-zinc-900/80"
               >
                 {/* User Credentials */}
                 <div className="space-y-1.5 min-w-0">
@@ -280,7 +290,7 @@ export function UserApprovals() {
                         Administrador
                       </span>
                     ) : (
-                      <span className="text-[9px] bg-sky-950/40 border border-sky-900/40 text-sky-450 py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1">
+                      <span className="text-[9px] bg-sky-950/40 border border-sky-900/40 text-sky-400 py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1">
                         <UserCheck className="h-2.5 w-2.5" />
                         Colaborador
                       </span>
@@ -294,11 +304,11 @@ export function UserApprovals() {
                     {/* Online/Offline Status Indicator */}
                     {isUserOnline(userProfile) ? (
                       <span className="text-[9px] bg-emerald-950/25 border border-emerald-900/40 text-emerald-400 py-0.5 px-2.5 rounded-full font-bold flex items-center gap-1.5 animate-pulse" title="Conectado agora">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-450"></span>
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500"></span>
                         Online
                       </span>
                     ) : (
-                      <span className="text-[9px] bg-zinc-950/60 border border-zinc-850 text-zinc-500 py-0.5 px-2.5 rounded-full font-medium flex items-center gap-1.5" title="Desconectado">
+                      <span className="text-[9px] bg-zinc-950/60 border border-zinc-800 text-zinc-500 py-0.5 px-2.5 rounded-full font-medium flex items-center gap-1.5" title="Desconectado">
                         <span className="h-1.5 w-1.5 rounded-full bg-zinc-700"></span>
                         Offline {getLastSeenText(userProfile) ? `(${getLastSeenText(userProfile)})` : ''}
                       </span>
@@ -326,9 +336,11 @@ export function UserApprovals() {
                       {currentStatus !== 'approved' && (
                         <button
                           onClick={async () => {
-                            if (!db) return;
                             try {
-                              await updateDoc(doc(db, 'users', userProfile.id), { status: 'approved' });
+                              const ok = await dbSupabase.updateUserStatus(userProfile.id, 'approved');
+                              if (ok) {
+                                setUsers(prev => prev.map(u => u.id === userProfile.id ? { ...u, status: 'approved' } : u));
+                              }
                             } catch (e) {
                               console.error('Error approving user:', e);
                             }
@@ -342,9 +354,11 @@ export function UserApprovals() {
                       {currentStatus !== 'rejected' && (
                         <button
                           onClick={async () => {
-                            if (!db) return;
                             try {
-                              await updateDoc(doc(db, 'users', userProfile.id), { status: 'rejected' });
+                              const ok = await dbSupabase.updateUserStatus(userProfile.id, 'rejected');
+                              if (ok) {
+                                setUsers(prev => prev.map(u => u.id === userProfile.id ? { ...u, status: 'rejected' } : u));
+                              }
                             } catch (e) {
                               console.error('Error rejecting user:', e);
                             }

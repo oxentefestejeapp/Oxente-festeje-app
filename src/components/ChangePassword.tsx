@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { db, hasConfig } from '../lib/firebase';
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { supabase, dbSupabase } from '../lib/supabase';
 import { 
   Lock, 
   CheckCircle2, 
@@ -66,17 +65,16 @@ export function ChangePassword({ currentUser, onPasswordChanged }: ChangePasswor
     }
 
     try {
-      // 1. Fetch user record to verify current password
+      // 1. Fetch user record to verify current password from Supabase
       let userRecord: any = null;
-      let isFirestore = false;
 
-      if (db && hasConfig && userId) {
-        const userRef = doc(db, 'users', userId);
-        const snap = await getDoc(userRef);
-        if (snap.exists()) {
-          userRecord = snap.data();
-          isFirestore = true;
+      try {
+        const { data, error } = await supabase.from('oxente_users').select('*').eq('id', userId).maybeSingle();
+        if (data && !error) {
+          userRecord = data;
         }
+      } catch (dbErr) {
+        console.warn('Erro ao consultar Supabase durante troca de senha:', dbErr);
       }
 
       // If not found online, fallback to localStorage
@@ -103,13 +101,14 @@ export function ChangePassword({ currentUser, onPasswordChanged }: ChangePasswor
         return;
       }
 
-      // 2. Save the updated password
-      if (isFirestore && db && userId) {
-        const userRef = doc(db, 'users', userId);
-        await updateDoc(userRef, {
+      // 2. Save the updated password to Supabase
+      try {
+        await supabase.from('oxente_users').update({
           password: newPassClean,
-          updatedAt: serverTimestamp()
-        });
+          updated_at: new Date().toISOString()
+        }).eq('id', userId);
+      } catch (dbErr) {
+        console.warn('Erro ao salvar nova senha no Supabase:', dbErr);
       }
 
       // Also support localStorage persistent sync

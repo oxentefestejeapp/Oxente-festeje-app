@@ -29,8 +29,6 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { doc, onSnapshot, updateDoc, serverTimestamp, getDoc, setDoc } from 'firebase/firestore';
-import { db, hasConfig } from './lib/firebase';
 import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig } from './lib/supabase';
 
 import { Header } from './components/Header';
@@ -89,6 +87,7 @@ export default function App() {
   const productsRef = useRef<Product[]>([]);
   const salesRef = useRef<Sale[]>([]);
   const currentUserEmailRef = useRef<string>('');
+  const userChannelRef = useRef<any>(null);
 
   useEffect(() => {
     productsRef.current = products;
@@ -200,15 +199,13 @@ export default function App() {
     return sales.filter(s => isSalePending(s) && (s.valorFaltante !== undefined ? s.valorFaltante > 0 : (s.total - (s.valorPago ?? 0)) > 0)).length;
   }, [sales]);
 
-  // Monitor Authentication State (Custom Code-Based Authenticated User)
+  // Monitor Authentication State (Custom Code-Based Authenticated User backed by Supabase Cloud)
   useEffect(() => {
-    let unsubscribeDoc: (() => void) | null = null;
-
-    const checkLocalAuth = () => {
-      // Clean up previous Firestore listener if exists
-      if (unsubscribeDoc) {
-        unsubscribeDoc();
-        unsubscribeDoc = null;
+    const checkLocalAuth = async () => {
+      // Clean up previous Supabase channel if any
+      if (userChannelRef.current) {
+        supabase.removeChannel(userChannelRef.current);
+        userChannelRef.current = null;
       }
 
       const savedUserStr = localStorage.getItem('oxente_custom_user');
@@ -217,44 +214,74 @@ export default function App() {
           const userObj = JSON.parse(savedUserStr);
           const userIdNormal = userObj.id || userObj.uid || '';
 
-          if (db && hasConfig && userIdNormal) {
-            // Read Firestore real-time snaps for this user
-            const userDocRef = doc(db, 'users', userIdNormal);
-            unsubscribeDoc = onSnapshot(userDocRef, (docSnap) => {
-              if (docSnap.exists()) {
-                const uData = docSnap.data();
-                const enhancedUser = {
-                  ...userObj,
-                  id: uData.id || userIdNormal,
-                  uid: uData.id || userIdNormal,
-                  name: uData.name || userObj.name || 'Colaborador',
-                  displayName: uData.name || userObj.name || 'Colaborador',
-                  email: uData.email || userObj.email || '',
-                  role: uData.role || (uData.id === 'abraaoapp' ? 'admin' : 'colaborador'),
-                  status: uData.status || 'approved'
-                };
-                setFirebaseUser(enhancedUser);
-
-                const statusValue = uData.status || 'approved';
-                if (statusValue === 'approved') {
-                  setUserStatus('approved');
-                } else if (statusValue === 'rejected') {
-                  setUserStatus('rejected');
+          if (userIdNormal) {
+            // First load user details directly from Supabase
+            const loadProfile = async () => {
+              try {
+                const { data, error } = await supabase.from('oxente_users').select('*').eq('id', userIdNormal).maybeSingle();
+                if (data && !error) {
+                  const enhancedUser = {
+                    ...userObj,
+                    id: data.id,
+                    uid: data.id,
+                    name: data.name || userObj.name || 'Colaborador',
+                    displayName: data.name || userObj.name || 'Colaborador',
+                    email: data.email || userObj.email || '',
+                    role: data.role || (data.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+                    status: data.status || 'approved'
+                  };
+                  setFirebaseUser(enhancedUser);
+                  setUserStatus((data.status || 'approved') as any);
                 } else {
-                  setUserStatus('pending');
+                  // Not found on DB yet – create it immediately to allow admin approvals
+                  await dbSupabase.saveUser({
+                    id: userIdNormal,
+                    name: userObj.name || 'Colaborador',
+                    email: userObj.email || '',
+                    role: userObj.role || (userIdNormal === 'abraaoapp' ? 'admin' : 'colaborador'),
+                    status: userObj.status || 'approved'
+                  });
+                  setFirebaseUser(userObj);
+                  setUserStatus((userObj.status || 'approved') as any);
                 }
-              } else {
-                // Not found on DB yet - use local details
+              } catch (e) {
+                console.error('Error loading profile from Supabase:', e);
                 setFirebaseUser(userObj);
-                setUserStatus(userObj.status || 'approved');
+                setUserStatus((userObj.status || 'approved') as any);
               }
-            }, (err) => {
-              console.error('Error fetching real-time snapshot status:', err);
-              setFirebaseUser(userObj);
-              setUserStatus(userObj.status || 'approved');
-            });
+            };
+
+            await loadProfile();
+
+            // Set up real-time postgres single-row changes listener for this user
+            const channel = supabase
+              .channel(`user-sync-${userIdNormal}`)
+              .on('postgres_changes', { 
+                event: '*', 
+                schema: 'public', 
+                table: 'oxente_users', 
+                filter: `id=eq.${userIdNormal}` 
+              }, (payload) => {
+                const { eventType, new: newRow } = payload;
+                if (eventType === 'INSERT' || eventType === 'UPDATE') {
+                  const enhancedUser = {
+                    ...userObj,
+                    id: newRow.id,
+                    uid: newRow.id,
+                    name: newRow.name || userObj.name || 'Colaborador',
+                    displayName: newRow.name || userObj.name || 'Colaborador',
+                    email: newRow.email || userObj.email || '',
+                    role: newRow.role || (newRow.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+                    status: newRow.status || 'approved'
+                  };
+                  setFirebaseUser(enhancedUser);
+                  setUserStatus((newRow.status || 'approved') as any);
+                }
+              })
+              .subscribe();
+
+            userChannelRef.current = channel;
           } else {
-            // Local offline fallback
             setFirebaseUser(userObj);
             setUserStatus('approved');
           }
@@ -273,25 +300,23 @@ export default function App() {
 
     return () => {
       window.removeEventListener('oxente_auth_change', checkLocalAuth);
-      if (unsubscribeDoc) {
-        unsubscribeDoc();
+      if (userChannelRef.current) {
+        supabase.removeChannel(userChannelRef.current);
+        userChannelRef.current = null;
       }
     };
   }, []);
 
-  // Online heartbeat and status synchronization with Firestore
+  // Online heartbeat and status synchronization with Supabase Cloud
   useEffect(() => {
     const uid = firebaseUser?.id || firebaseUser?.uid;
-    if (!uid || !db || !hasConfig) return;
+    if (!uid) return;
 
     const runHeartbeat = async () => {
       try {
-        const userRef = doc(db, 'users', uid);
-        await updateDoc(userRef, {
-          updatedAt: serverTimestamp()
-        });
+        await dbSupabase.updateUserHeartbeat(uid);
       } catch (err) {
-        console.error('Error running online heartbeat:', err);
+        console.error('Error running online heartbeat on Supabase:', err);
       }
     };
 
@@ -299,111 +324,6 @@ export default function App() {
     const interval = setInterval(runHeartbeat, 30000); // 30 seconds
     return () => clearInterval(interval);
   }, [firebaseUser?.id, firebaseUser?.uid]);
-
-  // Synchronize Supabase configurations dynamically through Firestore database inside a real-time snapshot listener
-  useEffect(() => {
-    if (!db || !hasConfig) return;
-
-    // Monitora as chaves do Supabase na nuvem do Firestore em Tempo Real para todos os dispositivos (desktop e mobile)
-    const configDocRef = doc(db, 'config', 'supabase');
-    const unsubscribe = onSnapshot(configDocRef, async (docSnap) => {
-      try {
-        const localUrl = localStorage.getItem('supabase_url');
-        const localKey = localStorage.getItem('supabase_anon_key');
-        const isDirty = localStorage.getItem('supabase_keys_dirty') === 'true';
-
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          const firestoreUrl = data.url;
-          const firestoreKey = data.key;
-
-          if (isAdmin) {
-            // O Administrador é a fonte da verdade de credenciais.
-            // Se o admin editou localmente na tela de Configurações, envia para a nuvem
-            if (isDirty && localUrl && localKey) {
-              if (localUrl !== firestoreUrl || localKey !== firestoreKey) {
-                await setDoc(configDocRef, {
-                  url: localUrl,
-                  key: localKey,
-                  updatedAt: serverTimestamp()
-                });
-                localStorage.removeItem('supabase_keys_dirty');
-                console.log('📡 [Supabase Realtime] Novas credenciais do Administrador salvas no Firestore.');
-              }
-            } else {
-              // Se não está editando localmente, o Admin puxa as chaves da nuvem para manter-se em sincronia com seus outros dispositivos (ex: celular e desktop)
-              if (firestoreUrl && firestoreKey && (localUrl !== firestoreUrl || localKey !== firestoreKey)) {
-                console.log('📡 [Supabase Realtime] Alinhando chaves do Administrador com a nuvem Firestore...');
-                localStorage.setItem('supabase_url', firestoreUrl);
-                localStorage.setItem('supabase_anon_key', firestoreKey);
-                localStorage.removeItem('supabase_keys_dirty');
-                window.location.reload();
-              }
-            }
-          } else {
-            // Funcionários (não-admin) e usuários que ainda estão fazendo login: SEMPRE seguem a nuvem Firestore do Admin em tempo real!
-            if (firestoreUrl && firestoreKey && (localUrl !== firestoreUrl || localKey !== firestoreKey)) {
-              console.log('📡 [Supabase Realtime] Alinhando dispositivo eletrônico às credenciais globais do banco de dados...');
-              localStorage.setItem('supabase_url', firestoreUrl);
-              localStorage.setItem('supabase_anon_key', firestoreKey);
-              localStorage.removeItem('supabase_keys_dirty');
-              window.location.reload();
-            }
-          }
-        } else {
-          // Inicializa o Firestore com as chaves padrão do aplicativo para garantir o primeiro acesso integrado
-          if (isAdmin) {
-            const defaultCfg = getSupabaseConfig();
-            await setDoc(configDocRef, {
-              url: localUrl || defaultCfg.url,
-              key: localKey || defaultCfg.key,
-              updatedAt: serverTimestamp()
-            });
-            console.log('📡 [Supabase Realtime] Configuração padrão criada na nuvem do Firestore.');
-          }
-        }
-      } catch (err) {
-        console.warn('Erro na escuta de credenciais em tempo real do Supabase via Firestore:', err);
-      }
-    });
-
-    return () => unsubscribe();
-  }, [db, isAdmin]);
-
-  // Escutar atualizações de versão unificada/forçada do sistema via Firestore (Suporta sincronização realtime)
-  useEffect(() => {
-    if (!db || !hasConfig) return;
-
-    const versionDocRef = doc(db, 'config', 'app_version');
-    const unsubscribe = onSnapshot(versionDocRef, (docSnap) => {
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        const dbTrigger = data.forcedReloadTrigger;
-        if (dbTrigger) {
-          const lastProcessed = localStorage.getItem('oxente_last_reload_trigger');
-          if (lastProcessed && lastProcessed !== String(dbTrigger)) {
-            // Se o trigger mudou, limpa tudo de cache que é passível de conflito e recarrega
-            localStorage.setItem('oxente_last_reload_trigger', String(dbTrigger));
-            localStorage.removeItem('oxente_products');
-            localStorage.removeItem('oxente_sales');
-            localStorage.removeItem('oxente_store_info');
-            
-            setIsForceUpdating(true);
-            setTimeout(() => {
-              window.location.reload();
-            }, 2500);
-          } else if (!lastProcessed) {
-            // Se é o primeiro carregamento, apenas define para não carregar em loop infinito no primeiro boot
-            localStorage.setItem('oxente_last_reload_trigger', String(dbTrigger));
-          }
-        }
-      }
-    }, (err) => {
-      console.warn('Erro ao escutar atualizações de versão em tempo real:', err);
-    });
-
-    return () => unsubscribe();
-  }, [firebaseUser?.id]);
 
   // Load state on mount (with SWR pull from Supabase Cloud Database)
   useEffect(() => {
@@ -769,6 +689,27 @@ export default function App() {
       console.log('Sincronização em Tempo Real (Loja):', eventType, payload);
 
       if (eventType === 'INSERT' || eventType === 'UPDATE') {
+        if (newRow.key === 'app_version_trigger') {
+          const dbTrigger = Number(newRow.nome);
+          if (dbTrigger) {
+            const lastProcessed = localStorage.getItem('oxente_last_reload_trigger');
+            if (lastProcessed && lastProcessed !== String(dbTrigger)) {
+              localStorage.setItem('oxente_last_reload_trigger', String(dbTrigger));
+              localStorage.removeItem('oxente_products');
+              localStorage.removeItem('oxente_sales');
+              localStorage.removeItem('oxente_store_info');
+              
+              setIsForceUpdating(true);
+              setTimeout(() => {
+                window.location.reload();
+              }, 2500);
+            } else if (!lastProcessed) {
+              localStorage.setItem('oxente_last_reload_trigger', String(dbTrigger));
+            }
+          }
+          return;
+        }
+
         const updatedStore = {
           nome: newRow.nome,
           instagram: newRow.instagram || '',
@@ -1498,20 +1439,18 @@ export default function App() {
   };
 
   const handleForceAllUsersUpdate = async (): Promise<void> => {
-    if (!db || !hasConfig) {
-      alert('Erro: Firebase/Firestore não está configurado!');
-      return;
-    }
     try {
-      const versionDocRef = doc(db, 'config', 'app_version');
       const newTrigger = Date.now();
-      await setDoc(versionDocRef, {
-        forcedReloadTrigger: newTrigger,
-        updatedAt: serverTimestamp(),
-        updatedBy: firebaseUser?.email || 'admin'
+      // Store in Supabase oxente_store_info table under key 'app_version_trigger'
+      const { error } = await supabase.from('oxente_store_info').upsert({
+        key: 'app_version_trigger',
+        nome: String(newTrigger),
+        updated_at: new Date().toISOString()
       });
       
-      // Armazena locally e remove os caches offline para garantir sync perfeito
+      if (error) throw error;
+      
+      // Clear locally
       localStorage.setItem('oxente_last_reload_trigger', String(newTrigger));
       localStorage.removeItem('oxente_products');
       localStorage.removeItem('oxente_sales');
@@ -1523,7 +1462,11 @@ export default function App() {
       }, 2000);
     } catch (err: any) {
       console.error('Erro ao forçar atualização:', err);
-      alert('Erro ao forçar atualização unificada: ' + (err.message || String(err)));
+      // Fallback: clear local and reload
+      localStorage.removeItem('oxente_products');
+      localStorage.removeItem('oxente_sales');
+      localStorage.removeItem('oxente_store_info');
+      window.location.reload();
     }
   };
 
