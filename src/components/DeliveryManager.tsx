@@ -177,6 +177,9 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
     // Create updated Sale with 0 balance and Concluding status
     const updated: Sale = {
       ...selectedSale,
+      valorPagoAntesConcluir: selectedSale.valorPago ?? 0,
+      valorFaltanteAntesConcluir: selectedSale.valorFaltante ?? (selectedSale.total - (selectedSale.valorPago ?? 0)),
+      statusProducaoAntesConcluir: selectedSale.statusProducao || 'Agendado',
       valorPago: selectedSale.total,
       valorFaltante: 0,
       formaPagamento: deliveryPaymentMethod,
@@ -491,7 +494,14 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                               const updated: Sale = {
                                 ...selectedSale,
                                 statusProducao: st,
-                                ...(st === 'Entregue' ? { status: 'Concluído', valorFaltante: 0, valorPago: selectedSale.total } : {})
+                                ...(st === 'Entregue' ? { 
+                                  status: 'Concluído', 
+                                  valorPagoAntesConcluir: selectedSale.valorPago ?? 0,
+                                  valorFaltanteAntesConcluir: selectedSale.valorFaltante ?? (selectedSale.total - (selectedSale.valorPago ?? 0)),
+                                  statusProducaoAntesConcluir: selectedSale.statusProducao || 'Agendado',
+                                  valorFaltante: 0, 
+                                  valorPago: selectedSale.total 
+                                } : {})
                               };
                               onUpdateSale(updated);
                             }}
@@ -572,14 +582,47 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                 </div>
               </div>
             ) : (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex items-center gap-3 shadow-xs no-print">
-                <div className="h-9 w-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm font-bold animate-pulse">
-                  ✓
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-xs no-print">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm font-bold animate-pulse">
+                    ✓
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-zinc-200 text-xs">Pedido Concluído e Pago</h4>
+                    <p className="text-[10px] text-emerald-400 font-medium">Histórico financeiro resolvido integralmente.</p>
+                  </div>
                 </div>
-                <div>
-                  <h4 className="font-bold text-zinc-200 text-xs">Pedido Concluído e Pago</h4>
-                  <p className="text-[10px] text-emerald-400 font-medium">Histórico financeiro resolvido integralmente.</p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const confirmUndo = window.confirm(`Deseja desfazer a conclusão e entrega do pedido de ${selectedSale.cliente}? O pedido voltará para o status Pendente com seu saldo anterior.`);
+                    if (confirmUndo) {
+                      const prevValorPago = selectedSale.valorPagoAntesConcluir !== undefined 
+                        ? selectedSale.valorPagoAntesConcluir 
+                        : (selectedSale.valoresOriginais?.valorPago !== undefined ? selectedSale.valoresOriginais.valorPago : Math.max(0, selectedSale.total - (selectedSale.valoresOriginais?.valorFaltante ?? 0)));
+
+                      const prevValorFaltante = selectedSale.valorFaltanteAntesConcluir !== undefined 
+                        ? selectedSale.valorFaltanteAntesConcluir 
+                        : (selectedSale.valoresOriginais?.valorFaltante !== undefined ? selectedSale.valoresOriginais.valorFaltante : Math.max(0, selectedSale.total - prevValorPago));
+
+                      onUpdateSale({
+                        ...selectedSale,
+                        status: 'Pendente',
+                        valorPago: prevValorPago,
+                        valorFaltante: prevValorFaltante,
+                        statusProducao: selectedSale.statusProducaoAntesConcluir || 'Pronto para Retirada',
+                        foiAlterado: true,
+                        editadoEm: new Date().toISOString()
+                      });
+                      
+                      setSuccessMessage("Mudança desfeita com sucesso! Retornando para lista de pendentes.");
+                      setTimeout(() => setSuccessMessage(''), 3000);
+                    }
+                  }}
+                  className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 hover:text-zinc-100 text-zinc-300 border border-zinc-750 rounded-lg text-[10px] font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5 shadow-sm shrink-0"
+                >
+                  <span>↩️ Desfazer Entrega</span>
+                </button>
               </div>
             )}
 

@@ -68,6 +68,9 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
       ...sale,
       status: 'Concluído',
       statusProducao: 'Entregue',
+      valorPagoAntesConcluir: sale.valorPago ?? 0,
+      valorFaltanteAntesConcluir: sale.valorFaltante ?? (sale.total - (sale.valorPago ?? 0)),
+      statusProducaoAntesConcluir: sale.statusProducao || 'Agendado para Entrega',
       valorFaltante: 0,
       valorPago: sale.total,
       formaPagamento: methodUsed, // Use payment method picked during delivery for remaining

@@ -402,24 +402,22 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                           <ArrowRight className="h-3 w-3 shrink-0 animate-bounce-horizontal" />
                         </button>
                         
-                        {isReadyForPickup && sale.avisoProntoSended && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              const confirmSched = window.confirm(`Deseja agendar a entrega do pedido de ${sale.cliente}?`);
-                              if (confirmSched) {
-                                playAppSound('success');
-                                onUpdateSale({
-                                  ...sale,
-                                  statusProducao: 'Agendado para Entrega'
-                                });
-                              }
-                            }}
-                            className="py-2.5 px-4 bg-purple-950/40 hover:bg-purple-900/40 border border-purple-800/45 text-purple-300 hover:text-purple-100 font-extrabold rounded-xl text-[10px] transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-md"
-                          >
-                            <span>🚚 Agendar para Entrega</span>
-                          </button>
-                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const confirmSched = window.confirm(`Deseja agendar a entrega do pedido de ${sale.cliente}?`);
+                            if (confirmSched) {
+                              playAppSound('success');
+                              onUpdateSale({
+                                ...sale,
+                                statusProducao: 'Agendado para Entrega'
+                              });
+                            }
+                          }}
+                          className="py-2.5 px-4 bg-purple-950/40 hover:bg-purple-900/40 border border-purple-800/45 text-purple-300 hover:text-purple-100 font-extrabold rounded-xl text-[10px] transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-md"
+                        >
+                          <span>🚚 Agendar para Entrega</span>
+                        </button>
 
                         <button
                           type="button"
@@ -430,6 +428,9 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                               onUpdateSale({
                                 ...sale,
                                 status: 'Concluído',
+                                valorPagoAntesConcluir: sale.valorPago ?? 0,
+                                valorFaltanteAntesConcluir: sale.valorFaltante ?? (sale.total - (sale.valorPago ?? 0)),
+                                statusProducaoAntesConcluir: sale.statusProducao || 'Agendado',
                                 valorFaltante: 0,
                                 valorPago: sale.total,
                                 statusProducao: 'Entregue'
@@ -443,9 +444,39 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                         </button>
                       </>
                     ) : (
-                      <div className="text-center py-4 px-3 flex flex-col items-center justify-center text-emerald-500 gap-1.5 select-none">
-                        <CheckCircle className="h-6 w-6 stroke-[3]" />
-                        <span className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-400">Status Concluído</span>
+                      <div className="text-center py-2 px-3 flex flex-col items-center justify-center gap-2 select-none">
+                        <div className="flex flex-col items-center justify-center text-emerald-500 gap-1.5">
+                          <CheckCircle className="h-5 w-5 stroke-[3]" />
+                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-450">Status Concluído</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const confirmUndo = window.confirm(`Deseja desfazer a conclusão/entrega do pedido de ${sale.cliente}?`);
+                            if (confirmUndo) {
+                              const prevValorPago = sale.valorPagoAntesConcluir !== undefined 
+                                ? sale.valorPagoAntesConcluir 
+                                : (sale.valoresOriginais?.valorPago !== undefined ? sale.valoresOriginais.valorPago : Math.max(0, sale.total - (sale.valoresOriginais?.valorFaltante ?? 0)));
+
+                              const prevValorFaltante = sale.valorFaltanteAntesConcluir !== undefined 
+                                ? sale.valorFaltanteAntesConcluir 
+                                : (sale.valoresOriginais?.valorFaltante !== undefined ? sale.valoresOriginais.valorFaltante : Math.max(0, sale.total - prevValorPago));
+
+                              onUpdateSale({
+                                ...sale,
+                                status: 'Pendente',
+                                valorPago: prevValorPago,
+                                valorFaltante: prevValorFaltante,
+                                statusProducao: sale.statusProducaoAntesConcluir || 'Agendado',
+                                foiAlterado: true,
+                                editadoEm: new Date().toISOString()
+                              });
+                            }
+                          }}
+                          className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 hover:text-zinc-100 text-zinc-300 border border-zinc-750 rounded-lg text-[9.5px] font-bold cursor-pointer transition-colors flex items-center gap-1.5 shadow-sm"
+                        >
+                          <span>↩️ Desfazer Conclusão</span>
+                        </button>
                       </div>
                     )}
                   </div>

@@ -78,6 +78,9 @@ export interface Sale {
   notasInternas?: string;
   pedidoAnotado?: boolean;
   avisoProntoSended?: boolean;
+  valorPagoAntesConcluir?: number;
+  valorFaltanteAntesConcluir?: number;
+  statusProducaoAntesConcluir?: 'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Agendado para Entrega' | 'Entregue';
 }
 
 export interface StoreInfo {
