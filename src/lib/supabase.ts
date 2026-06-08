@@ -333,6 +333,18 @@ export const mapDbToSale = (dbItem: any): Sale => ({
 });
 
 // MAIN INTERACTION METHODS WITH GRACEFUL FALLBACKS
+const isNetworkFetchError = (err: any): boolean => {
+  if (!err) return false;
+  const msg = typeof err === 'string' ? err : (err.message || String(err));
+  const lowerMsg = msg.toLowerCase();
+  return lowerMsg.includes('failed to fetch') || 
+         lowerMsg.includes('network error') || 
+         lowerMsg.includes('typeerror') || 
+         lowerMsg.includes('fetch') ||
+         lowerMsg.includes('internet') ||
+         lowerMsg.includes('offline');
+};
+
 const realDbSupabase = {
   // Test connection to verify URL and KEY are valid
   async testConnection(): Promise<{ success: boolean; error?: string; tablesConfigured?: boolean }> {
@@ -351,12 +363,15 @@ const realDbSupabase = {
       const { error: userError } = await supabase.from('oxente_users').select('id').limit(1);
       if (userError) {
         if (userError.code === '42P01' || userError.message.includes('schema cache') || userError.message.includes('not find')) {
+          isUsersTableSupported = false;
           return { 
             success: true, 
             tablesConfigured: false, 
             error: 'A tabela de usuários "oxente_users" está ausente no seu banco de dados do Supabase. Por favor, execute a migration SQL atualizada em Configurações para criá-la!' 
           };
         }
+      } else {
+        isUsersTableSupported = true;
       }
 
       lastSupabaseError = null;
@@ -732,11 +747,21 @@ const realDbSupabase = {
           const cached = localStorage.getItem('oxente_custom_users_local');
           return cached ? JSON.parse(cached) : [];
         }
+        if (isNetworkFetchError(error)) {
+          console.warn('Conectividade offline ou erro de rede ao carregar usuários do Supabase. Carregando registros offline do cache local.');
+          const cached = localStorage.getItem('oxente_custom_users_local');
+          return cached ? JSON.parse(cached) : [];
+        }
         console.warn('Erro ao carregar usuários do Supabase:', error.message);
         return null;
       }
       return data;
     } catch (e) {
+      if (isNetworkFetchError(e)) {
+        console.warn('Conectividade offline ou erro de rede (Promise) ao carregar usuários do Supabase. Carregando registros offline do cache local.');
+        const cached = localStorage.getItem('oxente_custom_users_local');
+        return cached ? JSON.parse(cached) : [];
+      }
       console.warn('Erro geral de conexão com Supabase ao buscar usuários:', e);
       return null;
     }
@@ -787,11 +812,19 @@ const realDbSupabase = {
           isUsersTableSupported = false;
           return true; // Graceful outcome
         }
+        if (isNetworkFetchError(error)) {
+          console.warn('Conectividade offline ou erro de rede ao salvar usuário no Supabase. Os dados foram salvos offline com sucesso.');
+          return true; // Graceful offline success
+        }
         console.error('Erro ao salvar usuário no Supabase:', error.message);
         return false;
       }
       return true;
-    } catch (e) {
+    } catch (e: any) {
+      if (isNetworkFetchError(e)) {
+        console.warn('Conectividade offline ou erro de rede (Promise) ao salvar usuário no Supabase. Os dados foram salvos offline com sucesso:', e?.message || e);
+        return true; // Graceful offline success
+      }
       console.error('Falha ao salvar usuário no Supabase:', e);
       return false;
     }
@@ -818,11 +851,19 @@ const realDbSupabase = {
           isUsersTableSupported = false;
           return true;
         }
+        if (isNetworkFetchError(error)) {
+          console.warn('Conectividade offline ou erro de rede ao excluir usuário no Supabase. Mantido offline.');
+          return true; // Graceful offline success
+        }
         console.error('Erro ao excluir usuário no Supabase:', error.message);
         return false;
       }
       return true;
     } catch (e) {
+      if (isNetworkFetchError(e)) {
+        console.warn('Conectividade offline ou erro de rede ao excluir usuário no Supabase. Mantido offline.');
+        return true; // Graceful offline success
+      }
       console.error('Falha ao excluir usuário no Supabase:', e);
       return false;
     }
@@ -853,11 +894,19 @@ const realDbSupabase = {
           isUsersTableSupported = false;
           return true;
         }
+        if (isNetworkFetchError(error)) {
+          console.warn('Conectividade offline ou erro de rede ao atualizar status do usuário no Supabase. Alterado offline.');
+          return true; // Graceful offline success
+        }
         console.error('Erro ao atualizar status do usuário no Supabase:', error.message);
         return false;
       }
       return true;
     } catch (e) {
+      if (isNetworkFetchError(e)) {
+        console.warn('Conectividade offline ou erro de rede ao atualizar status do usuário no Supabase. Alterado offline.');
+        return true; // Graceful offline success
+      }
       console.error('Falha ao atualizar status no Supabase:', e);
       return false;
     }
@@ -909,10 +958,18 @@ const realDbSupabase = {
           isUsersTableSupported = false;
           return true;
         }
+        if (isNetworkFetchError(error)) {
+          console.warn('Conectividade offline ou erro de rede ao atualizar batimento cardíaco (Heartbeat) no Supabase. Atualizado offline.');
+          return true; // Graceful offline success
+        }
         return false;
       }
       return true;
     } catch (e) {
+      if (isNetworkFetchError(e)) {
+        console.warn('Conectividade offline ou erro de rede ao atualizar batimento cardíaco (Heartbeat) no Supabase. Atualizado offline.');
+        return true; // Graceful offline success
+      }
       return false;
     }
   }

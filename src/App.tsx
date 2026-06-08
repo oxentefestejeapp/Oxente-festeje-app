@@ -204,7 +204,19 @@ export default function App() {
     const checkLocalAuth = async () => {
       // Clean up previous Supabase channel if any
       if (userChannelRef.current) {
-        supabase.removeChannel(userChannelRef.current);
+        if (typeof userChannelRef.current.cleanup === 'function') {
+          try {
+            userChannelRef.current.cleanup();
+          } catch (e) {
+            console.warn('Erro ao limpar canal customizado:', e);
+          }
+        } else {
+          try {
+            supabase.removeChannel(userChannelRef.current);
+          } catch (e) {
+            console.warn('Erro ao remover canal:', e);
+          }
+        }
         userChannelRef.current = null;
       }
 
@@ -257,33 +269,64 @@ export default function App() {
 
             if (isUsersTableSupported) {
               // Set up real-time postgres single-row changes listener for this user
-              const channel = supabase
-                .channel(`user-sync-${userIdNormal}`)
-                .on('postgres_changes', { 
-                  event: '*', 
-                  schema: 'public', 
-                  table: 'oxente_users', 
-                  filter: `id=eq.${userIdNormal}` 
-                }, (payload) => {
-                  const { eventType, new: newRow } = payload;
-                  if (eventType === 'INSERT' || eventType === 'UPDATE') {
-                    const enhancedUser = {
-                      ...userObj,
-                      id: newRow.id,
-                      uid: newRow.id,
-                      name: newRow.name || userObj.name || 'Colaborador',
-                      displayName: newRow.name || userObj.name || 'Colaborador',
-                      email: newRow.email || userObj.email || '',
-                      role: newRow.role || (newRow.id === 'abraaoapp' ? 'admin' : 'colaborador'),
-                      status: newRow.status || 'approved'
-                    };
-                    setFirebaseUser(enhancedUser);
-                    setUserStatus((newRow.status || 'approved') as any);
-                  }
-                })
-                .subscribe();
+              let syncChannel: any = null;
+              let syncReconnectTimer: any = null;
+              let syncActive = true;
 
-              userChannelRef.current = channel;
+              const subscribeUserSync = () => {
+                if (!syncActive) return;
+                if (syncChannel) {
+                  supabase.removeChannel(syncChannel);
+                }
+
+                syncChannel = supabase
+                  .channel(`user-sync-${userIdNormal}`)
+                  .on('postgres_changes', { 
+                    event: '*', 
+                    schema: 'public', 
+                    table: 'oxente_users', 
+                    filter: `id=eq.${userIdNormal}` 
+                  }, (payload) => {
+                    const { eventType, new: newRow } = payload;
+                    if (eventType === 'INSERT' || eventType === 'UPDATE') {
+                      const enhancedUser = {
+                        ...userObj,
+                        id: newRow.id,
+                        uid: newRow.id,
+                        name: newRow.name || userObj.name || 'Colaborador',
+                        displayName: newRow.name || userObj.name || 'Colaborador',
+                        email: newRow.email || userObj.email || '',
+                        role: newRow.role || (newRow.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+                        status: newRow.status || 'approved'
+                      };
+                      setFirebaseUser(enhancedUser);
+                      setUserStatus((newRow.status || 'approved') as any);
+                    }
+                  })
+                  .subscribe((status, err) => {
+                    console.log(`📡 [Supabase Realtime] Canal de Sincronização do Usuário (${userIdNormal}):`, status, err || '');
+                    if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+                      console.warn(`🔄 Canal de Sync do Usuário (${userIdNormal}) encerrado (${status}). Tentando reconectar em 4 segundos...`);
+                      clearTimeout(syncReconnectTimer);
+                      syncReconnectTimer = setTimeout(() => {
+                        if (syncActive) subscribeUserSync();
+                      }, 4000);
+                    } else if (status === 'SUBSCRIBED') {
+                      clearTimeout(syncReconnectTimer);
+                    }
+                  });
+
+                userChannelRef.current = {
+                  channel: syncChannel,
+                  cleanup: () => {
+                    syncActive = false;
+                    clearTimeout(syncReconnectTimer);
+                    supabase.removeChannel(syncChannel);
+                  }
+                };
+              };
+
+              subscribeUserSync();
             }
           } else {
             setFirebaseUser(userObj);
@@ -305,7 +348,19 @@ export default function App() {
     return () => {
       window.removeEventListener('oxente_auth_change', checkLocalAuth);
       if (userChannelRef.current) {
-        supabase.removeChannel(userChannelRef.current);
+        if (typeof userChannelRef.current.cleanup === 'function') {
+          try {
+            userChannelRef.current.cleanup();
+          } catch (e) {
+            console.warn('Erro ao limpar canal no encerramento:', e);
+          }
+        } else {
+          try {
+            supabase.removeChannel(userChannelRef.current);
+          } catch (e) {
+            console.warn('Erro ao remover canal no encerramento:', e);
+          }
+        }
         userChannelRef.current = null;
       }
     };
@@ -726,33 +781,91 @@ export default function App() {
       }
     };
 
-    // Listen to real-time event notifications from Supabase
-    const productsChannel = supabase
-      .channel('oxente_products_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_products' }, handleProductsChange)
-      .subscribe((status) => {
-        console.log('📡 [Supabase Realtime] Canal de Produtos:', status);
-      });
+    // Listen to real-time event notifications from Supabase with self-healing auto-reconnect
+    let productsChannel: any = null;
+    let salesChannel: any = null;
+    let storeChannel: any = null;
+    let reconnectTimers: { [key: string]: any } = {};
 
-    const salesChannel = supabase
-      .channel('oxente_sales_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_sales' }, handleSalesChange)
-      .subscribe((status) => {
-        console.log('📡 [Supabase Realtime] Canal de Vendas:', status);
-      });
+    const subscribeProducts = () => {
+      if (!active) return;
+      if (productsChannel) {
+        supabase.removeChannel(productsChannel);
+      }
+      
+      productsChannel = supabase
+        .channel('oxente_products_realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_products' }, handleProductsChange)
+        .subscribe((status, err) => {
+          console.log(`📡 [Supabase Realtime] Canal de Produtos: ${status}`, err || '');
+          if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn(`🔄 Canal de Produtos encerrado (${status}). Tentando reconectar em 4 segundos...`);
+            clearTimeout(reconnectTimers['products']);
+            reconnectTimers['products'] = setTimeout(() => {
+              if (active) subscribeProducts();
+            }, 4000);
+          } else if (status === 'SUBSCRIBED') {
+            clearTimeout(reconnectTimers['products']);
+          }
+        });
+    };
 
-    const storeChannel = supabase
-      .channel('oxente_store_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_store_info' }, handleStoreChange)
-      .subscribe((status) => {
-        console.log('📡 [Supabase Realtime] Canal da Loja:', status);
-      });
+    const subscribeSales = () => {
+      if (!active) return;
+      if (salesChannel) {
+        supabase.removeChannel(salesChannel);
+      }
+
+      salesChannel = supabase
+        .channel('oxente_sales_realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_sales' }, handleSalesChange)
+        .subscribe((status, err) => {
+          console.log(`📡 [Supabase Realtime] Canal de Vendas: ${status}`, err || '');
+          if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn(`🔄 Canal de Vendas encerrado (${status}). Tentando reconectar em 4 segundos...`);
+            clearTimeout(reconnectTimers['sales']);
+            reconnectTimers['sales'] = setTimeout(() => {
+              if (active) subscribeSales();
+            }, 4000);
+          } else if (status === 'SUBSCRIBED') {
+            clearTimeout(reconnectTimers['sales']);
+          }
+        });
+    };
+
+    const subscribeStore = () => {
+      if (!active) return;
+      if (storeChannel) {
+        supabase.removeChannel(storeChannel);
+      }
+
+      storeChannel = supabase
+        .channel('oxente_store_realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_store_info' }, handleStoreChange)
+        .subscribe((status, err) => {
+          console.log(`📡 [Supabase Realtime] Canal da Loja: ${status}`, err || '');
+          if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn(`🔄 Canal da Loja encerrado (${status}). Tentando reconectar em 4 segundos...`);
+            clearTimeout(reconnectTimers['store']);
+            reconnectTimers['store'] = setTimeout(() => {
+              if (active) subscribeStore();
+            }, 4000);
+          } else if (status === 'SUBSCRIBED') {
+            clearTimeout(reconnectTimers['store']);
+          }
+        });
+    };
+
+    subscribeProducts();
+    subscribeSales();
+    subscribeStore();
 
     return () => {
       active = false;
-      supabase.removeChannel(productsChannel);
-      supabase.removeChannel(salesChannel);
-      supabase.removeChannel(storeChannel);
+      Object.values(reconnectTimers).forEach(timer => clearTimeout(timer));
+      if (productsChannel) supabase.removeChannel(productsChannel);
+      if (salesChannel) supabase.removeChannel(salesChannel);
+      if (storeChannel) supabase.removeChannel(storeChannel);
     };
   }, []);
 

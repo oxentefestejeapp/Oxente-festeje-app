@@ -135,7 +135,15 @@ export function UserApprovals() {
 
     // Subscribe to real-time changes inside table 'oxente_users' if supported
     let channel: any = null;
-    if (isUsersTableSupported) {
+    let reconnectTimer: any = null;
+    let active = true;
+
+    const subscribeUsers = () => {
+      if (!isUsersTableSupported || !active) return;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+
       channel = supabase
         .channel('oxente_users_realtime')
         .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_users' }, (payload: any) => {
@@ -170,12 +178,27 @@ export function UserApprovals() {
             }
           }
         })
-        .subscribe((status) => {
-          console.log('📡 [Supabase Realtime] Canal de Usuários:', status);
+        .subscribe((status, err) => {
+          console.log('📡 [Supabase Realtime] Canal de Usuários:', status, err || '');
+          if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.warn(`🔄 Canal de Usuários encerrado (${status}). Tentando reconectar em 4 segundos...`);
+            clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+              if (active) subscribeUsers();
+            }, 4000);
+          } else if (status === 'SUBSCRIBED') {
+            clearTimeout(reconnectTimer);
+          }
         });
+    };
+
+    if (isUsersTableSupported) {
+      subscribeUsers();
     }
 
     return () => {
+      active = false;
+      clearTimeout(reconnectTimer);
       if (channel) {
         supabase.removeChannel(channel);
       }
