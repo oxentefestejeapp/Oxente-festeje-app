@@ -469,9 +469,17 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                               playAppSound('click');
                               setSchedulingSaleId(sale.id);
                             }}
-                            className="py-2.5 px-4 bg-purple-950/40 hover:bg-purple-900/40 border border-purple-800/45 text-purple-300 hover:text-purple-100 font-extrabold rounded-xl text-[10px] transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-md"
+                            className={
+                              sale.statusProducao === 'Agendado para Entrega'
+                                ? "py-2.5 px-4 bg-emerald-950/60 hover:bg-emerald-900/60 border border-emerald-500/40 text-emerald-400 hover:text-emerald-200 font-extrabold rounded-xl text-[10px] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md shadow-emerald-955/15"
+                                : "py-2.5 px-4 bg-purple-950/40 hover:bg-purple-900/40 border border-purple-800/45 text-purple-300 hover:text-purple-100 font-extrabold rounded-xl text-[10px] transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-md"
+                            }
                           >
-                            <span>🚚 Agendar para Entrega</span>
+                            <span>
+                              {sale.statusProducao === 'Agendado para Entrega'
+                                ? '🚚 Agendado'
+                                : '🚚 Agendar para Entrega'}
+                            </span>
                           </button>
                         )}
 
