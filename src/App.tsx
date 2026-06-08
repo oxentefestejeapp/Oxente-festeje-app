@@ -465,9 +465,9 @@ export default function App() {
 
         // Sync Products
         if (dbProds) {
-          // Identify local-only products (present locally but not on the server and are pending creation) to upload them and prevent losing newly registered products
+          // Identify local-only products (present locally but not on the server) to upload them and prevent losing newly registered products
           const serverProductIds = new Set(dbProds.map(p => p.id));
-          const localOnlyProducts = loadedProducts.filter(p => p && p.id && !serverProductIds.has(p.id) && pendingProducts.current && pendingProducts.current[p.id]);
+          const localOnlyProducts = loadedProducts.filter(p => p && p.id && !serverProductIds.has(p.id));
 
           if (localOnlyProducts.length > 0) {
             console.log(`📤 Encontrados ${localOnlyProducts.length} produtos locais/offline. Fazendo upload automático para a nuvem compartilhada...`);
@@ -2089,6 +2089,7 @@ export default function App() {
                 onUpdateStock={handleUpdateStock}
                 onDeleteProduct={handleDeleteProduct}
                 onUpdateProduct={handleUpdateProduct}
+                onAddProduct={handleAddProduct}
                 isAdmin={isAdmin}
               />
             )}

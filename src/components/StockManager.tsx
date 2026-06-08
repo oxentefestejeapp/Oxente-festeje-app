@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useRef, DragEvent, ChangeEvent } from 'react';
-import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box, Check, X, Pencil, Upload, Loader2, Sparkles, AlertCircle, Layers } from 'lucide-react';
+import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box, Check, X, Pencil, Upload, Loader2, Sparkles, AlertCircle, Layers, Undo2, History } from 'lucide-react';
 import { Product, PricingTier } from '../types';
 
 // Client-side image compression using HTML5 Canvas to keep Base64 strings tiny (~30KB-50KB)
@@ -58,14 +58,64 @@ interface StockManagerProps {
   onUpdateStock: (id: string, newStock: number, isInfinite?: boolean) => void;
   onDeleteProduct: (id: string) => void;
   onUpdateProduct?: (updatedProduct: Product) => Promise<boolean>;
+  onAddProduct?: (newProduct: Product) => Promise<boolean>;
   isAdmin?: boolean;
 }
 
-export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdateProduct, isAdmin = false }: StockManagerProps) {
+export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdateProduct, onAddProduct, isAdmin = false }: StockManagerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [editedStocks, setEditedStocks] = useState<Record<string, number>>({});
   const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
+
+  // States and Handlers for Undoing / Restoring Deleted Stock Products
+  const [deletedHistory, setDeletedHistory] = useState<Product[]>(() => {
+    try {
+      const saved = localStorage.getItem('oxente_deleted_products_history');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [lastDeletedProduct, setLastDeletedProduct] = useState<Product | null>(null);
+  const [showUndoToast, setShowUndoToast] = useState(false);
+  const toastTimeoutRef = useRef<any>(null);
+
+  const handleAddToDeletedHistory = (prod: Product) => {
+    setDeletedHistory(prev => {
+      const filtered = prev.filter(p => p.id !== prod.id);
+      const updated = [prod, ...filtered].slice(0, 15); // max 15 products in history
+      localStorage.setItem('oxente_deleted_products_history', JSON.stringify(updated));
+      return updated;
+    });
+
+    setLastDeletedProduct(prod);
+    setShowUndoToast(true);
+
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    toastTimeoutRef.current = setTimeout(() => {
+      setShowUndoToast(false);
+    }, 15000); // clear floating undo after 15 seconds
+  };
+
+  const handleRestoreDeletedProduct = async (prod: Product) => {
+    if (!onAddProduct) return;
+    const success = await onAddProduct(prod);
+    if (success !== false) {
+      setDeletedHistory(prev => {
+        const updated = prev.filter(p => p.id !== prod.id);
+        localStorage.setItem('oxente_deleted_products_history', JSON.stringify(updated));
+        return updated;
+      });
+      if (lastDeletedProduct?.id === prod.id) {
+        setShowUndoToast(false);
+        setLastDeletedProduct(null);
+      }
+    }
+  };
 
   const scrollToProduct = (id: string) => {
     setSearchTerm('');
@@ -329,6 +379,28 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
   return (
     <div className="space-y-6">
 
+      {/* 🔔 Toast Flutuante de Desfazer Exclusão */}
+      {showUndoToast && lastDeletedProduct && (
+        <div className="fixed bottom-6 right-6 z-50 bg-zinc-900 border border-brand-pink/50 shadow-[0_8px_32px_rgba(219,39,119,0.3)] rounded-2xl py-3.5 px-4.5 flex items-center justify-between gap-4 animate-fade-in max-w-sm w-full">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="h-9 w-9 rounded-xl bg-red-950/40 border border-red-900/40 flex items-center justify-center text-red-400 shrink-0">
+              <Trash2 className="h-5 w-5" />
+            </div>
+            <div className="min-w-0">
+              <span className="text-[10px] text-zinc-500 uppercase font-black tracking-widest block">Excluído por engano?</span>
+              <strong className="text-zinc-200 text-xs font-semibold truncate block mt-0.5">{lastDeletedProduct.nome}</strong>
+            </div>
+          </div>
+          <button
+            onClick={() => handleRestoreDeletedProduct(lastDeletedProduct)}
+            className="px-3.5 py-2 bg-brand-pink text-white rounded-xl text-xs font-black tracking-wider uppercase hover:bg-brand-pink/90 active:scale-95 transition-all cursor-pointer flex items-center gap-1.5 shrink-0 shadow-md font-sans"
+          >
+            <Undo2 className="h-4 w-4" />
+            Desfazer
+          </button>
+        </div>
+      )}
+
       {/* 📊 STOCK ANALYTICS INDICATORS BAR */}
       {isAdmin && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -415,6 +487,68 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
             <p className="text-[10px] text-zinc-500 mt-2 pt-2 border-t border-zinc-850/60 font-medium">Produtos com estoque menor que 10!</p>
           </div>
 
+        </div>
+      )}
+
+      {/* 🗑️ Lixeira de Itens Excluídos (Apenas Administrador) */}
+      {isAdmin && deletedHistory.length > 0 && (
+        <div className="bg-zinc-950/40 border border-zinc-850 rounded-2xl p-4.5 shadow-xs animate-fade-in space-y-3">
+          <div className="flex items-center justify-between border-b border-zinc-850/60 pb-2.5">
+            <div className="flex items-center gap-2">
+              <History className="h-4 w-4 text-brand-pink" />
+              <h4 className="text-xs font-extrabold text-zinc-300 uppercase tracking-widest font-sans">Lixeira de Brindes Excluídos ({deletedHistory.length})</h4>
+            </div>
+            <button
+              onClick={() => {
+                setDeletedHistory([]);
+                localStorage.removeItem('oxente_deleted_products_history');
+              }}
+              className="text-[10px] text-zinc-500 hover:text-red-400 font-black uppercase tracking-wider transition-colors cursor-pointer select-none"
+            >
+              Esvaziar Lixeira
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[220px] overflow-y-auto pr-1">
+            {deletedHistory.map((p) => (
+              <div key={p.id} className="bg-zinc-900 border border-zinc-850 rounded-xl p-3 flex items-center gap-3 hover:border-zinc-800 transition-all shadow-xs">
+                {/* Imagem em miniatura */}
+                <div className="shrink-0">
+                  {p.imagemBase64 ? (
+                    <img 
+                      src={p.imagemBase64} 
+                      alt={p.nome} 
+                      className="h-10 w-10 rounded-lg object-cover bg-black border border-zinc-800" 
+                      referrerPolicy="no-referrer" 
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded-lg bg-zinc-950 flex items-center justify-center text-zinc-650 border border-zinc-850">
+                      <Box className="h-4 w-4" />
+                    </div>
+                  )}
+                </div>
+                {/* Nome e Estoque Anterior */}
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-black text-zinc-150 truncate leading-tight" title={p.nome}>{p.nome}</p>
+                  <p className="text-[10px] font-semibold text-zinc-550 mt-1 flex items-center gap-1">
+                    <span className="font-sans">Estoque:</span> 
+                    <span className="font-mono text-zinc-400 font-bold">{p.estoque} un.</span>
+                  </p>
+                </div>
+                {/* Botão de Recuperar */}
+                <button
+                  onClick={() => handleRestoreDeletedProduct(p)}
+                  className="px-2.5 py-1.5 bg-brand-pink/10 hover:bg-brand-pink hover:text-white border border-brand-pink/25 hover:border-brand-pink text-brand-pink text-[11px] font-black uppercase tracking-wider rounded-lg transition-all flex items-center gap-1 shrink-0 cursor-pointer active:scale-95"
+                  title="Restaurar produto para o estoque ativo"
+                >
+                  <Undo2 className="h-3 w-3" />
+                  <span>Recuperar</span>
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="text-[10px] text-zinc-550 leading-tight">
+            Clique em <strong>Recuperar</strong> para restaurar o brinde de volta ao estoque principal com as mesmas configurações de preço e histórico.
+          </p>
         </div>
       )}
       
@@ -660,6 +794,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => {
+                                handleAddToDeletedHistory(p);
                                 onDeleteProduct(p.id);
                                 setProductToDelete(null);
                               }}

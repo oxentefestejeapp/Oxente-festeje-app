@@ -44,8 +44,8 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
   const totalSalesCount = actualSales.length;
   const totalRevenue = actualSales.reduce((acc, curr) => acc + curr.total, 0);
 
-  // Products with stock less than 3 units
-  const criticalProducts = products.filter(p => p.estoque < 3);
+  // Products with stock less than 3 units (ignoring infinite stock products)
+  const criticalProducts = products.filter(p => p && !p.estoqueInfinito && p.estoque < 3);
   const criticalCount = criticalProducts.length;
 
   return (
