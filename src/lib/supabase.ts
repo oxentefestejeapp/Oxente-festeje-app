@@ -76,11 +76,11 @@ CREATE TABLE IF NOT EXISTS oxente_products (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Garantir que a coluna de preços progressivos exista se a tabela já foi criada anteriormente
+-- Garantir que todos as colunas de produtos existam caso a tabela já tenha sido criada anteriormente
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS precos_progressivos TEXT;
-
--- Garantir que a coluna de imagem esteja presente também
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS imagem_base64 TEXT;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS estoque_infinito BOOLEAN DEFAULT FALSE;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS preco_custo NUMERIC;
 
 -- Desabilitar RLS para permitir que o Realtime distribua as atualizações instantaneamente e sem restrições de token para clientes anônimos (anon key)
 ALTER TABLE oxente_products DISABLE ROW LEVEL SECURITY;
@@ -125,14 +125,41 @@ CREATE TABLE IF NOT EXISTS oxente_sales (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Garantir que as colunas de pedido anotado e aviso de pronto existam caso a tabela já tenha sido criada anteriormente
+-- Garantir que absolutamente todas as colunas de vendas existam caso a tabela já tenha sido criada anteriormente
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS telefone_cliente TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS produto_id TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS produto_nome TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS preco_un NUMERIC;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS quantidade INTEGER;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS valor_pago NUMERIC;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS valor_faltante NUMERIC;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS numero_pedido TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS status TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS itens JSONB;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS criado_por_email TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS data_retirada TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS status_producao TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS designer_id TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS status_arte TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS puxado_por TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS puxado_em TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS observacoes_design TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS foi_alterado BOOLEAN DEFAULT FALSE;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS remover_do_design BOOLEAN DEFAULT FALSE;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS editado_por_email TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS editado_em TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS arte_finalizada_por_email TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS arte_finalizada_em TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS valores_originais JSONB;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS notas_internas TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS pedido_anotado BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS aviso_pronto_sended BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS turno_entrega TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
-ALTER TABLE oxente_sales ENABLE ROW LEVEL SECURITY;
+-- Desabilitar RLS para garantir que as atualizações de pedidos sejam propagadas instantaneamente entre todos os computadores e celulares
+ALTER TABLE oxente_sales DISABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_sales;
-CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_sales FOR ALL USING (true) WITH CHECK (true);
 
 -- 3. Tabela de Configurações da Loja (Store Info)
 CREATE TABLE IF NOT EXISTS oxente_store_info (
@@ -145,9 +172,9 @@ CREATE TABLE IF NOT EXISTS oxente_store_info (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-ALTER TABLE oxente_store_info ENABLE ROW LEVEL SECURITY;
+-- Desabilitar RLS para as configurações da loja para que qualquer cliente leia/salve instantaneamente as alterações de configurações
+ALTER TABLE oxente_store_info DISABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_store_info;
-CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_store_info FOR ALL USING (true) WITH CHECK (true);
 
 -- Inserir dados de configuração padrão da loja se não existirem
 INSERT INTO oxente_store_info (key, nome, instagram, telefone, endereco, whatsapp_template)
@@ -168,9 +195,9 @@ CREATE TABLE IF NOT EXISTS oxente_users (
 
 ALTER TABLE oxente_users ADD COLUMN IF NOT EXISTS password TEXT;
 
-ALTER TABLE oxente_users ENABLE ROW LEVEL SECURITY;
+-- Desabilitar RLS para garantir que as atualizações de usuários sejam propagadas instantaneamente
+ALTER TABLE oxente_users DISABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_users;
-CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_users FOR ALL USING (true) WITH CHECK (true);
 
 -- 5. Ajustar Réplica de Identidade (Garante payload completo em UPDATES e DELETES no canais Realtime)
 ALTER TABLE oxente_products REPLICA IDENTITY FULL;
