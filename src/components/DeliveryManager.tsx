@@ -67,6 +67,8 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
   // Deliver balance custom status states
   const [deliveryPaymentMethod, setDeliveryPaymentMethod] = useState<PaymentMethod>('Pix');
   const [successMessage, setSuccessMessage] = useState('');
+  const [localObservacoes, setLocalObservacoes] = useState('');
+  const [isSavingObs, setIsSavingObs] = useState(false);
 
   // Helper helper to check if a sale is Pending delivery
   const isSalePending = (sale: Sale) => {
@@ -165,6 +167,9 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
   React.useEffect(() => {
     if (selectedSale) {
       setDeliveryPaymentMethod(selectedSale.formaPagamento);
+      setLocalObservacoes(selectedSale.observacoesDesign || '');
+    } else {
+      setLocalObservacoes('');
     }
   }, [selectedSale]);
 
@@ -185,6 +190,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
       formaPagamento: deliveryPaymentMethod,
       status: 'Concluído',
       statusProducao: 'Entregue',
+      observacoesDesign: localObservacoes,
     };
 
     onUpdateSale(updated);
@@ -535,7 +541,8 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                                   statusProducaoAntesConcluir: selectedSale.statusProducao || 'Agendado',
                                   valorFaltante: 0, 
                                   valorPago: selectedSale.total 
-                                } : {})
+                                } : {}),
+                                observacoesDesign: localObservacoes,
                               };
                               onUpdateSale(updated);
                             }}
@@ -555,21 +562,60 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
 
                   {/* INTERACTIVE CUSTOMER NOTES OR INSTRUCTIONS */}
                   <div className="space-y-1.5 bg-zinc-950/45 border border-zinc-850 p-4 rounded-xl no-print">
-                    <label className="block text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider select-none text-brand-pink">
-                      📝 INSTRUÇÕES OU OBSERVAÇÕES DE RETIRADA/ENTREGA
-                    </label>
+                    <div className="flex justify-between items-center">
+                      <label className="block text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider select-none text-brand-pink">
+                        📝 INSTRUÇÕES OU OBSERVAÇÕES DE RETIRADA/ENTREGA
+                      </label>
+                      {selectedSale.observacoesDesign !== localObservacoes && (
+                        <span className="text-[9px] text-amber-400 font-bold animate-pulse">
+                          ⚠️ Alterações pendentes
+                        </span>
+                      )}
+                    </div>
                     <textarea
                       placeholder="Ex: Entregar após as 14h, embalar para presente, ou deixar na portaria..."
-                      value={selectedSale.observacoesDesign || ''}
-                      onChange={(e) => {
-                        const updated: Sale = {
+                      value={localObservacoes}
+                      onChange={(e) => setLocalObservacoes(e.target.value)}
+                      onBlur={() => {
+                        onUpdateSale({
                           ...selectedSale,
-                          observacoesDesign: e.target.value
-                        };
-                        onUpdateSale(updated);
+                          observacoesDesign: localObservacoes
+                        });
                       }}
                       className="w-full min-h-[55px] max-h-[140px] p-2 bg-black border border-zinc-800 rounded-lg text-xs font-semibold text-zinc-200 placeholder-zinc-700 focus:outline-none focus:border-brand-pink"
                     />
+                    <div className="flex justify-end pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsSavingObs(true);
+                          onUpdateSale({
+                            ...selectedSale,
+                            observacoesDesign: localObservacoes
+                          });
+                          setTimeout(() => {
+                            setIsSavingObs(false);
+                          }, 1000);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold cursor-pointer transition-all duration-200 flex items-center gap-1.5 border ${
+                          selectedSale.observacoesDesign === localObservacoes
+                            ? 'bg-zinc-800/50 text-zinc-400 border-zinc-800/80'
+                            : 'bg-brand-pink text-black font-extrabold shadow-md border-white/10 hover:scale-[1.01]'
+                        }`}
+                      >
+                        {isSavingObs ? (
+                          <>
+                            <span className="animate-spin inline-block h-3 w-3 border-2 border-current border-t-transparent rounded-full" />
+                            <span>Salvando...</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>{selectedSale.observacoesDesign === localObservacoes ? '✓' : '💾'}</span>
+                            <span>{selectedSale.observacoesDesign === localObservacoes ? 'Salvo na Nuvem' : 'Salvar Instruções'}</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
                   
                   <form onSubmit={handleConfirmDeliveryAndPayment} className="space-y-4">
