@@ -495,21 +495,25 @@ export default function App() {
         }
 
         // Sync Sales
-        if (dbSaless && dbSaless.length > 0) {
-          const oneDayAgoTime = new Date().getTime() - (24 * 60 * 60 * 1000);
-          const filteredSaless = dbSaless.filter(s => {
-            if (s.status === 'Orçamento') {
-              const sTime = new Date(s.data).getTime();
-              if (isNaN(sTime)) return true;
-              return sTime >= oneDayAgoTime;
-            }
-            return true;
-          });
-          setSales(filteredSaless);
-          localStorage.setItem('oxente_sales', JSON.stringify(filteredSaless));
-        } else if (dbSaless && dbSaless.length === 0 && loadedSales.length > 0) {
-          console.log('Populando vendas locais para o Supabase pela primeira vez...');
-          await Promise.all(loadedSales.map(s => dbSupabase.saveSale(s)));
+        if (dbSaless) {
+          if (dbSaless.length > 0) {
+            const oneDayAgoTime = new Date().getTime() - (24 * 60 * 60 * 1000);
+            const filteredSaless = dbSaless.filter(s => {
+              if (s.status === 'Orçamento') {
+                const sTime = new Date(s.data).getTime();
+                if (isNaN(sTime)) return true;
+                return sTime >= oneDayAgoTime;
+              }
+              return true;
+            });
+            setSales(filteredSaless);
+            localStorage.setItem('oxente_sales', JSON.stringify(filteredSaless));
+          } else {
+            // Se o banco de dados de vendas foi esvaziado/zerado, limpa o estado local
+            // para evitar ressuscitar vendas do localStorage.
+            setSales([]);
+            localStorage.setItem('oxente_sales', JSON.stringify([]));
+          }
         }
 
         // Sync Store Info
@@ -750,7 +754,7 @@ export default function App() {
           dbSupabase.fetchStoreInfo()
         ]);
 
-        if (dbProds && dbProds.length > 0) {
+        if (dbProds) {
           setProducts((curr) => {
             // Index the database products, applying pending stock changes
             const mergedProdsMap = new Map(dbProds.map(p => {
@@ -790,7 +794,7 @@ export default function App() {
           });
         }
 
-        if (dbSaless && dbSaless.length > 0) {
+        if (dbSaless) {
           setSales((curr) => {
             // Find newly added sales that are not in our current state (curr)
             const currentIds = new Set(curr.map(s => s.id));
@@ -874,9 +878,18 @@ export default function App() {
               return serverSale;
             });
             
-            // Re-add any sales that are present locally but not on the server list yet
+            // Only re-add very recently created local sales (less than 15 seconds old), which could be in-flight saves
+            // This prevents resurrecting old deleted sales or old zeroed databases
+            const nowTime = Date.now();
             const serverIds = new Set(typedDbSales.map(s => s.id));
-            const unsavedLocalSales = curr.filter(s => !serverIds.has(s.id));
+            const unsavedLocalSales = curr.filter(s => {
+              if (serverIds.has(s.id)) return false;
+              const createdAt = s.data ? new Date(s.data).getTime() : 0;
+              const updatedAt = s.updatedAt ? new Date(s.updatedAt).getTime() : 0;
+              const maxTime = Math.max(createdAt, updatedAt);
+              const diffMs = nowTime - maxTime;
+              return diffMs >= 0 && diffMs < 15000; // Only keep if in-flight (less than 15s)
+            });
             if (unsavedLocalSales.length > 0) {
               mergedSalesList.push(...unsavedLocalSales);
             }
