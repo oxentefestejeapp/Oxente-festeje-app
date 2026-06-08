@@ -553,8 +553,17 @@ export default function App() {
             }
           }
 
-          if (dbSaless.length > 0) {
-            const filteredSaless = dbSaless.filter(s => {
+          // Maintain local safety: keep local-only sales in the final list if they aren't on the server yet
+          const finalServerSalesIds = new Set(dbSaless.map(s => s.id));
+          const unsavedLocalSalesAtStart = loadedSales.filter(s => s && s.id && !finalServerSalesIds.has(s.id));
+          
+          const mergedSalesList = [...dbSaless];
+          if (unsavedLocalSalesAtStart.length > 0) {
+            mergedSalesList.push(...unsavedLocalSalesAtStart);
+          }
+
+          if (mergedSalesList.length > 0) {
+            const filteredSaless = mergedSalesList.filter(s => {
               if (s.status === 'Orçamento') {
                 const sTime = new Date(s.data).getTime();
                 if (isNaN(sTime)) return true;
@@ -562,6 +571,7 @@ export default function App() {
               }
               return true;
             });
+            filteredSaless.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
             setSales(filteredSaless);
             localStorage.setItem('oxente_sales', JSON.stringify(filteredSaless));
           } else {
@@ -796,11 +806,12 @@ export default function App() {
         supabase.removeChannel(productsChannel);
       }
       
+      const channelId = `oxente_products_realtime_${Math.random().toString(36).substring(2, 9)}`;
       productsChannel = supabase
-        .channel('oxente_products_realtime')
+        .channel(channelId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_products' }, handleProductsChange)
         .subscribe((status, err) => {
-          console.log(`📡 [Supabase Realtime] Canal de Produtos: ${status}`, err || '');
+          console.log(`📡 [Supabase Realtime] Canal de Produtos (${channelId}): ${status}`, err || '');
           if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             console.warn(`🔄 Canal de Produtos encerrado (${status}). Tentando reconectar em 4 segundos...`);
             clearTimeout(reconnectTimers['products']);
@@ -819,11 +830,12 @@ export default function App() {
         supabase.removeChannel(salesChannel);
       }
 
+      const channelId = `oxente_sales_realtime_${Math.random().toString(36).substring(2, 9)}`;
       salesChannel = supabase
-        .channel('oxente_sales_realtime')
+        .channel(channelId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_sales' }, handleSalesChange)
         .subscribe((status, err) => {
-          console.log(`📡 [Supabase Realtime] Canal de Vendas: ${status}`, err || '');
+          console.log(`📡 [Supabase Realtime] Canal de Vendas (${channelId}): ${status}`, err || '');
           if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             console.warn(`🔄 Canal de Vendas encerrado (${status}). Tentando reconectar em 4 segundos...`);
             clearTimeout(reconnectTimers['sales']);
@@ -842,11 +854,12 @@ export default function App() {
         supabase.removeChannel(storeChannel);
       }
 
+      const channelId = `oxente_store_realtime_${Math.random().toString(36).substring(2, 9)}`;
       storeChannel = supabase
-        .channel('oxente_store_realtime')
+        .channel(channelId)
         .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_store_info' }, handleStoreChange)
         .subscribe((status, err) => {
-          console.log(`📡 [Supabase Realtime] Canal da Loja: ${status}`, err || '');
+          console.log(`📡 [Supabase Realtime] Canal da Loja (${channelId}): ${status}`, err || '');
           if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
             console.warn(`🔄 Canal da Loja encerrado (${status}). Tentando reconectar em 4 segundos...`);
             clearTimeout(reconnectTimers['store']);
@@ -1056,7 +1069,7 @@ export default function App() {
               const updatedAt = s.updatedAt ? new Date(s.updatedAt).getTime() : 0;
               const maxTime = Math.max(createdAt, updatedAt);
               const diffMs = nowTime - maxTime;
-              return diffMs >= 0 && diffMs < 900000; // 15 minutes (900000 ms)
+              return Math.abs(diffMs) < 900000; // 15 minutes (900000 ms), tolerate timezone/clock mismatch
             });
             if (unsavedLocalSales.length > 0) {
               mergedSalesList.push(...unsavedLocalSales);
