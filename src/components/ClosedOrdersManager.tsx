@@ -245,6 +245,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
       const updated: Sale = {
         ...sale,
         statusArte: nextStatus,
+        statusProducao: 'Em Produção', // Already set to in production when art is completed
         arteFinalizadaPorEmail: currentUserEmail,
         arteFinalizadaEm: new Date().toISOString()
       };

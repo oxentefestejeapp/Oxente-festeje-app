@@ -29,6 +29,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
   const [category, setCategory] = useState<'Pendentes' | 'Concluidos'>('Pendentes');
   const [deliverySearchTerm, setDeliverySearchTerm] = useState('');
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
+  const [productionStatusFilter, setProductionStatusFilter] = useState<'All' | 'Agendado' | 'Em Produção' | 'Pronto para Retirada'>('All');
 
   const actualSales = useMemo(() => {
     return sales.filter(s => s.status !== 'Orçamento');
@@ -145,7 +146,13 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
   // Handle filtering by order number, client name, or telephone number
   const getFilteredList = () => {
     const term = deliverySearchTerm.toLowerCase().trim();
-    const list = category === 'Pendentes' ? pendingSales : concludedSales;
+    let list = category === 'Pendentes' ? pendingSales : concludedSales;
+    
+    // Filtro por status de produção quando selecionado nas métricas
+    if (productionStatusFilter !== 'All') {
+      list = list.filter(s => (s.statusProducao || 'Agendado') === productionStatusFilter);
+    }
+    
     if (!term) return list;
     
     return list.filter((sale) => {
@@ -225,20 +232,67 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
           </div>
         </div>
 
-        {/* ⚙️ PIPELINE METRICS CONTAINER BAR */}
+        {/* ⚙️ PIPELINE METRICS CONTAINER BAR (CLICÁVEIS PARA FILTRAR) */}
         <div className="grid grid-cols-3 gap-3 no-print">
-          <div className="bg-zinc-900 border border-zinc-850 p-3 rounded-xl">
-            <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-extrabold block">Agendados</span>
+          <button
+            type="button"
+            onClick={() => {
+              setProductionStatusFilter(prev => prev === 'Agendado' ? 'All' : 'Agendado');
+              setSelectedSaleId(null);
+            }}
+            className={`p-3 rounded-xl border text-left transition-all active:scale-98 cursor-pointer relative overflow-hidden group ${
+              productionStatusFilter === 'Agendado'
+                ? 'bg-blue-950/20 border-blue-500/50 shadow-[0_0_12px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/30'
+                : 'bg-zinc-900 border-zinc-850 hover:border-zinc-750 hover:bg-zinc-850/30'
+            }`}
+            title="Clique para filtrar apenas pedidos agendados"
+          >
+            <span className="text-[9px] uppercase tracking-wider text-zinc-500 group-hover:text-zinc-400 font-extrabold block">Agendados</span>
             <span className="text-lg font-black text-blue-400 font-mono mt-0.5 block">{pipelineMetrics.scheduled}</span>
-          </div>
-          <div className="bg-zinc-900 border border-zinc-850 p-3 rounded-xl">
-            <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-extrabold block">Em Produção</span>
+            {productionStatusFilter === 'Agendado' && (
+              <span className="absolute top-1 right-2 w-1.5 h-1.5 rounded-full bg-blue-400" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setProductionStatusFilter(prev => prev === 'Em Produção' ? 'All' : 'Em Produção');
+              setSelectedSaleId(null);
+            }}
+            className={`p-3 rounded-xl border text-left transition-all active:scale-98 cursor-pointer relative overflow-hidden group ${
+              productionStatusFilter === 'Em Produção'
+                ? 'bg-amber-950/20 border-amber-500/50 shadow-[0_0_12px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/30'
+                : 'bg-zinc-900 border-zinc-850 hover:border-zinc-750 hover:bg-zinc-850/30'
+            }`}
+            title="Clique para filtrar apenas pedidos em produção"
+          >
+            <span className="text-[9px] uppercase tracking-wider text-zinc-500 group-hover:text-zinc-400 font-extrabold block">Em Produção</span>
             <span className="text-lg font-black text-amber-400 font-mono mt-0.5 block">{pipelineMetrics.inProduction}</span>
-          </div>
-          <div className="bg-zinc-900 border border-zinc-850 p-3 rounded-xl">
-            <span className="text-[9px] uppercase tracking-wider text-zinc-500 font-extrabold block">Prontos</span>
+            {productionStatusFilter === 'Em Produção' && (
+              <span className="absolute top-1 right-2 w-1.5 h-1.5 rounded-full bg-amber-400" />
+            )}
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setProductionStatusFilter(prev => prev === 'Pronto para Retirada' ? 'All' : 'Pronto para Retirada');
+              setSelectedSaleId(null);
+            }}
+            className={`p-3 rounded-xl border text-left transition-all active:scale-98 cursor-pointer relative overflow-hidden group ${
+              productionStatusFilter === 'Pronto para Retirada'
+                ? 'bg-purple-950/20 border-purple-500/50 shadow-[0_0_12px_rgba(168,85,247,0.15)] ring-1 ring-purple-500/30'
+                : 'bg-zinc-900 border-zinc-850 hover:border-zinc-750 hover:bg-zinc-850/30'
+            }`}
+            title="Clique para filtrar apenas pedidos prontos"
+          >
+            <span className="text-[9px] uppercase tracking-wider text-zinc-500 group-hover:text-zinc-400 font-extrabold block">Prontos</span>
             <span className="text-lg font-black text-purple-400 font-mono mt-0.5 block">{pipelineMetrics.ready}</span>
-          </div>
+            {productionStatusFilter === 'Pronto para Retirada' && (
+              <span className="absolute top-1 right-2 w-1.5 h-1.5 rounded-full bg-purple-400" />
+            )}
+          </button>
         </div>
 
         {forgottenCount > 0 && (
@@ -253,6 +307,26 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
             <span className="text-[9.5px] font-black uppercase text-red-400 bg-red-900/15 border border-red-800/30 px-2 py-1 rounded-md animate-pulse">
               Prioridade
             </span>
+          </div>
+        )}
+
+        {/* Active Production Filter Alert */}
+        {productionStatusFilter !== 'All' && (
+          <div className="flex items-center justify-between bg-zinc-950/40 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs no-print animate-fade-in">
+            <span className="text-zinc-400 flex items-center gap-1.5">
+              <span>🔍</span> 
+              <span>Filtrando por:</span>
+              <strong className="text-zinc-100 font-black uppercase text-[10.5px]">
+                {productionStatusFilter === 'Agendado' ? '📅 Agendado' : 
+                 productionStatusFilter === 'Em Produção' ? '🔨 Em Produção' : '✨ Pronto para Retirada'}
+              </strong>
+            </span>
+            <button
+              onClick={() => setProductionStatusFilter('All')}
+              className="text-[10px] text-brand-pink hover:text-brand-pink/80 font-black uppercase tracking-widest cursor-pointer select-none"
+            >
+              Limpar Filtro [x]
+            </button>
           </div>
         )}
 
