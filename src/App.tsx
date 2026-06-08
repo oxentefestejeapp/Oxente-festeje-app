@@ -26,7 +26,9 @@ import {
   Key,
   Smartphone,
   CalendarCheck,
-  RefreshCw
+  RefreshCw,
+  AlertTriangle,
+  AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig, isUsersTableSupported } from './lib/supabase';
@@ -198,6 +200,17 @@ export default function App() {
     };
     return sales.filter(s => isSalePending(s) && (s.valorFaltante !== undefined ? s.valorFaltante > 0 : (s.total - (s.valorPago ?? 0)) > 0)).length;
   }, [sales]);
+
+  // Hook to calculate out-of-stock and critical stock products on the central page
+  const criticalStockBannerData = React.useMemo(() => {
+    const outOfStock = products.filter(p => p && !p.estoqueInfinito && p.estoque === 0);
+    const lowStock = products.filter(p => p && !p.estoqueInfinito && p.estoque > 0 && p.estoque < 3); // critical threshold (< 3)
+    return {
+      outOfStock,
+      lowStock,
+      totalAlerts: outOfStock.length + lowStock.length
+    };
+  }, [products]);
 
   // Monitor Authentication State (Custom Code-Based Authenticated User backed by Supabase Cloud)
   useEffect(() => {
@@ -1781,6 +1794,61 @@ export default function App() {
               className="w-full sm:w-auto shrink-0 px-4 py-2.5 bg-red-900/15 hover:bg-brand-pink text-red-500 hover:text-black font-extrabold border border-red-900/20 hover:border-brand-pink rounded-xl text-xs transition-all active:scale-97 cursor-pointer flex items-center justify-center gap-1.5 shadow-sm"
             >
               <span>Cobrar Clientes no WhatsApp</span>
+              <ArrowRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        )}
+
+        {/* Dynamic Stock Level Alert Banner - Visible on Central Page */}
+        {criticalStockBannerData.totalAlerts > 0 && (
+          <div className="no-print mb-6 bg-amber-950/10 border border-amber-900/25 rounded-2xl p-4 sm:p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-sm animate-fade-in max-w-5xl mx-auto w-full transition-all hover:border-amber-950">
+            <div className="flex flex-col sm:flex-row items-start gap-4.5 w-full min-w-0">
+              <div className={`p-3 rounded-xl flex items-center justify-center shrink-0 border ${
+                criticalStockBannerData.outOfStock.length > 0 
+                  ? 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse' 
+                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+              }`}>
+                <AlertTriangle className="h-5.5 w-5.5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] font-black uppercase tracking-widest text-amber-450 block">⚠️ ALERTA DE ESTOQUE CRÍTICO</span>
+                <span className="text-sm font-extrabold text-zinc-150 block mt-1">
+                  Existem <strong className="text-amber-400 font-mono text-base">{criticalStockBannerData.totalAlerts}</strong> {criticalStockBannerData.totalAlerts === 1 ? 'brinde esgotado ou com quantidade mínima' : 'brindes esgotados ou com quantidade mínima'} no estoque!
+                </span>
+                
+                {/* Scrollable list of critical products directly in the banner */}
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {criticalStockBannerData.outOfStock.map(p => (
+                    <button 
+                      key={p.id} 
+                      onClick={() => changeTab('estoque')}
+                      className="inline-flex items-center gap-1.5 text-[10.5px] font-black bg-red-950/35 hover:bg-red-950/60 text-red-400 border border-red-900/30 hover:border-red-800/50 px-2.5 py-1.5 rounded-lg shrink-0 transition-all font-sans cursor-pointer uppercase tracking-wider"
+                      title="Produto esgotado! Clique para gerenciar."
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-red-500 animate-ping" />
+                      <span className="max-w-[150px] truncate">{p.nome}</span>: <span className="font-mono font-bold text-red-300">0 un.</span>
+                    </button>
+                  ))}
+                  {criticalStockBannerData.lowStock.map(p => (
+                    <button 
+                      key={p.id} 
+                      onClick={() => changeTab('estoque')}
+                      className="inline-flex items-center gap-1.5 text-[10.5px] font-black bg-amber-950/30 hover:bg-amber-950/55 text-amber-400 border border-amber-900/20 hover:border-amber-800/40 px-2.5 py-1.5 rounded-lg shrink-0 transition-all font-sans cursor-pointer uppercase tracking-wider"
+                      title="Estoque muito baixo! Clique para gerenciar."
+                    >
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                      <span className="max-w-[150px] truncate">{p.nome}</span>: <span className="font-mono font-bold text-amber-300">{p.estoque} un.</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            
+            <button
+              onClick={() => changeTab('estoque')}
+              className="w-full lg:w-auto shrink-0 px-5 py-3 bg-amber-900/15 hover:bg-brand-pink text-amber-400 hover:text-black font-black border border-amber-900/25 hover:border-brand-pink rounded-xl text-xs transition-all active:scale-97 cursor-pointer flex items-center justify-center gap-1.5 shadow-sm font-sans uppercase tracking-widest"
+            >
+              <span>Conferir Estoque</span>
               <ArrowRight className="h-3.5 w-3.5" />
             </button>
           </div>
