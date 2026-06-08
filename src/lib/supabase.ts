@@ -82,11 +82,9 @@ ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS precos_progressivos TEXT;
 -- Garantir que a coluna de imagem esteja presente também
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS imagem_base64 TEXT;
 
--- Habilitar leitura/escrita aberta para simplificar (ajuste as políticas RLS como preferir em produção)
-ALTER TABLE oxente_products ENABLE ROW LEVEL SECURITY;
--- Remove existing simple policy to avoid duplication errors and recreate cleanly
+-- Desabilitar RLS para permitir que o Realtime distribua as atualizações instantaneamente e sem restrições de token para clientes anônimos (anon key)
+ALTER TABLE oxente_products DISABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_products;
-CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_products FOR ALL USING (true) WITH CHECK (true);
 
 -- 2. Tabela de Vendas e Pedidos (Sales)
 CREATE TABLE IF NOT EXISTS oxente_sales (
