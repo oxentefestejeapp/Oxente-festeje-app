@@ -538,7 +538,10 @@ export default function App() {
             await Promise.all(
               localOnlySales.map(async (sale) => {
                 try {
-                  await dbSupabase.saveSale(sale);
+                  const success = await dbSupabase.saveSale(sale);
+                  if (success) {
+                    sale.pendingSync = false;
+                  }
                 } catch (e) {
                   console.warn(`Erro ao fazer upload automático de venda local ${sale.id}:`, e);
                 }
@@ -879,6 +882,32 @@ export default function App() {
         return;
       }
       
+      // Auto background upload retry of pendingSync sales
+      try {
+        const currentSales = salesRef.current;
+        const pendingUploads = currentSales.filter(s => s && s.pendingSync);
+        if (pendingUploads.length > 0) {
+          console.log(`[Sync] Background upload de ${pendingUploads.length} vendas pendentes...`);
+          await Promise.all(pendingUploads.map(async (sale) => {
+            try {
+              const success = await dbSupabase.saveSale(sale);
+              if (success) {
+                console.log(`[Sync] Venda ${sale.id} sincronizada com sucesso.`);
+                setSales((current) => {
+                  const updated = current.map(s => s.id === sale.id ? { ...s, pendingSync: false } : s);
+                  localStorage.setItem('oxente_sales', JSON.stringify(updated));
+                  return updated;
+                });
+              }
+            } catch (err) {
+              console.warn(`[Sync] Falha ao tentar sincronizar em background a venda ${sale.id}:`, err);
+            }
+          }));
+        }
+      } catch (e) {
+        console.warn('[Sync] Erro no fluxo de upload automático em background:', e);
+      }
+      
       try {
         const [dbProds, dbSaless, dbStore] = await Promise.all([
           dbSupabase.fetchProducts(),
@@ -996,6 +1025,11 @@ export default function App() {
                 return serverSale;
               }
               
+              // If local sale is pending sync, preserve local version
+              if (localSale.pendingSync) {
+                return localSale;
+              }
+              
               // If local sale has a newer updatedAt, preserve local optimism
               if (localSale.updatedAt && serverSale.updatedAt) {
                 const localTime = new Date(localSale.updatedAt).getTime();
@@ -1010,17 +1044,19 @@ export default function App() {
               return serverSale;
             });
             
-            // Only re-add very recently created local sales (less than 15 seconds old), which could be in-flight saves
-            // This prevents resurrecting old deleted sales or old zeroed databases
+            // Keep local-only sales (unsaved local sales) to avoid losing offline orders.
             const nowTime = Date.now();
             const serverIds = new Set(typedDbSales.map(s => s.id));
             const unsavedLocalSales = curr.filter(s => {
               if (serverIds.has(s.id)) return false;
+              if (s.pendingSync) return true; // Keep unsynced sales indefinitely until they sync successfully!
+              
+              // Fallback: keep anyway if created or updated in the last 15 minutes (to tolerate lag, network delay, etc)
               const createdAt = s.data ? new Date(s.data).getTime() : 0;
               const updatedAt = s.updatedAt ? new Date(s.updatedAt).getTime() : 0;
               const maxTime = Math.max(createdAt, updatedAt);
               const diffMs = nowTime - maxTime;
-              return diffMs >= 0 && diffMs < 15000; // Only keep if in-flight (less than 15s)
+              return diffMs >= 0 && diffMs < 900000; // 15 minutes (900000 ms)
             });
             if (unsavedLocalSales.length > 0) {
               mergedSalesList.push(...unsavedLocalSales);
@@ -1196,7 +1232,8 @@ export default function App() {
   const handleRecordSale = async (newSale: Sale) => {
     const stampedSale: Sale = {
       ...newSale,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      pendingSync: true
     };
     const currentSales = salesRef.current;
     const currentProducts = productsRef.current;
@@ -1208,7 +1245,13 @@ export default function App() {
     if (stampedSale.status === 'Orçamento') {
       try {
         const success = await dbSupabase.saveSale(stampedSale);
-        if (!success) {
+        if (success) {
+          setSales((current) => {
+            const updatedSalesList = current.map(s => s.id === stampedSale.id ? { ...s, pendingSync: false } : s);
+            localStorage.setItem('oxente_sales', JSON.stringify(updatedSalesList));
+            return updatedSalesList;
+          });
+        } else {
           setSupabaseSyncStatus('error');
           setSupabaseErrorMsg(`Erro ao sincronizar orçamento no Supabase: ${getFormattedSupabaseError()}`);
         }
@@ -1280,7 +1323,13 @@ export default function App() {
     // Background save to Supabase
     try {
       const success = await dbSupabase.saveSale(stampedSale);
-      if (!success) {
+      if (success) {
+        setSales((current) => {
+          const updatedSalesList = current.map(s => s.id === stampedSale.id ? { ...s, pendingSync: false } : s);
+          localStorage.setItem('oxente_sales', JSON.stringify(updatedSalesList));
+          return updatedSalesList;
+        });
+      } else {
         setSupabaseSyncStatus('error');
         setSupabaseErrorMsg(`Erro ao sincronizar venda/pedido no Supabase: ${getFormattedSupabaseError()}`);
       }
@@ -1294,7 +1343,8 @@ export default function App() {
   const handleUpdateSale = async (updatedSale: Sale) => {
     const stampedSale: Sale = {
       ...updatedSale,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      pendingSync: true
     };
     const currentSales = salesRef.current;
     const currentProducts = productsRef.current;
@@ -1402,7 +1452,13 @@ export default function App() {
     // Salvamento em plano de fundo no Supabase
     try {
       const success = await dbSupabase.saveSale(stampedSale);
-      if (!success) {
+      if (success) {
+        setSales((current) => {
+          const updatedSalesList = current.map(s => s.id === stampedSale.id ? { ...s, pendingSync: false } : s);
+          localStorage.setItem('oxente_sales', JSON.stringify(updatedSalesList));
+          return updatedSalesList;
+        });
+      } else {
         setSupabaseSyncStatus('error');
         setSupabaseErrorMsg(`Erro ao sincronizar alteração de venda no Supabase: ${getFormattedSupabaseError()}`);
       }

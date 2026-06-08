@@ -123,12 +123,14 @@ CREATE TABLE IF NOT EXISTS oxente_sales (
   notas_internas TEXT,
   pedido_anotado BOOLEAN DEFAULT FALSE,
   aviso_pronto_sended BOOLEAN DEFAULT FALSE,
+  turno_entrega TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- Garantir que as colunas de pedido anotado e aviso de pronto existam caso a tabela já tenha sido criada anteriormente
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS pedido_anotado BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS aviso_pronto_sended BOOLEAN DEFAULT FALSE;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS turno_entrega TEXT;
 
 ALTER TABLE oxente_sales ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_sales;
@@ -352,6 +354,11 @@ const realDbSupabase = {
       const { data, error } = await supabase.from('oxente_store_info').select('*').limit(1);
       if (error) {
         lastSupabaseError = error;
+        // Handle network fetch errors gracefully
+        if (isNetworkFetchError(error)) {
+          console.warn('Conectividade offline ou erro de rede detectado durante o teste de conexão do Supabase. Prosseguindo em modo offline...');
+          return { success: true, tablesConfigured: true };
+        }
         // Handle specifically "relation does not exist" error
         if (error.code === '42P01') {
           return { success: true, tablesConfigured: false, error: 'As tabelas do Oxente Festeje ainda não foram criadas no banco de dados do Supabase. Execute o script de configuração abaixo!' };
@@ -362,6 +369,10 @@ const realDbSupabase = {
       // Check if oxente_users exists too
       const { error: userError } = await supabase.from('oxente_users').select('id').limit(1);
       if (userError) {
+        if (isNetworkFetchError(userError)) {
+          console.warn('Conectividade offline ou erro de rede detectado ao verificar tabela oxente_users.');
+          return { success: true, tablesConfigured: true };
+        }
         if (userError.code === '42P01' || userError.message.includes('schema cache') || userError.message.includes('not find')) {
           isUsersTableSupported = false;
           return { 
@@ -377,6 +388,10 @@ const realDbSupabase = {
       lastSupabaseError = null;
       return { success: true, tablesConfigured: true };
     } catch (e: any) {
+      if (isNetworkFetchError(e)) {
+        console.warn('Erro de rede genérico capturado no teste de conexão do Supabase:', e);
+        return { success: true, tablesConfigured: true };
+      }
       lastSupabaseError = { message: e.message || String(e) };
       return { success: false, error: e.message || String(e) };
     }

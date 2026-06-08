@@ -84,6 +84,7 @@ export interface Sale {
   statusProducaoAntesConcluir?: 'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Agendado para Entrega' | 'Entregue';
   turnoEntrega?: 'Manhã' | 'Tarde';
   updatedAt?: string;
+  pendingSync?: boolean;
 }
 
 export interface StoreInfo {
