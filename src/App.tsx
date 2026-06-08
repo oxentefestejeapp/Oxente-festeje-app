@@ -62,6 +62,11 @@ export default function App() {
 
   const isAdmin = firebaseUser?.email === 'oxentefesteje@gmail.com' || firebaseUser?.email === 'abraaoapp@oxente.com' || firebaseUser?.id === 'abraaoapp' || firebaseUser?.role === 'admin';
 
+  const isAdminRef = useRef(false);
+  useEffect(() => {
+    isAdminRef.current = isAdmin;
+  }, [isAdmin]);
+
   const isAnaClara = firebaseUser?.id === 'ana_clara' || 
                      firebaseUser?.email === 'anaclara@oxente.com' || 
                      (firebaseUser?.name && firebaseUser.name.toLowerCase().includes('ana clara')) || 
@@ -611,9 +616,9 @@ export default function App() {
           updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
           localStorage.setItem('oxente_sales', JSON.stringify(updated));
 
-          // Notificar sobre novos pedidos em tempo real no celular se veio de outro usuário
+          // Notificar sobre novos pedidos em tempo real no celular se veio de outro usuário e o usuário logado é administrador
           const isMySale = sale.criadoPorEmail === currentUserEmailRef.current;
-          if (!isMySale) {
+          if (!isMySale && isAdminRef.current) {
             dispatchNewOrderNotification(
               sale.cliente,
               sale.total,
@@ -655,7 +660,7 @@ export default function App() {
             (sale.status !== localSale.status)
           );
 
-          if (!isMyEdit && isManualEditSaved && !isStatusOrScheduleChangeOnly) {
+          if (!isMyEdit && isManualEditSaved && !isStatusOrScheduleChangeOnly && isAdminRef.current) {
             dispatchOrderEditedNotification(
               sale.cliente,
               sale.total,
@@ -793,11 +798,11 @@ export default function App() {
 
             // To prevent a flood of notifications on first load, only alert if we already had a local list
             if (curr.length > 0) {
-              // 1. Notify newly added orders
+              // 1. Notify newly added orders (only if logged in user is admin)
               if (newSalesOnServer.length > 0) {
                 newSalesOnServer.forEach(sale => {
                   const isMySale = sale.criadoPorEmail === currentUserEmailRef.current;
-                  if (!isMySale) {
+                  if (!isMySale && isAdminRef.current) {
                     dispatchNewOrderNotification(
                       sale.cliente,
                       sale.total,
@@ -831,7 +836,7 @@ export default function App() {
               if (editedSalesOnServer.length > 0) {
                 editedSalesOnServer.forEach(sale => {
                   const isMyEdit = sale.editadoPorEmail === currentUserEmailRef.current;
-                  if (!isMyEdit) {
+                  if (!isMyEdit && isAdminRef.current) {
                     dispatchOrderEditedNotification(
                       sale.cliente,
                       sale.total,
