@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { supabase, dbSupabase } from '../lib/supabase';
+import { supabase, dbSupabase, isUsersTableSupported } from '../lib/supabase';
 import { 
   Lock, 
   CheckCircle2, 
@@ -68,13 +68,15 @@ export function ChangePassword({ currentUser, onPasswordChanged }: ChangePasswor
       // 1. Fetch user record to verify current password from Supabase
       let userRecord: any = null;
 
-      try {
-        const { data, error } = await supabase.from('oxente_users').select('*').eq('id', userId).maybeSingle();
-        if (data && !error) {
-          userRecord = data;
+      if (isUsersTableSupported) {
+        try {
+          const { data, error } = await supabase.from('oxente_users').select('*').eq('id', userId).maybeSingle();
+          if (data && !error) {
+            userRecord = data;
+          }
+        } catch (dbErr) {
+          console.warn('Erro ao consultar Supabase durante troca de senha:', dbErr);
         }
-      } catch (dbErr) {
-        console.warn('Erro ao consultar Supabase durante troca de senha:', dbErr);
       }
 
       // If not found online, fallback to localStorage
@@ -102,13 +104,15 @@ export function ChangePassword({ currentUser, onPasswordChanged }: ChangePasswor
       }
 
       // 2. Save the updated password to Supabase
-      try {
-        await supabase.from('oxente_users').update({
-          password: newPassClean,
-          updated_at: new Date().toISOString()
-        }).eq('id', userId);
-      } catch (dbErr) {
-        console.warn('Erro ao salvar nova senha no Supabase:', dbErr);
+      if (isUsersTableSupported) {
+        try {
+          await supabase.from('oxente_users').update({
+            password: newPassClean,
+            updated_at: new Date().toISOString()
+          }).eq('id', userId);
+        } catch (dbErr) {
+          console.warn('Erro ao salvar nova senha no Supabase:', dbErr);
+        }
       }
 
       // Also support localStorage persistent sync

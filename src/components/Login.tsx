@@ -12,7 +12,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BrandLogo } from './BrandLogo';
-import { supabase, dbSupabase } from '../lib/supabase';
+import { supabase, dbSupabase, isUsersTableSupported } from '../lib/supabase';
 import { playAppSound } from '../lib/audio';
 
 interface LoginProps {
@@ -52,13 +52,13 @@ export function Login({ onLoginSuccess }: LoginProps) {
     const ensureDefaultUsersExistInDb = async () => {
       try {
         for (const user of INITIAL_USERS) {
-          await supabase.from('oxente_users').upsert({
+          await dbSupabase.saveUser({
             id: user.id,
             name: user.name,
             email: user.email,
             role: user.role,
             status: user.status,
-            updated_at: new Date().toISOString()
+            password: user.password
           });
         }
         console.log('Usuários padrão garantidos no Supabase cloud.');
@@ -93,35 +93,37 @@ export function Login({ onLoginSuccess }: LoginProps) {
     try {
       let userProfile: any = null;
 
-      // 1. Search in live Supabase database
-      try {
-        const { data: dbUser, error: dbErr } = await supabase.from('oxente_users').select('*').eq('id', usernameId).maybeSingle();
-        if (dbUser && !dbErr) {
-          // Keep preset password check or any custom password if stored
-          const presetMatch = INITIAL_USERS.find(u => u.id === dbUser.id);
-          userProfile = {
-            id: dbUser.id,
-            uid: dbUser.id,
-            name: dbUser.name,
-            email: dbUser.email,
-            role: dbUser.role,
-            status: dbUser.status,
-            password: presetMatch ? presetMatch.password : '69app69' // Default fallback pass for custom users
-          };
-        } else if (defaultMatch) {
-          // Seed the user if they entered a valid login username but it's not in DB yet
-          userProfile = {
-            id: defaultMatch.id,
-            name: defaultMatch.name,
-            email: defaultMatch.email,
-            role: defaultMatch.role,
-            status: defaultMatch.status,
-            password: defaultMatch.password,
-          };
-          await dbSupabase.saveUser(userProfile);
+      // 1. Search in live Supabase database if configured and supported
+      if (isUsersTableSupported) {
+        try {
+          const { data: dbUser, error: dbErr } = await supabase.from('oxente_users').select('*').eq('id', usernameId).maybeSingle();
+          if (dbUser && !dbErr) {
+            // Keep preset password check or any custom password if stored
+            const presetMatch = INITIAL_USERS.find(u => u.id === dbUser.id);
+            userProfile = {
+              id: dbUser.id,
+              uid: dbUser.id,
+              name: dbUser.name,
+              email: dbUser.email,
+              role: dbUser.role,
+              status: dbUser.status,
+              password: dbUser.password || (presetMatch ? presetMatch.password : '69app69') // Default fallback pass for custom users
+            };
+          } else if (defaultMatch) {
+            // Seed the user if they entered a valid login username but it's not in DB yet
+            userProfile = {
+              id: defaultMatch.id,
+              name: defaultMatch.name,
+              email: defaultMatch.email,
+              role: defaultMatch.role,
+              status: defaultMatch.status,
+              password: defaultMatch.password,
+            };
+            await dbSupabase.saveUser(userProfile);
+          }
+        } catch (dbErr) {
+          console.warn('Erro ao consultar Supabase durante login. Prosseguindo localmente:', dbErr);
         }
-      } catch (dbErr) {
-        console.warn('Erro ao consultar Supabase durante login. Prosseguindo localmente:', dbErr);
       }
 
       // 2. Fallback check inside cached custom list or default match list

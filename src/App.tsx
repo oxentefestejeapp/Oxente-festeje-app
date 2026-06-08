@@ -29,7 +29,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig } from './lib/supabase';
+import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig, isUsersTableSupported } from './lib/supabase';
 
 import { Header } from './components/Header';
 import { ProductForm } from './components/ProductForm';
@@ -213,37 +213,39 @@ export default function App() {
         try {
           const userObj = JSON.parse(savedUserStr);
           const userIdNormal = userObj.id || userObj.uid || '';
-
           if (userIdNormal) {
             // First load user details directly from Supabase
             const loadProfile = async () => {
               try {
-                const { data, error } = await supabase.from('oxente_users').select('*').eq('id', userIdNormal).maybeSingle();
-                if (data && !error) {
-                  const enhancedUser = {
-                    ...userObj,
-                    id: data.id,
-                    uid: data.id,
-                    name: data.name || userObj.name || 'Colaborador',
-                    displayName: data.name || userObj.name || 'Colaborador',
-                    email: data.email || userObj.email || '',
-                    role: data.role || (data.id === 'abraaoapp' ? 'admin' : 'colaborador'),
-                    status: data.status || 'approved'
-                  };
-                  setFirebaseUser(enhancedUser);
-                  setUserStatus((data.status || 'approved') as any);
-                } else {
-                  // Not found on DB yet – create it immediately to allow admin approvals
-                  await dbSupabase.saveUser({
-                    id: userIdNormal,
-                    name: userObj.name || 'Colaborador',
-                    email: userObj.email || '',
-                    role: userObj.role || (userIdNormal === 'abraaoapp' ? 'admin' : 'colaborador'),
-                    status: userObj.status || 'approved'
-                  });
-                  setFirebaseUser(userObj);
-                  setUserStatus((userObj.status || 'approved') as any);
+                if (isUsersTableSupported) {
+                  const { data, error } = await supabase.from('oxente_users').select('*').eq('id', userIdNormal).maybeSingle();
+                  if (data && !error) {
+                    const enhancedUser = {
+                      ...userObj,
+                      id: data.id,
+                      uid: data.id,
+                      name: data.name || userObj.name || 'Colaborador',
+                      displayName: data.name || userObj.name || 'Colaborador',
+                      email: data.email || userObj.email || '',
+                      role: data.role || (data.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+                      status: data.status || 'approved'
+                    };
+                    setFirebaseUser(enhancedUser);
+                    setUserStatus((data.status || 'approved') as any);
+                    return;
+                  }
                 }
+
+                // Fallback: Not found in database, table not supported, or database error
+                await dbSupabase.saveUser({
+                  id: userIdNormal,
+                  name: userObj.name || 'Colaborador',
+                  email: userObj.email || '',
+                  role: userObj.role || (userIdNormal === 'abraaoapp' ? 'admin' : 'colaborador'),
+                  status: userObj.status || 'approved'
+                });
+                setFirebaseUser(userObj);
+                setUserStatus((userObj.status || 'approved') as any);
               } catch (e) {
                 console.error('Error loading profile from Supabase:', e);
                 setFirebaseUser(userObj);
@@ -253,34 +255,36 @@ export default function App() {
 
             await loadProfile();
 
-            // Set up real-time postgres single-row changes listener for this user
-            const channel = supabase
-              .channel(`user-sync-${userIdNormal}`)
-              .on('postgres_changes', { 
-                event: '*', 
-                schema: 'public', 
-                table: 'oxente_users', 
-                filter: `id=eq.${userIdNormal}` 
-              }, (payload) => {
-                const { eventType, new: newRow } = payload;
-                if (eventType === 'INSERT' || eventType === 'UPDATE') {
-                  const enhancedUser = {
-                    ...userObj,
-                    id: newRow.id,
-                    uid: newRow.id,
-                    name: newRow.name || userObj.name || 'Colaborador',
-                    displayName: newRow.name || userObj.name || 'Colaborador',
-                    email: newRow.email || userObj.email || '',
-                    role: newRow.role || (newRow.id === 'abraaoapp' ? 'admin' : 'colaborador'),
-                    status: newRow.status || 'approved'
-                  };
-                  setFirebaseUser(enhancedUser);
-                  setUserStatus((newRow.status || 'approved') as any);
-                }
-              })
-              .subscribe();
+            if (isUsersTableSupported) {
+              // Set up real-time postgres single-row changes listener for this user
+              const channel = supabase
+                .channel(`user-sync-${userIdNormal}`)
+                .on('postgres_changes', { 
+                  event: '*', 
+                  schema: 'public', 
+                  table: 'oxente_users', 
+                  filter: `id=eq.${userIdNormal}` 
+                }, (payload) => {
+                  const { eventType, new: newRow } = payload;
+                  if (eventType === 'INSERT' || eventType === 'UPDATE') {
+                    const enhancedUser = {
+                      ...userObj,
+                      id: newRow.id,
+                      uid: newRow.id,
+                      name: newRow.name || userObj.name || 'Colaborador',
+                      displayName: newRow.name || userObj.name || 'Colaborador',
+                      email: newRow.email || userObj.email || '',
+                      role: newRow.role || (newRow.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+                      status: newRow.status || 'approved'
+                    };
+                    setFirebaseUser(enhancedUser);
+                    setUserStatus((newRow.status || 'approved') as any);
+                  }
+                })
+                .subscribe();
 
-            userChannelRef.current = channel;
+              userChannelRef.current = channel;
+            }
           } else {
             setFirebaseUser(userObj);
             setUserStatus('approved');

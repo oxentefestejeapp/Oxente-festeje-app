@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { dbSupabase, supabase } from '../lib/supabase';
+import { dbSupabase, supabase, isUsersTableSupported } from '../lib/supabase';
 import { 
   Users, 
   Search, 
@@ -133,47 +133,52 @@ export function UserApprovals() {
 
     loadUsers();
 
-    // Subscribe to real-time changes inside table 'oxente_users'
-    const channel = supabase
-      .channel('oxente_users_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_users' }, (payload: any) => {
-        const { eventType, new: newRow, old: oldRow } = payload;
-        console.log('Real-time Users Update:', eventType, payload);
-        
-        if (eventType === 'INSERT' || eventType === 'UPDATE') {
-          setUsers((current) => {
-            const index = current.findIndex(u => u.id === newRow.id);
-            const mappedUser: UserProfile = {
-              id: newRow.id,
-              name: newRow.name,
-              email: newRow.email,
-              role: newRow.role || (newRow.email === 'oxentefesteje@gmail.com' || newRow.email === 'abraaoapp@oxente.com' || newRow.id === 'abraaoapp' ? 'admin' : 'colaborador'),
-              status: newRow.status || 'approved',
-              createdAt: newRow.created_at || newRow.createdAt || new Date().toISOString(),
-              updatedAt: newRow.updated_at || newRow.updatedAt || new Date().toISOString()
-            };
-            
-            if (index >= 0) {
-              const updated = [...current];
-              updated[index] = mappedUser;
-              return updated;
-            } else {
-              return [mappedUser, ...current];
+    // Subscribe to real-time changes inside table 'oxente_users' if supported
+    let channel: any = null;
+    if (isUsersTableSupported) {
+      channel = supabase
+        .channel('oxente_users_realtime')
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_users' }, (payload: any) => {
+          const { eventType, new: newRow, old: oldRow } = payload;
+          console.log('Real-time Users Update:', eventType, payload);
+          
+          if (eventType === 'INSERT' || eventType === 'UPDATE') {
+            setUsers((current) => {
+              const index = current.findIndex(u => u.id === newRow.id);
+              const mappedUser: UserProfile = {
+                id: newRow.id,
+                name: newRow.name,
+                email: newRow.email,
+                role: newRow.role || (newRow.email === 'oxentefesteje@gmail.com' || newRow.email === 'abraaoapp@oxente.com' || newRow.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+                status: newRow.status || 'approved',
+                createdAt: newRow.created_at || newRow.createdAt || new Date().toISOString(),
+                updatedAt: newRow.updated_at || newRow.updatedAt || new Date().toISOString()
+              };
+              
+              if (index >= 0) {
+                const updated = [...current];
+                updated[index] = mappedUser;
+                return updated;
+              } else {
+                return [mappedUser, ...current];
+              }
+            });
+          } else if (eventType === 'DELETE') {
+            const targetId = oldRow?.id || newRow?.id;
+            if (targetId) {
+              setUsers((current) => current.filter(u => u.id !== targetId));
             }
-          });
-        } else if (eventType === 'DELETE') {
-          const targetId = oldRow?.id || newRow?.id;
-          if (targetId) {
-            setUsers((current) => current.filter(u => u.id !== targetId));
           }
-        }
-      })
-      .subscribe((status) => {
-        console.log('📡 [Supabase Realtime] Canal de Usuários:', status);
-      });
+        })
+        .subscribe((status) => {
+          console.log('📡 [Supabase Realtime] Canal de Usuários:', status);
+        });
+    }
 
     return () => {
-      supabase.removeChannel(channel);
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
     };
   }, []);
 

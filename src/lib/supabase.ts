@@ -9,6 +9,7 @@ export interface SupabaseErrorDetail {
 }
 
 export let lastSupabaseError: SupabaseErrorDetail | null = null;
+export let isUsersTableSupported = true;
 
 export function getFormattedSupabaseError(fallback = 'Erro desconhecido'): string {
   if (!lastSupabaseError) return fallback;
@@ -345,6 +346,19 @@ const realDbSupabase = {
         }
         return { success: false, error: `[Código: ${error.code || 'Desconhecido'}] ${error.message}` };
       }
+
+      // Check if oxente_users exists too
+      const { error: userError } = await supabase.from('oxente_users').select('id').limit(1);
+      if (userError) {
+        if (userError.code === '42P01' || userError.message.includes('schema cache') || userError.message.includes('not find')) {
+          return { 
+            success: true, 
+            tablesConfigured: false, 
+            error: 'A tabela de usuários "oxente_users" está ausente no seu banco de dados do Supabase. Por favor, execute a migration SQL atualizada em Configurações para criá-la!' 
+          };
+        }
+      }
+
       lastSupabaseError = null;
       return { success: true, tablesConfigured: true };
     } catch (e: any) {
@@ -704,10 +718,20 @@ const realDbSupabase = {
   },
 
   async fetchUsers(): Promise<any[] | null> {
+    if (!isUsersTableSupported) {
+      const cached = localStorage.getItem('oxente_custom_users_local');
+      return cached ? JSON.parse(cached) : [];
+    }
     try {
       const { data, error } = await supabase.from('oxente_users').select('*').order('updated_at', { ascending: false });
       if (error) {
         lastSupabaseError = error;
+        if (error.code === '42P01' || error.message.includes('schema cache') || error.message.includes('not find')) {
+          console.warn('A tabela de usuários (oxente_users) está ausente no Supabase. Usando armazenamento offline temporário.');
+          isUsersTableSupported = false;
+          const cached = localStorage.getItem('oxente_custom_users_local');
+          return cached ? JSON.parse(cached) : [];
+        }
         console.warn('Erro ao carregar usuários do Supabase:', error.message);
         return null;
       }
@@ -719,6 +743,33 @@ const realDbSupabase = {
   },
 
   async saveUser(user: any): Promise<boolean> {
+    // Synchronize locally first
+    const cached = localStorage.getItem('oxente_custom_users_local');
+    const list: any[] = cached ? JSON.parse(cached) : [];
+    const id = user.id || user.uid;
+    if (id) {
+      const index = list.findIndex(u => u.id === id);
+      const userPayload = {
+        id,
+        name: user.name || 'Colaborador',
+        email: user.email || '',
+        role: user.role || 'colaborador',
+        status: user.status || 'approved',
+        password: user.password || null,
+        updatedAt: new Date().toISOString()
+      };
+      if (index >= 0) {
+        list[index] = { ...list[index], ...userPayload };
+      } else {
+        list.push({ ...userPayload, createdAt: new Date().toISOString() });
+      }
+      localStorage.setItem('oxente_custom_users_local', JSON.stringify(list));
+    }
+
+    if (!isUsersTableSupported) {
+      return true;
+    }
+
     try {
       const { error } = await supabase.from('oxente_users').upsert({
         id: user.id || user.uid,
@@ -731,6 +782,11 @@ const realDbSupabase = {
       });
       if (error) {
         lastSupabaseError = error;
+        if (error.code === '42P01' || error.message.includes('schema cache') || error.message.includes('not find')) {
+          console.warn('A tabela de usuários "oxente_users" está ausente no banco Supabase. Salvando apenas offline.');
+          isUsersTableSupported = false;
+          return true; // Graceful outcome
+        }
         console.error('Erro ao salvar usuário no Supabase:', error.message);
         return false;
       }
@@ -742,10 +798,26 @@ const realDbSupabase = {
   },
 
   async deleteUser(id: string): Promise<boolean> {
+    // Delete locally
+    const cached = localStorage.getItem('oxente_custom_users_local');
+    if (cached) {
+      const list: any[] = JSON.parse(cached);
+      const filtered = list.filter(u => u.id !== id);
+      localStorage.setItem('oxente_custom_users_local', JSON.stringify(filtered));
+    }
+
+    if (!isUsersTableSupported) {
+      return true;
+    }
+
     try {
       const { error } = await supabase.from('oxente_users').delete().eq('id', id);
       if (error) {
         lastSupabaseError = error;
+        if (error.code === '42P01' || error.message.includes('schema cache') || error.message.includes('not find')) {
+          isUsersTableSupported = false;
+          return true;
+        }
         console.error('Erro ao excluir usuário no Supabase:', error.message);
         return false;
       }
@@ -757,10 +829,30 @@ const realDbSupabase = {
   },
 
   async updateUserStatus(id: string, status: string): Promise<boolean> {
+    // Update locally
+    const cached = localStorage.getItem('oxente_custom_users_local');
+    if (cached) {
+      const list: any[] = JSON.parse(cached);
+      const user = list.find(u => u.id === id);
+      if (user) {
+        user.status = status;
+        user.updatedAt = new Date().toISOString();
+        localStorage.setItem('oxente_custom_users_local', JSON.stringify(list));
+      }
+    }
+
+    if (!isUsersTableSupported) {
+      return true;
+    }
+
     try {
       const { error } = await supabase.from('oxente_users').update({ status, updated_at: new Date().toISOString() }).eq('id', id);
       if (error) {
         lastSupabaseError = error;
+        if (error.code === '42P01' || error.message.includes('schema cache') || error.message.includes('not find')) {
+          isUsersTableSupported = false;
+          return true;
+        }
         console.error('Erro ao atualizar status do usuário no Supabase:', error.message);
         return false;
       }
@@ -772,6 +864,21 @@ const realDbSupabase = {
   },
 
   async updateUserHeartbeat(id: string): Promise<boolean> {
+    // Update locally
+    const cached = localStorage.getItem('oxente_custom_users_local');
+    if (cached) {
+      const list: any[] = JSON.parse(cached);
+      const user = list.find(u => u.id === id);
+      if (user) {
+        user.updatedAt = new Date().toISOString();
+        localStorage.setItem('oxente_custom_users_local', JSON.stringify(list));
+      }
+    }
+
+    if (!isUsersTableSupported) {
+      return true;
+    }
+
     try {
       const savedUserStr = localStorage.getItem('oxente_custom_user');
       let name = 'Colaborador';
@@ -798,6 +905,10 @@ const realDbSupabase = {
       });
       if (error) {
         lastSupabaseError = error;
+        if (error.code === '42P01' || error.message.includes('schema cache') || error.message.includes('not find')) {
+          isUsersTableSupported = false;
+          return true;
+        }
         return false;
       }
       return true;
