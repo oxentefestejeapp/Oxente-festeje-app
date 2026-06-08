@@ -483,9 +483,43 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                         Clique para alterar o status
                       </span>
                     </div>
-                    <div className="grid grid-cols-5 gap-1 pt-1 bg-zinc-950 p-1 rounded-lg">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-2 pt-2 bg-zinc-950 p-2.5 rounded-xl border border-zinc-900">
                       {(['Agendado', 'Em Produção', 'Pronto para Retirada', 'Agendado para Entrega', 'Entregue'] as const).map((st) => {
                         const isCurrent = (selectedSale.statusProducao || 'Agendado') === st;
+                        
+                        // Pick beautiful custom colors for each status to make it colorful, vibrant, and incredibly clear!
+                        let activeStyles = '';
+                        let inactiveStyles = '';
+                        let textLabel = '';
+                        
+                        switch (st) {
+                          case 'Agendado':
+                            activeStyles = 'bg-blue-600 hover:bg-blue-500 text-white shadow-[0_0_12px_rgba(59,130,246,0.5)] border-blue-400';
+                            inactiveStyles = 'text-blue-400/85 hover:text-blue-300 hover:bg-blue-950/20 border-blue-950/40';
+                            textLabel = '📅 Agendado';
+                            break;
+                          case 'Em Produção':
+                            activeStyles = 'bg-amber-600 hover:bg-amber-500 text-white shadow-[0_0_12px_rgba(245,158,11,0.5)] border-amber-400 animate-pulse';
+                            inactiveStyles = 'text-amber-400/85 hover:text-amber-300 hover:bg-amber-950/20 border-amber-950/40';
+                            textLabel = '🔧 Em Produção';
+                            break;
+                          case 'Pronto para Retirada':
+                            activeStyles = 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-[0_0_12px_rgba(16,185,129,0.5)] border-emerald-400 font-extrabold';
+                            inactiveStyles = 'text-emerald-400/85 hover:text-emerald-300 hover:bg-emerald-950/20 border-emerald-950/40';
+                            textLabel = '✨ Pronto p/ Retirar';
+                            break;
+                          case 'Agendado para Entrega':
+                            activeStyles = 'bg-purple-600 hover:bg-purple-500 text-white shadow-[0_0_12px_rgba(147,51,234,0.5)] border-purple-400 font-bold';
+                            inactiveStyles = 'text-purple-400/85 hover:text-purple-300 hover:bg-purple-950/20 border-purple-950/40';
+                            textLabel = '🚚 Agendado Entrega';
+                            break;
+                          case 'Entregue':
+                            activeStyles = 'bg-cyan-600 hover:bg-cyan-500 text-white shadow-[0_0_12px_rgba(6,182,212,0.5)] border-cyan-400';
+                            inactiveStyles = 'text-cyan-400/85 hover:text-cyan-300 hover:bg-cyan-950/20 border-cyan-950/40';
+                            textLabel = '🤝 Entregue';
+                            break;
+                        }
+
                         return (
                           <button
                             key={st}
@@ -505,18 +539,14 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                               };
                               onUpdateSale(updated);
                             }}
-                            className={`py-2 px-0.5 rounded-md text-[9px] font-bold text-center transition-all cursor-pointer truncate ${
+                            className={`py-3 px-2 rounded-xl text-[11px] font-extrabold text-center transition-all duration-300 transform active:scale-95 border-2 cursor-pointer flex items-center justify-center gap-1.5 shadow-sm ${
                               isCurrent
-                                ? 'bg-brand-pink text-black'
-                                : 'text-zinc-500 hover:text-zinc-350 hover:bg-zinc-900'
+                                ? activeStyles
+                                : `bg-black border-zinc-850 ${inactiveStyles}`
                             }`}
-                            title={st}
+                            title={`Status de produção: ${st}`}
                           >
-                            {st === 'Agendado' ? '📅 Agendar' :
-                             st === 'Em Produção' ? '🔧 Produzir' :
-                             st === 'Pronto para Retirada' ? '✨ Pronto' :
-                             st === 'Agendado para Entrega' ? '🚚 Entregar' :
-                             '🤝 Entregue'}
+                            <span className="whitespace-nowrap leading-none">{textLabel}</span>
                           </button>
                         );
                       })}

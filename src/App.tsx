@@ -1353,10 +1353,54 @@ export default function App() {
   }
 
   const getTabClass = (tabKey: string) => {
-    return `w-full flex items-center justify-center gap-2 rounded-xl font-semibold transition-all cursor-pointer select-none whitespace-nowrap min-w-0 ${
+    let activeGradient = 'bg-brand-pink text-black shadow-lg';
+    
+    switch (tabKey) {
+      case 'vendas':
+        activeGradient = 'bg-gradient-to-r from-red-500 via-orange-500 to-amber-500 text-black shadow-[0_0_15px_rgba(249,115,22,0.35)]';
+        break;
+      case 'a_receber':
+        activeGradient = 'bg-gradient-to-r from-teal-500 to-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.35)]';
+        break;
+      case 'entregas':
+        activeGradient = 'bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white shadow-[0_0_15px_rgba(168,85,247,0.35)]';
+        break;
+      case 'agendamento':
+        activeGradient = 'bg-gradient-to-r from-blue-500 to-sky-500 text-black shadow-[0_0_15px_rgba(14,165,233,0.35)]';
+        break;
+      case 'lembretes':
+        activeGradient = 'bg-gradient-to-r from-amber-500 via-rose-500 to-red-600 text-white shadow-[0_0_15px_rgba(220,38,38,0.35)]';
+        break;
+      case 'pedidos_fechados':
+        activeGradient = 'bg-gradient-to-r from-zinc-650 to-neutral-500 text-white shadow-[0_0_15px_rgba(115,115,115,0.35)]';
+        break;
+      case 'whatsapp_web':
+        activeGradient = 'bg-gradient-to-r from-green-400 to-emerald-500 text-black shadow-[0_0_15px_rgba(34,197,94,0.35)]';
+        break;
+      case 'estoque':
+        activeGradient = 'bg-gradient-to-r from-purple-500 via-fuchsia-500 to-pink-500 text-white shadow-[0_0_15px_rgba(217,70,239,0.35)]';
+        break;
+      case 'cadastro':
+        activeGradient = 'bg-gradient-to-r from-yellow-400 via-amber-550 to-orange-500 text-black shadow-[0_0_15px_rgba(217,119,6,0.35)]';
+        break;
+      case 'configuracoes':
+        activeGradient = 'bg-gradient-to-r from-cyan-500 via-blue-500 to-indigo-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.35)]';
+        break;
+      case 'usuarios':
+        activeGradient = 'bg-gradient-to-r from-indigo-500 to-violet-600 text-white shadow-[0_0_15px_rgba(99,102,241,0.35)]';
+        break;
+      case 'auditoria':
+        activeGradient = 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-[0_0_15px_rgba(224,36,36,0.35)]';
+        break;
+      case 'instalar_app':
+        activeGradient = 'bg-gradient-to-r from-cyan-400 to-emerald-450 text-black shadow-[0_0_15px_rgba(6,182,212,0.35)]';
+        break;
+    }
+
+    return `w-full flex items-center justify-center gap-2 rounded-xl font-bold transition-all duration-300 cursor-pointer select-none whitespace-nowrap min-w-0 ${
       activeTab === tabKey
-        ? 'bg-brand-pink text-black shadow-lg font-bold hover:bg-brand-pink/90'
-        : 'text-zinc-400 hover:bg-zinc-800/80 hover:text-brand-pink'
+        ? `${activeGradient} scale-[1.04] border border-white/10`
+        : 'text-zinc-400 hover:bg-zinc-800/80 hover:text-white hover:scale-[1.02]'
     } ${
       isAdmin
         ? 'py-3.5 px-3 md:px-4 text-xs md:text-[13px] border border-zinc-800/45 shadow-sm'
@@ -1366,6 +1410,8 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-black text-zinc-100 flex flex-col font-sans select-none antialiased">
+      {/* Barra superior de gradiente festivo e animado multicolorido */}
+      <div className="h-1.5 w-full bg-gradient-to-r from-red-500 via-orange-500 via-yellow-400 via-emerald-500 via-blue-500 via-purple-500 to-pink-500 sticky top-0 z-50 shadow-[0_3px_15px_rgba(249,115,22,0.3)] animate-pulse" />
       
       {/* Real-time Header */}
       <Header products={products} sales={sales} currentUserEmail={firebaseUser?.email || ''} />
