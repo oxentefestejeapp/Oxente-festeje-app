@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check } from 'lucide-react';
+import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check, CheckSquare } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice } from '../types';
@@ -195,6 +195,15 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('all');
   const [startDateStr, setStartDateStr] = useState('');
   const [endDateStr, setEndDateStr] = useState('');
+
+  // State for green closed orders metric start date (custom selector)
+  const [metricStartDate, setMetricStartDate] = useState<string>(() => {
+    const local = new Date();
+    const year = local.getFullYear();
+    const month = String(local.getMonth() + 1).padStart(2, '0');
+    const day = String(local.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  });
 
   // 10 sales at a time with scrollable dynamic loading
   const [visibleSalesCount, setVisibleSalesCount] = useState(10);
@@ -724,6 +733,16 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
     };
   }, [filteredSales, products]);
 
+  const closedOrdersCount = useMemo(() => {
+    if (!metricStartDate) return 0;
+    const start = new Date(metricStartDate + 'T00:00:00');
+    return sales.filter(sale => {
+      if (sale.status === 'Orçamento') return false;
+      const saleDate = new Date(sale.data);
+      return saleDate >= start;
+    }).length;
+  }, [sales, metricStartDate]);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
       
@@ -780,6 +799,32 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                 />
               </BarChart>
             </ResponsiveContainer>
+          </div>
+
+          {/* New Green Closed Orders Metric Section */}
+          <div id="closed-orders-metric-container" className="mt-6 pt-6 border-t border-zinc-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div id="closed-orders-icon-badge" className="p-2 bg-emerald-950/20 border border-emerald-500/20 rounded-xl text-emerald-400">
+                <CheckSquare className="h-5 w-5" />
+              </div>
+              <div>
+                <span className="block text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Pedidos Fechados</span>
+                <span id="closed-orders-count-value" className="text-xl font-extrabold text-emerald-400 mt-0.5 block">
+                  {closedOrdersCount} {closedOrdersCount === 1 ? 'pedido fechado' : 'pedidos fechados'}
+                </span>
+              </div>
+            </div>
+            
+            <div id="closed-orders-date-selector" className="flex items-center gap-2 bg-black/30 px-3 py-1.5 rounded-xl border border-zinc-800/80">
+              <span className="text-[10px] text-zinc-400 font-medium">A partir de:</span>
+              <input
+                id="metric-start-date-picker"
+                type="date"
+                value={metricStartDate}
+                onChange={(e) => setMetricStartDate(e.target.value)}
+                className="px-2 py-0.5 bg-zinc-950 border border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink text-zinc-200 text-xs font-mono h-7"
+              />
+            </div>
           </div>
         </div>
       )}
@@ -1070,6 +1115,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                   <option value="Agendado">📅 Agendado / Reservado</option>
                   <option value="Em Produção">🔨 Em Produção Interna</option>
                   <option value="Pronto para Retirada">✨ Pronto para Retirada</option>
+                  <option value="Agendado para Entrega">🚚 Agendado para Entrega</option>
                   <option value="Entregue">🤝 Entregue ao Cliente</option>
                 </select>
               </div>
@@ -1498,11 +1544,13 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                                 sale.statusProducao === 'Agendado' ? 'bg-blue-900/10 text-blue-400 border-blue-900/30' :
                                 sale.statusProducao === 'Em Produção' ? 'bg-amber-900/10 text-amber-400 border-amber-900/30' :
                                 sale.statusProducao === 'Pronto para Retirada' ? 'bg-purple-900/10 text-purple-400 border-purple-900/30 animate-pulse-slow' :
+                                sale.statusProducao === 'Agendado para Entrega' ? 'bg-sky-950/20 text-sky-400 border-sky-800/30 font-bold' :
                                 'bg-emerald-900/10 text-emerald-400 border-emerald-900/30'
                               }`}>
                                 {sale.statusProducao === 'Agendado' ? '📅 Agendado' :
                                  sale.statusProducao === 'Em Produção' ? '🔨 Em Produção' :
                                  sale.statusProducao === 'Pronto para Retirada' ? '✨ Pronto' :
+                                 sale.statusProducao === 'Agendado para Entrega' ? '🚚 Agendado Entrega' :
                                  '🤝 Entregue'}
                               </span>
                             ) : null}
@@ -1556,6 +1604,27 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                                 <Pencil className="h-3 w-3" />
                                 <span>Editar</span>
                               </button>
+                              {sale.statusProducao === 'Pronto para Retirada' && sale.avisoProntoSended && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const confirmSched = window.confirm(`Deseja agendar a entrega do pedido de ${sale.cliente}?`);
+                                    if (confirmSched) {
+                                      playAppSound('success');
+                                      if (onUpdateSale) {
+                                        onUpdateSale({
+                                          ...sale,
+                                          statusProducao: 'Agendado para Entrega'
+                                        });
+                                      }
+                                    }
+                                  }}
+                                  className="px-2 py-1 bg-purple-950/45 border border-purple-800 hover:border-purple-400 text-purple-300 hover:text-purple-100 rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0 animate-pulse-slow font-sans"
+                                >
+                                  <span>🚚 Agendar Entrega</span>
+                                </button>
+                              )}
                               {isAdmin && (
                                 <>
                                   {saleIdToDelete === sale.id ? (
@@ -1953,6 +2022,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                       <option value="Agendado">📅 Agendado / Reservado</option>
                       <option value="Em Produção">🔨 Em Produção Interna</option>
                       <option value="Pronto para Retirada">✨ Pronto para Retirada</option>
+                      <option value="Agendado para Entrega">🚚 Agendado para Entrega</option>
                       <option value="Entregue">🤝 Entregue ao Cliente</option>
                     </select>
                   </div>

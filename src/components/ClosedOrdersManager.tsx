@@ -1383,6 +1383,7 @@ ${produtosTexto}`;
                       <option value="Agendado">📅 Agendado / Reservado</option>
                       <option value="Em Produção">🔨 Em Produção Interna</option>
                       <option value="Pronto para Retirada">✨ Pronto para Retirada</option>
+                      <option value="Agendado para Entrega">🚚 Agendado para Entrega</option>
                       <option value="Entregue">🤝 Entregue ao Cliente</option>
                     </select>
                   </div>

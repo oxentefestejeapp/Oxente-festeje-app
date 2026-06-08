@@ -35,8 +35,38 @@ export const getSupabaseConfig = () => {
   };
 };
 
+// Detect whether we are in the Google AI Studio DEV preview or PREVIEW environment
+export const isSandbox = typeof window !== 'undefined' && (
+  window.location.hostname.includes('ais-dev') || 
+  window.location.hostname.includes('ais-pre') ||
+  window.location.hostname.includes('localhost') ||
+  window.location.hostname.includes('127.0.0.1')
+);
+
+// Mock client for Supabase Realtime subscriptions to avoid WebSocket errors during preview
+const mockSupabase = {
+  channel: () => ({
+    on: () => mockSupabase.channel(),
+    subscribe: (callback?: (status: string) => void) => {
+      if (callback) {
+        setTimeout(() => callback('SUBSCRIBED'), 100);
+      }
+      return {};
+    }
+  }),
+  removeChannel: () => {},
+  from: () => ({
+    select: () => Promise.resolve({ data: [], error: null }),
+    upsert: () => Promise.resolve({ error: null }),
+    update: () => ({ eq: () => Promise.resolve({ error: null }) }),
+    delete: () => ({ eq: () => Promise.resolve({ error: null }), neq: () => Promise.resolve({ error: null }) })
+  })
+} as any;
+
 const config = getSupabaseConfig();
-export const supabase = createClient(config.url, config.key);
+export const supabase = isSandbox 
+  ? mockSupabase 
+  : createClient(config.url, config.key);
 
 // Generate migration SQL for Supabase SQL Editor
 export const getSupabaseMigrationSQL = (): string => {
@@ -283,7 +313,7 @@ export const mapDbToSale = (dbItem: any): Sale => ({
 });
 
 // MAIN INTERACTION METHODS WITH GRACEFUL FALLBACKS
-export const dbSupabase = {
+const realDbSupabase = {
   // Test connection to verify URL and KEY are valid
   async testConnection(): Promise<{ success: boolean; error?: string; tablesConfigured?: boolean }> {
     try {
@@ -653,3 +683,118 @@ export const dbSupabase = {
     }
   }
 };
+
+// SANDBOX ENVIRONMENT DATABASE SIMULATOR (Uses Local Storage only, leaving production database 100% untouched)
+const sandboxDbSupabase = {
+  testConnection: async (): Promise<{ success: boolean; error?: string; tablesConfigured?: boolean }> => {
+    return { success: true, tablesConfigured: true };
+  },
+
+  fetchProducts: async (): Promise<Product[] | null> => {
+    const cached = localStorage.getItem('oxente_products');
+    return cached ? JSON.parse(cached) : [];
+  },
+
+  saveProduct: async (product: Product): Promise<boolean> => {
+    const cached = localStorage.getItem('oxente_products');
+    const list: Product[] = cached ? JSON.parse(cached) : [];
+    const index = list.findIndex(p => p.id === product.id);
+    if (index >= 0) {
+      list[index] = product;
+    } else {
+      list.push(product);
+    }
+    localStorage.setItem('oxente_products', JSON.stringify(list));
+    return true;
+  },
+
+  updateProductStock: async (id: string, newStock: number, isInfinite?: boolean): Promise<boolean> => {
+    const cached = localStorage.getItem('oxente_products');
+    if (cached) {
+      const list: Product[] = JSON.parse(cached);
+      const product = list.find(p => p.id === id);
+      if (product) {
+        product.estoque = newStock;
+        if (isInfinite !== undefined) product.estoqueInfinito = isInfinite;
+        localStorage.setItem('oxente_products', JSON.stringify(list));
+      }
+    }
+    return true;
+  },
+
+  deleteProduct: async (id: string): Promise<boolean> => {
+    const cached = localStorage.getItem('oxente_products');
+    if (cached) {
+      const list: Product[] = JSON.parse(cached);
+      const filtered = list.filter(p => p.id !== id);
+      localStorage.setItem('oxente_products', JSON.stringify(filtered));
+    }
+    return true;
+  },
+
+  fetchSales: async (): Promise<Sale[] | null> => {
+    const cached = localStorage.getItem('oxente_sales');
+    return cached ? JSON.parse(cached) : [];
+  },
+
+  saveSale: async (sale: Sale): Promise<boolean> => {
+    const cached = localStorage.getItem('oxente_sales');
+    const list: Sale[] = cached ? JSON.parse(cached) : [];
+    const index = list.findIndex(s => s.id === sale.id);
+    if (index >= 0) {
+      list[index] = sale;
+    } else {
+      list.push(sale);
+    }
+    localStorage.setItem('oxente_sales', JSON.stringify(list));
+    return true;
+  },
+
+  purgeOldDeliveredSales: async (): Promise<boolean> => {
+    return true;
+  },
+
+  purgeOldEstimates: async (): Promise<boolean> => {
+    return true;
+  },
+
+  clearAllSales: async (): Promise<boolean> => {
+    localStorage.setItem('oxente_sales', JSON.stringify([]));
+    return true;
+  },
+
+  deleteSale: async (id: string): Promise<boolean> => {
+    const cached = localStorage.getItem('oxente_sales');
+    if (cached) {
+      const list: Sale[] = JSON.parse(cached);
+      const filtered = list.filter(s => s.id !== id);
+      localStorage.setItem('oxente_sales', JSON.stringify(filtered));
+    }
+    return true;
+  },
+
+  saveStoreInfo: async (storeInfo: StoreInfo): Promise<boolean> => {
+    localStorage.setItem('oxente_store_info', JSON.stringify(storeInfo));
+    return true;
+  },
+
+  fetchStoreInfo: async (): Promise<StoreInfo | null> => {
+    const cached = localStorage.getItem('oxente_store_info');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch {
+        // ignore
+      }
+    }
+    return {
+      nome: 'Oxente Festeje',
+      instagram: '@oxente_festeje',
+      telefone: '(83) 98885-9302',
+      endereco: 'Rua Josina Lessa feitosa 176',
+      whatsappTemplate: 'Olá {cliente}, seu pedido {numero} está {status}!'
+    };
+  }
+};
+
+export const dbSupabase = isSandbox ? sandboxDbSupabase : realDbSupabase;

@@ -368,11 +368,13 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                             sale.statusProducao === 'Agendado' ? 'bg-blue-900/10 text-blue-400 border-blue-900/20' :
                             sale.statusProducao === 'Em Produção' ? 'bg-amber-900/10 text-amber-400 border-amber-900/20' :
                             sale.statusProducao === 'Pronto para Retirada' ? 'bg-purple-900/10 text-purple-400 border-purple-900/20' :
-                            'bg-emerald-900/10 text-emerald-400 border-emerald-900/20'
+                            sale.statusProducao === 'Agendado para Entrega' ? 'bg-sky-950/20 text-sky-400 border-sky-850/40 text-[9px]' :
+                            'bg-emerald-900/10 text-emerald-400 border-emerald-900/30'
                           }`}>
                             {sale.statusProducao === 'Agendado' ? '📅 Agendado' :
                              sale.statusProducao === 'Em Produção' ? '🔨 Produção' :
                              sale.statusProducao === 'Pronto para Retirada' ? '✨ Pronto' :
+                             sale.statusProducao === 'Agendado para Entrega' ? '🚚 Agendado Entrega' :
                              '🤝 Entregue'}
                           </span>
                         )}
@@ -478,8 +480,8 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                         Clique para alterar o status
                       </span>
                     </div>
-                    <div className="grid grid-cols-4 gap-1 pt-1 bg-zinc-950 p-1 rounded-lg">
-                      {(['Agendado', 'Em Produção', 'Pronto para Retirada', 'Entregue'] as const).map((st) => {
+                    <div className="grid grid-cols-5 gap-1 pt-1 bg-zinc-950 p-1 rounded-lg">
+                      {(['Agendado', 'Em Produção', 'Pronto para Retirada', 'Agendado para Entrega', 'Entregue'] as const).map((st) => {
                         const isCurrent = (selectedSale.statusProducao || 'Agendado') === st;
                         return (
                           <button
@@ -503,6 +505,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                             {st === 'Agendado' ? '📅 Agendar' :
                              st === 'Em Produção' ? '🔧 Produzir' :
                              st === 'Pronto para Retirada' ? '✨ Pronto' :
+                             st === 'Agendado para Entrega' ? '🚚 Entregar' :
                              '🤝 Entregue'}
                           </button>
                         );

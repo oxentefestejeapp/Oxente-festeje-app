@@ -39,7 +39,7 @@ export interface SaleOriginalValues {
   valorPago?: number;
   valorFaltante?: number;
   numeroPedido?: string;
-  statusProducao?: 'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Entregue';
+  statusProducao?: 'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Agendado para Entrega' | 'Entregue';
   itens?: SaleItem[];
   notasInternas?: string;
 }
@@ -62,7 +62,7 @@ export interface Sale {
   itens?: SaleItem[];
   criadoPorEmail?: string;
   dataRetirada?: string; // Format YYYY-MM-DD
-  statusProducao?: 'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Entregue';
+  statusProducao?: 'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Agendado para Entrega' | 'Entregue';
   designerId?: 'designer1' | 'designer2' | null;
   statusArte?: 'Pendente' | 'Arte Finalizada';
   puxadoPor?: string;

@@ -24,7 +24,8 @@ import {
   Palette,
   MessageSquare,
   Key,
-  Smartphone
+  Smartphone,
+  CalendarCheck
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, onSnapshot, updateDoc, serverTimestamp, getDoc, setDoc } from 'firebase/firestore';
@@ -48,6 +49,7 @@ import { dispatchNewOrderNotification, dispatchOrderEditedNotification } from '.
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
 import { ChangePassword } from './components/ChangePassword';
 import InstallAppTab from './components/InstallAppTab';
+import { SchedulingManager } from './components/SchedulingManager';
 
 import { Product, Sale, StoreInfo } from './types';
 import { defaultProducts, defaultSales, defaultStoreInfo } from './defaultData';
@@ -107,9 +109,9 @@ export default function App() {
     localStorage.setItem('oxente_pending_products', JSON.stringify(updated));
   };
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(defaultStoreInfo);
-  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web' | 'instalar_app'>(() => {
+  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'agendamento' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web' | 'instalar_app'>(() => {
     const saved = localStorage.getItem('oxente_active_tab');
-    const allowedTabs = ['vendas', 'a_receber', 'entregas', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'lembretes', 'pedidos_fechados', 'whatsapp_web', 'instalar_app'];
+    const allowedTabs = ['vendas', 'a_receber', 'entregas', 'agendamento', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'lembretes', 'pedidos_fechados', 'whatsapp_web', 'instalar_app'];
     return (allowedTabs.includes(saved || '') ? saved : 'vendas') as any;
   });
   const [preselectedSaleId, setPreselectedSaleId] = useState<string | null>(null);
@@ -1452,6 +1454,22 @@ export default function App() {
             <span className="hidden sm:inline">Entregar Pedido</span>
             <span className="sm:hidden">Entregas</span>
           </button>
+
+          <button
+            onClick={() => changeTab('agendamento')}
+            className={getTabClass('agendamento')}
+          >
+            <motion.div
+              animate={activeTab === 'agendamento' ? { scale: [1, 1.3, 1], y: [0, -3, 3, 0] } : { scale: 1, y: 0 }}
+              whileHover={{ scale: 1.25 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+            >
+              <CalendarCheck className="h-4 w-4" />
+            </motion.div>
+            <span className="hidden sm:inline">Agendamento</span>
+            <span className="sm:hidden">Agendar</span>
+          </button>
  
           <button
             onClick={() => changeTab('lembretes')}
@@ -1722,6 +1740,21 @@ export default function App() {
                 onUpdateSale={handleUpdateSale}
                 preselectedSaleId={preselectedSaleId}
                 onClearPreselectedSaleId={() => setPreselectedSaleId(null)}
+              />
+            )}
+
+            {activeTab === 'agendamento' && (
+              <SchedulingManager
+                products={products}
+                sales={sales}
+                storeInfo={storeInfo}
+                onUpdateSale={handleUpdateSale}
+                onNavigateToTab={(tab, preselectedId) => {
+                  if (preselectedId) {
+                    setPreselectedSaleId(preselectedId);
+                  }
+                  changeTab(tab as any);
+                }}
               />
             )}
 

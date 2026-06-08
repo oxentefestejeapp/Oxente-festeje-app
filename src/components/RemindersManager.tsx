@@ -401,6 +401,25 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                           </span>
                           <ArrowRight className="h-3 w-3 shrink-0 animate-bounce-horizontal" />
                         </button>
+                        
+                        {isReadyForPickup && sale.avisoProntoSended && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const confirmSched = window.confirm(`Deseja agendar a entrega do pedido de ${sale.cliente}?`);
+                              if (confirmSched) {
+                                playAppSound('success');
+                                onUpdateSale({
+                                  ...sale,
+                                  statusProducao: 'Agendado para Entrega'
+                                });
+                              }
+                            }}
+                            className="py-2.5 px-4 bg-purple-950/40 hover:bg-purple-900/40 border border-purple-800/45 text-purple-300 hover:text-purple-100 font-extrabold rounded-xl text-[10px] transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-md"
+                          >
+                            <span>🚚 Agendar para Entrega</span>
+                          </button>
+                        )}
 
                         <button
                           type="button"
