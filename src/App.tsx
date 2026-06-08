@@ -25,7 +25,8 @@ import {
   MessageSquare,
   Key,
   Smartphone,
-  CalendarCheck
+  CalendarCheck,
+  RefreshCw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { doc, onSnapshot, updateDoc, serverTimestamp, getDoc, setDoc } from 'firebase/firestore';
@@ -125,6 +126,7 @@ export default function App() {
   const [supabaseSyncStatus, setSupabaseSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error' | 'tables_missing'>('idle');
   const [supabaseErrorMsg, setSupabaseErrorMsg] = useState<string | null>(null);
 
+  const [isForceUpdating, setIsForceUpdating] = useState(false);
   const [globalMuted, setGlobalMuted] = useState(() => getIsAudioMuted());
 
   useEffect(() => {
@@ -378,6 +380,41 @@ export default function App() {
       syncSupabaseSettings();
     }
   }, [firebaseUser, isAdmin]);
+
+  // Escutar atualizações de versão unificada/forçada do sistema via Firestore (Suporta sincronização realtime)
+  useEffect(() => {
+    if (!db || !hasConfig) return;
+
+    const versionDocRef = doc(db, 'config', 'app_version');
+    const unsubscribe = onSnapshot(versionDocRef, (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const dbTrigger = data.forcedReloadTrigger;
+        if (dbTrigger) {
+          const lastProcessed = localStorage.getItem('oxente_last_reload_trigger');
+          if (lastProcessed && lastProcessed !== String(dbTrigger)) {
+            // Se o trigger mudou, limpa tudo de cache que é passível de conflito e recarrega
+            localStorage.setItem('oxente_last_reload_trigger', String(dbTrigger));
+            localStorage.removeItem('oxente_products');
+            localStorage.removeItem('oxente_sales');
+            localStorage.removeItem('oxente_store_info');
+            
+            setIsForceUpdating(true);
+            setTimeout(() => {
+              window.location.reload();
+            }, 2500);
+          } else if (!lastProcessed) {
+            // Se é o primeiro carregamento, apenas define para não carregar em loop infinito no primeiro boot
+            localStorage.setItem('oxente_last_reload_trigger', String(dbTrigger));
+          }
+        }
+      }
+    }, (err) => {
+      console.warn('Erro ao escutar atualizações de versão em tempo real:', err);
+    });
+
+    return () => unsubscribe();
+  }, [firebaseUser?.id]);
 
   // Load state on mount (with SWR pull from Supabase Cloud Database)
   useEffect(() => {
@@ -1423,6 +1460,36 @@ export default function App() {
     }
   };
 
+  const handleForceAllUsersUpdate = async (): Promise<void> => {
+    if (!db || !hasConfig) {
+      alert('Erro: Firebase/Firestore não está configurado!');
+      return;
+    }
+    try {
+      const versionDocRef = doc(db, 'config', 'app_version');
+      const newTrigger = Date.now();
+      await setDoc(versionDocRef, {
+        forcedReloadTrigger: newTrigger,
+        updatedAt: serverTimestamp(),
+        updatedBy: firebaseUser?.email || 'admin'
+      });
+      
+      // Armazena locally e remove os caches offline para garantir sync perfeito
+      localStorage.setItem('oxente_last_reload_trigger', String(newTrigger));
+      localStorage.removeItem('oxente_products');
+      localStorage.removeItem('oxente_sales');
+      localStorage.removeItem('oxente_store_info');
+      
+      setIsForceUpdating(true);
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } catch (err: any) {
+      console.error('Erro ao forçar atualização:', err);
+      alert('Erro ao forçar atualização unificada: ' + (err.message || String(err)));
+    }
+  };
+
   if (userStatus === 'loading') {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center font-sans select-none antialiased">
@@ -1504,6 +1571,21 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-black text-zinc-100 flex flex-col font-sans select-none antialiased">
+      {isForceUpdating && (
+        <div className="fixed inset-0 bg-zinc-950/95 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-6 text-center animate-fade-in select-none">
+          <div className="bg-zinc-900 border border-brand-pink/30 rounded-2xl p-8 max-w-md shadow-2xl flex flex-col items-center">
+            <RefreshCw className="h-12 w-12 text-brand-pink animate-spin mb-4" />
+            <h2 className="text-xl font-display font-bold text-zinc-100 mb-2">Atualizando Oxente Festeje</h2>
+            <p className="text-sm text-zinc-400">
+              Sincronizando todos os dispositivos com a nuvem em tempo real...
+            </p>
+            <div className="mt-4 flex items-center space-x-2 bg-brand-pink/10 border border-brand-pink/20 px-3 py-1.5 rounded-lg">
+              <span className="w-2 h-2 rounded-full bg-brand-pink animate-ping" />
+              <span className="text-xs font-mono text-brand-pink">Recarregando recursos e cache...</span>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Barra superior de gradiente festivo e animado multicolorido */}
       <div className="h-1.5 w-full bg-gradient-to-r from-red-500 via-orange-500 via-yellow-400 via-emerald-500 via-blue-500 via-purple-500 to-pink-500 sticky top-0 z-50 shadow-[0_3px_15px_rgba(249,115,22,0.3)] animate-pulse" />
       
@@ -1931,6 +2013,7 @@ export default function App() {
                 onRestoreBackup={handleRestoreBackup}
                 onUpdateStoreInfo={handleUpdateStoreInfo}
                 onClearAllSales={handleClearAllSales}
+                onForceAllUsersUpdate={handleForceAllUsersUpdate}
                 supabaseSyncStatus={supabaseSyncStatus}
                 supabaseErrorMsg={supabaseErrorMsg}
               />

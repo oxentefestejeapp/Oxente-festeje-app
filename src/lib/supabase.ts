@@ -35,13 +35,8 @@ export const getSupabaseConfig = () => {
   };
 };
 
-// Detect whether we are in the Google AI Studio DEV preview or PREVIEW environment
-export const isSandbox = typeof window !== 'undefined' && (
-  window.location.hostname.includes('ais-dev') || 
-  window.location.hostname.includes('ais-pre') ||
-  window.location.hostname.includes('localhost') ||
-  window.location.hostname.includes('127.0.0.1')
-);
+// Force isSandbox to false so all environments (including preview/sandbox/localhost) connect directly to the real cloud Supabase database for perfect cross-user synchronization.
+export const isSandbox = false;
 
 // Mock client for Supabase Realtime subscriptions to avoid WebSocket errors during preview
 const mockSupabase = {

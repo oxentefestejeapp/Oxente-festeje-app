@@ -66,6 +66,7 @@ interface SettingsManagerProps {
   onRestoreBackup: (products: Product[], sales: Sale[], storeInfo: StoreInfo) => void;
   onUpdateStoreInfo?: (updated: StoreInfo) => void;
   onClearAllSales?: () => Promise<boolean>;
+  onForceAllUsersUpdate?: () => Promise<void>;
   supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error' | 'tables_missing';
   supabaseErrorMsg?: string | null;
 }
@@ -77,6 +78,7 @@ export function SettingsManager({
   onRestoreBackup, 
   onUpdateStoreInfo,
   onClearAllSales,
+  onForceAllUsersUpdate,
   supabaseSyncStatus = 'idle',
   supabaseErrorMsg = null
 }: SettingsManagerProps) {
@@ -85,6 +87,8 @@ export function SettingsManager({
   const [isClearingSales, setIsClearingSales] = useState(false);
   const [clearStep, setClearStep] = useState<'idle' | 'confirming'>('idle');
   const [dangerPassword, setDangerPassword] = useState('');
+  const [isTriggeringUpdate, setIsTriggeringUpdate] = useState(false);
+  const [updateTriggeredSuccess, setUpdateTriggeredSuccess] = useState(false);
 
   // States and effects for 1-Click PWA Installation on Android/Mobile
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -1402,6 +1406,66 @@ export function SettingsManager({
             );
           })}
         </div>
+      </div>
+
+      {/* 🟢 FORÇAR ATUALIZAÇÃO / SINCRONIZAÇÃO EM TEMPO REAL PARA TODOS OS USUÁRIOS */}
+      <div className="bg-zinc-900 rounded-2xl border border-emerald-550/15 p-6 shadow-md space-y-6">
+        <div className="flex items-center gap-2 border-b border-zinc-800 pb-4">
+          <Megaphone className="h-5 w-5 text-emerald-400 shrink-0" />
+          <div>
+            <h3 className="font-display font-semibold text-base text-zinc-100">Atualização Forçada Unificada (Sincronização Realtime)</h3>
+            <p className="text-[10px] text-zinc-450 mt-0.5">Sincronize instantaneamente todos os dispositivos e logins ativos do atelier de uma só vez</p>
+          </div>
+        </div>
+
+        <div className="text-xs text-zinc-300 space-y-2 leading-relaxed">
+          <p>
+            Ocasionalmente, devido a caches de rotas ou sessões antigas de navegadores de celulares, alguns colaboradores podem demorar a receber as notificações ou novos pedidos em tempo real.
+          </p>
+          <p>
+            Ao clicar no botão abaixo, você disparará um sinal Firestore em tempo real que <strong className="text-emerald-400">forçará todos os dispositivos (incluindo o seu perfil de administrador e todos os colaboradores logados)</strong> a exibir uma tela de recarga e recarregar os arquivos e caches do aplicativo automaticamente para a versão mais atualizada e 100% conectada ao Supabase Cloud.
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3 pt-1">
+          <button
+            type="button"
+            disabled={isTriggeringUpdate}
+            onClick={async () => {
+              if (onForceAllUsersUpdate) {
+                setIsTriggeringUpdate(true);
+                try {
+                  await onForceAllUsersUpdate();
+                  setUpdateTriggeredSuccess(true);
+                  setTimeout(() => setUpdateTriggeredSuccess(false), 5000);
+                } catch (e) {
+                  // Erro tratado no App.tsx
+                } finally {
+                  setIsTriggeringUpdate(false);
+                }
+              }
+            }}
+            className="px-5 py-3.5 bg-emerald-600 hover:bg-emerald-550 disabled:bg-emerald-800 text-white font-extrabold rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5 active:scale-97 shadow-md"
+          >
+            {isTriggeringUpdate ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin text-white" />
+                <span>Enviando Comando de Atualização...</span>
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 text-white" />
+                <span>Forçar Atualização / Sincronização em Todo o Sistema</span>
+              </>
+            )}
+          </button>
+        </div>
+
+        {updateTriggeredSuccess && (
+          <div className="p-3.5 bg-emerald-950/30 border border-emerald-900/40 rounded-xl text-emerald-350 text-xs font-semibold animate-fade-in text-center">
+            Comando de recarregamento executado com sucesso! Todos os celulares logados serão atualizados em segundos.
+          </div>
+        )}
       </div>
 
       {/* ZONA DE PERIGO: APAGAR PEDIDOS */}
