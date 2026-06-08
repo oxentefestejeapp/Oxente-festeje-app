@@ -318,7 +318,11 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                         )}
                         {sale.statusProducao === 'Agendado para Entrega' && (
                           <>
-                            <span>🚚 Agendado p/ Entrega {sale.turnoEntrega ? `(${sale.turnoEntrega})` : ''}</span>
+                            <span>🚚 Agendado p/ Entrega {sale.turnoEntrega ? (
+                              <strong className="text-white font-black bg-zinc-950 px-1.5 py-0.5 rounded border border-zinc-800 text-[9.5px] uppercase ml-1">
+                                {sale.turnoEntrega === 'Manhã' ? '☀️ MANHÃ' : '🌇 TARDE'}
+                              </strong>
+                            ) : ''}</span>
                           </>
                         )}
                         {sale.statusProducao === 'Entregue' && (
@@ -428,7 +432,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                                   });
                                   setSchedulingSaleId(null);
                                 }}
-                                className="py-2 px-1 bg-amber-505 hover:bg-amber-400 text-black font-black text-[10px] rounded-lg transition-transform active:scale-95 cursor-pointer flex items-center justify-center gap-1 shadow-md"
+                                className="py-2 px-1 bg-amber-600 hover:bg-amber-500 text-white font-black text-[10.5px] rounded-lg transition-transform active:scale-95 cursor-pointer flex items-center justify-center gap-1 shadow-md shadow-amber-955/20 border border-amber-500"
                               >
                                 <span>☀️ Manhã</span>
                               </button>
@@ -445,7 +449,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                                   });
                                   setSchedulingSaleId(null);
                                 }}
-                                className="py-2 px-1 bg-orange-505 hover:bg-orange-400 text-black font-black text-[10px] rounded-lg transition-transform active:scale-95 cursor-pointer flex items-center justify-center gap-1 shadow-md"
+                                className="py-2 px-1 bg-orange-600 hover:bg-orange-500 text-white font-black text-[10.5px] rounded-lg transition-transform active:scale-95 cursor-pointer flex items-center justify-center gap-1 shadow-md shadow-orange-955/20 border border-orange-500"
                               >
                                 <span>🌇 Tarde</span>
                               </button>

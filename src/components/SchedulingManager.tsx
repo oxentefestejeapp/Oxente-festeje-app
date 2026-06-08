@@ -362,7 +362,7 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
                         ⏰ Turno de Entrega:
                       </span>
                       {sale.turnoEntrega ? (
-                        <span className="text-[9.5px] font-black text-amber-400 bg-amber-955/10 px-1.5 py-0.5 rounded border border-amber-900/30">
+                        <span className="text-[10px] font-black text-white bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800 uppercase">
                           {sale.turnoEntrega === 'Manhã' ? '☀️ MANHÃ' : '🌇 TARDE'}
                         </span>
                       ) : (
@@ -370,7 +370,7 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
                       )}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
-                      <button
+                       <button
                         type="button"
                         onClick={() => {
                           playAppSound('click');
@@ -383,11 +383,11 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
                         }}
                         className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border ${
                           sale.turnoEntrega === 'Manhã'
-                            ? 'bg-amber-505 text-black border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.35)]'
+                            ? 'bg-amber-600 text-white border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.35)]'
                             : 'bg-zinc-950 text-zinc-400 border-zinc-900 hover:border-zinc-805'
                         }`}
                       >
-                        <span>☀️ Manhã</span>
+                        <span className="text-white font-black">☀️ Manhã</span>
                       </button>
                       <button
                         type="button"
@@ -402,11 +402,11 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
                         }}
                         className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border ${
                           sale.turnoEntrega === 'Tarde'
-                            ? 'bg-orange-505 text-black border-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.35)]'
+                            ? 'bg-orange-600 text-white border-orange-500 shadow-[0_0_8px_rgba(249,115,22,0.35)]'
                             : 'bg-zinc-950 text-zinc-400 border-zinc-900 hover:border-zinc-805'
                         }`}
                       >
-                        <span>🌇 Tarde</span>
+                        <span className="text-white font-black">🌇 Tarde</span>
                       </button>
                     </div>
                   </div>

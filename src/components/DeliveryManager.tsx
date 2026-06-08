@@ -615,11 +615,11 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                           }}
                           className={`py-2 px-4 rounded-xl text-xs font-black transition-all border cursor-pointer flex items-center justify-center gap-2 ${
                             selectedSale.turnoEntrega === 'Manhã'
-                              ? 'bg-amber-505 text-black border-amber-400 font-black shadow-md shadow-amber-955/20'
+                              ? 'bg-amber-600 text-white border-amber-500 font-black shadow-md shadow-amber-955/20'
                               : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:border-zinc-700'
                           }`}
                         >
-                          <span>☀️ Manhã</span>
+                          <span className="text-white font-black">☀️ Manhã</span>
                         </button>
                         <button
                           type="button"
@@ -634,11 +634,11 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                           }}
                           className={`py-2 px-4 rounded-xl text-xs font-black transition-all border cursor-pointer flex items-center justify-center gap-2 ${
                             selectedSale.turnoEntrega === 'Tarde'
-                              ? 'bg-orange-505 text-black border-orange-400 font-black shadow-md shadow-orange-955/20'
+                              ? 'bg-orange-600 text-white border-orange-500 font-black shadow-md shadow-orange-955/20'
                               : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:border-zinc-700'
                           }`}
                         >
-                          <span>🌆 Tarde</span>
+                          <span className="text-white font-black">🌆 Tarde</span>
                         </button>
                       </div>
                     </div>
