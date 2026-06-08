@@ -42,6 +42,7 @@ export interface SaleOriginalValues {
   statusProducao?: 'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Agendado para Entrega' | 'Entregue';
   itens?: SaleItem[];
   notasInternas?: string;
+  turnoEntrega?: 'Manhã' | 'Tarde';
 }
 
 export interface Sale {
@@ -81,6 +82,7 @@ export interface Sale {
   valorPagoAntesConcluir?: number;
   valorFaltanteAntesConcluir?: number;
   statusProducaoAntesConcluir?: 'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Agendado para Entrega' | 'Entregue';
+  turnoEntrega?: 'Manhã' | 'Tarde';
 }
 
 export interface StoreInfo {

@@ -87,16 +87,24 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
     const cleanPh = sale.telefoneCliente.replace(/\D/g, '');
     const numToUse = cleanPh.startsWith('55') ? cleanPh : `55${cleanPh}`;
     
-    // Default or custom template
-    let text = `Olá ${sale.cliente}! Seu agendamento de entrega está confirmado. Estamos organizando os detalhes do envio da sua encomenda.`;
-    if (storeInfo.whatsappTemplate) {
-      text = storeInfo.whatsappTemplate
-        .replace('{cliente}', sale.cliente)
-        .replace('{numero}', sale.numeroPedido || '')
-        .replace('{status}', 'agendado para entrega 🚚');
-    }
+    const storeName = storeInfo.nome || 'Ateliê Oxente Festeje';
+    const pedidoNum = sale.numeroPedido || sale.id.substring(0, 5).toUpperCase();
+    const listProducts = sale.itens && sale.itens.length > 0
+      ? sale.itens.map(item => `${item.produtoNome} (${item.quantidade}x)`).join(', ')
+      : `${sale.produtoNome} (${sale.quantidade}x)`;
 
-    const url = `https://web.whatsapp.com/send?phone=${numToUse}&text=${encodeURIComponent(text)}`;
+    const dateStr = sale.dataRetirada 
+      ? new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')
+      : 'Não informada';
+      
+    const shiftText = sale.turnoEntrega 
+      ? `*${sale.turnoEntrega}*` 
+      : 'A definir';
+
+    const text = `Olá, *${sale.cliente}*! Tudo bem? 🌟\n\nSeu agendamento de entrega da *${storeName}* foi confirmado com sucesso! 🚚🎉\n\n*Detalhes do seu Agendamento:*\n📦 *Pedido:* #${pedidoNum}\n🛒 *Peças:* ${listProducts}\n📅 *Data de Entrega:* ${dateStr}\n⏰ *Turno da Entrega:* ${shiftText}\n\nEstamos organizando a rota de entrega para sua comodidade. Qualquer dúvida, conte conosco! ❤️`;
+
+    // Opens directly on Web/Desktop/Mobile app depending on system configuration
+    const url = `https://api.whatsapp.com/send?phone=${numToUse}&text=${encodeURIComponent(text)}`;
     window.open(url, '_blank');
   };
 
@@ -277,7 +285,7 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
 
                   {/* User Note Instructions */}
                   {sale.observacoesDesign ? (
-                    <div className="mt-3.5 bg-black/40 border border-zinc-850/50 p-2.5 rounded-xl space-y-1">
+                    <div className="mt-3 bg-black/40 border border-zinc-850/50 p-2.5 rounded-xl space-y-1">
                       <div className="text-[9px] uppercase tracking-wider font-extrabold text-zinc-500 flex items-center gap-1 select-none">
                         <span>📝 Instruções de Envio:</span>
                       </div>
@@ -286,10 +294,66 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
                       </p>
                     </div>
                   ) : (
-                    <div className="mt-3.5 py-4 text-center border border-dashed border-zinc-850/50 rounded-xl">
+                    <div className="mt-3 py-3 text-center border border-dashed border-zinc-850/50 rounded-xl">
                       <p className="text-[9.5px] font-mono text-zinc-650 tracking-wider">Mão Festeira sem observações extras</p>
                     </div>
                   )}
+
+                  {/* Shift of delivery (Turno da Entrega) selection */}
+                  <div className="mt-3 bg-zinc-950/40 border border-zinc-850/60 p-2.5 rounded-xl space-y-2 no-print">
+                    <div className="flex justify-between items-center select-none">
+                      <span className="text-[9.5px] uppercase tracking-wider font-extrabold text-purple-300 flex items-center gap-1">
+                        ⏰ Turno de Entrega:
+                      </span>
+                      {sale.turnoEntrega ? (
+                        <span className="text-[9.5px] font-black text-amber-400 bg-amber-955/10 px-1.5 py-0.5 rounded border border-amber-900/30">
+                          {sale.turnoEntrega === 'Manhã' ? '☀️ MANHÃ' : '🌇 TARDE'}
+                        </span>
+                      ) : (
+                        <span className="text-[9.5px] font-bold text-zinc-500">A definir</span>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playAppSound('click');
+                          onUpdateSale({
+                            ...sale,
+                            turnoEntrega: 'Manhã',
+                            foiAlterado: true,
+                            editadoEm: new Date().toISOString()
+                          });
+                        }}
+                        className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border ${
+                          sale.turnoEntrega === 'Manhã'
+                            ? 'bg-amber-505 text-black border-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.35)]'
+                            : 'bg-zinc-950 text-zinc-400 border-zinc-900 hover:border-zinc-805'
+                        }`}
+                      >
+                        <span>☀️ Manhã</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playAppSound('click');
+                          onUpdateSale({
+                            ...sale,
+                            turnoEntrega: 'Tarde',
+                            foiAlterado: true,
+                            editadoEm: new Date().toISOString()
+                          });
+                        }}
+                        className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border ${
+                          sale.turnoEntrega === 'Tarde'
+                            ? 'bg-orange-505 text-black border-orange-400 shadow-[0_0_8px_rgba(249,115,22,0.35)]'
+                            : 'bg-zinc-950 text-zinc-400 border-zinc-900 hover:border-zinc-805'
+                        }`}
+                      >
+                        <span>🌇 Tarde</span>
+                      </button>
+                    </div>
+                  </div>
 
                   {/* Actions buttons layout */}
                   <div className="mt-5 space-y-2.5">
@@ -298,11 +362,11 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
                       <button
                         onClick={() => handleOpenWhatsApp(sale)}
                         disabled={!sale.telefoneCliente}
-                        className="py-2 px-2.5 bg-emerald-950/20 hover:bg-emerald-900/20 border border-emerald-900/40 text-emerald-400 rounded-xl text-[10.5px] font-bold cursor-pointer transition-colors flex items-center justify-center gap-1.5 hover:border-emerald-500 disabled:opacity-20 disabled:cursor-not-allowed select-none"
-                        title={sale.telefoneCliente ? "Contatar cliente agendado" : "Telefone não cadastrado"}
+                        className="py-2 px-2 bg-emerald-600 hover:bg-emerald-500 border border-emerald-500 text-black rounded-xl text-[10.5px] font-black cursor-pointer transition-all flex items-center justify-center gap-1.5 active:scale-95 disabled:opacity-20 disabled:cursor-not-allowed select-none shadow-[0_0_12px_rgba(16,185,129,0.25)] hover:scale-[1.01]"
+                        title={sale.telefoneCliente ? "Enviar no WhatsApp Desktop/Zap" : "Telefone não cadastrado"}
                       >
                         <Phone className="h-3.5 w-3.5 shrink-0" />
-                        <span>Chamar Zap</span>
+                        <span>Enviar no Zap</span>
                       </button>
 
                       <button

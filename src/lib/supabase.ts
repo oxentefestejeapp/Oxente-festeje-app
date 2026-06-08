@@ -273,6 +273,7 @@ const mapSaleToDb = (sale: Sale) => ({
   notas_internas: sale.notasInternas || null,
   pedido_anotado: sale.pedidoAnotado || false,
   aviso_pronto_sended: sale.avisoProntoSended || false,
+  turno_entrega: sale.turnoEntrega || null,
   updated_at: new Date().toISOString()
 });
 
@@ -309,7 +310,8 @@ export const mapDbToSale = (dbItem: any): Sale => ({
   valoresOriginais: dbItem.valores_originais ? (typeof dbItem.valores_originais === 'string' ? JSON.parse(dbItem.valores_originais) : dbItem.valores_originais) : undefined,
   notasInternas: dbItem.notas_internas || undefined,
   pedidoAnotado: dbItem.pedido_anotado || false,
-  avisoProntoSended: dbItem.aviso_pronto_sended || false
+  avisoProntoSended: dbItem.aviso_pronto_sended || false,
+  turnoEntrega: dbItem.turno_entrega || undefined
 });
 
 // MAIN INTERACTION METHODS WITH GRACEFUL FALLBACKS
@@ -533,6 +535,7 @@ const realDbSupabase = {
             console.warn('Colunas novas podem não existir no Supabase, tentando salvar sem elas.');
             delete dbRow.pedido_anotado;
             delete dbRow.aviso_pronto_sended;
+            delete dbRow.turno_entrega;
             attempt++;
             continue;
           }

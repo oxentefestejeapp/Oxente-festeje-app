@@ -7,6 +7,7 @@ import React, { useState, useMemo } from 'react';
 import { Search, Phone, CheckCircle2, Clock, DollarSign, Truck, FileText, Check, ShieldAlert, ArrowRight, User } from 'lucide-react';
 import { Sale, PaymentMethod, StoreInfo, Product } from '../types';
 import { Receipt } from './Receipt';
+import { playAppSound } from '../lib/audio';
 
 interface DeliveryManagerProps {
   products: Product[];
@@ -559,6 +560,55 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                       })}
                     </div>
                   </div>
+
+                  {/* SELECTOR FOR TURNO DE ENTREGA IF STATUS IS AGENDADO PARA ENTREGA */}
+                  {selectedSale.statusProducao === 'Agendado para Entrega' && (
+                    <div className="space-y-1.5 bg-purple-950/20 border border-purple-900/40 p-4 rounded-xl no-print">
+                      <label className="block text-[10px] text-purple-300 font-extrabold uppercase tracking-wider select-none">
+                        ⏰ TURNO DE ENTREGA AGENDADO
+                      </label>
+                      <div className="grid grid-cols-2 gap-3 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playAppSound('click');
+                            onUpdateSale({
+                              ...selectedSale,
+                              turnoEntrega: 'Manhã',
+                              foiAlterado: true,
+                              editadoEm: new Date().toISOString()
+                            });
+                          }}
+                          className={`py-2 px-4 rounded-xl text-xs font-black transition-all border cursor-pointer flex items-center justify-center gap-2 ${
+                            selectedSale.turnoEntrega === 'Manhã'
+                              ? 'bg-amber-505 text-black border-amber-400 font-black shadow-md shadow-amber-955/20'
+                              : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:border-zinc-700'
+                          }`}
+                        >
+                          <span>☀️ Manhã</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playAppSound('click');
+                            onUpdateSale({
+                              ...selectedSale,
+                              turnoEntrega: 'Tarde',
+                              foiAlterado: true,
+                              editadoEm: new Date().toISOString()
+                            });
+                          }}
+                          className={`py-2 px-4 rounded-xl text-xs font-black transition-all border cursor-pointer flex items-center justify-center gap-2 ${
+                            selectedSale.turnoEntrega === 'Tarde'
+                              ? 'bg-orange-505 text-black border-orange-400 font-black shadow-md shadow-orange-955/20'
+                              : 'bg-zinc-950 text-zinc-400 border-zinc-850 hover:border-zinc-700'
+                          }`}
+                        >
+                          <span>🌆 Tarde</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {/* INTERACTIVE CUSTOMER NOTES OR INSTRUCTIONS */}
                   <div className="space-y-1.5 bg-zinc-950/45 border border-zinc-850 p-4 rounded-xl no-print">

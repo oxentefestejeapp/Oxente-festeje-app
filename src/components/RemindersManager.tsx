@@ -25,6 +25,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
   const [selectedSaleForWA, setSelectedSaleForWA] = useState<Sale | null>(null);
   const [filterType, setFilterType] = useState<'todos' | 'pendentes' | 'concluidos'>('todos');
   const [readyId, setReadyId] = useState<string | null>(null);
+  const [schedulingSaleId, setSchedulingSaleId] = useState<string | null>(null);
 
   const playNotificationChime = () => {
     playAppSound('success');
@@ -296,6 +297,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                         (!sale.statusProducao || sale.statusProducao === 'Agendado') ? 'bg-blue-900/10 text-blue-400 border-blue-900/20' :
                         sale.statusProducao === 'Em Produção' ? 'bg-amber-900/10 text-amber-400 border-amber-900/20 animate-pulse' :
                         sale.statusProducao === 'Pronto para Retirada' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 font-extrabold' :
+                        sale.statusProducao === 'Agendado para Entrega' ? 'bg-purple-900/10 text-purple-400 border-purple-900/20 font-bold' :
                         'bg-emerald-900/10 text-emerald-450 border-emerald-900/20'
                       }`}>
                         {(!sale.statusProducao || sale.statusProducao === 'Agendado') && (
@@ -312,6 +314,11 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                           <>
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
                             <span>✨ Pronto para Retirada</span>
+                          </>
+                        )}
+                        {sale.statusProducao === 'Agendado para Entrega' && (
+                          <>
+                            <span>🚚 Agendado p/ Entrega {sale.turnoEntrega ? `(${sale.turnoEntrega})` : ''}</span>
                           </>
                         )}
                         {sale.statusProducao === 'Entregue' && (
@@ -402,22 +409,67 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                           <ArrowRight className="h-3 w-3 shrink-0 animate-bounce-horizontal" />
                         </button>
                         
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const confirmSched = window.confirm(`Deseja agendar a entrega do pedido de ${sale.cliente}?`);
-                            if (confirmSched) {
-                              playAppSound('success');
-                              onUpdateSale({
-                                ...sale,
-                                statusProducao: 'Agendado para Entrega'
-                              });
-                            }
-                          }}
-                          className="py-2.5 px-4 bg-purple-950/40 hover:bg-purple-900/40 border border-purple-800/45 text-purple-300 hover:text-purple-100 font-extrabold rounded-xl text-[10px] transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-md"
-                        >
-                          <span>🚚 Agendar para Entrega</span>
-                        </button>
+                        {schedulingSaleId === sale.id ? (
+                          <div className="bg-purple-950/30 border border-purple-800/60 rounded-xl p-2.5 space-y-2 mt-1 animate-fade-in no-print">
+                            <span className="block text-[8.5px] uppercase font-black text-purple-300 tracking-wider text-center select-none">
+                              Turno da entrega domiciliar:
+                            </span>
+                            <div className="grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playAppSound('success');
+                                  onUpdateSale({
+                                    ...sale,
+                                    statusProducao: 'Agendado para Entrega',
+                                    turnoEntrega: 'Manhã',
+                                    foiAlterado: true,
+                                    editadoEm: new Date().toISOString()
+                                  });
+                                  setSchedulingSaleId(null);
+                                }}
+                                className="py-2 px-1 bg-amber-505 hover:bg-amber-400 text-black font-black text-[10px] rounded-lg transition-transform active:scale-95 cursor-pointer flex items-center justify-center gap-1 shadow-md"
+                              >
+                                <span>☀️ Manhã</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  playAppSound('success');
+                                  onUpdateSale({
+                                    ...sale,
+                                    statusProducao: 'Agendado para Entrega',
+                                    turnoEntrega: 'Tarde',
+                                    foiAlterado: true,
+                                    editadoEm: new Date().toISOString()
+                                  });
+                                  setSchedulingSaleId(null);
+                                }}
+                                className="py-2 px-1 bg-orange-505 hover:bg-orange-400 text-black font-black text-[10px] rounded-lg transition-transform active:scale-95 cursor-pointer flex items-center justify-center gap-1 shadow-md"
+                              >
+                                <span>🌇 Tarde</span>
+                              </button>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSchedulingSaleId(null)}
+                              className="w-full py-1 text-[9px] text-zinc-400 hover:text-zinc-100 bg-zinc-900 border border-zinc-800 rounded-md cursor-pointer transition-colors mt-0.5 font-bold"
+                            >
+                              Cancelar
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              playAppSound('click');
+                              setSchedulingSaleId(sale.id);
+                            }}
+                            className="py-2.5 px-4 bg-purple-950/40 hover:bg-purple-900/40 border border-purple-800/45 text-purple-300 hover:text-purple-100 font-extrabold rounded-xl text-[10px] transition-colors cursor-pointer flex items-center justify-center gap-1.5 shadow-md"
+                          >
+                            <span>🚚 Agendar para Entrega</span>
+                          </button>
+                        )}
 
                         <button
                           type="button"
