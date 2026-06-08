@@ -596,7 +596,17 @@ export default function App() {
       if (eventType === 'INSERT') {
         const sale = mapDbToSale(newRow);
         setSales((current) => {
-          if (current.some(s => s.id === sale.id)) return current;
+          if (current.some(s => s.id === sale.id)) {
+            const localSale = current.find(s => s.id === sale.id);
+            if (localSale && localSale.updatedAt && sale.updatedAt) {
+              const localTime = new Date(localSale.updatedAt).getTime();
+              const serverTime = new Date(sale.updatedAt).getTime();
+              if (localTime > serverTime) return current;
+            }
+            const updated = current.map(s => s.id === sale.id ? sale : s);
+            localStorage.setItem('oxente_sales', JSON.stringify(updated));
+            return updated;
+          }
           const updated = [sale, ...current];
           updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
           localStorage.setItem('oxente_sales', JSON.stringify(updated));
@@ -623,13 +633,29 @@ export default function App() {
           // Only trigger if the manual edit timestamp (editadoEm) actually changed
           const isManualEditSaved = localSale && sale.editadoEm && sale.editadoEm !== localSale.editadoEm;
 
+          // If local sale has a newer updatedAt, preserve local optimism and ignore this message
+          if (localSale && localSale.updatedAt && sale.updatedAt) {
+            const localTime = new Date(localSale.updatedAt).getTime();
+            const serverTime = new Date(sale.updatedAt).getTime();
+            if (localTime > serverTime) {
+              return current;
+            }
+          }
+
           const updated = current.map(s => s.id === sale.id ? sale : s);
           updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
           localStorage.setItem('oxente_sales', JSON.stringify(updated));
 
           // Notificar sobre pedidos editados em tempo real no celular se veio de outro usuário e foi um salvamento de edição manual
           const isMyEdit = sale.editadoPorEmail === currentUserEmailRef.current;
-          if (!isMyEdit && isManualEditSaved) {
+          const isStatusOrScheduleChangeOnly = localSale && (
+            (sale.statusProducao !== localSale.statusProducao) ||
+            (sale.turnoEntrega !== localSale.turnoEntrega) ||
+            (sale.dataRetirada !== localSale.dataRetirada) ||
+            (sale.status !== localSale.status)
+          );
+
+          if (!isMyEdit && isManualEditSaved && !isStatusOrScheduleChangeOnly) {
             dispatchOrderEditedNotification(
               sale.cliente,
               sale.total,
@@ -791,7 +817,15 @@ export default function App() {
                 if (!localSale) return false;
                 // Only notify if the manual edit timestamp (editadoEm) has actually changed
                 const isManualEditSaved = s.editadoEm && s.editadoEm !== localSale.editadoEm;
-                return isManualEditSaved;
+                
+                const isStatusOrScheduleChangeOnly = localSale && (
+                  (s.statusProducao !== localSale.statusProducao) ||
+                  (s.turnoEntrega !== localSale.turnoEntrega) ||
+                  (s.dataRetirada !== localSale.dataRetirada) ||
+                  (s.status !== localSale.status)
+                );
+                
+                return isManualEditSaved && !isStatusOrScheduleChangeOnly;
               });
 
               if (editedSalesOnServer.length > 0) {
@@ -811,10 +845,44 @@ export default function App() {
               }
             }
 
-            const hasChanged = JSON.stringify(curr) !== JSON.stringify(dbSaless);
+            // Construct merged sales list dynamically comparing local vs remote updatedAt
+            const localSalesMap = new Map<string, Sale>(curr.map(s => [s.id, s]));
+            const typedDbSales = dbSaless as Sale[];
+            
+            const mergedSalesList = typedDbSales.map(serverSale => {
+              const localSale = localSalesMap.get(serverSale.id);
+              if (!localSale) {
+                return serverSale;
+              }
+              
+              // If local sale has a newer updatedAt, preserve local optimism
+              if (localSale.updatedAt && serverSale.updatedAt) {
+                const localTime = new Date(localSale.updatedAt).getTime();
+                const serverTime = new Date(serverSale.updatedAt).getTime();
+                if (localTime > serverTime) {
+                  return localSale;
+                }
+              } else if (localSale.updatedAt && !serverSale.updatedAt) {
+                return localSale;
+              }
+              
+              return serverSale;
+            });
+            
+            // Re-add any sales that are present locally but not on the server list yet
+            const serverIds = new Set(typedDbSales.map(s => s.id));
+            const unsavedLocalSales = curr.filter(s => !serverIds.has(s.id));
+            if (unsavedLocalSales.length > 0) {
+              mergedSalesList.push(...unsavedLocalSales);
+            }
+            
+            // Keep sorting by 'data' descending
+            mergedSalesList.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+
+            const hasChanged = JSON.stringify(curr) !== JSON.stringify(mergedSalesList);
             if (hasChanged) {
-              localStorage.setItem('oxente_sales', JSON.stringify(dbSaless));
-              return dbSaless;
+              localStorage.setItem('oxente_sales', JSON.stringify(mergedSalesList));
+              return mergedSalesList;
             }
             return curr;
           });
@@ -976,16 +1044,20 @@ export default function App() {
   };
 
   const handleRecordSale = async (newSale: Sale) => {
+    const stampedSale: Sale = {
+      ...newSale,
+      updatedAt: new Date().toISOString()
+    };
     const currentSales = salesRef.current;
     const currentProducts = productsRef.current;
 
-    const updated = [...currentSales, newSale];
+    const updated = [...currentSales, stampedSale];
     saveSales(updated);
 
     // If it is an estimate, do not deduct from product inventory stock
-    if (newSale.status === 'Orçamento') {
+    if (stampedSale.status === 'Orçamento') {
       try {
-        const success = await dbSupabase.saveSale(newSale);
+        const success = await dbSupabase.saveSale(stampedSale);
         if (!success) {
           setSupabaseSyncStatus('error');
           setSupabaseErrorMsg(`Erro ao sincronizar orçamento no Supabase: ${getFormattedSupabaseError()}`);
@@ -999,14 +1071,14 @@ export default function App() {
     }
 
     // Atomically decrease stock for each sold item
-    const itemsToDecrease = newSale.itens || [
+    const itemsToDecrease = stampedSale.itens || [
       {
-        id: `item-${newSale.produtoId}`,
-        produtoId: newSale.produtoId,
-        produtoNome: newSale.produtoNome,
-        precoUn: newSale.precoUn,
-        quantidade: newSale.quantidade,
-        total: newSale.total
+        id: `item-${stampedSale.produtoId}`,
+        produtoId: stampedSale.produtoId,
+        produtoNome: stampedSale.produtoNome,
+        precoUn: stampedSale.precoUn,
+        quantidade: stampedSale.quantidade,
+        total: stampedSale.total
       }
     ];
 
@@ -1057,7 +1129,7 @@ export default function App() {
 
     // Background save to Supabase
     try {
-      const success = await dbSupabase.saveSale(newSale);
+      const success = await dbSupabase.saveSale(stampedSale);
       if (!success) {
         setSupabaseSyncStatus('error');
         setSupabaseErrorMsg(`Erro ao sincronizar venda/pedido no Supabase: ${getFormattedSupabaseError()}`);
@@ -1070,14 +1142,18 @@ export default function App() {
   };
 
   const handleUpdateSale = async (updatedSale: Sale) => {
+    const stampedSale: Sale = {
+      ...updatedSale,
+      updatedAt: new Date().toISOString()
+    };
     const currentSales = salesRef.current;
     const currentProducts = productsRef.current;
 
     // 1. Encontrar o pedido original antes da alteração usando o valor mais atualizado do ref
-    const oldSale = currentSales.find((s) => s.id === updatedSale.id);
+    const oldSale = currentSales.find((s) => s.id === stampedSale.id);
 
     // 2. Atualizar a lista de vendas localmente
-    const updated = currentSales.map((s) => (s.id === updatedSale.id ? updatedSale : s));
+    const updated = currentSales.map((s) => (s.id === stampedSale.id ? stampedSale : s));
     saveSales(updated);
 
     // 3. Se temos o pedido original, calcular as diferenças de estoque
@@ -1100,7 +1176,7 @@ export default function App() {
       };
 
       const oldItems = getSaleItems(oldSale);
-      const newItems = getSaleItems(updatedSale);
+      const newItems = getSaleItems(stampedSale);
 
       // Mapear quantidades de produtos no pedido antigo e novo
       // Nota: o estoque só é afetado se o status NÃO for 'Orçamento'
@@ -1112,7 +1188,7 @@ export default function App() {
       }
 
       const newQtyMap: Record<string, number> = {};
-      if (updatedSale.status !== 'Orçamento') {
+      if (stampedSale.status !== 'Orçamento') {
         newItems.forEach(item => {
           newQtyMap[item.produtoId] = (newQtyMap[item.produtoId] || 0) + item.quantidade;
         });
@@ -1175,7 +1251,7 @@ export default function App() {
 
     // Salvamento em plano de fundo no Supabase
     try {
-      const success = await dbSupabase.saveSale(updatedSale);
+      const success = await dbSupabase.saveSale(stampedSale);
       if (!success) {
         setSupabaseSyncStatus('error');
         setSupabaseErrorMsg(`Erro ao sincronizar alteração de venda no Supabase: ${getFormattedSupabaseError()}`);

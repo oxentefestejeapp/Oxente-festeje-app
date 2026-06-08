@@ -274,7 +274,7 @@ const mapSaleToDb = (sale: Sale) => ({
   pedido_anotado: sale.pedidoAnotado || false,
   aviso_pronto_sended: sale.avisoProntoSended || false,
   turno_entrega: sale.turnoEntrega || null,
-  updated_at: new Date().toISOString()
+  updated_at: sale.updatedAt || new Date().toISOString()
 });
 
 export const mapDbToSale = (dbItem: any): Sale => ({
@@ -311,7 +311,8 @@ export const mapDbToSale = (dbItem: any): Sale => ({
   notasInternas: dbItem.notas_internas || undefined,
   pedidoAnotado: dbItem.pedido_anotado || false,
   avisoProntoSended: dbItem.aviso_pronto_sended || false,
-  turnoEntrega: dbItem.turno_entrega || undefined
+  turnoEntrega: dbItem.turno_entrega || undefined,
+  updatedAt: dbItem.updated_at || undefined
 });
 
 // MAIN INTERACTION METHODS WITH GRACEFUL FALLBACKS

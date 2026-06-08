@@ -83,6 +83,7 @@ export interface Sale {
   valorFaltanteAntesConcluir?: number;
   statusProducaoAntesConcluir?: 'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Agendado para Entrega' | 'Entregue';
   turnoEntrega?: 'Manhã' | 'Tarde';
+  updatedAt?: string;
 }
 
 export interface StoreInfo {
