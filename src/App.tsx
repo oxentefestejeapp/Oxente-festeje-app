@@ -300,86 +300,75 @@ export default function App() {
     return () => clearInterval(interval);
   }, [firebaseUser?.id, firebaseUser?.uid]);
 
-  // Synchronize Supabase configurations dynamically through Firestore database
+  // Synchronize Supabase configurations dynamically through Firestore database inside a real-time snapshot listener
   useEffect(() => {
     if (!db || !hasConfig) return;
 
-    const syncSupabaseSettings = async () => {
+    // Monitora as chaves do Supabase na nuvem do Firestore em Tempo Real para todos os dispositivos (desktop e mobile)
+    const configDocRef = doc(db, 'config', 'supabase');
+    const unsubscribe = onSnapshot(configDocRef, async (docSnap) => {
       try {
-        const configDocRef = doc(db, 'config', 'supabase');
-        const docSnap = await getDoc(configDocRef);
-        
         const localUrl = localStorage.getItem('supabase_url');
         const localKey = localStorage.getItem('supabase_anon_key');
         const isDirty = localStorage.getItem('supabase_keys_dirty') === 'true';
 
-        if (isAdmin) {
-          // O Administrador é a fonte da verdade absoluta de credenciais.
-          // Se o Administrador tem chaves salvas localmente, garantimos que elas estejam guardadas na nuvem do Firestore
-          // para interligar todos os funcionários à mesma base de dados instantaneamente.
-          if (localUrl && localKey) {
-            const firestoreUrl = docSnap.exists() ? docSnap.data().url : null;
-            const firestoreKey = docSnap.exists() ? docSnap.data().key : null;
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          const firestoreUrl = data.url;
+          const firestoreKey = data.key;
 
-            if (localUrl !== firestoreUrl || localKey !== firestoreKey || isDirty) {
-              await setDoc(configDocRef, {
-                url: localUrl,
-                key: localKey,
-                updatedAt: serverTimestamp()
-              });
-              localStorage.removeItem('supabase_keys_dirty');
-              console.log('📡 [Supabase Interligado] Novas credenciais do Administrador salvas na nuvem compartilhada do Firestore.');
-            }
-          } else {
-            // Se o Administrador não tem chaves locais mas elas existem na nuvem, puxa para interligar
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              if (data.url && data.key) {
-                console.log('Puxando credenciais existentes do Supabase do Firestore para sincronizar.');
-                localStorage.setItem('supabase_url', data.url);
-                localStorage.setItem('supabase_anon_key', data.key);
+          if (isAdmin) {
+            // O Administrador é a fonte da verdade de credenciais.
+            // Se o admin editou localmente na tela de Configurações, envia para a nuvem
+            if (isDirty && localUrl && localKey) {
+              if (localUrl !== firestoreUrl || localKey !== firestoreKey) {
+                await setDoc(configDocRef, {
+                  url: localUrl,
+                  key: localKey,
+                  updatedAt: serverTimestamp()
+                });
+                localStorage.removeItem('supabase_keys_dirty');
+                console.log('📡 [Supabase Realtime] Novas credenciais do Administrador salvas no Firestore.');
+              }
+            } else {
+              // Se não está editando localmente, o Admin puxa as chaves da nuvem para manter-se em sincronia com seus outros dispositivos (ex: celular e desktop)
+              if (firestoreUrl && firestoreKey && (localUrl !== firestoreUrl || localKey !== firestoreKey)) {
+                console.log('📡 [Supabase Realtime] Alinhando chaves do Administrador com a nuvem Firestore...');
+                localStorage.setItem('supabase_url', firestoreUrl);
+                localStorage.setItem('supabase_anon_key', firestoreKey);
                 localStorage.removeItem('supabase_keys_dirty');
                 window.location.reload();
               }
-            } else {
-              // Inicializa o Firestore com as chaves padrão do aplicativo para garantir o primeiro acesso integrado
-              const defaultCfg = getSupabaseConfig();
-              await setDoc(configDocRef, {
-                url: defaultCfg.url,
-                key: defaultCfg.key,
-                updatedAt: serverTimestamp()
-              });
-              console.log('Banco de dados padrão registrado no Firestore para início unificado.');
+            }
+          } else {
+            // Funcionários (não-admin) e usuários que ainda estão fazendo login: SEMPRE seguem a nuvem Firestore do Admin em tempo real!
+            if (firestoreUrl && firestoreKey && (localUrl !== firestoreUrl || localKey !== firestoreKey)) {
+              console.log('📡 [Supabase Realtime] Alinhando dispositivo eletrônico às credenciais globais do banco de dados...');
+              localStorage.setItem('supabase_url', firestoreUrl);
+              localStorage.setItem('supabase_anon_key', firestoreKey);
+              localStorage.removeItem('supabase_keys_dirty');
+              window.location.reload();
             }
           }
         } else {
-          // Funcionários (não-admin) SEMPRE puxam as credenciais em tempo real do banco do Firestore do Administrador.
-          // Isso garante que todos estejam interligados na MESMA base de dados do Supabase na nuvem sem falha!
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.url && data.key) {
-              if (localUrl !== data.url || localKey !== data.key) {
-                console.log('📡 [Supabase Interligado] Alinhando credenciais do funcionário ao Supabase do Administrador...');
-                localStorage.setItem('supabase_url', data.url);
-                localStorage.setItem('supabase_anon_key', data.key);
-                localStorage.removeItem('supabase_keys_dirty');
-                
-                // Reinicia a página para que o cliente do Supabase conecte na nova base correta.
-                window.location.reload();
-              }
-            }
+          // Inicializa o Firestore com as chaves padrão do aplicativo para garantir o primeiro acesso integrado
+          if (isAdmin) {
+            const defaultCfg = getSupabaseConfig();
+            await setDoc(configDocRef, {
+              url: localUrl || defaultCfg.url,
+              key: localKey || defaultCfg.key,
+              updatedAt: serverTimestamp()
+            });
+            console.log('📡 [Supabase Realtime] Configuração padrão criada na nuvem do Firestore.');
           }
         }
       } catch (err) {
-        console.warn('Erro ao sincronizar chaves do Supabase via Firestore:', err);
+        console.warn('Erro na escuta de credenciais em tempo real do Supabase via Firestore:', err);
       }
-    };
+    });
 
-    // Run once after auth determines role
-    if (firebaseUser) {
-      syncSupabaseSettings();
-    }
-  }, [firebaseUser, isAdmin]);
+    return () => unsubscribe();
+  }, [db, isAdmin]);
 
   // Escutar atualizações de versão unificada/forçada do sistema via Firestore (Suporta sincronização realtime)
   useEffect(() => {
@@ -486,13 +475,39 @@ export default function App() {
         }
 
         // Parallel load of remote data
-        const [dbProds, dbSaless, dbStore] = await Promise.all([
+        const fetchedData = await Promise.all([
           dbSupabase.fetchProducts(),
           dbSupabase.fetchSales(),
           dbSupabase.fetchStoreInfo()
         ]);
+        let dbProds = fetchedData[0];
+        let dbSaless = fetchedData[1];
+        let dbStore = fetchedData[2];
 
         // Sync Products
+        if (dbProds) {
+          // Identify local-only products (present locally but not on the server) to upload them and prevent losing newly registered products
+          const serverProductIds = new Set(dbProds.map(p => p.id));
+          const localOnlyProducts = loadedProducts.filter(p => p && p.id && !serverProductIds.has(p.id));
+
+          if (localOnlyProducts.length > 0) {
+            console.log(`📤 Encontrados ${localOnlyProducts.length} produtos locais/offline. Fazendo upload automático para a nuvem compartilhada...`);
+            await Promise.all(
+              localOnlyProducts.map(async (p) => {
+                try {
+                  await dbSupabase.saveProduct(p);
+                } catch (e) {
+                  console.warn(`Erro ao fazer upload automático de produto local ${p.id}:`, e);
+                }
+              })
+            );
+            const refreshedDbProds = await dbSupabase.fetchProducts();
+            if (refreshedDbProds) {
+              dbProds = refreshedDbProds;
+            }
+          }
+        }
+
         if (dbProds && dbProds.length > 0) {
           // Merge local loadedProducts or pendingProducts with database dbProds to avoid losing locally registered products
           const mergedProdsMap = new Map(dbProds.map(p => [p.id, p]));
@@ -533,8 +548,30 @@ export default function App() {
 
         // Sync Sales
         if (dbSaless) {
+          const oneDayAgoTime = new Date().getTime() - (24 * 60 * 60 * 1000);
+          
+          // Identify local-only sales (present locally but not on the server) to upload them and prevent losing offline orders.
+          const serverSalesIds = new Set(dbSaless.map(s => s.id));
+          const localOnlySales = loadedSales.filter(s => s && s.id && !serverSalesIds.has(s.id));
+
+          if (localOnlySales.length > 0) {
+            console.log(`📤 Encontrados ${localOnlySales.length} pedidos locais/offline. Fazendo upload automático para a nuvem compartilhada...`);
+            await Promise.all(
+              localOnlySales.map(async (sale) => {
+                try {
+                  await dbSupabase.saveSale(sale);
+                } catch (e) {
+                  console.warn(`Erro ao fazer upload automático de venda local ${sale.id}:`, e);
+                }
+              })
+            );
+            const refreshedDbSales = await dbSupabase.fetchSales();
+            if (refreshedDbSales) {
+              dbSaless = refreshedDbSales;
+            }
+          }
+
           if (dbSaless.length > 0) {
-            const oneDayAgoTime = new Date().getTime() - (24 * 60 * 60 * 1000);
             const filteredSaless = dbSaless.filter(s => {
               if (s.status === 'Orçamento') {
                 const sTime = new Date(s.data).getTime();
