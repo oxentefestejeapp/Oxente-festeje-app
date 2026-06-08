@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
-import { Search, Phone, CheckCircle2, Clock, DollarSign, Truck, FileText, Check, ShieldAlert, ArrowRight, User } from 'lucide-react';
+import { Search, Phone, CheckCircle2, Clock, DollarSign, Truck, FileText, Check, ShieldAlert, ArrowRight, User, Calendar } from 'lucide-react';
 import { Sale, PaymentMethod, StoreInfo, Product } from '../types';
 import { Receipt } from './Receipt';
 import { playAppSound } from '../lib/audio';
@@ -478,6 +478,40 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                     <p className="text-3xl font-extrabold text-red-400 font-mono mt-1">
                       R$ {((selectedSale.valorFaltante !== undefined ? selectedSale.valorFaltante : 0)).toFixed(2)}
                     </p>
+                  </div>
+
+                  {/* ALTER DATA DE AGENDAMENTO OU RETIRADA */}
+                  <div className="space-y-1.5 bg-zinc-950/45 border border-zinc-850 p-4 rounded-xl no-print">
+                    <label className="block text-[10px] text-zinc-400 font-extrabold uppercase tracking-wider select-none text-brand-pink flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />
+                      <span>📅 DATA DE AGENDAMENTO / RETIRADA</span>
+                    </label>
+                    <div className="flex items-center gap-3 pt-1">
+                      <input
+                        type="date"
+                        value={selectedSale.dataRetirada || ''}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          playAppSound('click');
+                          onUpdateSale({
+                            ...selectedSale,
+                            dataRetirada: val || undefined,
+                            foiAlterado: true,
+                            editadoEm: new Date().toISOString()
+                          });
+                        }}
+                        className="bg-black text-zinc-100 border border-zinc-800 rounded-xl py-2 px-3 text-xs focus:outline-none focus:border-brand-pink flex-1 no-print"
+                      />
+                      {selectedSale.dataRetirada ? (
+                        <span className="text-xs font-bold text-amber-500 font-mono bg-amber-955/10 border border-amber-900/35 px-2.5 py-1.5 rounded-xl">
+                          {new Date(selectedSale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}
+                        </span>
+                      ) : (
+                        <span className="text-xs font-bold text-zinc-500 italic bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 rounded-xl">
+                          Não agendado
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {/* INTERACTIVE PRODUCTION FLOW STATUS STEPPER */}

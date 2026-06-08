@@ -31,6 +31,8 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
   const [selectedSaleForReceipt, setSelectedSaleForReceipt] = useState<Sale | null>(null);
   const [quickDeliverPaymentMethod, setQuickDeliverPaymentMethod] = useState<PaymentMethod>('Pix');
   const [confirmingDeliverSaleId, setConfirmingDeliverSaleId] = useState<string | null>(null);
+  const [editingDateSaleId, setEditingDateSaleId] = useState<string | null>(null);
+  const [tempDate, setTempDate] = useState<string>('');
 
   // Filter sales to ONLY scheduled deliveries
   const scheduledSales = useMemo(() => {
@@ -258,13 +260,67 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
                       <span className="font-bold text-zinc-200">{sale.quantidade} items</span>
                     </div>
 
-                    {sale.dataRetirada && (
-                      <div className="flex justify-between text-xs">
+                    {editingDateSaleId === sale.id ? (
+                      <div className="space-y-1.5 bg-zinc-950 p-2 border border-zinc-800 rounded-xl mt-1.5 no-print">
+                        <div className="flex justify-between items-center select-none">
+                          <span className="text-[9.5px] uppercase tracking-wider font-extrabold text-amber-500 flex items-center gap-1">
+                            📅 Nova data de agendamento:
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="date"
+                            value={tempDate}
+                            onChange={(e) => setTempDate(e.target.value)}
+                            className="bg-black text-zinc-100 border border-zinc-800 rounded-lg py-1 px-2 text-xs focus:outline-none focus:border-amber-500 flex-1 no-print"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (!tempDate) return;
+                              playAppSound('success');
+                              onUpdateSale({
+                                ...sale,
+                                dataRetirada: tempDate,
+                                foiAlterado: true,
+                                editadoEm: new Date().toISOString()
+                              });
+                              setEditingDateSaleId(null);
+                            }}
+                            className="py-1 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-black font-extrabold text-[10px] rounded-lg transition-transform active:scale-95 cursor-pointer shadow-md"
+                          >
+                            Salvar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingDateSaleId(null)}
+                            className="py-1 px-2.5 bg-zinc-900 hover:bg-zinc-805 border border-zinc-800 text-zinc-400 hover:text-zinc-100 font-bold text-xs rounded-lg transition-colors cursor-pointer"
+                          >
+                            X
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex justify-between items-center text-xs">
                         <span className="text-zinc-500 select-none">📅 Planejado para:</span>
-                        <span className="font-bold text-amber-500 bg-amber-950/15 border border-amber-900/30 px-1.5 py-0.5 rounded flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          <span>{new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-bold text-amber-500 bg-amber-950/15 border border-amber-900/30 px-1.5 py-0.5 rounded flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>{sale.dataRetirada ? new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR') : 'A definir'}</span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              playAppSound('click');
+                              setTempDate(sale.dataRetirada || '');
+                              setEditingDateSaleId(sale.id);
+                            }}
+                            className="p-1 hover:bg-zinc-800 border border-transparent hover:border-zinc-700/60 text-zinc-400 hover:text-amber-500 rounded-lg transition-colors cursor-pointer no-print"
+                            title="Alterar data de agendamento"
+                          >
+                            <Calendar className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
                       </div>
                     )}
 
