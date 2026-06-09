@@ -117,6 +117,20 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
     }
   };
 
+  // Self-heal: If any item in deletedHistory (the lixeira) is still present in the active products list
+  // (e.g. because of a previous sync bug that resurrected it), delete it permanently from the database.
+  React.useEffect(() => {
+    if (deletedHistory.length === 0 || products.length === 0) return;
+    
+    const activeIds = new Set(products.map(p => p.id));
+    deletedHistory.forEach((deletedProd) => {
+      if (activeIds.has(deletedProd.id)) {
+        console.log(`[Auto-Cleanup] Deletando produto ressuscitado do estoque ativo: ${deletedProd.id} (${deletedProd.nome})`);
+        onDeleteProduct(deletedProd.id);
+      }
+    });
+  }, [deletedHistory, products, onDeleteProduct]);
+
   const scrollToProduct = (id: string) => {
     setSearchTerm('');
     setTimeout(() => {
@@ -500,6 +514,10 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
             </div>
             <button
               onClick={() => {
+                // Ensure all items in the trash are deleted from Supabase again to guarantee they don't resurrect
+                deletedHistory.forEach((p) => {
+                  onDeleteProduct(p.id);
+                });
                 setDeletedHistory([]);
                 localStorage.removeItem('oxente_deleted_products_history');
               }}

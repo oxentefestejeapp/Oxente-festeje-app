@@ -479,8 +479,10 @@ export default function App() {
         // Sync Products
         if (dbProds) {
           // Identify local-only products (present locally but not on the server) to upload them and prevent losing newly registered products
+          // CRITICAL: Only treat them as local-only offline creations if they are in pendingProducts.current.
+          // This prevents deleted products from being resurrected/uploaded back to the server!
           const serverProductIds = new Set(dbProds.map(p => p.id));
-          const localOnlyProducts = loadedProducts.filter(p => p && p.id && !serverProductIds.has(p.id));
+          const localOnlyProducts = loadedProducts.filter(p => p && p.id && pendingProducts.current[p.id] && !serverProductIds.has(p.id));
 
           if (localOnlyProducts.length > 0) {
             console.log(`📤 Encontrados ${localOnlyProducts.length} produtos locais/offline. Fazendo upload automático para a nuvem compartilhada...`);
