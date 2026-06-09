@@ -73,6 +73,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   }, []);
 
   const [descontoPercent, setDescontoPercent] = useState<number>(0);
+  const [customPctInput, setCustomPctInput] = useState('');
+  const [customValInput, setCustomValInput] = useState('');
+
   const [productFilterTerm, setProductFilterTerm] = useState('');
   const [productSortOption, setProductSortOption] = useState<'nome' | 'preco_asc' | 'preco_desc' | 'estoque_desc'>('nome');
 
@@ -297,6 +300,17 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       : 0;
   }, [cart, selectedProduct, quantidade]);
 
+  // Sincronizar o desconto calculado quando o valor total sem desconto mudar e houver desconto digitado em valor fixo R$
+  useEffect(() => {
+    if (customValInput !== '' && totalVendaSemDesconto > 0) {
+      const parsed = parseFloat(customValInput);
+      if (!isNaN(parsed)) {
+        const equivPct = (parsed / totalVendaSemDesconto) * 100;
+        setDescontoPercent(Math.min(100, Math.max(0, equivPct)));
+      }
+    }
+  }, [totalVendaSemDesconto, customValInput]);
+
   const totalVenda = useMemo(() => {
     const discountedValue = totalVendaSemDesconto * (1 - descontoPercent / 100);
     return Number(Math.max(0, discountedValue).toFixed(2));
@@ -519,6 +533,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setDataRetirada('');
     setStatusProducao('Agendado');
     setDescontoPercent(0);
+    setCustomPctInput('');
+    setCustomValInput('');
     setCart([]);
 
     setTimeout(() => {
@@ -1253,10 +1269,12 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                     type="button"
                     onClick={() => {
                       setDescontoPercent(pct);
+                      setCustomPctInput('');
+                      setCustomValInput('');
                       playSound('add');
                     }}
                     className={`px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer ${
-                      descontoPercent === pct
+                      descontoPercent === pct && customPctInput === '' && customValInput === ''
                         ? 'bg-brand-pink/15 text-brand-pink border-brand-pink/35 shadow-xs'
                         : 'bg-black text-zinc-400 border-zinc-850 hover:text-zinc-200'
                     }`}
@@ -1264,6 +1282,84 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                     {pct === 0 ? 'Sem Desconto' : `${pct}% Off`}
                   </button>
                 ))}
+              </div>
+
+              {/* Opção de desconto personalizado */}
+              <div className="grid grid-cols-2 gap-2.5 pt-1 border-t border-zinc-900 mt-2">
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+                    % no Teclado
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Ex: 12"
+                      value={customPctInput}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(',', '.').replace(/[^0-9.]/g, '');
+                        setCustomPctInput(val);
+                        setCustomValInput(''); // limpa o outro
+                        
+                        if (val === '') {
+                          setDescontoPercent(0);
+                          return;
+                        }
+                        
+                        const parsed = parseFloat(val);
+                        if (!isNaN(parsed)) {
+                          setDescontoPercent(Math.min(100, Math.max(0, parsed)));
+                        } else {
+                          setDescontoPercent(0);
+                        }
+                      }}
+                      className={`w-full pl-3 pr-7 py-1.5 bg-black border rounded-lg text-xs font-semibold text-zinc-200 font-mono focus:outline-none transition-all ${
+                        customPctInput !== '' 
+                          ? 'border-brand-pink/60 ring-1 ring-brand-pink/20' 
+                          : 'border-zinc-850 focus:border-brand-pink/40'
+                      }`}
+                    />
+                    <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 text-xs font-bold font-mono select-none">%</span>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">
+                    Valor Fixo (R$)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 text-[10px] font-bold font-mono select-none">R$</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      placeholder="Ex: 15.00"
+                      value={customValInput}
+                      onChange={(e) => {
+                        const val = e.target.value.replace(',', '.').replace(/[^0-9.]/g, '');
+                        setCustomValInput(val);
+                        setCustomPctInput(''); // limpa o outro
+                        
+                        if (val === '' || totalVendaSemDesconto <= 0) {
+                          setDescontoPercent(0);
+                          return;
+                        }
+                        
+                        const parsed = parseFloat(val);
+                        if (!isNaN(parsed)) {
+                          const equivPct = (parsed / totalVendaSemDesconto) * 100;
+                          setDescontoPercent(Math.min(100, Math.max(0, equivPct)));
+                        } else {
+                          setDescontoPercent(0);
+                        }
+                      }}
+                      className={`w-full pl-8 pr-3 py-1.5 bg-black border rounded-lg text-xs font-semibold text-zinc-200 font-mono focus:outline-none transition-all ${
+                        customValInput !== '' 
+                          ? 'border-brand-pink/60 ring-1 ring-brand-pink/20' 
+                          : 'border-zinc-850 focus:border-brand-pink/40'
+                      }`}
+                    />
+                  </div>
+                </div>
               </div>
               
               {descontoPercent > 0 && (
