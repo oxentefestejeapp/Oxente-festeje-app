@@ -84,6 +84,77 @@ export function playNewOrderChime() {
 }
 
 /**
+ * Internal custom Speech Queue to ensure sequential voice announcements
+ * without skipping, overriding, or triggering the Chrome browser stuck bug.
+ */
+interface QueuedSpeech {
+  message: string;
+}
+
+const speechQueue: QueuedSpeech[] = [];
+let isSpeaking = false;
+let queueTimeoutId: any = null;
+
+function processSpeechQueue() {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  if (isSpeaking) return;
+  if (speechQueue.length === 0) return;
+
+  const nextItem = speechQueue.shift();
+  if (!nextItem) return;
+
+  try {
+    isSpeaking = true;
+    const utterance = new SpeechSynthesisUtterance(nextItem.message);
+    utterance.lang = 'pt-BR';
+    utterance.rate = 1.05; // Slightly faster to sound crisp
+    utterance.pitch = 1.0;  // Natural pitch
+
+    // Find proper Brazilian Portuguese voice if available
+    const voices = window.speechSynthesis.getVoices();
+    const ptVoice = voices.find(v => v.lang.includes('pt-BR') || v.lang.includes('pt_BR'));
+    if (ptVoice) {
+      utterance.voice = ptVoice;
+    }
+
+    // Safeguard: reset isSpeaking after 8 seconds if browser fails to trigger onend/onerror
+    const safetyTimeout = setTimeout(() => {
+      console.warn('Limite de segurança da síntese de voz atingido.');
+      isSpeaking = false;
+      processSpeechQueue();
+    }, 8000);
+
+    const onSpeechEnd = () => {
+      clearTimeout(safetyTimeout);
+      isSpeaking = false;
+      // Brief, pleasant pause between announcements so they sound distinct
+      if (queueTimeoutId) clearTimeout(queueTimeoutId);
+      queueTimeoutId = setTimeout(() => {
+        processSpeechQueue();
+      }, 200);
+    };
+
+    utterance.onend = onSpeechEnd;
+    utterance.onerror = onSpeechEnd;
+
+    window.speechSynthesis.speak(utterance);
+  } catch (err) {
+    console.warn('Erro ao reproduzir fala da fila:', err);
+    isSpeaking = false;
+    if (queueTimeoutId) clearTimeout(queueTimeoutId);
+    queueTimeoutId = setTimeout(() => {
+      processSpeechQueue();
+    }, 200);
+  }
+}
+
+function queueVoiceSpeech(message: string) {
+  if (!isTtsEnabled()) return;
+  speechQueue.push({ message });
+  processSpeechQueue();
+}
+
+/**
  * Synthesizes speech to speak out loud when a new order comes in.
  */
 export function announceNewSaleVoice(clientName: string, total: number) {
@@ -92,30 +163,13 @@ export function announceNewSaleVoice(clientName: string, total: number) {
       return;
     }
 
-    if (!isTtsEnabled()) return;
-
-    // Fast cleanup to prevent audio queue build-up / lagging Speak queue
-    window.speechSynthesis.cancel();
-
     const formattedTotal = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const cleanClient = clientName && clientName.trim() !== 'Consumidor' ? clientName : 'Consumidor Geral';
     
     // Warm and friendly audio copy in Portuguese
     const msg = `Novo pedido de ${cleanClient}! No valor de ${formattedTotal}!`;
     
-    const utterance = new SpeechSynthesisUtterance(msg);
-    utterance.lang = 'pt-BR';
-    utterance.rate = 1.05; // Slightly faster to sound crisp
-    utterance.pitch = 1.0;  // Natural pitch
-    
-    // Find a proper Brazilian Portuguese voice if available
-    const voices = window.speechSynthesis.getVoices();
-    const ptVoice = voices.find(v => v.lang.includes('pt-BR') || v.lang.includes('pt_BR'));
-    if (ptVoice) {
-      utterance.voice = ptVoice;
-    }
-
-    window.speechSynthesis.speak(utterance);
+    queueVoiceSpeech(msg);
   } catch (err) {
     console.warn('Erro ao processar síntese de voz (TTS):', err);
   }
@@ -205,30 +259,13 @@ export function announceEditedSaleVoice(clientName: string, total: number) {
       return;
     }
 
-    if (!isTtsEnabled()) return;
-
-    // Fast cleanup to prevent audio queue build-up / lagging Speak queue
-    window.speechSynthesis.cancel();
-
     const formattedTotal = total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     const cleanClient = clientName && clientName.trim() !== 'Consumidor' ? clientName : 'Consumidor Geral';
     
     // Warm and friendly audio copy in Portuguese
     const msg = `Pedido de ${cleanClient} foi alterado! Novo valor de ${formattedTotal}!`;
     
-    const utterance = new SpeechSynthesisUtterance(msg);
-    utterance.lang = 'pt-BR';
-    utterance.rate = 1.05; // Slightly faster to sound crisp
-    utterance.pitch = 1.0;  // Natural pitch
-    
-    // Find a proper Brazilian Portuguese voice if available
-    const voices = window.speechSynthesis.getVoices();
-    const ptVoice = voices.find(v => v.lang.includes('pt-BR') || v.lang.includes('pt_BR'));
-    if (ptVoice) {
-      utterance.voice = ptVoice;
-    }
-
-    window.speechSynthesis.speak(utterance);
+    queueVoiceSpeech(msg);
   } catch (err) {
     console.warn('Erro ao processar síntese de voz (TTS) para alteração:', err);
   }
