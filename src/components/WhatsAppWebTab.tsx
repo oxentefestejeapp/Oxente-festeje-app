@@ -53,7 +53,7 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
   const templates = [
     {
       title: 'Pedido Anotado 📝',
-      text: 'Olá, {cliente}! Seu pedido foi anotado com sucesso e já está em nossa linha de produção! Logo entraremos em contato com mais novidades. Muito obrigado pela preferência! Oxente Festeje 🎈'
+      text: 'Olá, {cliente}! Seu pedido foi anotado com sucesso e já está em nossa linha de produção! Logo entraremos em contato com mais novidades. Muito obrigado pela preferência! Oxente Festeje 🎈\n\n🎨A partir de agora, será encaminhado para fila de artes do design.\n\n🚨 Ele poderá entrar em contato com 1 a 3 dias uteis, sem alteração da data da entrega.'
     },
     {
       title: 'Pronto para Retirada 📦',

@@ -422,6 +422,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return;
     }
 
+    if (registroTipo !== 'Orçamento' && valorPagoInput.trim() === '') {
+      setFormError('Por favor, informe o valor pago pelo cliente (digite 0 caso ele não tenha pago nenhum sinal ou valor inicial ainda).');
+      return;
+    }
+
     let finalItens: SaleItem[] = [];
 
     if (cart.length > 0) {
@@ -458,8 +463,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       }];
     }
 
-    const valPagoNum = valorPagoInput.trim() === '' ? totalVenda : parseFloat(valorPagoInput);
-    const finalValorPago = registroTipo === 'Orçamento' ? 0 : (isNaN(valPagoNum) ? totalVenda : valPagoNum);
+    const valPagoNum = valorPagoInput.trim() === '' ? 0 : parseFloat(valorPagoInput);
+    const finalValorPago = registroTipo === 'Orçamento' ? 0 : (isNaN(valPagoNum) ? 0 : valPagoNum);
     const finalValorFaltante = registroTipo === 'Orçamento' ? totalVenda : Math.max(0, totalVenda - finalValorPago);
 
     const mainItem = finalItens[0];
@@ -680,7 +685,11 @@ ${itensDetail}
 *Quanto falta:* R$ ${valorFaltante.toFixed(2)}
 *Data de retirada:* ${dataRetiradaFormatted}
 
-Muito obrigado pela preferência! Oxente Festeje 🎈`;
+Muito obrigado pela preferência! Oxente Festeje 🎈
+
+🎨A partir de agora, será encaminhado para fila de artes do design.
+
+🚨 Ele poderá entrar em contato com 1 a 3 dias uteis, sem alteração da data da entrega.`;
 
     const encodedText = encodeURIComponent(message);
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
@@ -1228,7 +1237,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-zinc-950/40 border border-zinc-800/80 p-4 rounded-xl">
               <div>
                 <label htmlFor="sale-paid-amount" className="block text-xs font-semibold text-zinc-400 mb-1.5">
-                  Quanto o cliente pagou? (R$)
+                  Quanto o cliente pagou? (R$) <span className="text-red-400 font-bold">*</span>
                 </label>
                 <input
                   id="sale-paid-amount"
@@ -1240,7 +1249,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                     setValorPagoInput(val);
                   }}
                   className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-zinc-100 text-sm"
-                  placeholder={`Vazio = Integral (R$ ${totalVenda.toFixed(2)})`}
+                  placeholder={registroTipo === 'Orçamento' ? 'Não aplicável para orçamento' : 'Ex: 50.00 ou 0 se nada pago'}
                 />
               </div>
 
@@ -1250,8 +1259,8 @@ Muito obrigado pela preferência! Oxente Festeje 🎈`;
                 </label>
                 <div className="px-3 py-2 bg-black border border-zinc-850 rounded-lg text-sm text-zinc-300 flex items-center h-[38px] font-mono justify-between">
                   <span className="text-zinc-550 text-[11px] select-none uppercase">A Pagar:</span>
-                  <span className={`font-bold ${(totalVenda - (valorPagoInput === '' ? totalVenda : parseFloat(valorPagoInput) || 0)) > 0 ? 'text-red-400' : 'text-emerald-500'}`}>
-                    R$ {Math.max(0, totalVenda - (valorPagoInput === '' ? totalVenda : parseFloat(valorPagoInput) || 0)).toFixed(2)}
+                  <span className={`font-bold ${(totalVenda - (valorPagoInput === '' ? 0 : parseFloat(valorPagoInput) || 0)) > 0 ? 'text-red-400' : 'text-emerald-500'}`}>
+                    R$ {Math.max(0, totalVenda - (valorPagoInput === '' ? 0 : parseFloat(valorPagoInput) || 0)).toFixed(2)}
                   </span>
                 </div>
               </div>
