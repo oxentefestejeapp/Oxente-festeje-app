@@ -94,9 +94,17 @@ interface QueuedSpeech {
 const speechQueue: QueuedSpeech[] = [];
 let isSpeaking = false;
 let queueTimeoutId: any = null;
+let activeUtterance: SpeechSynthesisUtterance | null = null; // Essential fix for the Chrome Garbage Collector bug!
 
 function processSpeechQueue() {
   if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+  
+  // Real-time engine healthcheck: if the browser is not actually speaking,
+  // we must reset our custom locked flag to avoid deadlocks.
+  if (isSpeaking && !window.speechSynthesis.speaking) {
+    isSpeaking = false;
+  }
+  
   if (isSpeaking) return;
   if (speechQueue.length === 0) return;
 
@@ -105,10 +113,17 @@ function processSpeechQueue() {
 
   try {
     isSpeaking = true;
+    
+    // Always wake up/resume synthesis in Chrome or Safari before speaking
+    window.speechSynthesis.resume();
+
     const utterance = new SpeechSynthesisUtterance(nextItem.message);
     utterance.lang = 'pt-BR';
     utterance.rate = 1.05; // Slightly faster to sound crisp
     utterance.pitch = 1.0;  // Natural pitch
+
+    // Store in global/module scope to completely prevent browser garbage collection of callbacks
+    activeUtterance = utterance;
 
     // Find proper Brazilian Portuguese voice if available
     const voices = window.speechSynthesis.getVoices();
@@ -121,36 +136,51 @@ function processSpeechQueue() {
     const safetyTimeout = setTimeout(() => {
       console.warn('Limite de segurança da síntese de voz atingido.');
       isSpeaking = false;
+      activeUtterance = null;
       processSpeechQueue();
     }, 8000);
 
     const onSpeechEnd = () => {
       clearTimeout(safetyTimeout);
       isSpeaking = false;
+      activeUtterance = null;
+      
       // Brief, pleasant pause between announcements so they sound distinct
       if (queueTimeoutId) clearTimeout(queueTimeoutId);
       queueTimeoutId = setTimeout(() => {
         processSpeechQueue();
-      }, 200);
+      }, 350);
     };
 
     utterance.onend = onSpeechEnd;
-    utterance.onerror = onSpeechEnd;
+    utterance.onerror = (e) => {
+      console.warn('Erro de evento na síntese de voz:', e);
+      onSpeechEnd();
+    };
 
     window.speechSynthesis.speak(utterance);
   } catch (err) {
     console.warn('Erro ao reproduzir fala da fila:', err);
     isSpeaking = false;
+    activeUtterance = null;
     if (queueTimeoutId) clearTimeout(queueTimeoutId);
     queueTimeoutId = setTimeout(() => {
       processSpeechQueue();
-    }, 200);
+    }, 350);
   }
 }
 
 function queueVoiceSpeech(message: string) {
   if (!isTtsEnabled()) return;
   speechQueue.push({ message });
+
+  // If the browser is definitely not speaking right now, heal state
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    if (!window.speechSynthesis.speaking) {
+      isSpeaking = false;
+    }
+  }
+
   processSpeechQueue();
 }
 
