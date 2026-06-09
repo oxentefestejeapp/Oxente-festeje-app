@@ -543,11 +543,13 @@ export default function App() {
           const oneDayAgoTime = new Date().getTime() - (24 * 60 * 60 * 1000);
           
           // Identify local-only sales (present locally but not on the server) to upload them and prevent losing offline orders.
+          // CRITICAL: Only treat them as local-only offline orders if they are explicitly marked as pendingSync.
+          // This prevents deleted sales from being resurrected/uploaded back to the server!
           const serverSalesIds = new Set(dbSaless.map(s => s.id));
-          const localOnlySales = loadedSales.filter(s => s && s.id && !serverSalesIds.has(s.id));
+          const localOnlySales = loadedSales.filter(s => s && s.id && s.pendingSync && !serverSalesIds.has(s.id));
 
           if (localOnlySales.length > 0) {
-            console.log(`📤 Encontrados ${localOnlySales.length} pedidos locais/offline. Fazendo upload automático para a nuvem compartilhada...`);
+            console.log(`📤 Encontrados ${localOnlySales.length} pedidos locais/offline pendentes de envio. Fazendo upload automático para a nuvem compartilhada...`);
             await Promise.all(
               localOnlySales.map(async (sale) => {
                 try {
@@ -566,9 +568,9 @@ export default function App() {
             }
           }
 
-          // Maintain local safety: keep local-only sales in the final list if they aren't on the server yet
+          // Maintain local safety: keep local-only sales in the final list if they aren't on the server yet and are pending sync
           const finalServerSalesIds = new Set(dbSaless.map(s => s.id));
-          const unsavedLocalSalesAtStart = loadedSales.filter(s => s && s.id && !finalServerSalesIds.has(s.id));
+          const unsavedLocalSalesAtStart = loadedSales.filter(s => s && s.id && s.pendingSync && !finalServerSalesIds.has(s.id));
           
           const mergedSalesList = [...dbSaless];
           if (unsavedLocalSalesAtStart.length > 0) {
