@@ -171,7 +171,7 @@ export default function App() {
 
   const todayRemindersCount = React.useMemo(() => {
     const todayStr = getTodayString();
-    return sales.filter(s => s.dataRetirada === todayStr && s.statusProducao !== 'Entregue' && s.status !== 'Concluído' && s.status !== 'Orçamento').length;
+    return sales.filter(s => s.dataRetirada === todayStr && s.statusProducao !== 'Entregue' && s.status !== 'Concluído' && s.status !== 'Pago total' && s.status !== 'Orçamento').length;
   }, [sales]);
 
   const totalFaltante = React.useMemo(() => {

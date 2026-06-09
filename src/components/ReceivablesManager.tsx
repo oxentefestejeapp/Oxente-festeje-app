@@ -233,7 +233,7 @@ export function ReceivablesManager({ sales, storeInfo, onUpdateSale, onNavigateT
       ...saleToPay,
       valorPago: newPaid,
       valorFaltante: newMissing,
-      status: newMissing === 0 ? 'Concluído' : 'Pendente',
+      status: newMissing === 0 ? 'Pago total' : 'Pendente',
       notasInternas: notes
     };
 

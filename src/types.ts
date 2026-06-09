@@ -59,7 +59,7 @@ export interface Sale {
   valorPago?: number;
   valorFaltante?: number;
   numeroPedido?: string;
-  status?: 'Pendente' | 'Concluído' | 'Orçamento';
+  status?: 'Pendente' | 'Concluído' | 'Pago total' | 'Orçamento';
   itens?: SaleItem[];
   criadoPorEmail?: string;
   dataRetirada?: string; // Format YYYY-MM-DD

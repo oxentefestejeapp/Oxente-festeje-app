@@ -26,7 +26,7 @@ const paymentMethods: { value: PaymentMethod; label: string; icon: string }[] = 
 ];
 
 export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, preselectedSaleId, onClearPreselectedSaleId }: DeliveryManagerProps) {
-  const [category, setCategory] = useState<'Pendentes' | 'Concluidos'>('Pendentes');
+  const [category, setCategory] = useState<'Pendentes' | 'Entregues'>('Pendentes');
   const [deliverySearchTerm, setDeliverySearchTerm] = useState('');
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [productionStatusFilter, setProductionStatusFilter] = useState<'All' | 'Agendado' | 'Em Produção' | 'Pronto para Retirada'>('All');
@@ -50,10 +50,10 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
       setSelectedSaleId(preselectedSaleId);
       const sale = actualSales.find(s => s.id === preselectedSaleId);
       if (sale) {
-        if (sale.status === 'Pendente') {
-          setCategory('Pendentes');
+        if (sale.statusProducao === 'Entregue') {
+          setCategory('Entregues');
         } else {
-          setCategory('Concluidos');
+          setCategory('Pendentes');
         }
       }
       if (onClearPreselectedSaleId) {
@@ -84,8 +84,8 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
 
   const isForgottenSale = (sale: Sale) => {
     if (!sale.dataRetirada) return false;
-    // It shouldn't be finalized (i.e. if statusProducao is 'Entregue' or sale.status is 'Concluído', it's delivered)
-    if (sale.status === 'Concluído' || sale.statusProducao === 'Entregue') return false;
+    // It shouldn't be finalized (i.e. if statusProducao is 'Entregue' or sale.status is 'Concluído' or 'Pago total', it's delivered)
+    if (sale.status === 'Concluído' || sale.status === 'Pago total' || sale.statusProducao === 'Entregue') return false;
     
     try {
       const pickupDate = new Date(sale.dataRetirada + 'T12:00:00');
@@ -134,19 +134,19 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
     };
   }, [actualSales]);
 
-  // Divide sales into Pending and Concluded
+  // Divide sales into Pending and Delivered
   const pendingSales = useMemo(() => {
-    return actualSales.filter(s => isSalePending(s));
+    return actualSales.filter(s => s.statusProducao !== 'Entregue');
   }, [actualSales]);
 
-  const concludedSales = useMemo(() => {
-    return actualSales.filter(s => !isSalePending(s));
+  const deliveredSales = useMemo(() => {
+    return actualSales.filter(s => s.statusProducao === 'Entregue');
   }, [actualSales]);
 
   // Handle filtering by order number, client name, or telephone number
   const getFilteredList = () => {
     const term = deliverySearchTerm.toLowerCase().trim();
-    let list = category === 'Pendentes' ? pendingSales : concludedSales;
+    let list = category === 'Pendentes' ? pendingSales : deliveredSales;
     
     // Filtro por status de produção quando selecionado nas métricas
     if (productionStatusFilter !== 'All') {
@@ -196,7 +196,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
       valorPago: selectedSale.total,
       valorFaltante: 0,
       formaPagamento: deliveryPaymentMethod,
-      status: 'Concluído',
+      status: 'Pago total',
       statusProducao: 'Entregue',
       observacoesDesign: localObservacoes,
     };
@@ -349,16 +349,16 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
           <button 
             type="button"
             onClick={() => {
-              setCategory('Concluidos');
+              setCategory('Entregues');
               setSelectedSaleId(null);
             }}
             className={`flex-1 py-3 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-              category === 'Concluidos' 
+              category === 'Entregues' 
                 ? 'bg-emerald-600 text-white font-bold shadow-xs' 
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
-            <span>✅</span> Pedidos Concluídos ({concludedSales.length})
+            <span>✅</span> Pedidos Entregues ({deliveredSales.length})
           </button>
         </div>
 
@@ -473,7 +473,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                         </div>
                       ) : (
                         <div className="text-xs font-bold text-emerald-400 mt-1 flex items-center gap-1">
-                          <Check className="h-3.5 w-3.5 stroke-[3px]" /> Concluído
+                          <Check className="h-3.5 w-3.5 stroke-[3px]" /> Pago total
                         </div>
                       )}
                     </div>
@@ -644,7 +644,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                                 ...selectedSale,
                                 statusProducao: st,
                                 ...(st === 'Entregue' ? { 
-                                  status: 'Concluído', 
+                                  status: 'Pago total', 
                                   valorPagoAntesConcluir: selectedSale.valorPago ?? 0,
                                   valorFaltanteAntesConcluir: selectedSale.valorFaltante ?? (selectedSale.total - (selectedSale.valorPago ?? 0)),
                                   statusProducaoAntesConcluir: selectedSale.statusProducao || 'Agendado',
@@ -822,7 +822,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                     ✓
                   </div>
                   <div>
-                    <h4 className="font-bold text-zinc-200 text-xs">Pedido Concluído e Pago</h4>
+                    <h4 className="font-bold text-zinc-200 text-xs">Pedido Pago Total</h4>
                     <p className="text-[10px] text-emerald-400 font-medium">Histórico financeiro resolvido integralmente.</p>
                   </div>
                 </div>

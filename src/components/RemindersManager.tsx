@@ -66,7 +66,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
   // Apply visual status filters on today's sales
   const filteredSales = useMemo(() => {
     return todaySales.filter(sale => {
-      const isPending = sale.statusProducao !== 'Entregue' && sale.status !== 'Concluído';
+      const isPending = sale.statusProducao !== 'Entregue' && sale.status !== 'Concluído' && sale.status !== 'Pago total';
       
       if (filterType === 'pendentes') {
         return isPending;
@@ -80,7 +80,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
 
   // Counts for Today
   const pendingCount = useMemo(() => {
-    return todaySales.filter(s => s.statusProducao !== 'Entregue' && s.status !== 'Concluído').length;
+    return todaySales.filter(s => s.statusProducao !== 'Entregue' && s.status !== 'Concluído' && s.status !== 'Pago total').length;
   }, [todaySales]);
 
   const completedCount = todaySales.length - pendingCount;
@@ -236,7 +236,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
           {/* List of today's reminders */}
           <div className="space-y-4">
             {filteredSales.map((sale) => {
-              const isPending = sale.statusProducao !== 'Entregue' && sale.status !== 'Concluído';
+              const isPending = sale.statusProducao !== 'Entregue' && sale.status !== 'Concluído' && sale.status !== 'Pago total';
               const isReadyForPickup = sale.statusProducao === 'Pronto para Retirada';
               
               return (
@@ -491,7 +491,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                               playNotificationChime();
                               onUpdateSale({
                                 ...sale,
-                                status: 'Concluído',
+                                status: 'Pago total',
                                 valorPagoAntesConcluir: sale.valorPago ?? 0,
                                 valorFaltanteAntesConcluir: sale.valorFaltante ?? (sale.total - (sale.valorPago ?? 0)),
                                 statusProducaoAntesConcluir: sale.statusProducao || 'Agendado',
@@ -511,7 +511,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                       <div className="text-center py-2 px-3 flex flex-col items-center justify-center gap-2 select-none">
                         <div className="flex flex-col items-center justify-center text-emerald-500 gap-1.5">
                           <CheckCircle className="h-5 w-5 stroke-[3]" />
-                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-450">Status Concluído</span>
+                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-450">Status Pago Total</span>
                         </div>
                         <button
                           type="button"
@@ -592,7 +592,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
           {/* Tomorrow's entries list */}
           <div className="space-y-3">
             {tomorrowSales.map((sale) => {
-              const isPending = sale.statusProducao !== 'Entregue' && sale.status !== 'Concluído';
+              const isPending = sale.statusProducao !== 'Entregue' && sale.status !== 'Concluído' && sale.status !== 'Pago total';
               
               return (
                 <div 
@@ -649,7 +649,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale }: RemindersMa
                         const update: Sale = {
                           ...sale,
                           statusProducao: targetStatus,
-                          ...(targetStatus === 'Entregue' ? { status: 'Concluído', valorFaltante: 0, valorPago: sale.total } : {})
+                          ...(targetStatus === 'Entregue' ? { status: 'Pago total', valorFaltante: 0, valorPago: sale.total } : {})
                         };
                         onUpdateSale(update);
                       }}

@@ -68,7 +68,7 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
     playAppSound('success');
     const updatedSale: Sale = {
       ...sale,
-      status: 'Concluído',
+      status: 'Pago total',
       statusProducao: 'Entregue',
       valorPagoAntesConcluir: sale.valorPago ?? 0,
       valorFaltanteAntesConcluir: sale.valorFaltante ?? (sale.total - (sale.valorPago ?? 0)),
