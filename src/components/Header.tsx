@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Package, TrendingUp, DollarSign, Gift, AlertTriangle, Volume2, VolumeX, Wifi, WifiOff } from 'lucide-react';
+import { Sparkles, Package, TrendingUp, DollarSign, Gift, AlertTriangle, Volume2, VolumeX, Wifi, WifiOff, X } from 'lucide-react';
 import { Product, Sale } from '../types';
 import { BrandLogo } from './BrandLogo';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
@@ -18,6 +18,7 @@ interface HeaderProps {
 export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) {
   const [audioMuted, setAudioMutedState] = useState(() => getIsAudioMuted());
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [showCriticalList, setShowCriticalList] = useState(false);
   const isAdmin = currentUserEmail === 'oxentefesteje@gmail.com' || currentUserEmail === 'abraaoapp@oxente.com';
 
   useEffect(() => {
@@ -58,8 +59,8 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
   const totalSalesCount = actualSales.length;
   const totalRevenue = actualSales.reduce((acc, curr) => acc + curr.total, 0);
 
-  // Products with stock less than 3 units (ignoring infinite stock products)
-  const criticalProducts = products.filter(p => p && !p.estoqueInfinito && p.estoque < 3);
+  // Products with stock less than or equal to 10 units (ignoring infinite stock products)
+  const criticalProducts = products.filter(p => p && !p.estoqueInfinito && p.estoque <= 10);
   const criticalCount = criticalProducts.length;
 
   return (
@@ -119,9 +120,13 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
         </div>
       </div>
       
-      {/* Upper Corner Critical Stock Alert Badge */}
+      {/* Upper Corner Critical Stock Alert Badge - Interactive and clickable for all users */}
       {criticalCount > 0 && (
-        <div className="absolute top-2 right-4 md:top-3 md:right-6 flex items-center gap-1.5 bg-amber-950/30 border border-amber-800/80 text-amber-200 px-3 py-1 rounded-full text-xs font-bold shadow-3xs animate-fade-in select-none">
+        <button
+          onClick={() => setShowCriticalList(true)}
+          className="absolute top-2 right-4 md:top-3 md:right-6 flex items-center gap-1.5 bg-amber-950/40 hover:bg-amber-905 border border-amber-800/80 text-amber-200 px-3 py-1 rounded-full text-xs font-bold shadow-3xs animate-fade-in select-none cursor-pointer transition-colors"
+          title="Clique para localizar produtos com estoque crítico"
+        >
           <span className="relative flex h-2 w-2">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
             <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
@@ -130,6 +135,58 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
           <span>
             Estoque Crítico: <span className="text-amber-300 font-extrabold">{criticalCount}</span> {criticalCount === 1 ? 'item' : 'itens'}
           </span>
+        </button>
+      )}
+
+      {/* Critical Stock List Modal to let all users easily see and locate low-stock products */}
+      {showCriticalList && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex items-center justify-center z-[99999] p-4 select-none animate-fade-in">
+          <div 
+            className="bg-zinc-950 border border-zinc-800 rounded-3xl w-full max-w-sm overflow-hidden shadow-2xl relative p-6 pointer-events-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-zinc-900 pb-3 mb-4">
+              <div className="flex items-center gap-2 text-amber-400">
+                <AlertTriangle className="h-5 w-5 text-amber-400 animate-bounce" />
+                <h3 className="text-xs font-black uppercase tracking-wider text-zinc-200 font-sans">Estoque Crítico</h3>
+              </div>
+              <button 
+                onClick={() => setShowCriticalList(false)}
+                className="text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-zinc-900 rounded-xl cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Subtext */}
+            <p className="text-[11px] text-zinc-400 mb-4 leading-relaxed font-medium">
+              Os seguintes produtos possuem estoque igual ou inferior a <strong className="text-amber-400">10 itens</strong>. Providencie a reposição para evitar a falta do produto:
+            </p>
+
+            {/* List container */}
+            <div className="max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+              {criticalProducts.map((p) => (
+                <div 
+                  key={p.id} 
+                  className="flex justify-between items-center bg-zinc-905 border border-zinc-850 p-2.5 rounded-xl hover:border-amber-900/40 transition-colors"
+                >
+                  <p className="text-xs font-bold text-zinc-200 truncate pr-2" title={p.nome}>{p.nome}</p>
+                  <span className="px-2.5 py-0.5 bg-red-950/40 border border-red-500/30 text-red-400 font-black text-[11px] rounded-full shrink-0">
+                    {p.estoque} un.
+                  </span>
+                </div>
+              ))}
+            </div>
+
+            {/* CTA action */}
+            <button
+              onClick={() => setShowCriticalList(false)}
+              className="mt-5 w-full py-2.5 bg-zinc-900 hover:bg-zinc-850 border border-zinc-800 text-zinc-350 font-bold rounded-xl text-xs transition-colors cursor-pointer select-none"
+            >
+              Ciente, fechar visualização 🚀
+            </button>
+          </div>
         </div>
       )}
 
