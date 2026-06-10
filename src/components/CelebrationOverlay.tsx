@@ -908,7 +908,7 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName }: Celebra
 
             {/* Subtitle */}
             <p className="text-xs text-zinc-350 font-medium px-4 mb-5 leading-relaxed">
-              Desejamos que o seu dia no atelier seja incrivelmente criativo, produtivo e cheio de festas. Vamos criar artes lindas e fechar excelentes pedidos hoje! ☕🎈✨
+              Desejamos que o seu dia na loja seja incrivelmente criativo, produtivo e cheio de festas. Vamos criar artes lindas e fechar excelentes pedidos hoje! ☕🎈✨
             </p>
 
             {/* Warm Quote Display */}
