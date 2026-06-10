@@ -760,7 +760,8 @@ export default function App() {
 
           // Notificar sobre novos pedidos em tempo real no celular se veio de outro usuário e o usuário logado é administrador
           const isMySale = sale.criadoPorEmail === currentUserEmailRef.current;
-          if (!isMySale && isAdminRef.current) {
+          const isBudget = sale.status === 'Orçamento';
+          if (!isMySale && isAdminRef.current && !isBudget) {
             dispatchNewOrderNotification(
               sale.cliente,
               sale.total,
@@ -1052,7 +1053,8 @@ export default function App() {
               if (newSalesOnServer.length > 0) {
                 newSalesOnServer.forEach(sale => {
                   const isMySale = sale.criadoPorEmail === currentUserEmailRef.current;
-                  if (!isMySale && isAdminRef.current) {
+                  const isBudget = sale.status === 'Orçamento';
+                  if (!isMySale && isAdminRef.current && !isBudget) {
                     dispatchNewOrderNotification(
                       sale.cliente,
                       sale.total,

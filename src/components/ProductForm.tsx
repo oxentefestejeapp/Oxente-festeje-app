@@ -64,6 +64,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
   const [precoCusto, setPrecoCusto] = useState<number | ''>('');
   const [estoque, setEstoque] = useState<number | ''>('');
   const [estoqueInfinito, setEstoqueInfinito] = useState(false);
+  const [adicional, setAdicional] = useState(false);
   const [photo, setPhoto] = useState<string>(''); // Base64 Data URL
   const [dragActive, setDragActive] = useState(false);
   const [error, setError] = useState('');
@@ -216,6 +217,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       estoque: Math.floor(estoqueNum),
       imagemBase64: photo || undefined,
       estoqueInfinito: estoqueInfinito || undefined,
+      adicional: adicional || undefined,
       faixasPreco: faixasPreco.length > 0 ? faixasPreco : undefined,
     };
 
@@ -235,6 +237,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
         setPrecoCusto('');
         setEstoque('');
         setEstoqueInfinito(false);
+        setAdicional(false);
         setPhoto('');
         setFaixasPreco([]);
         setNovaQuantidadeMinima('');
@@ -336,22 +339,33 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1.5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-1.5 gap-2">
               <label htmlFor="product-stock" className="block text-sm font-medium text-zinc-300">
                 Estoque Inicial / Quantidade <span className="text-brand-pink font-bold">*</span>
               </label>
-              <label className="flex items-center gap-1.5 text-xs text-brand-pink font-semibold cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={estoqueInfinito}
-                  onChange={(e) => {
-                    setEstoqueInfinito(e.target.checked);
-                    if (e.target.checked) setEstoque('');
-                  }}
-                  className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink focus:ring-offset-0 h-3.5 w-3.5 cursor-pointer bg-black"
-                />
-                <span>Estoque Infinito</span>
-              </label>
+              <div className="flex gap-4">
+                <label className="flex items-center gap-1.5 text-xs text-brand-pink font-semibold cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={estoqueInfinito}
+                    onChange={(e) => {
+                      setEstoqueInfinito(e.target.checked);
+                      if (e.target.checked) setEstoque('');
+                    }}
+                    className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink focus:ring-offset-0 h-3.5 w-3.5 cursor-pointer bg-black"
+                  />
+                  <span>Estoque Infinito</span>
+                </label>
+                <label className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={adicional}
+                    onChange={(e) => setAdicional(e.target.checked)}
+                    className="rounded border-emerald-500 text-emerald-500 focus:ring-0 accent-emerald-500 h-3.5 w-3.5 cursor-pointer bg-black"
+                  />
+                  <span>Produto Adicional</span>
+                </label>
+              </div>
             </div>
             <input
               id="product-stock"

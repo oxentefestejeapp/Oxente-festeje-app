@@ -102,6 +102,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   // Cart state for multi-product orders
   const [cart, setCart] = useState<{ id: string; product: Product; quantity: number; total: number }[]>([]);
 
+  // Selected Addon Product IDs
+  const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
+
   // Track annotated (notified) sales via localStorage key for cross-session consistency on their device
   const [annotatedSaleIds, setAnnotatedSaleIds] = useState<string[]>(() => {
     try {
@@ -124,6 +127,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return next;
     });
   };
+
+  // Reset selected addons when selected product changes
+  useEffect(() => {
+    setSelectedAddonIds([]);
+  }, [selectedProductId]);
 
   // States for editing a sale
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
@@ -269,7 +277,13 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   // Filter and Sort products that are available in stock (simplified to alphabetical order)
   const availableProducts = useMemo(() => {
-    let list = products.filter(p => p.estoque > 0 || p.estoqueInfinito);
+    let list = products.filter(p => !p.adicional && (p.estoque > 0 || p.estoqueInfinito));
+    return [...list].sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [products]);
+
+  // Filter and Sort addon products that are available in stock
+  const availableAddons = useMemo(() => {
+    let list = products.filter(p => p.adicional && (p.estoque > 0 || p.estoqueInfinito));
     return [...list].sort((a, b) => a.nome.localeCompare(b.nome));
   }, [products]);
 
@@ -279,10 +293,21 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     if (cart.length > 0) {
       return cart.reduce((sum, item) => sum + item.total, 0);
     }
-    return selectedProduct && typeof quantidade === 'number' 
+    const mainTotal = selectedProduct && typeof quantidade === 'number' 
       ? getProductUnitPrice(selectedProduct, quantidade) * quantidade 
       : 0;
-  }, [cart, selectedProduct, quantidade]);
+
+    const addonsTotal = selectedAddonIds.reduce((sum, addonId) => {
+      const addon = products.find(p => p.id === addonId);
+      if (addon && typeof quantidade === 'number') {
+        const addonPrice = getProductUnitPrice(addon, quantidade);
+        return sum + (addonPrice * quantidade);
+      }
+      return sum;
+    }, 0);
+
+    return mainTotal + addonsTotal;
+  }, [cart, selectedProduct, quantidade, selectedAddonIds, products]);
 
   // Sincronizar o desconto calculado quando o valor total sem desconto mudar e houver desconto digitado em valor fixo R$
   useEffect(() => {
@@ -392,6 +417,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     // Reset single item selector fields
     setSelectedProductId('');
     setQuantidade(1);
+    setSelectedAddonIds([]);
     setSuccessMsg(`"${prod.nome}" adicionado ao carrinho!`);
     setTimeout(() => setSuccessMsg(''), 2500);
   };
@@ -451,15 +477,39 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         setFormError(`Quantidade indisponível no estoque! Estoque atual de "${selectedProduct.nome}": ${selectedProduct.estoque} un.`);
         return;
       }
+
+      const addonItems: SaleItem[] = [];
+      for (const addonId of selectedAddonIds) {
+        const addon = products.find(p => p.id === addonId);
+        if (addon) {
+          if (registroTipo !== 'Orçamento' && !addon.estoqueInfinito && qtyNum > addon.estoque) {
+            setFormError(`Quantidade de adicional indisponível! Estoque do adicional "${addon.nome}": ${addon.estoque} un. (Necessário: ${qtyNum})`);
+            return;
+          }
+          const addonPrice = getProductUnitPrice(addon, qtyNum);
+          addonItems.push({
+            id: `item-${addon.id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+            produtoId: addon.id,
+            produtoNome: `Adicional: ${addon.nome}`,
+            precoUn: addonPrice,
+            quantidade: qtyNum,
+            total: addonPrice * qtyNum
+          });
+        }
+      }
+
       const progressiveUnitPrice = getProductUnitPrice(selectedProduct, qtyNum);
-      finalItens = [{
-        id: `item-${selectedProduct.id}-${Date.now()}`,
-        produtoId: selectedProduct.id,
-        produtoNome: selectedProduct.nome,
-        precoUn: progressiveUnitPrice,
-        quantidade: qtyNum,
-        total: progressiveUnitPrice * qtyNum
-      }];
+      finalItens = [
+        {
+          id: `item-${selectedProduct.id}-${Date.now()}`,
+          produtoId: selectedProduct.id,
+          produtoNome: selectedProduct.nome,
+          precoUn: progressiveUnitPrice,
+          quantidade: qtyNum,
+          total: progressiveUnitPrice * qtyNum
+        },
+        ...addonItems
+      ];
     }
 
     const valPagoNum = valorPagoInput.trim() === '' ? 0 : parseFloat(valorPagoInput);
@@ -534,6 +584,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     // Reset fields (keeping client empty)
     setSelectedProductId('');
     setQuantidade(1);
+    setSelectedAddonIds([]);
     setCliente('');
     setTelefoneCliente('');
     setValorPagoInput('');
@@ -995,6 +1046,54 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   </select>
                 )}
               </div>
+
+              {/* Seleção de Adicionais Opcionais */}
+              {selectedProductId && availableAddons.length > 0 && (
+                <div className="mt-3 bg-zinc-900/40 border border-zinc-800/80 p-3 rounded-xl space-y-2 animate-fade-in">
+                  <span className="block text-[11px] font-bold text-emerald-400 uppercase tracking-wide flex items-center gap-1.5">
+                    <span>✨ Brinde Adicional / Opcionais do Pedido:</span>
+                  </span>
+                  <p className="text-[10px] text-zinc-500 leading-normal">
+                    A quantidade dos adicionais marcados acompanhará automaticamente a quantidade do produto principal ({quantidade || 1} un.).
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
+                    {availableAddons.map(addon => {
+                      const isChecked = selectedAddonIds.includes(addon.id);
+                      return (
+                        <label
+                          key={addon.id}
+                          className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
+                            isChecked
+                              ? 'bg-emerald-950/20 border-emerald-500/50 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.05)]'
+                              : 'bg-black/40 border-zinc-850 text-zinc-400 hover:border-zinc-700'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              setSelectedAddonIds(prev =>
+                                prev.includes(addon.id)
+                                  ? prev.filter(id => id !== addon.id)
+                                  : [...prev, addon.id]
+                              );
+                            }}
+                            className="rounded border-zinc-800 text-emerald-500 focus:ring-0 accent-emerald-500 h-4 w-4 cursor-pointer bg-black"
+                          />
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-xs font-semibold truncate text-zinc-250">
+                              {addon.nome}
+                            </span>
+                            <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                              + R$ {addon.preco.toFixed(2)} /un
+                            </span>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Client and Phone fields row */}

@@ -152,6 +152,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
   const [editPrecoCusto, setEditPrecoCusto] = useState<number | ''>('');
   const [editEstoque, setEditEstoque] = useState<number | ''>('');
   const [editEstoqueInfinito, setEditEstoqueInfinito] = useState(false);
+  const [editAdicional, setEditAdicional] = useState(false);
   const [editPhoto, setEditPhoto] = useState<string>('');
   const [editDragActive, setEditDragActive] = useState(false);
   const [editError, setEditError] = useState('');
@@ -173,6 +174,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
     setEditPrecoCusto(product.precoCusto !== undefined ? product.precoCusto : '');
     setEditEstoque(product.estoque);
     setEditEstoqueInfinito(!!product.estoqueInfinito);
+    setEditAdicional(!!product.adicional);
     setEditPhoto(product.imagemBase64 || '');
     setEditFaixasPreco(product.faixasPreco ? [...product.faixasPreco] : []);
     setEditNovaQuantidadeMinima('');
@@ -306,6 +308,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
       estoque: Math.floor(estoqueNum),
       imagemBase64: editPhoto || undefined,
       estoqueInfinito: editEstoqueInfinito || undefined,
+      adicional: editAdicional || undefined,
       faixasPreco: editFaixasPreco.length > 0 ? editFaixasPreco : undefined,
     };
 
@@ -643,6 +646,11 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
 
                   {/* Badges */}
                   <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                    {p.adicional && (
+                      <span className="bg-emerald-500 text-black text-[10px] font-extrabold px-2 py-1 rounded-md shadow-xs uppercase tracking-wider">
+                        ✨ Adicional
+                      </span>
+                    )}
                     {p.estoqueInfinito ? (
                       <span className="bg-brand-pink text-black text-[10px] font-extrabold px-2 py-1 rounded-md shadow-xs uppercase tracking-wider">
                         Infinito ∞
@@ -938,22 +946,33 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-1.5 gap-2">
                     <label className="block text-sm font-medium text-zinc-300">
                       Estoque Atual <span className="text-brand-pink font-bold">*</span>
                     </label>
-                    <label className="flex items-center gap-1.5 text-xs text-brand-pink font-semibold cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={editEstoqueInfinito}
-                        onChange={(e) => {
-                          setEditEstoqueInfinito(e.target.checked);
-                          if (e.target.checked) setEditEstoque('');
-                        }}
-                        className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-3.5 w-3.5 cursor-pointer bg-black"
-                      />
-                      <span>Estoque Infinito</span>
-                    </label>
+                    <div className="flex gap-4">
+                      <label className="flex items-center gap-1.5 text-xs text-brand-pink font-semibold cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={editEstoqueInfinito}
+                          onChange={(e) => {
+                            setEditEstoqueInfinito(e.target.checked);
+                            if (e.target.checked) setEditEstoque('');
+                          }}
+                          className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-3.5 w-3.5 cursor-pointer bg-black"
+                        />
+                        <span>Estoque Infinito</span>
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs text-emerald-400 font-semibold cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={editAdicional}
+                          onChange={(e) => setEditAdicional(e.target.checked)}
+                          className="rounded border-emerald-500 text-emerald-500 focus:ring-0 accent-emerald-500 h-3.5 w-3.5 cursor-pointer bg-black"
+                        />
+                        <span>Produto Adicional</span>
+                      </label>
+                    </div>
                   </div>
                   <input
                     type="number"

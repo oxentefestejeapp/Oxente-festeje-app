@@ -17,6 +17,7 @@ export interface Product {
   estoqueInfinito?: boolean;
   precoCusto?: number;
   faixasPreco?: PricingTier[];
+  adicional?: boolean;
 }
 
 export type PaymentMethod = 'Pix' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito';
