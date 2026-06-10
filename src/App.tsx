@@ -134,6 +134,33 @@ export default function App() {
   const [showCelebration, setShowCelebration] = useState<'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'critical_stock' | null>(null);
   const [criticalStockProduct, setCriticalStockProduct] = useState<Product | null>(null);
   const [shortFeedback, setShortFeedback] = useState<ShortFeedback | null>(null);
+  const [hasCheckedCritical, setHasCheckedCritical] = useState(false);
+
+  useEffect(() => {
+    if (products.length > 0 && !hasCheckedCritical) {
+      const critical = products.filter(p => !p.estoqueInfinito && p.estoque <= 10);
+      if (critical.length > 0) {
+        critical.sort((a, b) => a.estoque - b.estoque);
+        
+        // Use localStorage to restrict the reload warning to at most 3 times for the same critical inventory state
+        const criticalSetKey = critical.map(p => `${p.id}:${p.estoque}`).join(',');
+        const storedSetKey = localStorage.getItem('oxente_critical_stock_set_key');
+        let showCount = Number(localStorage.getItem('oxente_critical_stock_show_count') || '0');
+
+        if (criticalSetKey !== storedSetKey) {
+          showCount = 0;
+          localStorage.setItem('oxente_critical_stock_set_key', criticalSetKey);
+        }
+
+        if (showCount < 3) {
+          setCriticalStockProduct(critical[0]);
+          setShowCelebration('critical_stock');
+          localStorage.setItem('oxente_critical_stock_show_count', String(showCount + 1));
+        }
+      }
+      setHasCheckedCritical(true);
+    }
+  }, [products, hasCheckedCritical]);
 
   useEffect(() => {
     const handleMute = (e: any) => {
@@ -677,10 +704,21 @@ export default function App() {
       } else if (eventType === 'UPDATE') {
         const prod = mapDbToProduct(newRow);
         setProducts((current) => {
+          const oldProd = current.find(p => p.id === prod.id);
+          const oldStock = oldProd ? oldProd.estoque : 999;
           const pendingStock = pendingStockUpdates.current[prod.id];
           const finalProd = pendingStock !== undefined ? { ...prod, estoque: pendingStock } : prod;
           const updated = current.map(p => p.id === prod.id ? finalProd : p);
           localStorage.setItem('oxente_products', JSON.stringify(updated));
+
+          // Real-time synchronization check for critical stock (<= 10) for ALL users
+          if (oldProd && !prod.estoqueInfinito && prod.estoque <= 10 && prod.estoque < oldStock) {
+            setTimeout(() => {
+              setCriticalStockProduct(prod);
+              setShowCelebration('critical_stock');
+            }, 50);
+          }
+
           return updated;
         });
       } else if (eventType === 'DELETE') {

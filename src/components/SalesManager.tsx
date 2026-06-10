@@ -72,12 +72,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     };
   }, []);
 
-  const [descontoPercent, setDescontoPercent] = useState<number>(0);
+   const [descontoPercent, setDescontoPercent] = useState<number>(0);
   const [customPctInput, setCustomPctInput] = useState('');
   const [customValInput, setCustomValInput] = useState('');
-
-  const [productFilterTerm, setProductFilterTerm] = useState('');
-  const [productSortOption, setProductSortOption] = useState<'nome' | 'preco_asc' | 'preco_desc' | 'estoque_desc'>('nome');
 
   const playSound = (type: 'add' | 'remove' | 'success') => {
     if (getIsAudioMuted()) return;
@@ -259,35 +256,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     return matchName || matchProduct || matchOrderNum || matchPhone;
   });
 
-  // Filter and Sort products that are available in stock
+  // Filter and Sort products that are available in stock (simplified to alphabetical order)
   const availableProducts = useMemo(() => {
     let list = products.filter(p => p.estoque > 0 || p.estoqueInfinito);
-    
-    // Filter
-    if (productFilterTerm.trim()) {
-      const term = productFilterTerm.toLowerCase().trim();
-      list = list.filter(p => p.nome.toLowerCase().includes(term));
-    }
-
-    // Sort
-    return [...list].sort((a, b) => {
-      if (productSortOption === 'nome') {
-        return a.nome.localeCompare(b.nome);
-      }
-      if (productSortOption === 'preco_asc') {
-        return a.preco - b.preco;
-      }
-      if (productSortOption === 'preco_desc') {
-        return b.preco - a.preco;
-      }
-      if (productSortOption === 'estoque_desc') {
-        const estA = a.estoqueInfinito ? 999999 : a.estoque;
-        const estB = b.estoqueInfinito ? 999999 : b.estoque;
-        return estB - estA;
-      }
-      return 0;
-    });
-  }, [products, productFilterTerm, productSortOption]);
+    return [...list].sort((a, b) => a.nome.localeCompare(b.nome));
+  }, [products]);
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
@@ -957,33 +930,6 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 </button>
               </div>
 
-              {/* Filtering and Sorting control panel */}
-              {products.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <input
-                      type="text"
-                      placeholder="🔍 Filtrar produtos..."
-                      value={productFilterTerm}
-                      onChange={(e) => setProductFilterTerm(e.target.value)}
-                      className="w-full px-2.5 py-1.5 bg-black/60 border border-zinc-800 rounded-lg text-zinc-200 placeholder-zinc-650 focus:outline-none focus:border-brand-pink text-xs"
-                    />
-                  </div>
-                  <div>
-                    <select
-                      value={productSortOption}
-                      onChange={(e) => setProductSortOption(e.target.value as any)}
-                      className="w-full px-2 py-1.5 bg-black border border-zinc-800 rounded-lg text-zinc-350 focus:outline-none focus:border-brand-pink text-xs"
-                    >
-                      <option value="nome">Sort: Nome [A-Z]</option>
-                      <option value="preco_asc">Sort: Menor Preço</option>
-                      <option value="preco_desc">Sort: Maior Preço</option>
-                      <option value="estoque_desc">Sort: Maior Estoque</option>
-                    </select>
-                  </div>
-                </div>
-              )}
-
               {/* Product selector dropdown */}
               <div>
                 <label htmlFor="sale-p-select" className="block text-xs font-semibold text-zinc-400 mb-1">
@@ -995,7 +941,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   </div>
                 ) : availableProducts.length === 0 ? (
                   <div className="p-3 bg-red-950/10 border border-red-900/30 rounded-xl text-center text-red-400 text-xs font-medium">
-                    {productFilterTerm ? 'Nenhum resultado corresponde ao filtro!' : 'Todos os produtos estão esgotados!'}
+                    Todos os produtos estão esgotados!
                   </div>
                 ) : (
                   <select
