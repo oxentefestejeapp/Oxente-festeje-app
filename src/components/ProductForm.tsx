@@ -466,90 +466,16 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
           )}
         </div>
 
-        {/* Drag and Drop File Input */}
-        <div>
-          <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center justify-between">
-            <span>Foto do Produto (Arrastar ou selecionar)</span>
-            {isCompressing && (
-              <span className="text-xs text-brand-pink flex items-center gap-1 animate-pulse">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Otimizando imagem...</span>
-              </span>
-            )}
-          </label>
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleChange}
-            accept="image/*"
-            className="hidden"
-            disabled={isSaving || isCompressing}
-          />
-
-          {!photo ? (
-            <button
-              type="button"
-              onDragEnter={handleDrag}
-              onDragOver={handleDrag}
-              onDragLeave={handleDrag}
-              onDrop={handleDrop}
-              onClick={triggerFileSelect}
-              disabled={isSaving || isCompressing}
-              className={`w-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                dragActive
-                  ? 'border-brand-pink bg-brand-pink/10'
-                  : 'border-zinc-800 hover:border-brand-pink hover:bg-zinc-950'
-              } disabled:opacity-50 disabled:cursor-not-allowed`}
-            >
-              <div className="flex flex-col items-center gap-3">
-                <div className="p-3 bg-zinc-950 rounded-full text-brand-pink border border-zinc-800">
-                  {isCompressing ? <Loader2 className="h-6 w-6 animate-spin" /> : <Upload className="h-6 w-6" />}
-                </div>
-                <div>
-                  <p className="font-medium text-zinc-300 text-sm">
-                    {isCompressing ? 'Compactando foto do produto...' : 'Arraste uma imagem aqui ou clique para selecionar'}
-                  </p>
-                  <p className="text-xs text-zinc-550 mt-1">O sistema otimiza qualquer tamanho de foto automaticamente para a nuvem!</p>
-                </div>
-              </div>
-            </button>
-          ) : (
-            <div className="relative border border-zinc-800 rounded-xl overflow-hidden bg-black p-4 flex items-center justify-center">
-              <div className="relative h-44 w-44 rounded-lg overflow-hidden border border-zinc-800 bg-zinc-950">
-                <img
-                  src={photo}
-                  alt="Previa do Produto"
-                  className="h-full w-full object-contain"
-                />
-                <button
-                  type="button"
-                  onClick={removePhoto}
-                  disabled={isSaving || isCompressing}
-                  className="absolute top-2 right-2 p-1.5 bg-red-500 hover:bg-red-600 text-white rounded-full shadow-sm hover:scale-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  title="Remover imagem"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
         {/* Submit button */}
         <button
           type="submit"
-          disabled={isSaving || isCompressing}
+          disabled={isSaving}
           className="w-full flex items-center justify-center gap-2 py-3 bg-brand-pink hover:bg-brand-pink-hover text-black font-bold rounded-xl shadow-md hover:shadow-lg transition-all transform active:scale-98 cursor-pointer mt-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           {isSaving ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" />
               <span>Sincronizando com Supabase...</span>
-            </>
-          ) : isCompressing ? (
-            <>
-              <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Processando Imagem...</span>
             </>
           ) : (
             <>

@@ -51,17 +51,23 @@ export function Login({ onLoginSuccess }: LoginProps) {
   useEffect(() => {
     const ensureDefaultUsersExistInDb = async () => {
       try {
+        const existingUsers = await dbSupabase.fetchUsers();
+        const existingIds = new Set(existingUsers?.map((u: any) => u.id) || []);
+
         for (const user of INITIAL_USERS) {
-          await dbSupabase.saveUser({
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            status: user.status,
-            password: user.password
-          });
+          if (!existingIds.has(user.id)) {
+            await dbSupabase.saveUser({
+              id: user.id,
+              name: user.name,
+              email: user.email,
+              role: user.role,
+              status: user.status,
+              password: user.password
+            });
+            console.log(`Usuário inicial @${user.id} criado no Supabase.`);
+          }
         }
-        console.log('Usuários padrão garantidos no Supabase cloud.');
+        console.log('Verificação de usuários padrão concluída.');
       } catch (e) {
         console.warn('Erro ao sincronizar usuários iniciais no Supabase:', e);
       }

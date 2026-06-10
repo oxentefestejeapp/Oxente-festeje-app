@@ -532,20 +532,8 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 max-h-[220px] overflow-y-auto pr-1">
             {deletedHistory.map((p) => (
               <div key={p.id} className="bg-zinc-900 border border-zinc-850 rounded-xl p-3 flex items-center gap-3 hover:border-zinc-800 transition-all shadow-xs">
-                {/* Imagem em miniatura */}
-                <div className="shrink-0">
-                  {p.imagemBase64 ? (
-                    <img 
-                      src={p.imagemBase64} 
-                      alt={p.nome} 
-                      className="h-10 w-10 rounded-lg object-cover bg-black border border-zinc-800" 
-                      referrerPolicy="no-referrer" 
-                    />
-                  ) : (
-                    <div className="h-10 w-10 rounded-lg bg-zinc-950 flex items-center justify-center text-zinc-650 border border-zinc-850">
-                      <Box className="h-4 w-4" />
-                    </div>
-                  )}
+                <div className="shrink-0 h-10 w-10 rounded-lg bg-zinc-950 border border-zinc-850 flex items-center justify-center text-zinc-500">
+                  <Box className="h-5 w-5" />
                 </div>
                 {/* Nome e Estoque Anterior */}
                 <div className="min-w-0 flex-1">
@@ -619,67 +607,77 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
               <div 
                 key={p.id} 
                 id={`product-card-${p.id}`}
-                className={`bg-zinc-900 rounded-xl border transition-all duration-500 overflow-hidden shadow-sm hover:shadow-lg ${
+                className={`bg-zinc-950 border transition-all duration-300 rounded-2xl flex flex-col justify-between shadow-sm hover:shadow-md ${
                   highlightedProductId === p.id
-                    ? 'animate-blink-red scale-[1.02] border-red-500'
+                    ? 'animate-blink-red scale-[1.02] border-brand-pink'
                     : isOutOfStock 
-                      ? 'border-zinc-800/80 bg-zinc-950/40' 
+                      ? 'border-red-900 bg-red-950/5' 
                       : isDeleting 
                         ? 'border-red-900 ring-2 ring-red-950/50'
-                        : 'border-zinc-850'
+                        : 'border-zinc-850 hover:border-zinc-700 hover:bg-zinc-900/40'
                 }`}
               >
-                {/* Product Thumbnail Banner */}
-                <div className="aspect-square w-full bg-black/30 relative overflow-hidden flex items-center justify-center p-4 border-b border-zinc-800/60">
-                  {p.imagemBase64 ? (
-                    <img 
-                       src={p.imagemBase64} 
-                      alt={p.nome} 
-                      className="max-h-full max-w-full object-contain hover:scale-105 transition-transform duration-300 pointer-events-none"
-                    />
-                  ) : (
-                    <div className="flex flex-col items-center justify-center text-zinc-700">
-                      <Box className="h-16 w-16 stroke-1 mb-2" />
-                      <span className="text-xs uppercase font-bold tracking-wider opacity-60">Sem Foto</span>
-                    </div>
-                  )}
-
-                  {/* Badges */}
-                  <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                {/* Highlighted info / Badges Header Block */}
+                <div className="p-5 pb-0 space-y-4">
+                  <div className="flex flex-wrap gap-1.5 select-none animate-fade-in">
                     {p.adicional && (
-                      <span className="bg-emerald-500 text-black text-[10px] font-extrabold px-2 py-1 rounded-md shadow-xs uppercase tracking-wider">
+                      <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
                         ✨ Adicional
                       </span>
                     )}
                     {p.estoqueInfinito ? (
-                      <span className="bg-brand-pink text-black text-[10px] font-extrabold px-2 py-1 rounded-md shadow-xs uppercase tracking-wider">
-                        Infinito ∞
+                      <span className="bg-brand-pink/10 border border-brand-pink/30 text-brand-pink text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
+                        ♾️ Estoque Infinito
                       </span>
                     ) : isOutOfStock ? (
-                      <span className="bg-red-650 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-xs uppercase tracking-wider">
-                        Esgotado
+                      <span className="bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-wider animate-pulse flex items-center gap-1 shrink-0 w-full justify-center">
+                        🚨 ESGOTADO / FALTA NO ESTOQUE
                       </span>
                     ) : isLowStock ? (
-                      <span className="bg-amber-600 text-white text-[10px] font-bold px-2 py-1 rounded-md shadow-xs uppercase tracking-wider animate-pulse">
-                        Estoque Baixo
+                      <span className="bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
+                        ⚠️ Estoque Baixo ({p.estoque})
                       </span>
-                    ) : null}
+                    ) : (
+                      <span className="bg-zinc-800/40 border border-zinc-750 text-zinc-400 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
+                        📦 Em Estoque ({p.estoque} un)
+                      </span>
+                    )}
                   </div>
 
-                  <div className="absolute bottom-3 right-3 bg-zinc-950/90 backdrop-blur-xs border border-zinc-800 px-2.5 py-1 rounded-lg text-xs font-bold text-brand-pink shadow-2xs flex items-center gap-1">
-                    <Tag className="h-3.5 w-3.5 shrink-0" />
-                    R$ {p.preco.toFixed(2)}
+                  {/* Product Name & Price Row */}
+                  <div className="flex items-start justify-between gap-3 pt-1">
+                    <div className="min-w-0 flex-1">
+                      <h4 className="font-display font-black text-white text-base leading-tight truncate hover:text-brand-pink transition-colors" title={p.nome}>
+                        {p.nome}
+                      </h4>
+                      <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider mt-1 flex items-center gap-1">
+                        <Box className="h-3 w-3 text-zinc-650" />
+                        <span>Brinde / Código cadastrado</span>
+                      </p>
+                    </div>
+                    <div className="bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-black text-brand-pink shrink-0 shadow-inner flex items-center gap-1">
+                      <Tag className="h-3.5 w-3.5 animate-pulse text-brand-pink" />
+                      <span>R$ {p.preco.toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* Details and pricing Grid */}
+                  <div className="grid grid-cols-2 gap-2 bg-zinc-900/40 p-3 rounded-xl border border-zinc-900/60 text-left">
+                    <div>
+                      <span className="block text-[8px] text-zinc-500 font-extrabold uppercase tracking-widest leading-none mb-1">Preço de Venda</span>
+                      <span className="text-xs font-mono font-bold text-zinc-200">R$ {p.preco.toFixed(2)}</span>
+                    </div>
+                    <div className="border-l border-zinc-850/80 pl-3">
+                      <span className="block text-[8px] text-zinc-500 font-extrabold uppercase tracking-widest leading-none mb-1">Preço de Custo</span>
+                      <span className="text-xs font-mono font-bold text-zinc-400">
+                        {p.precoCusto !== undefined ? `R$ ${Number(p.precoCusto).toFixed(2)}` : 'Não conf.'}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
                 {/* Info and Actions Area */}
-                <div className="p-5 space-y-4">
-                  <div>
-                    <h4 className="font-display font-semibold text-zinc-100 text-base line-clamp-1 hover:text-brand-pink transition-colors">
-                      {p.nome}
-                    </h4>
-                    <p className="text-xs text-zinc-450 mt-1">Preço unitário: R$ {p.preco.toFixed(2)}</p>
-                  </div>
+                <div className="p-5 pt-3 space-y-4">
 
                   {/* Quantity Editing Control */}
                   <div className="space-y-1.5">
@@ -1068,70 +1066,6 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                 ) : (
                   <div className="text-center py-2.5 border border-dashed border-zinc-850 rounded-xl text-zinc-650 text-[11px]">
                     Nenhum preço progressivo cadastrado para este item.
-                  </div>
-                )}
-              </div>
-
-              {/* Product Photo drag-drop with canvas preview */}
-              <div>
-                <label className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center justify-between">
-                  <span>Foto do Produto (Arrastar ou selecionar nova)</span>
-                  {isEditCompressing && (
-                    <span className="text-xs text-brand-pink flex items-center gap-1 animate-pulse">
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      <span>Otimizando imagem...</span>
-                    </span>
-                  )}
-                </label>
-                <input
-                  type="file"
-                  ref={editFileInputRef}
-                  onChange={handleEditFileChange}
-                  accept="image/*"
-                  className="hidden"
-                  disabled={isEditSaving || isEditCompressing}
-                />
-
-                {!editPhoto ? (
-                  <button
-                    type="button"
-                    onDragEnter={handleEditDrag}
-                    onDragOver={handleEditDrag}
-                    onDragLeave={handleEditDrag}
-                    onDrop={handleEditDrop}
-                    onClick={() => editFileInputRef.current?.click()}
-                    disabled={isEditSaving || isEditCompressing}
-                    className={`w-full border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
-                      editDragActive
-                        ? 'border-brand-pink bg-brand-pink/10'
-                        : 'border-zinc-800 hover:border-brand-pink hover:bg-zinc-950'
-                    }`}
-                  >
-                    <div className="flex flex-col items-center gap-2">
-                      <Upload className="h-5 w-5 text-brand-pink" />
-                      <p className="font-medium text-zinc-300 text-xs">
-                        Arraste uma nova imagem aqui ou clique para selecionar
-                      </p>
-                    </div>
-                  </button>
-                ) : (
-                  <div className="relative border border-zinc-800 rounded-xl overflow-hidden bg-black p-4 flex items-center justify-center">
-                    <div className="relative h-32 w-32 rounded-lg overflow-hidden border border-zinc-805 bg-zinc-950">
-                      <img
-                        src={editPhoto}
-                        alt="Previa da Edição"
-                        className="h-full w-full object-contain"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setEditPhoto('')}
-                        disabled={isEditSaving || isEditCompressing}
-                        className="absolute top-1 right-1 p-1 bg-red-500 hover:bg-red-650 text-white rounded-full shadow cursor-pointer"
-                        title="Remover imagem"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
                   </div>
                 )}
               </div>

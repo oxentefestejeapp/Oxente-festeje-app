@@ -142,6 +142,12 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
   const [specialFilter, setSpecialFilter] = useState<'all' | 'edited' | 'has_designer' | 'finished_art'>('all');
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
 
+  // User Comparison specific filters
+  const [compDateFilter, setCompDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('all');
+  const [compStartDateStr, setCompStartDateStr] = useState('');
+  const [compEndDateStr, setCompEndDateStr] = useState('');
+  const [compCombineDays, setCompCombineDays] = useState(true); // Juntando os dias = true
+
   // Convert string timestamp to comparative date
   const parseSaleDate = (dateStr: string) => {
     try {
@@ -151,7 +157,42 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
     }
   };
 
-  // Get list of unique creators and designers with comprehensive metrics
+  // Filter Sales for Comparison specifically
+  const comparisonFilteredSales = useMemo(() => {
+    return sales.filter(s => {
+      if (s.status === 'Orçamento') return false;
+
+      try {
+        const saleDate = parseSaleDate(s.data);
+        const now = new Date();
+
+        if (compDateFilter === 'today') {
+          if (saleDate.toDateString() !== now.toDateString()) return false;
+        } else if (compDateFilter === '7days') {
+          const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
+          if (diffDays > 7 || diffDays < 0) return false;
+        } else if (compDateFilter === 'this_month') {
+          if (saleDate.getMonth() !== now.getMonth() || saleDate.getFullYear() !== now.getFullYear()) {
+            return false;
+          }
+        } else if (compDateFilter === 'custom') {
+          if (compStartDateStr) {
+            const start = new Date(compStartDateStr + 'T00:00:00');
+            if (saleDate < start) return false;
+          }
+          if (compEndDateStr) {
+            const end = new Date(compEndDateStr + 'T23:59:59');
+            if (saleDate > end) return false;
+          }
+        }
+      } catch (e) {
+        console.error('Comparison date filtering error:', e);
+      }
+      return true;
+    });
+  }, [sales, compDateFilter, compStartDateStr, compEndDateStr]);
+
+  // Consolidated Creators stats for layout (when compCombineDays is true)
   const creatorsStats = useMemo(() => {
     const stats: Record<string, { count: number; totalValue: number; designsCompleted: number }> = {};
     
@@ -161,16 +202,12 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
       }
     };
 
-    sales.forEach(sale => {
-      // 1. Check creations (excluding estimates)
-      if (sale.status !== 'Orçamento') {
-        const creatorEmail = sale.criadoPorEmail || 'Sistema/Legado';
-        ensureUser(creatorEmail);
-        stats[creatorEmail].count += 1;
-        stats[creatorEmail].totalValue += sale.total;
-      }
+    comparisonFilteredSales.forEach(sale => {
+      const creatorEmail = sale.criadoPorEmail || 'Sistema/Legado';
+      ensureUser(creatorEmail);
+      stats[creatorEmail].count += 1;
+      stats[creatorEmail].totalValue += sale.total;
 
-      // 2. Check completed designs (arts)
       if (sale.statusArte === 'Arte Finalizada') {
         const designerEmail = sale.arteFinalizadaPorEmail || sale.puxadoPor;
         if (designerEmail) {
@@ -181,7 +218,52 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
     });
 
     return stats;
-  }, [sales]);
+  }, [comparisonFilteredSales]);
+
+  // Daily breakdown creators stats (when compCombineDays is false)
+  const dailyCreatorsStats = useMemo(() => {
+    const breakdown: Record<string, Record<string, { count: number; totalValue: number; designsCompleted: number }>> = {};
+
+    comparisonFilteredSales.forEach(sale => {
+      let dateKey = 'Data Desconhecida';
+      try {
+        const saleDate = parseSaleDate(sale.data);
+        dateKey = saleDate.toLocaleDateString('pt-BR');
+      } catch {}
+
+      if (!breakdown[dateKey]) {
+        breakdown[dateKey] = {};
+      }
+
+      const dayGroup = breakdown[dateKey];
+      const ensureUser = (email: string) => {
+        if (!dayGroup[email]) {
+          dayGroup[email] = { count: 0, totalValue: 0, designsCompleted: 0 };
+        }
+      };
+
+      const creatorEmail = sale.criadoPorEmail || 'Sistema/Legado';
+      ensureUser(creatorEmail);
+      dayGroup[creatorEmail].count += 1;
+      dayGroup[creatorEmail].totalValue += sale.total;
+
+      if (sale.statusArte === 'Arte Finalizada') {
+        const designerEmail = sale.arteFinalizadaPorEmail || sale.puxadoPor;
+        if (designerEmail) {
+          ensureUser(designerEmail);
+          dayGroup[designerEmail].designsCompleted += 1;
+        }
+      }
+    });
+
+    return Object.entries(breakdown).sort((a, b) => {
+      const partsA = a[0].split('/');
+      const partsB = b[0].split('/');
+      const dateA = new Date(Number(partsA[2]), Number(partsA[1]) - 1, Number(partsA[0]));
+      const dateB = new Date(Number(partsB[2]), Number(partsB[1]) - 1, Number(partsB[0]));
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [comparisonFilteredSales]);
 
   // Determine leaders for gamified presentation & comparison
   const leaderboardMeta = useMemo(() => {
@@ -190,7 +272,7 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
     let maxValEmail = '';
     let maxDesignsEmail = '';
 
-    (Object.entries(creatorsStats) as [string, { count: number; totalValue: number; designsCompleted: number }][]).forEach(([email, stats]) => {
+    Object.entries(creatorsStats).forEach(([email, stats]) => {
       if (stats.totalValue > maxVal) {
         maxVal = stats.totalValue;
         maxValEmail = email;
@@ -202,8 +284,8 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
     });
 
     return {
-      maxSalesValue: maxVal || 1,
-      maxDesignsCompleted: maxDesigns || 1,
+      maxSalesValue: maxVal || 0.01,
+      maxDesignsCompleted: maxDesigns || 0.01,
       maxSalesEmail: maxValEmail,
       maxDesignsEmail: maxDesignsEmail,
     };
@@ -367,105 +449,297 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
       </div>
 
       {/* Collaborator Contributions Leaderboard */}
-      <div className="bg-zinc-900 border border-zinc-805 rounded-2xl p-5 shadow-sm space-y-4">
+      <div className="bg-zinc-900 border border-zinc-805 rounded-2xl p-5 shadow-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
-          <h3 className="text-xs font-bold font-display uppercase tracking-widest text-zinc-400 flex items-center gap-1.5 select-none">
+          <div className="flex items-center gap-2">
             <UserCheck className="h-4 w-4 text-brand-pink" />
-            <span>Atividade e Comparativo por Usuário</span>
-          </h3>
+            <h3 className="text-xs font-bold font-display uppercase tracking-widest text-zinc-400 select-none">
+              Atividade e Comparativo por Usuário
+            </h3>
+          </div>
           <span className="text-[10px] text-zinc-550 font-bold uppercase select-none">
             🎨 Compare o desempenho de vendas e designs concluídos
           </span>
         </div>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-          {Object.entries(creatorsStats).map(([email, info]) => {
-            const stats = info as { count: number; totalValue: number; designsCompleted: number };
-            const isSalesLeader = email === leaderboardMeta.maxSalesEmail && stats.totalValue > 0;
-            const isDesignsLeader = email === leaderboardMeta.maxDesignsEmail && stats.designsCompleted > 0;
-            
-            return (
+
+        {/* Filtros de data específicos para o Comparativo */}
+        <div className="bg-black/40 border border-zinc-850 p-4 rounded-xl space-y-4">
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-black text-zinc-400 uppercase tracking-widest flex items-center gap-1.5 mr-2 select-none">
+                <Calendar className="h-4 w-4 text-brand-pink animate-pulse" />
+                Filtrar Comparativo por:
+              </span>
+              {(['all', 'today', '7days', 'this_month', 'custom'] as const).map((filter) => (
+                <button
+                  type="button"
+                  key={filter}
+                  onClick={() => setCompDateFilter(filter)}
+                  className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border cursor-pointer select-none ${
+                    compDateFilter === filter
+                      ? 'bg-brand-pink/15 border-brand-pink/45 text-brand-pink'
+                      : 'bg-zinc-900/50 border-zinc-850 text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  {filter === 'all' && 'Tudo'}
+                  {filter === 'today' && 'Hoje'}
+                  {filter === '7days' && 'Últimos 7 Dias'}
+                  {filter === 'this_month' && 'Este Mês'}
+                  {filter === 'custom' && 'Período Personalizado 📅'}
+                </button>
+              ))}
+            </div>
+
+            {/* Alternar entre JUNTAR os dias ou não */}
+            <div className="flex items-center gap-3 bg-zinc-900/60 p-1.5 border border-zinc-800 rounded-xl shrink-0 select-none">
+              <span className="text-[10px] uppercase font-extrabold tracking-wider text-zinc-500 pl-1.5">Organizar visualização:</span>
+              <div className="flex rounded-lg overflow-hidden border border-zinc-800">
+                <button
+                  type="button"
+                  onClick={() => setCompCombineDays(true)}
+                  className={`px-3 py-1 text-xs font-black transition-all cursor-pointer ${
+                    compCombineDays 
+                      ? 'bg-brand-pink text-black' 
+                      : 'bg-black text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  Acumulado Total (Juntar Dias)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCompCombineDays(false)}
+                  className={`px-3 py-1 text-xs font-black transition-all cursor-pointer ${
+                    !compCombineDays 
+                      ? 'bg-brand-pink text-black' 
+                      : 'bg-black text-zinc-400 hover:text-zinc-200'
+                  }`}
+                >
+                  Separar por Dia (Detalhamento)
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Sub Row: Custom Period Inputs */}
+          {compDateFilter === 'custom' && (
+            <div className="flex flex-wrap items-center gap-3 pt-2 pl-1 animate-fade-in">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-400 font-semibold">Início:</span>
+                <input
+                  type="date"
+                  value={compStartDateStr}
+                  onChange={(e) => setCompStartDateStr(e.target.value)}
+                  className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-150 focus:outline-none focus:ring-1 focus:ring-brand-pink/50"
+                />
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-450 font-semibold">Término:</span>
+                <input
+                  type="date"
+                  value={compEndDateStr}
+                  onChange={(e) => setCompEndDateStr(e.target.value)}
+                  className="px-3 py-1.5 bg-zinc-900 border border-zinc-800 rounded-lg text-xs font-mono text-zinc-150 focus:outline-none focus:ring-1 focus:ring-brand-pink/50"
+                />
+              </div>
               <button
-                key={email}
-                onClick={() => setSelectedUserFilter(selectedUserFilter === email ? 'all' : email)}
-                className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer group relative overflow-hidden ${
-                  selectedUserFilter === email 
-                    ? 'bg-brand-pink/15 border-brand-pink/50 shadow-md ring-1 ring-brand-pink/20' 
-                    : 'bg-black/30 border-zinc-850 hover:border-zinc-750'
-                }`}
+                type="button"
+                onClick={() => {
+                  setCompStartDateStr('');
+                  setCompEndDateStr('');
+                }}
+                className="text-[10px] text-zinc-550 hover:text-red-400 font-black uppercase tracking-wider pl-1 cursor-pointer transition-colors"
               >
-                <div className="w-full space-y-4">
-                  {/* Card Header */}
-                  <div className="flex items-start justify-between gap-2 w-full">
-                    <div className="min-w-0 flex-1">
-                      <div className="text-zinc-500 text-[9px] font-extrabold uppercase tracking-widest group-hover:text-zinc-400 transition-colors">E-mail do Operador</div>
-                      <div className="text-zinc-200 text-xs font-bold font-mono truncate mt-0.5" title={email}>{email}</div>
-                    </div>
-                  </div>
-
-                  {/* Operational stats list */}
-                  <div className="space-y-3 bg-zinc-950/30 p-3 rounded-xl border border-zinc-850/35">
-                    {/* Vendas */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-zinc-350">
-                        <span className="flex items-center gap-1">
-                          <DollarSign className="w-3.5 h-3.5 text-brand-pink shrink-0" />
-                          <span>Vendas: <b className="text-zinc-150 font-mono font-black">{stats.count}</b></span>
-                        </span>
-                        <span className="text-brand-pink font-mono font-extrabold text-[10.5px]">R$ {stats.totalValue.toFixed(2)}</span>
-                      </div>
-                      <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-brand-pink rounded-full transition-all duration-300"
-                          style={{ width: `${Math.min(100, Math.max(3, (stats.totalValue / leaderboardMeta.maxSalesValue) * 100))}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    {/* Artes Criadas / Arte Finalizada */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[11px] font-bold text-zinc-350">
-                        <span className="flex items-center gap-1">
-                          <Palette className="w-3.5 h-3.5 text-emerald-450 shrink-0" />
-                          <span>Artes Concluídas:</span>
-                        </span>
-                        <span className="text-emerald-400 font-mono font-black text-xs">{stats.designsCompleted}</span>
-                      </div>
-                      <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
-                        <div 
-                          className="h-full bg-emerald-500 rounded-full transition-all duration-300"
-                          style={{ width: `${Math.min(100, Math.max(3, (stats.designsCompleted / leaderboardMeta.maxDesignsCompleted) * 100))}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Leader ribbons / tags */}
-                  {(isSalesLeader || isDesignsLeader) && (
-                    <div className="flex flex-wrap gap-1 pt-1 border-t border-zinc-850/30 w-full select-none">
-                      {isSalesLeader && (
-                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/10 border border-amber-500/30 text-amber-400">
-                          👑 Top Vendas
-                        </span>
-                      )}
-                      {isDesignsLeader && (
-                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
-                          ✨ Líder Artes
-                        </span>
-                      )}
-                    </div>
-                  )}
-
-                </div>
+                Limpar Período
               </button>
-            );
-          })}
-          {Object.keys(creatorsStats).length === 0 && (
-            <div className="col-span-full py-4 text-center text-zinc-500 text-xs">
-              Nenhum dado de auditoria disponível no momento.
             </div>
           )}
         </div>
+
+        {/* Dynamic Comparative Contents Grid */}
+        {compCombineDays ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+            {Object.entries(creatorsStats).map(([email, info]) => {
+              const stats = info as { count: number; totalValue: number; designsCompleted: number };
+              const isSalesLeader = email === leaderboardMeta.maxSalesEmail && stats.totalValue > 0;
+              const isDesignsLeader = email === leaderboardMeta.maxDesignsEmail && stats.designsCompleted > 0;
+              
+              return (
+                <button
+                  type="button"
+                  key={email}
+                  onClick={() => setSelectedUserFilter(selectedUserFilter === email ? 'all' : email)}
+                  className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer group relative overflow-hidden ${
+                    selectedUserFilter === email 
+                      ? 'bg-brand-pink/15 border-brand-pink/50 shadow-md ring-1 ring-brand-pink/20' 
+                      : 'bg-black/30 border-zinc-850 hover:border-zinc-750'
+                  }`}
+                >
+                  <div className="w-full space-y-4">
+                    {/* Card Header */}
+                    <div className="flex items-start justify-between gap-2 w-full">
+                      <div className="min-w-0 flex-1">
+                        <div className="text-zinc-500 text-[9px] font-extrabold uppercase tracking-widest group-hover:text-zinc-400 transition-colors">E-mail do Operador</div>
+                        <div className="text-zinc-200 text-xs font-bold font-mono truncate mt-0.5" title={email}>{email}</div>
+                      </div>
+                    </div>
+
+                    {/* Operational stats list */}
+                    <div className="space-y-3 bg-zinc-950/30 p-3 rounded-xl border border-zinc-850/35">
+                      {/* Vendas */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-zinc-350">
+                          <span className="flex items-center gap-1">
+                            <DollarSign className="w-3.5 h-3.5 text-brand-pink shrink-0" />
+                            <span>Vendas: <b className="text-zinc-150 font-mono font-black">{stats.count}</b></span>
+                          </span>
+                          <span className="text-brand-pink font-mono font-extrabold text-[10.5px]">R$ {stats.totalValue.toFixed(2)}</span>
+                        </div>
+                        <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-brand-pink rounded-full transition-all duration-300"
+                            style={{ width: `${Math.min(100, Math.max(3, (stats.totalValue / leaderboardMeta.maxSalesValue) * 100))}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      {/* Artes Criadas / Arte Finalizada */}
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-zinc-350">
+                          <span className="flex items-center gap-1">
+                            <Palette className="w-3.5 h-3.5 text-emerald-450 shrink-0" />
+                            <span>Artes Concluídas:</span>
+                          </span>
+                          <span className="text-emerald-400 font-mono font-black text-xs">{stats.designsCompleted}</span>
+                        </div>
+                        <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                            style={{ width: `${Math.min(100, Math.max(3, (stats.designsCompleted / leaderboardMeta.maxDesignsCompleted) * 100))}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Leader ribbons / tags */}
+                    {(isSalesLeader || isDesignsLeader) && (
+                      <div className="flex flex-wrap gap-1 pt-1 border-t border-zinc-850/30 w-full select-none">
+                        {isSalesLeader && (
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                            👑 Top Vendas
+                          </span>
+                        )}
+                        {isDesignsLeader && (
+                          <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                            ✨ Líder Artes
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                  </div>
+                </button>
+              );
+            })}
+            {Object.keys(creatorsStats).length === 0 && (
+              <div className="col-span-full py-8 text-center text-zinc-500 text-xs border border-dashed border-zinc-800 rounded-xl">
+                Nenhum dado de auditoria disponível para o filtro estipulado.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4 text-left">
+            {dailyCreatorsStats.length === 0 ? (
+              <div className="text-center py-8 border border-dashed border-zinc-850 rounded-2xl text-zinc-500 text-xs">
+                Nenhum dado registrado para o período filtrado.
+              </div>
+            ) : (
+              dailyCreatorsStats.map(([dateKey, usersRecord]) => {
+                let maxSalesValOnDay = 0.01;
+                let maxDesignsOnDay = 0.01;
+                Object.values(usersRecord).forEach((st) => {
+                  if (st.totalValue > maxSalesValOnDay) maxSalesValOnDay = st.totalValue;
+                  if (st.designsCompleted > maxDesignsOnDay) maxDesignsOnDay = st.designsCompleted;
+                });
+
+                return (
+                  <div key={dateKey} className="bg-black/25 rounded-2xl border border-zinc-850/60 p-4.5 space-y-3 shadow-inner">
+                    <div className="flex items-center justify-between border-b border-zinc-850 pb-2">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2 w-2 rounded-full bg-brand-pink animate-pulse" />
+                        <h4 className="text-sm font-black font-mono text-zinc-200">{dateKey}</h4>
+                      </div>
+                      <span className="text-[10px] text-zinc-550 uppercase font-extrabold font-sans">Leaderboard Diário</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-left">
+                      {Object.entries(usersRecord).map(([email, stats]) => {
+                        const isDaySalesLeader = stats.totalValue === maxSalesValOnDay && stats.totalValue > 0;
+                        const isDayDesignsLeader = stats.designsCompleted === maxDesignsOnDay && stats.designsCompleted > 0;
+
+                        return (
+                          <div 
+                            key={email}
+                            className="p-3.5 bg-zinc-900/60 rounded-xl border border-zinc-850 flex flex-col justify-between"
+                          >
+                            <div className="space-y-3">
+                              <div className="min-w-0">
+                                <span className="text-[8px] font-extrabold uppercase tracking-widest text-zinc-500 block">Operador</span>
+                                <span className="text-xs font-bold font-mono text-zinc-350 truncate block mt-0.5" title={email}>{email}</span>
+                              </div>
+
+                              <div className="space-y-2 bg-zinc-950/40 p-2.5 rounded-lg border border-zinc-850/30">
+                                {/* Vendas */}
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400">
+                                    <span>Vendas ({stats.count}):</span>
+                                    <span className="text-brand-pink font-mono">R$ {stats.totalValue.toFixed(2)}</span>
+                                  </div>
+                                  <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-brand-pink rounded-full transition-all duration-300"
+                                      style={{ width: `${(stats.totalValue / maxSalesValOnDay) * 100}%` }}
+                                    />
+                                  </div>
+                                </div>
+
+                                {/* Artes */}
+                                <div className="space-y-0.5">
+                                  <div className="flex items-center justify-between text-[10px] font-bold text-zinc-400">
+                                    <span>Artes Prontas:</span>
+                                    <span className="text-emerald-450 font-mono font-black">{stats.designsCompleted}</span>
+                                  </div>
+                                  <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                                    <div 
+                                      className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                                      style={{ width: `${(stats.designsCompleted / maxDesignsOnDay) * 100}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Badges do Dia */}
+                            {(isDaySalesLeader || isDayDesignsLeader) && (
+                              <div className="flex flex-wrap gap-1 mt-2.5 pt-2 border-t border-zinc-850/45 text-[8.5px] uppercase font-black">
+                                {isDaySalesLeader && (
+                                  <span className="px-2 py-0.5 rounded bg-amber-500/10 border border-amber-500/25 text-amber-500">🏆 Líder Vendas</span>
+                                )}
+                                {isDayDesignsLeader && (
+                                  <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/25 text-emerald-400">✨ Líder Arte</span>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        )}
+
         {selectedUserFilter !== 'all' && (
           <div className="flex justify-end select-none pt-1">
             <button
