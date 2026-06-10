@@ -49,6 +49,7 @@ import { ClosedOrdersManager } from './components/ClosedOrdersManager';
 import { dispatchNewOrderNotification, dispatchOrderEditedNotification } from './lib/notifications';
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
+import { ShortFeedbackToast, ShortFeedback } from './components/ShortFeedbackToast';
 import { ChangePassword } from './components/ChangePassword';
 import InstallAppTab from './components/InstallAppTab';
 import { SchedulingManager } from './components/SchedulingManager';
@@ -131,6 +132,7 @@ export default function App() {
   const [isForceUpdating, setIsForceUpdating] = useState(false);
   const [globalMuted, setGlobalMuted] = useState(() => getIsAudioMuted());
   const [showCelebration, setShowCelebration] = useState<'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'scheduled_delivery' | null>(null);
+  const [shortFeedback, setShortFeedback] = useState<ShortFeedback | null>(null);
 
   useEffect(() => {
     const handleMute = (e: any) => {
@@ -1285,6 +1287,13 @@ export default function App() {
     const updated = [...currentSales, stampedSale];
     saveSales(updated);
 
+    // Show creative, fast 2-second confirmation overlay that registration is successful!
+    setShortFeedback({
+      title: stampedSale.status === 'Orçamento' ? 'Orçamento Emitido! 📝' : 'Pedido Registrado! 🎉🎈',
+      message: `${stampedSale.cliente ? `${stampedSale.cliente}: ` : ''}O pedido foi gravado no sistema com absoluto sucesso!`,
+      type: 'pedido_criado'
+    });
+
     // Se o pedido gravado NÃO for orçamento, verificamos a meta diária de 5 ou 10 pedidos
     if (stampedSale.status !== 'Orçamento') {
       const todayPrefix = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
@@ -1421,6 +1430,12 @@ export default function App() {
 
     // Se o status da arte foi alterado para 'Arte Finalizada' nesta edição, checar se bateu a meta diária de 10 artes
     if (oldSale && oldSale.statusArte !== 'Arte Finalizada' && stampedSale.statusArte === 'Arte Finalizada') {
+      setShortFeedback({
+        title: 'Arte Concluída! 🎨🖌️',
+        message: 'Design finalizado com sucesso! Pronto para emocionar as festas!',
+        type: 'art_finalizada'
+      });
+
       const todayPrefix = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
       const finishedArtsToday = updated.filter(s => {
         if (s.statusArte !== 'Arte Finalizada' || !s.arteFinalizadaEm) return false;
@@ -1435,6 +1450,49 @@ export default function App() {
         setShowCelebration('designer_halfway');
       } else if (finishedArtsToday.length === 10) {
         setShowCelebration('designer_goal');
+      }
+    }
+
+    // Se o status de produção foi alterado
+    if (oldSale && oldSale.statusProducao !== stampedSale.statusProducao) {
+      // Priorizar a mensagem de Arte Finalizada se ambos mudaram juntos para evitar sobreposição de mensagens
+      const nextArteFinalized = oldSale.statusArte !== 'Arte Finalizada' && stampedSale.statusArte === 'Arte Finalizada';
+      
+      if (!nextArteFinalized) {
+        const nextProd = stampedSale.statusProducao || 'Agendado';
+        let title = '';
+        let message = '';
+        let toastType: any = 'status_agendado';
+
+        if (nextProd === 'Agendado') {
+          title = 'Pedido Agendado! 📅';
+          message = 'Tudo planejado com carinho e guardado para o momento ideal!';
+          toastType = 'status_agendado';
+        } else if (nextProd === 'Em Produção') {
+          title = 'Mãos na Massa! 🔨🎨';
+          message = 'O pedido entrou na linha de produção!';
+          toastType = 'status_producao';
+        } else if (nextProd === 'Pronto para Retirada') {
+          title = 'Está Prontinho! ✨🎁';
+          message = 'Mimos finalizados com sucesso e disponíveis para retirada na loja!';
+          toastType = 'status_pronto';
+        } else if (nextProd === 'Agendado para Entrega') {
+          title = 'Rota Planejada! 🚚💨';
+          message = 'Tudo pronto e embalado para transporte na hora certa!';
+          toastType = 'status_entrega';
+        } else if (nextProd === 'Entregue') {
+          title = 'Festa Realizada! 🤝💕';
+          message = 'Pedido entregue com sucesso e saldo liquidado!';
+          toastType = 'status_entregue';
+        }
+
+        if (title && message) {
+          setShortFeedback({
+            title,
+            message,
+            type: toastType
+          });
+        }
       }
     }
 
@@ -2363,6 +2421,12 @@ export default function App() {
             type={showCelebration} 
             userName={firebaseUser?.name || firebaseUser?.displayName || 'Colaborador'}
             onClose={() => setShowCelebration(null)} 
+          />
+        )}
+        {shortFeedback && (
+          <ShortFeedbackToast
+            feedback={shortFeedback}
+            onClose={() => setShortFeedback(null)}
           />
         )}
       </AnimatePresence>
