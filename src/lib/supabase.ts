@@ -81,6 +81,7 @@ ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS precos_progressivos TEXT;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS imagem_base64 TEXT;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS estoque_infinito BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS preco_custo NUMERIC;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS adicional BOOLEAN DEFAULT FALSE;
 
 -- Desabilitar RLS para permitir que o Realtime distribua as atualizações instantaneamente e sem restrições de token para clientes anônimos (anon key)
 ALTER TABLE oxente_products DISABLE ROW LEVEL SECURITY;
@@ -255,6 +256,7 @@ const mapProductToDb = (product: Product) => ({
   estoque: product.estoque,
   imagem_base64: product.imagemBase64 || null,
   estoque_infinito: product.estoqueInfinito || false,
+  adicional: product.adicional || false,
   preco_custo: product.precoCusto || null,
   precos_progressivos: product.faixasPreco ? JSON.stringify(product.faixasPreco) : null,
   updated_at: new Date().toISOString()
@@ -278,6 +280,7 @@ export const mapDbToProduct = (dbItem: any): Product => {
     estoque: Number(dbItem.estoque),
     imagemBase64: dbItem.imagem_base64 || undefined,
     estoqueInfinito: dbItem.estoque_infinito || undefined,
+    adicional: dbItem.adicional || undefined,
     precoCusto: dbItem.preco_custo ? Number(dbItem.preco_custo) : undefined,
     faixasPreco
   };
