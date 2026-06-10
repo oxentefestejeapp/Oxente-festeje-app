@@ -137,6 +137,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [editValorPago, setEditValorPago] = useState('');
   const [editDataRetirada, setEditDataRetirada] = useState('');
   const [editStatusProducao, setEditStatusProducao] = useState<'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Entregue'>('Agendado');
+  const [editConvertToOrder, setEditConvertToOrder] = useState(false);
 
   const [editItens, setEditItens] = useState<SaleItem[]>([]);
   const [selectedAddProductId, setSelectedAddProductId] = useState('');
@@ -155,6 +156,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       setEditValorPago(editingSale.valorPago !== undefined ? editingSale.valorPago.toString() : editingSale.total.toString());
       setEditDataRetirada(editingSale.dataRetirada || '');
       setEditStatusProducao(editingSale.statusProducao || 'Agendado');
+      setEditConvertToOrder(false);
 
       if (editingSale.itens && editingSale.itens.length > 0) {
         setEditItens(editingSale.itens.map(item => ({ ...item })));
@@ -175,6 +177,15 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [viewedSale, setViewedSale] = useState<Sale | null>(
     sales.length > 0 ? sales[sales.length - 1] : null
   );
+
+  React.useEffect(() => {
+    if (viewedSale) {
+      const fresh = sales.find(s => s.id === viewedSale.id);
+      if (fresh) {
+        setViewedSale(fresh);
+      }
+    }
+  }, [sales]);
 
   const receiptColRef = React.useRef<HTMLDivElement>(null);
 
@@ -506,8 +517,12 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     // Salvar venda (que agora deduz o estoque de forma atômica no pai)
     onRecordSale(newSale);
 
-    // Play victory success sound cue
-    playSound('success');
+    // Play victory success sound cue if not an budget/orçamento
+    if (registroTipo !== 'Orçamento') {
+      playSound('success');
+    } else {
+      playSound('add');
+    }
 
     // Define newly registered sale as the viewed receipt
     setViewedSale(newSale);
@@ -544,9 +559,28 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return;
     }
 
-    const valPagoNum = editValorPago.trim() === '' ? editTotal : parseFloat(editValorPago);
-    const finalValorPago = isNaN(valPagoNum) ? editTotal : valPagoNum;
-    const finalValorFaltante = Math.max(0, editTotal - finalValorPago);
+    const isBudget = editingSale.status === 'Orçamento' && !editConvertToOrder;
+
+    if (editConvertToOrder) {
+      let hasStockBypass = true;
+      for (const item of editItens) {
+        const prod = products.find(p => p.id === item.produtoId);
+        if (prod && !prod.estoqueInfinito && prod.estoque < item.quantidade) {
+          const confirmBypass = window.confirm(
+            `Atenção: O produto "${item.produtoNome}" tem apenas ${prod.estoque} un. em estoque, mas o pedido solicita ${item.quantidade} un.\n\nDeseja realizar a conversão assim mesmo?`
+          );
+          if (!confirmBypass) {
+            hasStockBypass = false;
+            break;
+          }
+        }
+      }
+      if (!hasStockBypass) return;
+    }
+
+    const valPagoNum = isBudget ? 0 : (editValorPago.trim() === '' ? editTotal : parseFloat(editValorPago));
+    const finalValorPago = isBudget ? 0 : (isNaN(valPagoNum) ? editTotal : valPagoNum);
+    const finalValorFaltante = isBudget ? editTotal : Math.max(0, editTotal - finalValorPago);
 
     const mainItem = editItens[0];
     const mainProdutoId = mainItem.produtoId;
@@ -587,13 +621,13 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       precoUn: mainPrecoUn,
       quantidade: mainQuantidade,
       total: editTotal,
-      formaPagamento: editFormaPagamento,
+      formaPagamento: isBudget ? editingSale.formaPagamento : editFormaPagamento,
       valorPago: finalValorPago,
       valorFaltante: finalValorFaltante,
       numeroPedido: editNumeroPedido.trim() ? editNumeroPedido.trim() : undefined,
-      status: finalValorFaltante > 0 ? 'Pendente' : 'Pago total',
+      status: isBudget ? 'Orçamento' : (finalValorFaltante > 0 ? 'Pendente' : 'Pago total'),
       dataRetirada: editDataRetirada || undefined,
-      statusProducao: editStatusProducao,
+      statusProducao: isBudget ? undefined : editStatusProducao,
       itens: editItens,
       foiAlterado: true,
       editadoPorEmail: currentUserEmail,
@@ -755,6 +789,8 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
       return saleDate >= start;
     }).length;
   }, [sales, metricStartDate]);
+
+  const isBudget = editingSale !== null && editingSale.status === 'Orçamento' && !editConvertToOrder;
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
@@ -1370,7 +1406,13 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
       {/* RIGHT COLUMN: Interactive Receipt Preview (5 cols) */}
       <div ref={receiptColRef} className="lg:col-span-5 flex flex-col justify-start scroll-mt-6">
         {viewedSale ? (
-          <Receipt sale={viewedSale} storeInfo={storeInfo} onUpdateSale={onUpdateSale} />
+          <Receipt 
+            sale={viewedSale} 
+            storeInfo={storeInfo} 
+            onUpdateSale={onUpdateSale} 
+            products={products}
+            onEdit={() => setEditingSale(viewedSale)}
+          />
         ) : (
           <div className="no-print bg-zinc-900 rounded-2xl border border-zinc-800 border-dashed p-10 text-center text-zinc-500 h-full flex flex-col items-center justify-center min-h-[350px]">
             <FileText className="h-12 w-12 text-zinc-700 stroke-1 mb-3" />
@@ -1965,6 +2007,33 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   )}
                 </div>
 
+                {editingSale && editingSale.status === 'Orçamento' && (
+                  <div className="p-3.5 bg-emerald-950/20 border border-emerald-900/40 rounded-xl flex items-center justify-between gap-3 select-none transition-all">
+                    <div className="flex-1">
+                      <span className="text-xs font-bold text-emerald-400 block font-display uppercase tracking-wider">
+                        🛒 Converter Orçamento em Pedido
+                      </span>
+                      <p className="text-[10px] text-zinc-400 font-medium leading-relaxed">
+                        Marque para aprovar este orçamento e transformá-lo em um pedido real (com baixa automática de estoque).
+                      </p>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer select-none">
+                      <input 
+                        type="checkbox" 
+                        checked={editConvertToOrder}
+                        onChange={(e) => {
+                          setEditConvertToOrder(e.target.checked);
+                          if (e.target.checked) {
+                            setEditValorPago(editTotal.toString());
+                          }
+                        }}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-zinc-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:border-zinc-350 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500 peer-checked:after:bg-white peer-checked:after:border-transparent"></div>
+                    </label>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Client Name Input */}
                   <div>
@@ -2042,7 +2111,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Edit Withdrawal/Pickup Date */}
-                  <div>
+                  <div className={isBudget ? 'col-span-2' : ''}>
                     <label htmlFor="edit-pickup-date" className="block text-xs font-semibold text-zinc-400 mb-1.5">
                       Data da Retirada (Opcional)
                     </label>
@@ -2056,83 +2125,98 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   </div>
 
                   {/* Edit Production Status */}
-                  <div>
-                    <label htmlFor="edit-production-status" className="block text-xs font-semibold text-zinc-400 mb-1.5">
-                      Status de Produção
-                    </label>
-                    <select
-                      id="edit-production-status"
-                      value={editStatusProducao}
-                      onChange={(e) => setEditStatusProducao(e.target.value as any)}
-                      className="w-full px-3 py-2.5 bg-black border border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-zinc-150 text-xs font-semibold"
-                    >
-                      <option value="Agendado">📅 Agendado / Reservado</option>
-                      <option value="Em Produção">🔨 Em Produção Interna</option>
-                      <option value="Pronto para Retirada">✨ Pronto para Retirada</option>
-                      <option value="Agendado para Entrega">🚚 Agendado para Entrega</option>
-                      <option value="Entregue">🤝 Entregue ao Cliente</option>
-                    </select>
-                  </div>
+                  {!isBudget && (
+                    <div>
+                      <label htmlFor="edit-production-status" className="block text-xs font-semibold text-zinc-400 mb-1.5">
+                        Status de Produção
+                      </label>
+                      <select
+                        id="edit-production-status"
+                        value={editStatusProducao}
+                        onChange={(e) => setEditStatusProducao(e.target.value as any)}
+                        className="w-full px-3 py-2.5 bg-black border border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-zinc-150 text-xs font-semibold"
+                      >
+                        <option value="Agendado">📅 Agendado / Reservado</option>
+                        <option value="Em Produção">🔨 Em Produção Interna</option>
+                        <option value="Pronto para Retirada">✨ Pronto para Retirada</option>
+                        <option value="Agendado para Entrega">🚚 Agendado para Entrega</option>
+                        <option value="Entregue">🤝 Entregue ao Cliente</option>
+                      </select>
+                    </div>
+                  )}
                 </div>
 
                 {/* Edit Payment Method Select Options */}
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-zinc-400">
-                    Forma de Pagamento
-                  </label>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    {paymentMethods.map((m) => {
-                      const isSelected = editFormaPagamento === m.value;
-                      return (
-                        <button
-                          key={m.value}
-                          type="button"
-                          onClick={() => setEditFormaPagamento(m.value)}
-                          className={`py-2 px-1 rounded-lg text-center border transition-all text-[10px] flex flex-col items-center justify-center gap-1 cursor-pointer ${
-                            isSelected
-                              ? 'border-brand-pink bg-brand-pink/10 text-brand-pink font-semibold shadow-xs'
-                              : 'border-zinc-800 text-zinc-400 hover:bg-zinc-950/40'
-                          }`}
-                        >
-                          <span className="text-base">{m.icon}</span>
-                          <span className="whitespace-nowrap">{m.value}</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Paid amount & automatic recalculation */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 bg-zinc-950/25 border border-zinc-850 p-4 rounded-xl">
-                  <div>
-                    <label htmlFor="edit-paid-amount" className="block text-xs font-semibold text-zinc-400 mb-1.5">
-                      Quanto o cliente pagou? (R$)
+                {!isBudget && (
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-semibold text-zinc-400">
+                      Forma de Pagamento
                     </label>
-                    <input
-                      id="edit-paid-amount"
-                      type="text"
-                      value={editValorPago}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/[^0-9.]/g, '');
-                        setEditValorPago(val);
-                      }}
-                      className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-zinc-100 text-sm font-mono font-semibold"
-                      placeholder={`Vazio = R$ ${editTotal.toFixed(2)}`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-zinc-400 mb-1.5">
-                      Falta Pagar (Calculado)
-                    </label>
-                    <div className="px-3 py-2 bg-black border border-zinc-850 rounded-lg text-sm text-zinc-300 flex items-center h-[38px] font-mono justify-between font-medium">
-                      <span className="text-zinc-550 text-[10px] select-none uppercase font-bold">Restante:</span>
-                      <span className={`font-bold ${(editTotal - (editValorPago === '' ? editTotal : parseFloat(editValorPago) || 0)) > 0 ? 'text-red-400' : 'text-emerald-500'}`}>
-                        R$ {Math.max(0, editTotal - (editValorPago === '' ? editTotal : parseFloat(editValorPago) || 0)).toFixed(2)}
-                      </span>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {paymentMethods.map((m) => {
+                        const isSelected = editFormaPagamento === m.value;
+                        return (
+                          <button
+                            key={m.value}
+                            type="button"
+                            onClick={() => setEditFormaPagamento(m.value)}
+                            className={`py-2 px-1 rounded-lg text-center border transition-all text-[10px] flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                              isSelected
+                                ? 'border-brand-pink bg-brand-pink/10 text-brand-pink font-semibold shadow-xs'
+                                : 'border-zinc-800 text-zinc-400 hover:bg-zinc-950/40'
+                            }`}
+                          >
+                            <span className="text-base">{m.icon}</span>
+                            <span className="whitespace-nowrap">{m.value}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                </div>
+                )}
+
+                {/* Paid amount & automatic recalculation */}
+                {!isBudget ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1 bg-zinc-950/25 border border-zinc-850 p-4 rounded-xl">
+                    <div>
+                      <label htmlFor="edit-paid-amount" className="block text-xs font-semibold text-zinc-400 mb-1.5">
+                        Quanto o cliente pagou? (R$)
+                      </label>
+                      <input
+                        id="edit-paid-amount"
+                        type="text"
+                        value={editValorPago}
+                        onChange={(e) => {
+                          const val = e.target.value.replace(/[^0-9.]/g, '');
+                          setEditValorPago(val);
+                        }}
+                        className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-zinc-100 text-sm font-mono font-semibold"
+                        placeholder={`Vazio = R$ ${editTotal.toFixed(2)}`}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-semibold text-zinc-400 mb-1.5">
+                        Falta Pagar (Calculado)
+                      </label>
+                      <div className="px-3 py-2 bg-black border border-zinc-850 rounded-lg text-sm text-zinc-300 flex items-center h-[38px] font-mono justify-between font-medium">
+                        <span className="text-zinc-550 text-[10px] select-none uppercase font-bold">Restante:</span>
+                        <span className={`font-bold ${(editTotal - (editValorPago === '' ? editTotal : parseFloat(editValorPago) || 0)) > 0 ? 'text-red-400' : 'text-emerald-500'}`}>
+                          R$ {Math.max(0, editTotal - (editValorPago === '' ? editTotal : parseFloat(editValorPago) || 0)).toFixed(2)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-amber-950/15 border border-amber-900/30 rounded-xl text-center">
+                    <span className="text-[11px] font-bold text-amber-400 flex items-center justify-center gap-1.5 font-display uppercase tracking-wider select-none">
+                      📄 Informativo de Orçamento Sem Compromisso
+                    </span>
+                    <p className="text-[10px] text-zinc-400 mt-1 leading-normal font-medium select-none">
+                      Este pedido é uma proposta de orçamento. Não há lançamento financeiro ou baixa de estoque.
+                    </p>
+                  </div>
+                )}
 
                 {/* Footer Buttons */}
                 <div className="flex gap-3 justify-end pt-3 border-t border-zinc-850">

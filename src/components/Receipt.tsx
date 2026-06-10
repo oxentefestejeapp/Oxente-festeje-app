@@ -8,16 +8,42 @@ import { Printer, Calendar, User, CreditCard, ShoppingBag, Eye, MessageSquare, P
 import { motion } from 'motion/react';
 import { Sale, StoreInfo } from '../types';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
+import { playAppSound } from '../lib/audio';
 
 interface ReceiptProps {
   sale: Sale;
   storeInfo: StoreInfo;
   onUpdateSale?: (updatedSale: Sale) => void;
   onEdit?: () => void;
+  products?: any[];
 }
 
-export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps) {
+export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: ReceiptProps) {
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
+  const [showConvertForm, setShowConvertForm] = useState(false);
+  const [selectedPayment, setSelectedPayment] = useState<any>('Pix');
+  const [paidValue, setPaidValue] = useState<string>('');
+  const [pickupDate, setPickupDate] = useState<string>(sale.dataRetirada || '');
+  const [confirmForce, setConfirmForce] = useState(false);
+
+  // Helper to extract items from sale
+  const getSaleItems = (s: Sale): { produtoId: string; quantidade: number; produtoNome: string }[] => {
+    if (s.itens && s.itens.length > 0) {
+      return s.itens.map(item => ({
+        produtoId: item.produtoId,
+        quantidade: item.quantidade || 0,
+        produtoNome: item.produtoNome
+      }));
+    }
+    if (s.produtoId) {
+      return [{
+        produtoId: s.produtoId,
+        quantidade: s.quantidade || 0,
+        produtoNome: s.produtoNome || 'Produto'
+      }];
+    }
+    return [];
+  };
 
   const handlePrint = () => {
     window.print();
@@ -227,7 +253,198 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
 
       {/* Control Buttons for Screen UI (hidden in prints) */}
       <div className="no-print flex flex-col gap-2.5 w-full max-w-sm mt-6">
-        {onEdit && (
+        
+        {/* BUDGET TO ORDER INLINE CONVERTER FORM */}
+        {sale.status === 'Orçamento' && showConvertForm ? (
+          <div className="w-full p-4.5 border border-emerald-500/20 bg-zinc-900 rounded-2xl space-y-4 text-zinc-100 transition-all shadow-xl">
+            <div className="flex items-center gap-1.5 border-b border-zinc-800 pb-2">
+              <span className="text-sm">⚡</span>
+              <span className="text-xs font-bold text-emerald-400 uppercase tracking-widest font-display">
+                Converter em Pedido Fechado
+              </span>
+            </div>
+            
+            {/* Payment options */}
+            <div className="space-y-1.5">
+              <span className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wide">
+                Forma de Pagamento
+              </span>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { value: 'Pix', icon: '⚡', label: 'Pix' },
+                  { value: 'Dinheiro', icon: '💵', label: 'Dinheiro' },
+                  { value: 'Cartão de Crédito', icon: '💳', label: 'Crédito' },
+                  { value: 'Cartão de Débito', icon: '🏦', label: 'Débito' }
+                ].map((m) => {
+                  const isSelected = selectedPayment === m.value;
+                  return (
+                    <button
+                      key={m.value}
+                      type="button"
+                      onClick={() => setSelectedPayment(m.value)}
+                      className={`py-2 px-1 rounded-xl text-center border font-bold text-[10px] cursor-pointer transition-all flex flex-col items-center gap-0.5 ${
+                        isSelected
+                          ? 'border-emerald-500 bg-emerald-500/10 text-emerald-450 font-extrabold'
+                          : 'border-zinc-800 text-zinc-400 bg-zinc-950/40 hover:bg-zinc-950/80 hover:text-zinc-300'
+                      }`}
+                    >
+                      <span>{m.icon}</span>
+                      <span>{m.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Paid Value input */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wide">
+                Quanto o cliente pagou? (R$)
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-zinc-500 select-none">R$</span>
+                <input
+                  type="text"
+                  value={paidValue}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/[^0-9.]/g, '');
+                    setPaidValue(val);
+                  }}
+                  className="w-full pl-8 pr-3 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 focus:border-emerald-500 text-zinc-100 text-xs font-mono font-bold"
+                  placeholder={`Valor total = R$ ${sale.total.toFixed(2)}`}
+                />
+              </div>
+              <p className="text-[10px] leading-relaxed font-semibold">
+                {paidValue.trim() === '' || parseFloat(paidValue) >= sale.total ? (
+                  <span className="text-emerald-450 font-medium">✓ Pago Integralmente: Pedido será criado como faturado e pago.</span>
+                ) : (
+                  <span className="text-amber-500 font-medium">⚠ Entrada Parcial: Restará saldo devedor de R$ {Math.max(0, sale.total - (parseFloat(paidValue) || 0)).toFixed(2)} e pedido ficará Pendente.</span>
+                )}
+              </p>
+            </div>
+
+            {/* Pickup Date input */}
+            <div className="space-y-1.5">
+              <label className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wide">
+                Prazo de Entrega / Retirada
+              </label>
+              <input
+                type="date"
+                value={pickupDate}
+                onChange={(e) => setPickupDate(e.target.value)}
+                className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 text-zinc-150 text-xs font-mono font-semibold"
+              />
+            </div>
+
+            {/* Stock Alerts inside conversion */}
+            {(() => {
+              const items = getSaleItems(sale);
+              const stockAlerts = items.map(item => {
+                const prod = products?.find(p => p.id === item.produtoId);
+                const hasSufficient = !prod || prod.estoqueInfinito || prod.estoque >= item.quantidade;
+                return {
+                  ...item,
+                  currentStock: prod ? prod.estoque : 0,
+                  isInfinite: prod ? prod.estoqueInfinito : false,
+                  hasSufficient
+                };
+              });
+              const hasStockIssue = stockAlerts.some(alert => !alert.hasSufficient);
+
+              if (hasStockIssue) {
+                return (
+                  <div className="border border-red-900/40 bg-red-950/15 text-red-400 rounded-xl p-3 text-[10px] space-y-1.5 leading-relaxed">
+                    <span className="font-extrabold uppercase tracking-wider block text-red-400">⚠️ Estoque Insuficiente no Estoque</span>
+                    <p className="font-medium">
+                      O estoque físico não comporta as quantidades requisitadas:
+                    </p>
+                    <ul className="list-disc pl-4 space-y-0.5">
+                      {stockAlerts.filter(a => !a.hasSufficient).map((alert, idx) => (
+                        <li key={idx} className="font-semibold text-red-300">
+                          {alert.produtoNome}: necessário {alert.quantidade} un. (Disponível: {alert.currentStock} un.)
+                        </li>
+                      ))}
+                    </ul>
+                    <label className="flex items-start gap-2 pt-1 font-semibold text-red-300 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={confirmForce}
+                        onChange={(e) => setConfirmForce(e.target.checked)}
+                        className="mt-0.5 rounded text-red-500 focus:ring-red-500 bg-black border-zinc-800"
+                      />
+                      <span>Entendo o risco e desejo converter o pedido mesmo assim.</span>
+                    </label>
+                  </div>
+                );
+              }
+              return (
+                <div className="p-2.5 bg-emerald-950/20 border border-emerald-900/30 rounded-xl flex items-center gap-2 select-none text-[10px] text-emerald-400 leading-normal font-semibold">
+                  <span>✓</span>
+                  <span>Todos os produtos possuem estoque disponível para faturamento imediato.</span>
+                </div>
+              );
+            })()}
+
+            {/* Form actions */}
+            <div className="flex gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setShowConvertForm(false)}
+                className="flex-1 py-2 border border-zinc-800 bg-zinc-850 hover:bg-zinc-800 text-zinc-300 font-bold rounded-xl text-xs transition-colors cursor-pointer text-center select-none"
+              >
+                Voltar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const items = getSaleItems(sale);
+                  const stockAlerts = items.map(item => {
+                    const prod = products?.find(p => p.id === item.produtoId);
+                    const hasSufficient = !prod || prod.estoqueInfinito || prod.estoque >= item.quantidade;
+                    return { ...item, hasSufficient };
+                  });
+                  const hasStockIssue = stockAlerts.some(alert => !alert.hasSufficient);
+
+                  if (hasStockIssue && !confirmForce) {
+                    alert('Por favor, marque a caixa de confirmação de estoque para prosseguir de qualquer forma e evitar quebras indesejadas.');
+                    return;
+                  }
+
+                  const total = sale.total;
+                  const valPaid = paidValue.trim() === '' ? total : parseFloat(paidValue);
+                  const finalPaid = isNaN(valPaid) ? total : valPaid;
+                  const finalRemaining = Math.max(0, total - finalPaid);
+
+                  const updatedSale: Sale = {
+                    ...sale,
+                    status: finalRemaining > 0 ? 'Pendente' : 'Pago total',
+                    valorPago: finalPaid,
+                    valorFaltante: finalRemaining,
+                    formaPagamento: selectedPayment,
+                    statusProducao: 'Agendado',
+                    dataRetirada: pickupDate || undefined,
+                    foiAlterado: true,
+                    editadoEm: new Date().toISOString(),
+                    // Carry identifying email
+                    editadoPorEmail: sale.editadoPorEmail || ''
+                  };
+
+                  if (onUpdateSale) {
+                    onUpdateSale(updatedSale);
+                  }
+
+                  playAppSound('success');
+                  setShowConvertForm(false);
+                }}
+                className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-505 text-white font-extrabold rounded-xl text-xs shadow-md transition-colors cursor-pointer text-center select-none"
+              >
+                Confirmar e Faturar
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {onEdit && !showConvertForm && (
           <button
             onClick={onEdit}
             className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-red-500/10 hover:bg-red-500/20 border border-red-500/30 hover:border-red-500 text-red-400 hover:text-red-300 font-extrabold rounded-xl text-sm shadow-[0_0_12px_rgba(239,68,68,0.04)] transition-all transform active:scale-98 cursor-pointer select-none"
@@ -237,14 +454,31 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
           </button>
         )}
 
-        {sale.status === 'Orçamento' ? (
+        {sale.status === 'Orçamento' && !showConvertForm && (
           <button
-            onClick={handleSendWhatsAppOrcamento}
-            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-md transition-all transform active:scale-98 cursor-pointer select-none"
+            onClick={() => {
+              setShowConvertForm(true);
+              setPaidValue(sale.total.toString());
+              setPickupDate(sale.dataRetirada || '');
+              setConfirmForce(false);
+            }}
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold rounded-xl text-sm shadow-[0_0_15px_rgba(16,185,129,0.22)] transition-all transform hover:-translate-y-0.5 active:scale-98 cursor-pointer select-none"
           >
-            <MessageSquare className="h-4.5 w-4.5" />
-            <span>Enviar Orçamento pelo WhatsApp</span>
+            <span>⚡</span>
+            <span>Converter em Pedido</span>
           </button>
+        )}
+
+        {sale.status === 'Orçamento' ? (
+          !showConvertForm && (
+            <button
+              onClick={handleSendWhatsAppOrcamento}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-emerald-650 hover:bg-emerald-700 text-white font-bold rounded-xl text-sm shadow-md transition-all transform active:scale-98 cursor-pointer select-none"
+            >
+              <MessageSquare className="h-4.5 w-4.5" />
+              <span>Enviar Orçamento pelo WhatsApp</span>
+            </button>
+          )
         ) : (
           <button
             onClick={() => setWhatsAppOpen(true)}
@@ -255,15 +489,15 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit }: ReceiptProps)
           </button>
         )}
 
-
-
-        <button
-          onClick={handlePrint}
-          className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-brand-pink hover:bg-brand-pink-hover text-white font-bold rounded-xl text-sm shadow-md transition-all transform active:scale-98 cursor-pointer select-none"
-        >
-          <Printer className="h-4.5 w-4.5" />
-          <span>{sale.status === 'Orçamento' ? 'Imprimir Orçamento' : 'Imprimir Recibo'}</span>
-        </button>
+        {!showConvertForm && (
+          <button
+            onClick={handlePrint}
+            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-brand-pink hover:bg-brand-pink-hover text-white font-bold rounded-xl text-sm shadow-md transition-all transform active:scale-98 cursor-pointer select-none"
+          >
+            <Printer className="h-4.5 w-4.5" />
+            <span>{sale.status === 'Orçamento' ? 'Imprimir Orçamento' : 'Imprimir Recibo'}</span>
+          </button>
+        )}
       </div>
 
       <WhatsAppNotifier
