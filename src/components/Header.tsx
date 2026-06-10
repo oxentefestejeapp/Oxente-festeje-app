@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Package, TrendingUp, DollarSign, Gift, AlertTriangle, Volume2, VolumeX } from 'lucide-react';
+import { Sparkles, Package, TrendingUp, DollarSign, Gift, AlertTriangle, Volume2, VolumeX, Wifi, WifiOff } from 'lucide-react';
 import { Product, Sale } from '../types';
 import { BrandLogo } from './BrandLogo';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
@@ -17,6 +17,7 @@ interface HeaderProps {
 
 export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) {
   const [audioMuted, setAudioMutedState] = useState(() => getIsAudioMuted());
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const isAdmin = currentUserEmail === 'oxentefesteje@gmail.com' || currentUserEmail === 'abraaoapp@oxente.com';
 
   useEffect(() => {
@@ -26,6 +27,19 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
     window.addEventListener('oxente_app_audio_mute_changed', handleMute);
     return () => {
       window.removeEventListener('oxente_app_audio_mute_changed', handleMute);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
     };
   }, []);
 
@@ -51,8 +65,8 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
   return (
     <header className="no-print w-full bg-black border-b border-zinc-900 py-6 px-4 mb-8 relative">
       
-      {/* Global Mute Toggle Control in Header */}
-      <div className="absolute top-2 left-4 md:top-3 md:left-6 no-print">
+      {/* Global Controls (Mute + Connection Status) in Header */}
+      <div className="absolute top-2 left-4 md:top-3 md:left-6 no-print flex items-center gap-2">
         <button
           onClick={toggleMute}
           className={`flex items-center gap-1.5 px-3 py-1 bg-black border rounded-xl text-xs font-black transition-all hover:scale-105 active:scale-95 cursor-pointer shadow-sm ${
@@ -74,6 +88,35 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
             </>
           )}
         </button>
+
+        {/* Dynamic Connection Status Indicator */}
+        <div 
+          className={`flex items-center gap-1.5 px-3 py-1 bg-black border rounded-xl text-xs font-black select-none shadow-sm cursor-help ${
+            isOnline 
+              ? 'border-emerald-900/30 text-emerald-500 bg-emerald-950/5' 
+              : 'border-amber-900/40 text-amber-500 bg-amber-950/20 animate-pulse'
+          }`}
+          title={isOnline ? "Você está conectado à internet! Seus dados estão sincronizando em tempo real com o banco de dados." : "Você está offline! Suas alterações estão salvas localmente neste dispositivo e serão sincronizadas assim que a conexão for restabelecida."}
+        >
+          {isOnline ? (
+            <>
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+              </span>
+              <Wifi className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <span className="text-[9px] uppercase font-bold tracking-widest sm:inline hidden">Online</span>
+            </>
+          ) : (
+            <>
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
+              </span>
+              <WifiOff className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <span className="text-[9px] uppercase font-bold tracking-widest sm:inline hidden text-amber-400">Offline</span>
+            </>
+          )}
+        </div>
       </div>
       
       {/* Upper Corner Critical Stock Alert Badge */}

@@ -48,6 +48,7 @@ import { RemindersManager } from './components/RemindersManager';
 import { ClosedOrdersManager } from './components/ClosedOrdersManager';
 import { dispatchNewOrderNotification, dispatchOrderEditedNotification } from './lib/notifications';
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
+import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { ChangePassword } from './components/ChangePassword';
 import InstallAppTab from './components/InstallAppTab';
 import { SchedulingManager } from './components/SchedulingManager';
@@ -129,6 +130,7 @@ export default function App() {
 
   const [isForceUpdating, setIsForceUpdating] = useState(false);
   const [globalMuted, setGlobalMuted] = useState(() => getIsAudioMuted());
+  const [showCelebration, setShowCelebration] = useState<'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'scheduled_delivery' | null>(null);
 
   useEffect(() => {
     const handleMute = (e: any) => {
@@ -213,6 +215,18 @@ export default function App() {
   }, [products]);
 
   // Monitor Authentication State (Custom Code-Based Authenticated User backed by Supabase Cloud)
+  useEffect(() => {
+    if (firebaseUser?.id && userStatus === 'approved') {
+      const todayPrefix = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local format
+      const storageKey = `oxente_last_welcome_date_${firebaseUser.id}`;
+      const lastWelcome = localStorage.getItem(storageKey);
+      if (lastWelcome !== todayPrefix) {
+        setShowCelebration('welcome');
+        localStorage.setItem(storageKey, todayPrefix);
+      }
+    }
+  }, [firebaseUser?.id, userStatus]);
+
   useEffect(() => {
     const checkLocalAuth = async () => {
       // Clean up previous Supabase channel if any
@@ -1271,6 +1285,25 @@ export default function App() {
     const updated = [...currentSales, stampedSale];
     saveSales(updated);
 
+    // Se o pedido gravado NÃO for orçamento, verificamos a meta diária de 5 ou 10 pedidos
+    if (stampedSale.status !== 'Orçamento') {
+      const todayPrefix = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+      const ordersToday = updated.filter(s => {
+        if (s.status === 'Orçamento') return false;
+        try {
+          const sDateLocal = new Date(s.data).toLocaleDateString('en-CA');
+          return sDateLocal === todayPrefix;
+        } catch {
+          return false;
+        }
+      });
+      if (ordersToday.length === 10) {
+        setShowCelebration('goal');
+      } else if (ordersToday.length === 5) {
+        setShowCelebration('halfway');
+      }
+    }
+
     // If it is an estimate, do not deduct from product inventory stock
     if (stampedSale.status === 'Orçamento') {
       try {
@@ -1385,6 +1418,35 @@ export default function App() {
     // 2. Atualizar a lista de vendas localmente
     const updated = currentSales.map((s) => (s.id === stampedSale.id ? stampedSale : s));
     saveSales(updated);
+
+    // Se o status da arte foi alterado para 'Arte Finalizada' nesta edição, checar se bateu a meta diária de 10 artes
+    if (oldSale && oldSale.statusArte !== 'Arte Finalizada' && stampedSale.statusArte === 'Arte Finalizada') {
+      const todayPrefix = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+      const finishedArtsToday = updated.filter(s => {
+        if (s.statusArte !== 'Arte Finalizada' || !s.arteFinalizadaEm) return false;
+        try {
+          const sDateLocal = new Date(s.arteFinalizadaEm).toLocaleDateString('en-CA');
+          return sDateLocal === todayPrefix;
+        } catch {
+          return false;
+        }
+      });
+      if (finishedArtsToday.length === 5) {
+        setShowCelebration('designer_halfway');
+      } else if (finishedArtsToday.length === 10) {
+        setShowCelebration('designer_goal');
+      }
+    }
+
+    // Se o status de produção foi alterado para 'Entregue' nesta edição, disparar animação de pedido entregue
+    if (oldSale && oldSale.statusProducao !== 'Entregue' && stampedSale.statusProducao === 'Entregue') {
+      setShowCelebration('order_delivered');
+    }
+
+    // Se o status de produção foi alterado para 'Agendado para Entrega' nesta edição, disparar animação de agendamento de entrega
+    if (oldSale && oldSale.statusProducao !== 'Agendado para Entrega' && stampedSale.statusProducao === 'Agendado para Entrega') {
+      setShowCelebration('scheduled_delivery');
+    }
 
     // 3. Se temos o pedido original, calcular as diferenças de estoque
     if (oldSale) {
@@ -2253,6 +2315,7 @@ export default function App() {
                 onUpdateStoreInfo={handleUpdateStoreInfo}
                 onClearAllSales={handleClearAllSales}
                 onForceAllUsersUpdate={handleForceAllUsersUpdate}
+                onTriggerCelebration={(type) => setShowCelebration(type)}
                 supabaseSyncStatus={supabaseSyncStatus}
                 supabaseErrorMsg={supabaseErrorMsg}
               />
@@ -2292,6 +2355,17 @@ export default function App() {
           </p>
         </div>
       </footer>
+
+      {/* Dynamic Orders Milestone Celebration Overlay inside AnimatePresence */}
+      <AnimatePresence>
+        {showCelebration && (
+          <CelebrationOverlay 
+            type={showCelebration} 
+            userName={firebaseUser?.name || firebaseUser?.displayName || 'Colaborador'}
+            onClose={() => setShowCelebration(null)} 
+          />
+        )}
+      </AnimatePresence>
 
     </div>
   );

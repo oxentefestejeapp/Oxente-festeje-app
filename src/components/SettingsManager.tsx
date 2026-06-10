@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Download, 
   FileText, 
@@ -11,6 +11,7 @@ import {
   Package, 
   ShieldCheck, 
   Calendar, 
+  Clock,
   Info, 
   LogOut, 
   RefreshCw, 
@@ -34,7 +35,12 @@ import {
   Bell,
   Volume2,
   VolumeX,
-  Megaphone
+  Megaphone,
+  Rocket,
+  Bot,
+  Sun,
+  Palette,
+  Truck
 } from 'lucide-react';
 import { Product, Sale, StoreInfo } from '../types';
 import { 
@@ -67,6 +73,7 @@ interface SettingsManagerProps {
   onUpdateStoreInfo?: (updated: StoreInfo) => void;
   onClearAllSales?: () => Promise<boolean>;
   onForceAllUsersUpdate?: () => Promise<void>;
+  onTriggerCelebration?: (type: 'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'scheduled_delivery') => void;
   supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error' | 'tables_missing';
   supabaseErrorMsg?: string | null;
 }
@@ -79,10 +86,14 @@ export function SettingsManager({
   onUpdateStoreInfo,
   onClearAllSales,
   onForceAllUsersUpdate,
+  onTriggerCelebration,
   supabaseSyncStatus = 'idle',
   supabaseErrorMsg = null
 }: SettingsManagerProps) {
   const [downloadSuccess, setDownloadSuccess] = useState(false);
+  const [localRestoreError, setLocalRestoreError] = useState<string | null>(null);
+  const [localRestoreSuccess, setLocalRestoreSuccess] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [selectedTipId, setSelectedTipId] = useState<number | null>(null);
   const [isClearingSales, setIsClearingSales] = useState(false);
   const [clearStep, setClearStep] = useState<'idle' | 'confirming'>('idle');
@@ -511,6 +522,83 @@ export function SettingsManager({
     } catch (error) {
       console.error('Failed to generate backup file:', error);
     }
+  };
+
+  const handleLocalRestoreBackup = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const jsonText = event.target?.result as string;
+        const backupData = JSON.parse(jsonText);
+
+        let validatedProducts: Product[] | null = null;
+        let validatedSales: Sale[] | null = null;
+        let validatedStoreInfo: StoreInfo | null = null;
+
+        // Try standard format: { database: { products, sales, storeInfo } }
+        if (backupData && backupData.database) {
+          if (Array.isArray(backupData.database.products)) {
+            validatedProducts = backupData.database.products;
+          }
+          if (Array.isArray(backupData.database.sales)) {
+            validatedSales = backupData.database.sales;
+          }
+          if (backupData.database.storeInfo) {
+            validatedStoreInfo = backupData.database.storeInfo;
+          }
+        } 
+        // Fallback standard structure if top-level has them direct
+        else if (backupData && (Array.isArray(backupData.products) || Array.isArray(backupData.sales))) {
+          if (Array.isArray(backupData.products)) {
+            validatedProducts = backupData.products;
+          }
+          if (Array.isArray(backupData.sales)) {
+            validatedSales = backupData.sales;
+          }
+          if (backupData.storeInfo) {
+            validatedStoreInfo = backupData.storeInfo;
+          }
+        }
+
+        if (!validatedProducts || !validatedSales) {
+          setLocalRestoreError('Estrutura de arquivo inválida. Certifique-se de que é um JSON de backup exportado por este aplicativo.');
+          setLocalRestoreSuccess(false);
+          e.target.value = '';
+          return;
+        }
+
+        const confirmRestore = window.confirm(
+          `⚠️ ATENÇÃO: Você tem certeza que deseja restaurar o backup local?\nEste arquivo possui ${validatedProducts.length} produtos e ${validatedSales.length} vendas.\n\nEssa ação irá SOBRESCREVER os dados atuais e sincronizar o banco de dados!`
+        );
+
+        if (!confirmRestore) {
+          e.target.value = '';
+          return;
+        }
+
+        onRestoreBackup(
+          validatedProducts,
+          validatedSales,
+          validatedStoreInfo || storeInfo
+        );
+
+        setLocalRestoreSuccess(true);
+        setLocalRestoreError(null);
+        setTimeout(() => setLocalRestoreSuccess(false), 5000);
+
+      } catch (error) {
+        console.error('Failed to parse backup file:', error);
+        setLocalRestoreError('Falha ao ler o arquivo. Certifique-se de que é um arquivo JSON válido exportado por este aplicativo.');
+        setLocalRestoreSuccess(false);
+      } finally {
+        e.target.value = '';
+      }
+    };
+
+    reader.readAsText(file);
   };
 
   // Restores a backup from Drive
@@ -1032,14 +1120,31 @@ export function SettingsManager({
           </div>
         </div>
 
-        {/* Action Button */}
-        <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Hidden File Input for local backup importation */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept=".json"
+          onChange={handleLocalRestoreBackup}
+          className="hidden"
+        />
+
+        {/* Action Buttons */}
+        <div className="pt-2 grid grid-cols-1 sm:grid-cols-3 gap-3">
           <button
             onClick={handleDownloadBackup}
             className="w-full flex items-center justify-center gap-2.5 py-3.5 px-4 bg-zinc-800 hover:bg-zinc-750 text-zinc-250 hover:text-white font-bold rounded-xl shadow-xs transition-all transform active:scale-98 cursor-pointer border border-zinc-700/40 text-xs"
           >
             <Download className="h-4 w-4" />
-            <span>Baixar Cópia JSON (Sistema)</span>
+            <span>Baixar JSON</span>
+          </button>
+
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-full flex items-center justify-center gap-2.5 py-3.5 px-4 bg-gradient-to-r from-purple-900/40 to-indigo-900/40 hover:from-purple-900/60 hover:to-indigo-900/60 text-purple-200 hover:text-white font-bold rounded-xl shadow-xs transition-all transform active:scale-98 cursor-pointer border border-purple-800/30 text-xs"
+          >
+            <UploadCloud className="h-4 w-4" />
+            <span>Restaurar JSON</span>
           </button>
 
           <button
@@ -1047,15 +1152,29 @@ export function SettingsManager({
             className="w-full flex items-center justify-center gap-2.5 py-3.5 px-4 bg-brand-pink/15 hover:bg-brand-pink/25 text-brand-pink font-bold rounded-xl shadow-xs transition-all transform active:scale-98 cursor-pointer border border-brand-pink/30 text-xs animate-pulse-slow"
           >
             <FileSpreadsheet className="h-4.5 w-4.5" />
-            <span>Exportar Relatório Excel (CSV)</span>
+            <span>Exportar Excel (CSV)</span>
           </button>
         </div>
 
-        {/* Success Confirmation Toast/Notice */}
+        {/* Success / Error Confirmation Toast/Notices */}
         {downloadSuccess && (
           <div className="p-3.5 bg-emerald-950/30 border border-emerald-900/40 rounded-xl text-emerald-300 text-xs font-semibold animate-fade-in flex items-center justify-center gap-2 text-center">
             <span className="text-base">🎉</span>
             <span>Arquivo de backup baixado com sucesso!</span>
+          </div>
+        )}
+
+        {localRestoreSuccess && (
+          <div className="p-3.5 bg-emerald-950/35 border border-emerald-900/50 rounded-xl text-emerald-300 text-xs font-bold animate-fade-in flex items-center justify-center gap-2 text-center shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+            <span className="text-base">✨</span>
+            <span>Backup local carregado e restaurado com sucesso! Toda a base foi sincronizada.</span>
+          </div>
+        )}
+
+        {localRestoreError && (
+          <div className="p-3.5 bg-red-950/30 border border-red-900/40 rounded-xl text-red-300 text-xs font-semibold animate-fade-in flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-red-400 shrink-0" />
+            <span>{localRestoreError}</span>
           </div>
         )}
 
@@ -1407,6 +1526,93 @@ export function SettingsManager({
           })}
         </div>
       </div>
+
+      {/* 🎉 DEMONSTRAÇÃO DO EFEITO DE METAS (ANIMAÇÃO) */}
+      {onTriggerCelebration && (
+        <div className="bg-zinc-900 rounded-2xl border border-pink-500/15 p-6 shadow-md space-y-6">
+          <div className="flex items-center gap-2 border-b border-zinc-800 pb-4">
+            <Sparkles className="h-5 w-5 text-pink-400 shrink-0" />
+            <div>
+              <h3 className="font-display font-semibold text-base text-zinc-100">Testar Efeitos Visuais de Conquista</h3>
+              <p className="text-[10px] text-zinc-450 mt-0.5">Veja em primeira mão as duas lindas animações comemorativas que celebram as metas diárias</p>
+            </div>
+          </div>
+
+          <div className="text-xs text-zinc-300 space-y-2 leading-relaxed">
+            <p>
+              Para engajar e motivar a equipe, o aplicativo conta com efeitos comemorativos interativos e sonoros ao bater marcas de vendas diárias ou receber as boas-vindas do dia.
+            </p>
+            <p>
+              Ao clicar nos botões abaixo, você poderá demonstrar e conferir como as comemorações de <strong>Metade do Caminho (5º pedido)</strong>, <strong>Meta Batida (10º pedido)</strong>, o <strong>Modo Criativo (5ª arte finalizada)</strong>, o <strong>Modo Máquina (10ª arte finalizada)</strong>, os <strong>Pedidos Entregues</strong> e as <strong>Boas-Vindas do Dia</strong> funcionam e surgem na tela para animar a produção.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 pt-1">
+            <button
+              type="button"
+              onClick={() => onTriggerCelebration('halfway')}
+              className="px-5 py-3.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5 active:scale-97 shadow-md flex-1 min-w-[200px]"
+            >
+              <Rocket className="h-4 w-4 text-white animate-pulse" />
+              <span>Testar Metade do Caminho (5º Pedido) 🚀</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onTriggerCelebration('goal')}
+              className="px-5 py-3.5 bg-gradient-to-r from-pink-500 to-purple-600 hover:from-pink-600 hover:to-purple-700 text-white font-extrabold rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5 active:scale-97 shadow-md flex-1 min-w-[200px]"
+            >
+              <Sparkles className="h-4 w-4 text-white" />
+              <span>Testar Meta Batida (10º Pedido) 🎈</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onTriggerCelebration('order_delivered')}
+              className="px-5 py-3.5 bg-gradient-to-r from-emerald-650 to-emerald-800 hover:brightness-110 text-white font-extrabold rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5 active:scale-97 shadow-md flex-1 min-w-[200px]"
+            >
+              <Truck className="h-4 w-4 text-white animate-bounce" />
+              <span>Testar Pedido Entregue 🚚💨</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onTriggerCelebration('scheduled_delivery')}
+              className="px-5 py-3.5 bg-gradient-to-r from-sky-600 to-sky-800 hover:brightness-110 text-white font-extrabold rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5 active:scale-97 shadow-md flex-1 min-w-[200px]"
+            >
+              <Calendar className="h-4 w-4 text-white animate-pulse" />
+              <span>Testar Agendado p/ Entrega 📅🚚</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onTriggerCelebration('designer_halfway')}
+              className="px-5 py-3.5 bg-gradient-to-r from-pink-500 to-indigo-500 hover:from-pink-600 hover:to-indigo-600 text-white font-extrabold rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5 active:scale-97 shadow-md flex-1 min-w-[200px]"
+            >
+              <Palette className="h-4 w-4 text-white animate-pulse" />
+              <span>Testar Modo Criativo (5ª Arte) 🎨✨</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onTriggerCelebration('designer_goal')}
+              className="px-5 py-3.5 bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-600 hover:to-indigo-700 text-white font-extrabold rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5 active:scale-97 shadow-md flex-1 min-w-[200px]"
+            >
+              <Bot className="h-4 w-4 text-white animate-bounce" />
+              <span>Testar Modo Máquina (10ª Arte) 🤖🎨</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onTriggerCelebration('welcome')}
+              className="px-5 py-3.5 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-extrabold rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5 active:scale-97 shadow-md flex-1 min-w-[200px]"
+            >
+              <Sun className="h-4 w-4 text-white animate-spin" style={{ animationDuration: '6s' }} />
+              <span>Testar Boas-Vindas do Dia 🏡☕</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 🟢 FORÇAR ATUALIZAÇÃO / SINCRONIZAÇÃO EM TEMPO REAL PARA TODOS OS USUÁRIOS */}
       <div className="bg-zinc-900 rounded-2xl border border-emerald-550/15 p-6 shadow-md space-y-6">

@@ -48,7 +48,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdateStock, onUpdateSale, onDeleteSale, currentUserEmail = '' }: SalesManagerProps) {
   const isAdmin = currentUserEmail.trim().toLowerCase() === 'oxentefesteje@gmail.com' || currentUserEmail.trim().toLowerCase() === 'abraaoapp@oxente.com';
   const [selectedProductId, setSelectedProductId] = useState('');
-  const [cliente, setCliente] = useState('Consumidor');
+  const [cliente, setCliente] = useState('');
   const [telefoneCliente, setTelefoneCliente] = useState('');
   const [quantidade, setQuantidade] = useState<number | ''>(1);
   const [formaPagamento, setFormaPagamento] = useState<PaymentMethod>('Pix');
@@ -417,8 +417,23 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setFormError('');
     setSuccessMsg('');
 
+    if (!cliente.trim() || cliente.trim().toLowerCase() === 'consumidor') {
+      setFormError('Por favor, informe o nome do consumidor. Esse dado é obrigatório para fechar o pedido e não pode ser "Consumidor".');
+      return;
+    }
+
     if (cart.length === 0 && !selectedProductId) {
-      setFormError('Escolha um brinde/produto ou adicione itens ao carrinho.');
+      setFormError('Por favor, selecione um produto ou adicione itens ao carrinho. A escolha de um produto é obrigatória para fechar o pedido.');
+      return;
+    }
+
+    if (!telefoneCliente.trim()) {
+      setFormError('Por favor, informe o telefone do cliente. Esse dado é obrigatório para notificações e para o recibo.');
+      return;
+    }
+
+    if (!dataRetirada.trim()) {
+      setFormError('Por favor, escolha a data de retirada. Esse dado é obrigatório para notificações, agendamentos e para o recibo.');
       return;
     }
 
@@ -496,7 +511,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
-      cliente: cliente.trim() || 'Consumidor',
+      cliente: cliente.trim(),
       telefoneCliente: telefoneCliente.trim() ? telefoneCliente.trim() : undefined,
       produtoId: mainProdutoId,
       produtoNome: mainProdutoNome,
@@ -512,7 +527,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       itens: finalItens,
       criadoPorEmail: currentUserEmail || 'Desconhecido',
       dataRetirada: dataRetirada || undefined,
-      statusProducao: registroTipo === 'Orçamento' ? undefined : statusProducao
+      statusProducao: registroTipo === 'Orçamento' ? undefined : 'Agendado'
     };
 
     // Salvar venda (que agora deduz o estoque de forma atômica no pai)
@@ -528,10 +543,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }, 150);
     setSuccessMsg(registroTipo === 'Orçamento' ? 'Orçamento gerado com sucesso! Verifique a folha de recibo ao lado.' : 'Estoque atualizado e venda processada com sucesso!');
 
-    // Reset fields (keeping client as Consumidor)
+    // Reset fields (keeping client empty)
     setSelectedProductId('');
     setQuantidade(1);
-    setCliente('Consumidor');
+    setCliente('');
     setTelefoneCliente('');
     setValorPagoInput('');
     setNumeroPedido('');
@@ -1004,7 +1019,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label htmlFor="sale-client" className="block text-sm font-medium text-zinc-300 mb-1.5">
-                  Nome do Cliente
+                  Nome do Cliente <span className="text-red-400 font-bold">*</span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-3.5 text-zinc-500">
@@ -1016,14 +1031,14 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     value={cliente}
                     onChange={(e) => setCliente(e.target.value)}
                     className="w-full pl-10 pr-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 text-sm placeholder-zinc-650"
-                    placeholder="Ex: Maria Consumidora"
+                    placeholder="Digite o nome do consumidor..."
                   />
                 </div>
               </div>
 
               <div>
-                <label htmlFor="sale-client-phone" className="block text-sm font-medium text-zinc-300 mb-1.5">
-                  Telefone do Cliente
+                <label htmlFor="sale-client-phone" className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-1">
+                  Telefone do Cliente <span className="text-red-400 font-bold">*</span>
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-3.5 text-zinc-500">
@@ -1110,40 +1125,21 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               </div>
             </div>
 
-            {/* Withdrawal Date and initial Production Status row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="sale-pickup-date" className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5">
-                  <span>📅</span> Data de Retirada (Opcional)
-                </label>
-                <input
-                  id="sale-pickup-date"
-                  type="date"
-                  value={dataRetirada}
-                  onChange={(e) => {
-                    setDataRetirada(e.target.value);
-                  }}
-                  className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 text-sm font-semibold font-mono"
-                />
-              </div>
-
-              <div>
-                <label htmlFor="sale-initial-prod-status" className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5">
-                  <span>⚙️</span> Status de Produção Inicial
-                </label>
-                <select
-                  id="sale-initial-prod-status"
-                  value={statusProducao}
-                  onChange={(e) => setStatusProducao(e.target.value as any)}
-                  className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-150 text-sm font-semibold"
-                >
-                  <option value="Agendado">📅 Agendado / Reservado</option>
-                  <option value="Em Produção">🔨 Em Produção Interna</option>
-                  <option value="Pronto para Retirada">✨ Pronto para Retirada</option>
-                  <option value="Agendado para Entrega">🚚 Agendado para Entrega</option>
-                  <option value="Entregue">🤝 Entregue ao Cliente</option>
-                </select>
-              </div>
+            {/* Withdrawal Date and automatically set Production Status */}
+            <div>
+              <label htmlFor="sale-pickup-date" className="block text-sm font-medium text-zinc-300 mb-1.5 flex items-center gap-1.5 flex-wrap">
+                <span>📅</span> Data de Retirada <span className="text-red-400 font-bold">*</span>
+                <span className="text-[10px] text-zinc-400 font-sans font-normal">(Início da produção será definido automaticamente como "Agendado")</span>
+              </label>
+              <input
+                id="sale-pickup-date"
+                type="date"
+                value={dataRetirada}
+                onChange={(e) => {
+                  setDataRetirada(e.target.value);
+                }}
+                className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 text-sm font-semibold font-mono"
+              />
             </div>
 
             {/* Add to Cart Trigger Button */}
