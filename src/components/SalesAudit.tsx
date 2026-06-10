@@ -15,7 +15,8 @@ import {
   Palette,
   Sparkles,
   Check,
-  RotateCcw
+  RotateCcw,
+  DollarSign
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Sale, StoreInfo } from '../types';
@@ -150,22 +151,63 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
     }
   };
 
-  // Get list of unique creators
+  // Get list of unique creators and designers with comprehensive metrics
   const creatorsStats = useMemo(() => {
-    const stats: Record<string, { count: number; totalValue: number }> = {};
+    const stats: Record<string, { count: number; totalValue: number; designsCompleted: number }> = {};
     
-    sales.forEach(sale => {
-      if (sale.status === 'Orçamento') return;
-      const email = sale.criadoPorEmail || 'Sistema/Legado';
+    const ensureUser = (email: string) => {
       if (!stats[email]) {
-        stats[email] = { count: 0, totalValue: 0 };
+        stats[email] = { count: 0, totalValue: 0, designsCompleted: 0 };
       }
-      stats[email].count += 1;
-      stats[email].totalValue += sale.total;
+    };
+
+    sales.forEach(sale => {
+      // 1. Check creations (excluding estimates)
+      if (sale.status !== 'Orçamento') {
+        const creatorEmail = sale.criadoPorEmail || 'Sistema/Legado';
+        ensureUser(creatorEmail);
+        stats[creatorEmail].count += 1;
+        stats[creatorEmail].totalValue += sale.total;
+      }
+
+      // 2. Check completed designs (arts)
+      if (sale.statusArte === 'Arte Finalizada') {
+        const designerEmail = sale.arteFinalizadaPorEmail || sale.puxadoPor;
+        if (designerEmail) {
+          ensureUser(designerEmail);
+          stats[designerEmail].designsCompleted += 1;
+        }
+      }
     });
 
     return stats;
   }, [sales]);
+
+  // Determine leaders for gamified presentation & comparison
+  const leaderboardMeta = useMemo(() => {
+    let maxVal = 0;
+    let maxDesigns = 0;
+    let maxValEmail = '';
+    let maxDesignsEmail = '';
+
+    (Object.entries(creatorsStats) as [string, { count: number; totalValue: number; designsCompleted: number }][]).forEach(([email, stats]) => {
+      if (stats.totalValue > maxVal) {
+        maxVal = stats.totalValue;
+        maxValEmail = email;
+      }
+      if (stats.designsCompleted > maxDesigns) {
+        maxDesigns = stats.designsCompleted;
+        maxDesignsEmail = email;
+      }
+    });
+
+    return {
+      maxSalesValue: maxVal || 1,
+      maxDesignsCompleted: maxDesigns || 1,
+      maxSalesEmail: maxValEmail,
+      maxDesignsEmail: maxDesignsEmail,
+    };
+  }, [creatorsStats]);
 
   // Filter Sales list based on search term, date, user filter, and special audit filter
   const auditLogs = useMemo(() => {
@@ -175,9 +217,10 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
     });
 
     return sortedSales.filter((sale) => {
-      // 1. User Filter
-      const email = sale.criadoPorEmail || 'Sistema/Legado';
-      if (selectedUserFilter !== 'all' && email !== selectedUserFilter) {
+      // 1. User Filter (Matches both sale creator and designer who completed the artwork)
+      const creator = sale.criadoPorEmail || 'Sistema/Legado';
+      const designer = sale.arteFinalizadaPorEmail || sale.puxadoPor || '';
+      if (selectedUserFilter !== 'all' && creator !== selectedUserFilter && designer !== selectedUserFilter) {
         return false;
       }
 
@@ -325,36 +368,94 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
 
       {/* Collaborator Contributions Leaderboard */}
       <div className="bg-zinc-900 border border-zinc-805 rounded-2xl p-5 shadow-sm space-y-4">
-        <h3 className="text-xs font-bold font-display uppercase tracking-widest text-zinc-400 border-b border-zinc-800 pb-3 flex items-center gap-1.5 select-none">
-          <UserCheck className="h-4 w-4 text-brand-pink" />
-          <span>Atividade por Usuário</span>
-        </h3>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800 pb-3">
+          <h3 className="text-xs font-bold font-display uppercase tracking-widest text-zinc-400 flex items-center gap-1.5 select-none">
+            <UserCheck className="h-4 w-4 text-brand-pink" />
+            <span>Atividade e Comparativo por Usuário</span>
+          </h3>
+          <span className="text-[10px] text-zinc-550 font-bold uppercase select-none">
+            🎨 Compare o desempenho de vendas e designs concluídos
+          </span>
+        </div>
         
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
           {Object.entries(creatorsStats).map(([email, info]) => {
-            const stats = info as { count: number; totalValue: number };
+            const stats = info as { count: number; totalValue: number; designsCompleted: number };
+            const isSalesLeader = email === leaderboardMeta.maxSalesEmail && stats.totalValue > 0;
+            const isDesignsLeader = email === leaderboardMeta.maxDesignsEmail && stats.designsCompleted > 0;
+            
             return (
               <button
                 key={email}
                 onClick={() => setSelectedUserFilter(selectedUserFilter === email ? 'all' : email)}
-                className={`p-3 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer group ${
+                className={`p-4 rounded-xl border text-left transition-all flex flex-col justify-between cursor-pointer group relative overflow-hidden ${
                   selectedUserFilter === email 
                     ? 'bg-brand-pink/15 border-brand-pink/50 shadow-md ring-1 ring-brand-pink/20' 
                     : 'bg-black/30 border-zinc-850 hover:border-zinc-750'
                 }`}
               >
-                <div className="w-full">
-                  <div className="text-zinc-500 text-[9px] font-extrabold uppercase tracking-wide group-hover:text-zinc-400 transition-colors">E-mail do Operador</div>
-                  <div className="text-zinc-200 text-xs font-semibold font-mono truncate mt-0.5" title={email}>{email}</div>
-                </div>
-                <div className="flex items-center justify-between mt-3 w-full">
-                  <div>
-                    <span className="text-[9px] text-zinc-500 uppercase font-bold mr-1">Vendas:</span>
-                    <span className="text-xs font-bold text-zinc-200">{stats.count}</span>
+                <div className="w-full space-y-4">
+                  {/* Card Header */}
+                  <div className="flex items-start justify-between gap-2 w-full">
+                    <div className="min-w-0 flex-1">
+                      <div className="text-zinc-500 text-[9px] font-extrabold uppercase tracking-widest group-hover:text-zinc-400 transition-colors">E-mail do Operador</div>
+                      <div className="text-zinc-200 text-xs font-bold font-mono truncate mt-0.5" title={email}>{email}</div>
+                    </div>
                   </div>
-                  <div className="text-[11px] font-bold font-mono text-brand-pink">
-                    R$ {stats.totalValue.toFixed(2)}
+
+                  {/* Operational stats list */}
+                  <div className="space-y-3 bg-zinc-950/30 p-3 rounded-xl border border-zinc-850/35">
+                    {/* Vendas */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-zinc-350">
+                        <span className="flex items-center gap-1">
+                          <DollarSign className="w-3.5 h-3.5 text-brand-pink shrink-0" />
+                          <span>Vendas: <b className="text-zinc-150 font-mono font-black">{stats.count}</b></span>
+                        </span>
+                        <span className="text-brand-pink font-mono font-extrabold text-[10.5px]">R$ {stats.totalValue.toFixed(2)}</span>
+                      </div>
+                      <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-brand-pink rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, Math.max(3, (stats.totalValue / leaderboardMeta.maxSalesValue) * 100))}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Artes Criadas / Arte Finalizada */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-zinc-350">
+                        <span className="flex items-center gap-1">
+                          <Palette className="w-3.5 h-3.5 text-emerald-450 shrink-0" />
+                          <span>Artes Concluídas:</span>
+                        </span>
+                        <span className="text-emerald-400 font-mono font-black text-xs">{stats.designsCompleted}</span>
+                      </div>
+                      <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+                        <div 
+                          className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                          style={{ width: `${Math.min(100, Math.max(3, (stats.designsCompleted / leaderboardMeta.maxDesignsCompleted) * 100))}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Leader ribbons / tags */}
+                  {(isSalesLeader || isDesignsLeader) && (
+                    <div className="flex flex-wrap gap-1 pt-1 border-t border-zinc-850/30 w-full select-none">
+                      {isSalesLeader && (
+                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-500/10 border border-amber-500/30 text-amber-400">
+                          👑 Top Vendas
+                        </span>
+                      )}
+                      {isDesignsLeader && (
+                        <span className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-500/10 border border-emerald-500/30 text-emerald-400">
+                          ✨ Líder Artes
+                        </span>
+                      )}
+                    </div>
+                  )}
+
                 </div>
               </button>
             );
