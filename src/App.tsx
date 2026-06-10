@@ -131,7 +131,8 @@ export default function App() {
 
   const [isForceUpdating, setIsForceUpdating] = useState(false);
   const [globalMuted, setGlobalMuted] = useState(() => getIsAudioMuted());
-  const [showCelebration, setShowCelebration] = useState<'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'scheduled_delivery' | null>(null);
+  const [showCelebration, setShowCelebration] = useState<'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'critical_stock' | null>(null);
+  const [criticalStockProduct, setCriticalStockProduct] = useState<Product | null>(null);
   const [shortFeedback, setShortFeedback] = useState<ShortFeedback | null>(null);
 
   useEffect(() => {
@@ -1185,6 +1186,13 @@ export default function App() {
 
     const updated = [newProduct, ...products];
     saveProducts(updated);
+
+    // Show a fast 2-second confirmation that the product was added to stocking system
+    setShortFeedback({
+      title: 'Item Adicionado no Estoque! 📦✨',
+      message: `${newProduct.nome} foi cadastrado com sucesso.`,
+      type: 'produto_criado'
+    });
     
     // Background sync to Supabase
     try {
@@ -1205,6 +1213,9 @@ export default function App() {
     pendingStockUpdates.current[id] = newStock;
 
     const currentProducts = productsRef.current;
+    const oldProduct = currentProducts.find(p => p.id === id);
+    const oldStock = oldProduct ? oldProduct.estoque : 999;
+
     let itemToSync: Product | null = null;
     const updated = currentProducts.map((p) => {
       if (p.id === id) {
@@ -1218,6 +1229,12 @@ export default function App() {
       return p;
     });
     saveProducts(updated);
+
+    // Trigger critical stock of 10 or lower if stock decreased
+    if (oldProduct && !oldProduct.estoqueInfinito && !isInfinite && newStock <= 10 && newStock < oldStock) {
+      setCriticalStockProduct(itemToSync);
+      setShowCelebration('critical_stock');
+    }
 
     // Background sync to Supabase using fast optimized method
     try {
@@ -1369,6 +1386,16 @@ export default function App() {
 
       saveProducts(updatedProducts);
 
+      // Trigger critical stock of 10 or lower if stock decreased
+      productsToSync.forEach((p) => {
+        const oldProd = currentProducts.find((old) => old.id === p.id);
+        const oldStock = oldProd ? oldProd.estoque : 999;
+        if (p.estoque <= 10 && p.estoque < oldStock) {
+          setCriticalStockProduct(p);
+          setShowCelebration('critical_stock');
+        }
+      });
+
       // Async update each product's stock in Supabase using the fast optimized method
       try {
         const results = await Promise.all(
@@ -1501,11 +1528,6 @@ export default function App() {
       setShowCelebration('order_delivered');
     }
 
-    // Se o status de produção foi alterado para 'Agendado para Entrega' nesta edição, disparar animação de agendamento de entrega
-    if (oldSale && oldSale.statusProducao !== 'Agendado para Entrega' && stampedSale.statusProducao === 'Agendado para Entrega') {
-      setShowCelebration('scheduled_delivery');
-    }
-
     // 3. Se temos o pedido original, calcular as diferenças de estoque
     if (oldSale) {
       // Função auxiliar para consolidar os itens de uma venda
@@ -1574,6 +1596,16 @@ export default function App() {
         });
 
         saveProducts(updatedProducts);
+
+        // Trigger critical stock of 10 or lower if stock decreased
+        productsToSync.forEach((p) => {
+          const oldProd = currentProducts.find((old) => old.id === p.id);
+          const oldStock = oldProd ? oldProd.estoque : 999;
+          if (p.estoque <= 10 && p.estoque < oldStock) {
+            setCriticalStockProduct(p);
+            setShowCelebration('critical_stock');
+          }
+        });
 
         // Atualizar estoque no Supabase de forma assíncrona/otimizada
         try {
@@ -2420,7 +2452,12 @@ export default function App() {
           <CelebrationOverlay 
             type={showCelebration} 
             userName={firebaseUser?.name || firebaseUser?.displayName || 'Colaborador'}
-            onClose={() => setShowCelebration(null)} 
+            productName={criticalStockProduct?.nome}
+            productStock={criticalStockProduct?.estoque}
+            onClose={() => {
+              setShowCelebration(null);
+              setCriticalStockProduct(null);
+            }} 
           />
         )}
         {shortFeedback && (

@@ -73,7 +73,7 @@ interface SettingsManagerProps {
   onUpdateStoreInfo?: (updated: StoreInfo) => void;
   onClearAllSales?: () => Promise<boolean>;
   onForceAllUsersUpdate?: () => Promise<void>;
-  onTriggerCelebration?: (type: 'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'scheduled_delivery') => void;
+  onTriggerCelebration?: (type: 'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered') => void;
   supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error' | 'tables_missing';
   supabaseErrorMsg?: string | null;
 }
@@ -1573,15 +1573,6 @@ export function SettingsManager({
             >
               <Truck className="h-4 w-4 text-white animate-bounce" />
               <span>Testar Pedido Entregue 🚚💨</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => onTriggerCelebration('scheduled_delivery')}
-              className="px-5 py-3.5 bg-gradient-to-r from-sky-600 to-sky-800 hover:brightness-110 text-white font-extrabold rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5 active:scale-97 shadow-md flex-1 min-w-[200px]"
-            >
-              <Calendar className="h-4 w-4 text-white animate-pulse" />
-              <span>Testar Agendado p/ Entrega 📅🚚</span>
             </button>
 
             <button

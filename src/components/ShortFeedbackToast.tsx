@@ -18,7 +18,7 @@ import { playAppSound } from '../lib/audio';
 export interface ShortFeedback {
   title: string;
   message: string;
-  type: 'status_agendado' | 'status_producao' | 'status_pronto' | 'status_entrega' | 'status_entregue' | 'art_finalizada' | 'pedido_criado';
+  type: 'status_agendado' | 'status_producao' | 'status_pronto' | 'status_entrega' | 'status_entregue' | 'art_finalizada' | 'pedido_criado' | 'produto_criado';
 }
 
 interface ShortFeedbackToastProps {
@@ -118,6 +118,14 @@ export function ShortFeedbackToast({ feedback, onClose }: ShortFeedbackToastProp
           iconBg: 'bg-yellow-500/15 text-yellow-400',
           barColor: 'bg-yellow-500',
           icon: <ShoppingBag className="h-6 w-6 stroke-[2.2] animate-pulse" />
+        };
+      case 'produto_criado':
+        return {
+          gradient: 'from-emerald-500 via-teal-500 to-emerald-600',
+          border: 'border-emerald-500/30 shadow-[0_0_25px_rgba(16,185,129,0.25)]',
+          iconBg: 'bg-emerald-500/15 text-emerald-450',
+          barColor: 'bg-emerald-505',
+          icon: <Gift className="h-6 w-6 stroke-[2.2] animate-bounce" style={{ animationDuration: '3s' }} />
         };
       default:
         return {

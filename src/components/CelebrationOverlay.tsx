@@ -1,12 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Trophy, Star, X, Rocket, Zap, Flame, Bot, Cpu, Palette, Brain, Sun, Coffee, Heart, Truck, Gift, CheckCircle2, Calendar, Clock } from 'lucide-react';
+import { Sparkles, Trophy, Star, X, Rocket, Zap, Flame, Bot, Cpu, Palette, Brain, Sun, Coffee, Heart, Truck, Gift, CheckCircle2, Calendar, Clock, AlertTriangle, AlertOctagon } from 'lucide-react';
 import { playAppSound } from '../lib/audio';
 
 interface CelebrationOverlayProps {
   onClose: () => void;
-  type?: 'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'scheduled_delivery';
+  type?: 'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'critical_stock';
   userName?: string;
+  productName?: string;
+  productStock?: number;
 }
 
 interface Balloon {
@@ -42,7 +44,7 @@ interface CosmicStar {
   rotation: number;
 }
 
-export function CelebrationOverlay({ onClose, type = 'goal', userName }: CelebrationOverlayProps) {
+export function CelebrationOverlay({ onClose, type = 'goal', userName, productName, productStock }: CelebrationOverlayProps) {
   const [balloons, setBalloons] = useState<Balloon[]>([]);
   const [fireworks, setFireworks] = useState<FireworkCluster[]>([]);
   const [cosmicStars, setCosmicStars] = useState<CosmicStar[]>([]);
@@ -131,32 +133,6 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName }: Celebra
         clearTimeout(secondBeep);
         clearTimeout(autoCloseTimer);
       };
-    } else if (type === 'scheduled_delivery') {
-      // Setup celebratory scheduling stars and calendars
-      const generatedStars = Array.from({ length: 22 }).map((_, i) => ({
-        id: i,
-        x: Math.random() * 100,
-        y: Math.random() * 50 + 50,
-        scale: Math.random() * 0.75 + 0.45,
-        delay: Math.random() * 1.8,
-        speed: Math.random() * 2.6 + 2.1,
-        rotation: Math.random() * 360
-      }));
-      setCosmicStars(generatedStars);
-
-      playAppSound('success');
-      const secondBeep = setTimeout(() => {
-        playAppSound('success');
-      }, 250);
-
-      const autoCloseTimer = setTimeout(() => {
-        onClose();
-      }, 8000); // 8 seconds is also great for scheduled delivery toast
-
-      return () => {
-        clearTimeout(secondBeep);
-        clearTimeout(autoCloseTimer);
-      };
     } else if (type === 'designer_halfway') {
       // Setup charming palette stars and design sparkles
       const generatedStars = Array.from({ length: 24 }).map((_, i) => ({
@@ -230,6 +206,32 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName }: Celebra
       }, 15000); // slightly more time to read the gorgeous morning greeting
 
       return () => {
+        clearTimeout(autoCloseTimer);
+      };
+    } else if (type === 'critical_stock') {
+      // Setup alarming yellow/red pulsing warning signs
+      const generatedStars = Array.from({ length: 20 }).map((_, i) => ({
+        id: i,
+        x: Math.random() * 100,
+        y: Math.random() * 60 + 30, // all over
+        scale: Math.random() * 0.7 + 0.5,
+        delay: Math.random() * 1.5,
+        speed: Math.random() * 3.5 + 2.5,
+        rotation: Math.random() * 30 - 15
+      }));
+      setCosmicStars(generatedStars);
+
+      playAppSound('alert');
+      const secondBeep = setTimeout(() => {
+        playAppSound('alert');
+      }, 500);
+
+      const autoCloseTimer = setTimeout(() => {
+        onClose();
+      }, 15000);
+
+      return () => {
+        clearTimeout(secondBeep);
         clearTimeout(autoCloseTimer);
       };
     } else {
@@ -361,7 +363,7 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName }: Celebra
       )}
 
       {/* RENDER HALFWAY, DESIGNER_GOAL, WELCOME, DESIGNER_HALFWAY, ORDER_DELIVERED OR SCHEDULED_DELIVERY VISUAL LAYERS */}
-      {(type === 'halfway' || type === 'designer_goal' || type === 'welcome' || type === 'designer_halfway' || type === 'order_delivered' || type === 'scheduled_delivery') && (
+      {(type === 'halfway' || type === 'designer_goal' || type === 'welcome' || type === 'designer_halfway' || type === 'order_delivered' || type === 'critical_stock') && (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {cosmicStars.map((star) => (
             <motion.div
@@ -418,15 +420,6 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName }: Celebra
                 ) : (
                   <Sparkles className="h-4 w-4 text-amber-300 drop-shadow-[0_0_8px_rgba(252,211,77,0.8)]" />
                 )
-              ) : type === 'scheduled_delivery' ? (
-                // Scheduled delivery elements
-                star.id % 3 === 0 ? (
-                  <Calendar className="h-5 w-5 text-sky-400 drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]" />
-                ) : star.id % 2 === 0 ? (
-                  <Clock className="h-4.5 w-4.5 text-indigo-400 drop-shadow-[0_0_8px_rgba(129,140,248,0.8)]" />
-                ) : (
-                  <Truck className="h-4 w-4 text-sky-305 drop-shadow-[0_0_8px_rgba(125,211,252,0.6)] animate-pulse" />
-                )
               ) : type === 'welcome' ? (
                 // Welcome morning/warm elements
                 star.id % 3 === 0 ? (
@@ -435,6 +428,13 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName }: Celebra
                   <Heart className="h-5 w-5 text-pink-500 fill-pink-500/10 drop-shadow-[0_0_8px_rgba(236,72,153,0.7)]" />
                 ) : (
                   <Coffee className="h-5 w-5 text-amber-500 drop-shadow-[0_0_8px_rgba(217,119,6,0.6)] animate-bounce" />
+                )
+              ) : type === 'critical_stock' ? (
+                // Critical stock warning elements
+                star.id % 2 === 0 ? (
+                  <AlertTriangle className="h-6 w-6 text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />
+                ) : (
+                  <AlertOctagon className="h-5 w-5 text-amber-500 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)] animate-bounce" />
                 )
               ) : (
                 // Traditional halfway elements
@@ -777,81 +777,6 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName }: Celebra
               Continuar Fazendo Festas! 🚀
             </button>
           </motion.div>
-        ) : type === 'scheduled_delivery' ? (
-          // SCHEDULED DELIVERY CARD
-          <motion.div
-            key="scheduled-delivery-card"
-            initial={{ scale: 0.8, opacity: 0, y: 50 }}
-            animate={{ scale: 1, opacity: 1, y: 0 }}
-            exit={{ scale: 0.8, opacity: 0, y: 50 }}
-            transition={{ type: 'spring', damping: 15, stiffness: 100, delay: 0.1 }}
-            className="relative z-10 w-full max-w-sm mx-4 bg-zinc-950 border border-sky-500/30 rounded-3xl shadow-[0_0_50px_rgba(56,189,248,0.25)] p-7 text-center pointer-events-auto no-print"
-          >
-            {/* Sparkly corner highlights */}
-            <div className="absolute top-4 left-4 text-sky-400 animate-pulse">
-              <Calendar className="h-5 w-5" />
-            </div>
-            <div className="absolute bottom-4 right-4 text-indigo-400 animate-pulse delay-100">
-              <Truck className="h-5 w-5" />
-            </div>
-
-            {/* Close Button */}
-            <button 
-              onClick={onClose}
-              className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-zinc-900 rounded-xl cursor-pointer"
-            >
-              <X className="h-5 w-5" />
-            </button>
-
-            {/* Glowing Calendar Icon */}
-            <motion.div 
-              animate={{ 
-                scale: [1, 1.08, 1],
-                y: [0, -4, 4, 0]
-              }}
-              transition={{
-                duration: 2.2,
-                repeat: Infinity,
-                repeatType: 'reverse',
-                ease: 'easeInOut'
-              }}
-              className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-sky-400 via-indigo-505 to-sky-600 text-white shadow-xl shadow-sky-500/25 mb-5"
-            >
-              <Calendar className="h-8 w-8 stroke-[2.2] animate-pulse" />
-            </motion.div>
-
-            {/* Badge */}
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-sky-500/10 border border-sky-500/20 rounded-full text-[10px] font-bold text-sky-400 uppercase tracking-widest mb-3">
-              <Clock className="h-3.5 w-3.5 text-sky-400 animate-spin" style={{ animationDuration: '6s' }} />
-              Agendado para Entrega! 📅🚚
-            </div>
-
-            {/* Title */}
-            <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-sky-305 via-indigo-400 to-sky-405 tracking-tight leading-tight mb-2">
-              Tudo Pronto para a Festa! 🎉🎈
-            </h1>
-
-            {/* Subtitle */}
-            <p className="text-xs text-zinc-350 font-medium px-2 mb-5 leading-relaxed">
-              O pedido foi agendado para entrega com sucesso! A rota está traçada e o estoque reservado para encantar nossos clientes no momento perfeito. Excelente trabalho de planejamento! 🌸✨
-            </p>
-
-            {/* Quote of scheduling */}
-            <div className="bg-zinc-900/60 border border-zinc-850 p-4 rounded-xl mb-5 text-left space-y-1">
-              <span className="block text-[9px] font-extrabold text-sky-400 uppercase tracking-widest">Compromisso Oxente:</span>
-              <p className="text-xs italic text-zinc-400 font-medium leading-relaxed">
-                "Planejar e organizar com carinho é garantir que a alegria chegue exatamente na hora certa!" 📅🚚🌸
-              </p>
-            </div>
-
-            {/* CTA button */}
-            <button
-              onClick={onClose}
-              className="w-full py-2.5 px-5 bg-gradient-to-r from-sky-500 via-indigo-500 to-zinc-800 hover:brightness-110 active:scale-[0.98] transition-all text-white font-extrabold text-xs rounded-xl shadow-lg shadow-sky-500/15 cursor-pointer"
-            >
-              Organizar Próximas Entregas! 🚀
-            </button>
-          </motion.div>
         ) : type === 'welcome' ? (
           // WELCOME CARD FOR FIRST LOGIN OF THE DAY
           <motion.div
@@ -925,6 +850,86 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName }: Celebra
               className="w-full py-2.5 px-5 bg-gradient-to-r from-amber-500 via-purple-500 to-pink-550 hover:brightness-110 active:scale-[0.98] transition-all text-white font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/15 cursor-pointer"
             >
               Iniciar Dia de Sucesso 🚀
+            </button>
+          </motion.div>
+        ) : type === 'critical_stock' ? (
+          // CRITICAL STOCK ALERT CARD
+          <motion.div
+            key="critical-stock-card"
+            initial={{ scale: 0.8, opacity: 0, y: 50 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.8, opacity: 0, y: 50 }}
+            transition={{ type: 'spring', damping: 15, stiffness: 100, delay: 0.1 }}
+            className="relative z-10 w-full max-w-sm mx-4 bg-zinc-950 border border-red-500/35 rounded-3xl shadow-[0_0_50px_rgba(239,68,68,0.3)] p-7 text-center pointer-events-auto no-print"
+          >
+            {/* Sparkly corner highlights */}
+            <div className="absolute top-4 left-4 text-red-500 animate-pulse">
+              <AlertTriangle className="h-5 w-5" />
+            </div>
+            <div className="absolute bottom-4 right-4 text-amber-500 animate-pulse delay-75">
+              <AlertOctagon className="h-5 w-5" />
+            </div>
+
+            {/* Close Button */}
+            <button 
+              onClick={onClose}
+              className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-zinc-900 rounded-xl cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Glowing warning icon */}
+            <motion.div 
+              animate={{ 
+                scale: [1, 1.15, 1],
+                rotate: [0, 4, -4, 0]
+              }}
+              transition={{
+                duration: 1.5,
+                repeat: Infinity,
+                repeatType: 'reverse',
+                ease: 'easeInOut'
+              }}
+              className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-red-600 via-orange-500 to-amber-500 text-white shadow-xl shadow-red-500/25 mb-5"
+            >
+              <AlertTriangle className="h-8 w-8 stroke-[2.2] animate-bounce" />
+            </motion.div>
+
+            {/* Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-500/10 border border-red-500/20 rounded-full text-[10px] font-bold text-red-400 uppercase tracking-widest mb-3">
+              🚨 Atenção: Estoque Crítico!
+            </div>
+
+            {/* Title */}
+            <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-orange-400 to-amber-400 tracking-tight leading-tight mb-2">
+              Produto Acabando! ⚠️
+            </h1>
+
+            {/* Product Details Section */}
+            <div className="bg-zinc-900/80 border border-red-500/20 p-4 rounded-xl mb-4 text-left">
+              <span className="block text-[9px] font-black text-red-400 uppercase tracking-wider mb-1">Item Identificado:</span>
+              <p className="text-sm font-extrabold text-zinc-100 mb-1.5 line-clamp-2">
+                {productName || 'Brinde/Brinco'}
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-zinc-500 font-bold uppercase">Quantidade Restante:</span>
+                <span className="px-2 py-0.5 bg-red-550 text-white font-extrabold text-xs rounded-full animate-pulse">
+                  {productStock !== undefined ? `${productStock} un.` : 'Pouco estoque'}
+                </span>
+              </div>
+            </div>
+
+            {/* Subtitle */}
+            <p className="text-xs text-zinc-450 font-medium px-2 mb-5 leading-relaxed">
+              Sugerimos providenciar a reposição ou produção deste item o quanto antes para continuarmos realizando festas lindas sem surpresas! 🌸📦✨
+            </p>
+
+            {/* CTA button */}
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 px-5 bg-gradient-to-r from-red-600 to-orange-500 hover:brightness-110 active:scale-[0.98] transition-all text-white font-extrabold text-xs rounded-xl shadow-lg shadow-red-500/15 cursor-pointer animate-pulse"
+            >
+              Ciente, vou verificar! 🚀
             </button>
           </motion.div>
         ) : (
