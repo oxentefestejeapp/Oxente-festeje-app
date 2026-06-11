@@ -1550,16 +1550,34 @@ export default function App() {
   };
 
   const handleUpdateSale = async (updatedSale: Sale) => {
+    const currentSales = salesRef.current;
+    
+    // 1. Encontrar o pedido original antes da alteração usando o valor mais atualizado do ref
+    const oldSale = currentSales.find((s) => s.id === updatedSale.id);
+
+    let finalSaleToUpdate = { ...updatedSale };
+
+    // Se o pedido era Orçamento e agora NÃO é mais (foi convertido), e não tem numeroPedido, gerar o próximo número real!
+    if (oldSale && oldSale.status === 'Orçamento' && finalSaleToUpdate.status !== 'Orçamento') {
+      if (!finalSaleToUpdate.numeroPedido) {
+        // Gerar número de pedido sequencial automaticamente a partir de 30000
+        const numericPedidoNumbers = currentSales
+          .map(s => parseInt(s.numeroPedido || '', 10))
+          .filter(num => !isNaN(num));
+        const nextPedidoNumber = numericPedidoNumbers.length > 0 
+          ? Math.max(...numericPedidoNumbers, 29999) + 1 
+          : 30000;
+        
+        finalSaleToUpdate.numeroPedido = String(nextPedidoNumber);
+      }
+    }
+
     const stampedSale: Sale = {
-      ...updatedSale,
+      ...finalSaleToUpdate,
       updatedAt: new Date().toISOString(),
       pendingSync: true
     };
-    const currentSales = salesRef.current;
     const currentProducts = productsRef.current;
-
-    // 1. Encontrar o pedido original antes da alteração usando o valor mais atualizado do ref
-    const oldSale = currentSales.find((s) => s.id === stampedSale.id);
 
     // 2. Atualizar a lista de vendas localmente
     const updated = currentSales.map((s) => (s.id === stampedSale.id ? stampedSale : s));

@@ -156,10 +156,15 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   const [editItens, setEditItens] = useState<SaleItem[]>([]);
   const [selectedAddProductId, setSelectedAddProductId] = useState('');
+  const [editArteDesign, setEditArteDesign] = useState(false);
+  const [editTemTaxaUrgencia, setEditTemTaxaUrgencia] = useState(false);
+  const [editValorTaxaUrgencia, setEditValorTaxaUrgencia] = useState('');
 
   const editTotal = useMemo(() => {
-    return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0);
-  }, [editItens]);
+    const artVal = editArteDesign ? 5 : 0;
+    const urgVal = editTemTaxaUrgencia ? (parseFloat(editValorTaxaUrgencia) || 0) : 0;
+    return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0) + artVal + urgVal;
+  }, [editItens, editArteDesign, editTemTaxaUrgencia, editValorTaxaUrgencia]);
 
   // Sync edit states when editingSale shifts
   React.useEffect(() => {
@@ -173,18 +178,33 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       setEditStatusProducao(editingSale.statusProducao || 'Agendado');
       setEditConvertToOrder(false);
 
+      let rawItens: SaleItem[] = [];
       if (editingSale.itens && editingSale.itens.length > 0) {
-        setEditItens(editingSale.itens.map(item => ({ ...item })));
+        rawItens = editingSale.itens.map(item => ({ ...item }));
       } else {
-        setEditItens([{
+        rawItens = [{
           id: `item-${editingSale.produtoId || '1'}-${Date.now()}`,
           produtoId: editingSale.produtoId || '',
           produtoNome: editingSale.produtoNome || '',
           precoUn: editingSale.precoUn || 0,
           quantidade: editingSale.quantidade || 1,
           total: (editingSale.precoUn || 0) * (editingSale.quantidade || 1)
-        }]);
+        }];
       }
+
+      const hasArte = rawItens.some(item => item.produtoId === 'artedesign-service');
+      const urgenciaItem = rawItens.find(item => item.produtoId === 'taxaurgencia-service');
+
+      setEditArteDesign(hasArte);
+      if (urgenciaItem) {
+        setEditTemTaxaUrgencia(true);
+        setEditValorTaxaUrgencia(String(urgenciaItem.precoUn));
+      } else {
+        setEditTemTaxaUrgencia(false);
+        setEditValorTaxaUrgencia('');
+      }
+
+      setEditItens(rawItens.filter(item => item.produtoId !== 'artedesign-service' && item.produtoId !== 'taxaurgencia-service'));
     }
   }, [editingSale]);
   
@@ -640,7 +660,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       data: new Date().toISOString(),
       valorPago: finalValorPago,
       valorFaltante: finalValorFaltante,
-      numeroPedido: String(nextPedidoNumber),
+      numeroPedido: registroTipo === 'Orçamento' ? undefined : String(nextPedidoNumber),
       status: registroTipo === 'Orçamento' ? 'Orçamento' : (finalValorFaltante > 0 ? 'Pendente' : 'Pago total'),
       itens: finalItens,
       criadoPorEmail: currentUserEmail || 'Desconhecido',
@@ -750,6 +770,31 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       ]
     };
 
+    const finalItensToSave = [...editItens];
+    if (editArteDesign) {
+      finalItensToSave.push({
+        id: `item-artedesign-${Date.now()}`,
+        produtoId: 'artedesign-service',
+        produtoNome: 'Arte do design',
+        precoUn: 5.0,
+        quantidade: 1,
+        total: 5.0
+      });
+    }
+    if (editTemTaxaUrgencia) {
+      const urgenciaVal = parseFloat(editValorTaxaUrgencia) || 0;
+      if (urgenciaVal > 0) {
+        finalItensToSave.push({
+          id: `item-taxaurgencia-${Date.now()}`,
+          produtoId: 'taxaurgencia-service',
+          produtoNome: 'Taxa de Urgência',
+          precoUn: urgenciaVal,
+          quantidade: 1,
+          total: urgenciaVal
+        });
+      }
+    }
+
     const updatedSale: Sale = {
       ...editingSale,
       cliente: editCliente.trim() || 'Consumidor',
@@ -766,7 +811,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       status: isBudget ? 'Orçamento' : (finalValorFaltante > 0 ? 'Pendente' : 'Pago total'),
       dataRetirada: editDataRetirada || undefined,
       statusProducao: isBudget ? undefined : editStatusProducao,
-      itens: editItens,
+      itens: finalItensToSave,
       foiAlterado: true,
       editadoPorEmail: currentUserEmail,
       editadoEm: new Date().toISOString(),
@@ -1183,7 +1228,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               )}
 
               {/* Opções de Serviços e Taxas Adicionais */}
-              {selectedProductId && (
+              {(selectedProductId || cart.length > 0) && (
                 <div className="mt-4 bg-zinc-900/40 border border-zinc-850 p-4 rounded-2xl space-y-3 animate-fade-in text-left">
                   <span className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 select-none">
                     <span>✨ Serviços e Taxas Adicionais do Pedido:</span>
@@ -1891,9 +1936,13 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                           <td className="py-3 px-3 max-w-[125px] truncate">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-semibold text-zinc-100">{sale.cliente}</span>
-                              {sale.numeroPedido && (
+                              {sale.numeroPedido ? (
                                 <span className="bg-zinc-800 text-brand-pink text-[9px] font-mono px-1 py-0.5 rounded tracking-wider leading-none" title={`Número do Pedido: ${sale.numeroPedido}`}>
                                   #{sale.numeroPedido}
+                                </span>
+                              ) : (
+                                <span className="bg-amber-950/45 text-amber-450 border border-amber-900/40 text-[8.5px] font-bold font-sans px-1.5 py-0.5 rounded uppercase tracking-wider leading-none">
+                                  Orçamento
                                 </span>
                               )}
                             </div>
@@ -2290,6 +2339,95 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                       >
                         Acrescentar
                       </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Opções de Serviços e Taxas Adicionais na Edição */}
+                <div className="bg-zinc-950/40 border border-zinc-850 p-4 rounded-xl space-y-3 text-left">
+                  <span className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-sans">
+                    <span>✨ Serviços e Taxas Adicionais do Pedido:</span>
+                  </span>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Botão de Arte do Design */}
+                    <label
+                      className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
+                        editArteDesign
+                          ? 'bg-brand-pink/12 border-brand-pink/40 text-brand-pink shadow-[0_0_8px_rgba(236,72,153,0.04)]'
+                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editArteDesign}
+                        onChange={() => {
+                          setEditArteDesign(prev => !prev);
+                          playSound(editArteDesign ? 'remove' : 'add');
+                        }}
+                        className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-4 w-4 cursor-pointer bg-black"
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold truncate text-zinc-200">
+                          🎨 Arte do Design
+                        </span>
+                        <span className="text-[10px] font-mono text-brand-pink font-bold">
+                          + R$ 5,00
+                        </span>
+                      </div>
+                    </label>
+
+                    {/* Botão de Taxa de Urgência */}
+                    <label
+                      className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
+                        editTemTaxaUrgencia
+                          ? 'bg-amber-500/12 border-amber-500/40 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.04)]'
+                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editTemTaxaUrgencia}
+                        onChange={() => {
+                          const nextState = !editTemTaxaUrgencia;
+                          setEditTemTaxaUrgencia(nextState);
+                          playSound(nextState ? 'add' : 'remove');
+                          if (!nextState) {
+                            setEditValorTaxaUrgencia('');
+                          }
+                        }}
+                        className="rounded border-zinc-800 text-amber-500 focus:ring-0 accent-amber-500 h-4 w-4 cursor-pointer bg-black"
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold truncate text-zinc-200">
+                          ⚡ Taxa de Urgência
+                        </span>
+                        <span className="text-[10px] font-mono text-amber-400 font-bold">
+                          {editValorTaxaUrgencia ? `+ R$ ${parseFloat(editValorTaxaUrgencia).toFixed(2)}` : 'Informa Valor'}
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+
+                  {editTemTaxaUrgencia && (
+                    <div className="mt-2 text-left animate-fade-in max-w-xs pt-1">
+                      <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5 font-sans select-none">
+                        Valor da taxa cobrado (R$):
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-2 text-xs text-zinc-500 font-mono font-bold">
+                          R$
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Digite o valor adicional..."
+                          value={editValorTaxaUrgencia}
+                          onChange={(e) => setEditValorTaxaUrgencia(e.target.value)}
+                          className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl py-1.5 pl-9 pr-4 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500 transition-colors"
+                        />
+                      </div>
                     </div>
                   )}
                 </div>

@@ -137,10 +137,15 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
 
         {/* Sales Meta Information */}
         <div className="text-xs space-y-1.5 mb-4 leading-relaxed text-black">
-          {sale.numeroPedido && (
+          {sale.numeroPedido ? (
             <div className="flex justify-between">
               <span className="text-black font-bold uppercase select-none">Nº Pedido:</span>
               <span className="font-extrabold text-right select-text text-black">#{sale.numeroPedido}</span>
+            </div>
+          ) : (
+            <div className="flex justify-between">
+              <span className="text-black font-bold uppercase select-none">Documento:</span>
+              <span className="font-extrabold text-right select-text text-amber-600 uppercase">Orçamento</span>
             </div>
           )}
           <div className="flex justify-between">
