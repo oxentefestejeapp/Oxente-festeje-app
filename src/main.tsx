@@ -63,6 +63,14 @@ window.addEventListener('appinstalled', () => {
   console.log('App successfully installed on homescreen!');
 });
 
+// 🛡️ BLOQUEADOR GLOBAL DE SCROLL WHEEL PARA INPUTS NUMÉRICOS
+// Evita alteração de valores de estoque, preços e quantidades acidentalmente ao rolar a página
+document.addEventListener('wheel', (e) => {
+  if (document.activeElement instanceof HTMLInputElement && document.activeElement.type === 'number') {
+    document.activeElement.blur();
+  }
+}, { passive: true });
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <App />
