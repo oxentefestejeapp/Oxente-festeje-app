@@ -40,7 +40,8 @@ import {
   Bot,
   Sun,
   Palette,
-  Truck
+  Truck,
+  Crown
 } from 'lucide-react';
 import { Product, Sale, StoreInfo } from '../types';
 import { 
@@ -73,7 +74,7 @@ interface SettingsManagerProps {
   onUpdateStoreInfo?: (updated: StoreInfo) => void;
   onClearAllSales?: () => Promise<boolean>;
   onForceAllUsersUpdate?: () => Promise<void>;
-  onTriggerCelebration?: (type: 'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered') => void;
+  onTriggerCelebration?: (type: 'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'weekly_50_orders') => void;
   supabaseSyncStatus?: 'idle' | 'syncing' | 'synced' | 'error' | 'tables_missing';
   supabaseErrorMsg?: string | null;
 }
@@ -1600,6 +1601,15 @@ export function SettingsManager({
             >
               <Sun className="h-4 w-4 text-white animate-spin" style={{ animationDuration: '6s' }} />
               <span>Testar Boas-Vindas do Dia 🏡☕</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onTriggerCelebration('weekly_50_orders')}
+              className="px-5 py-3.5 bg-gradient-to-tr from-amber-500 via-yellow-400 to-pink-500 hover:brightness-110 text-black font-black rounded-xl transition-all cursor-pointer text-xs flex items-center justify-center gap-1.5 active:scale-97 shadow-md flex-1 min-w-[200px]"
+            >
+              <Crown className="h-4 w-4 text-black animate-pulse" />
+              <span>Testar Meta Semanal (50 Pedidos) 👑🏆</span>
             </button>
           </div>
         </div>

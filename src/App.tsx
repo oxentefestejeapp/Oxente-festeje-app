@@ -57,6 +57,29 @@ import { Product, Sale, StoreInfo } from './types';
 import { defaultProducts, defaultSales, defaultStoreInfo } from './defaultData';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from './lib/audio';
 
+export const getWeeklyNonBudgetOrdersCount = (salesList: Sale[]): number => {
+  const today = new Date();
+  const day = today.getDay(); // 0 = Sun, 1 = Mon, ..., 6 = Sat
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + diffToMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  const friday = new Date(monday);
+  friday.setDate(monday.getDate() + 4);
+  friday.setHours(23, 59, 59, 999);
+
+  return salesList.filter(s => {
+    if (s.status === 'Orçamento') return false;
+    try {
+      const saleDate = new Date(s.data);
+      return saleDate >= monday && saleDate <= friday;
+    } catch {
+      return false;
+    }
+  }).length;
+};
+
 export default function App() {
   // 1. Custom Secure Credentials Auth State
   const [firebaseUser, setFirebaseUser] = useState<any | null>(null);
@@ -130,7 +153,7 @@ export default function App() {
 
   const [isForceUpdating, setIsForceUpdating] = useState(false);
   const [globalMuted, setGlobalMuted] = useState(() => getIsAudioMuted());
-  const [showCelebration, setShowCelebration] = useState<'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'critical_stock' | null>(null);
+  const [showCelebration, setShowCelebration] = useState<'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'critical_stock' | 'weekly_50_orders' | null>(null);
   const [criticalStockProduct, setCriticalStockProduct] = useState<Product | null>(null);
   const [shortFeedback, setShortFeedback] = useState<ShortFeedback | null>(null);
   const [hasCheckedCritical, setHasCheckedCritical] = useState(false);
@@ -756,6 +779,28 @@ export default function App() {
           const updated = [sale, ...current];
           updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
           localStorage.setItem('oxente_sales', JSON.stringify(updated));
+          
+          // Real-time synced celebrations for all connected users (5th, 10th and 50th orders)
+          const isTodayVal = (dateStr: string): boolean => {
+            try {
+              const todayPrefix = new Date().toLocaleDateString('en-CA');
+              return new Date(dateStr).toLocaleDateString('en-CA') === todayPrefix;
+            } catch {
+              return false;
+            }
+          };
+          const prevTodayVal = current.filter(s => s.status !== 'Orçamento' && isTodayVal(s.data)).length;
+          const newTodayVal = updated.filter(s => s.status !== 'Orçamento' && isTodayVal(s.data)).length;
+          const prevWeeklyVal = getWeeklyNonBudgetOrdersCount(current);
+          const newWeeklyVal = getWeeklyNonBudgetOrdersCount(updated);
+
+          if (prevWeeklyVal < 50 && newWeeklyVal >= 50) {
+            setTimeout(() => setShowCelebration('weekly_50_orders'), 50);
+          } else if (prevTodayVal < 10 && newTodayVal >= 10) {
+            setTimeout(() => setShowCelebration('goal'), 50);
+          } else if (prevTodayVal < 5 && newTodayVal >= 5) {
+            setTimeout(() => setShowCelebration('halfway'), 50);
+          }
 
           // Notificar sobre novos pedidos em tempo real no celular se veio de outro usuário e o usuário logado é administrador
           const isMySale = sale.criadoPorEmail === currentUserEmailRef.current;
@@ -792,6 +837,28 @@ export default function App() {
           const updated = current.map(s => s.id === sale.id ? sale : s);
           updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
           localStorage.setItem('oxente_sales', JSON.stringify(updated));
+
+          // Real-time synced celebrations for all connected users (5th, 10th and 50th orders)
+          const isTodayVal = (dateStr: string): boolean => {
+            try {
+              const todayPrefix = new Date().toLocaleDateString('en-CA');
+              return new Date(dateStr).toLocaleDateString('en-CA') === todayPrefix;
+            } catch {
+              return false;
+            }
+          };
+          const prevTodayVal = current.filter(s => s.status !== 'Orçamento' && isTodayVal(s.data)).length;
+          const newTodayVal = updated.filter(s => s.status !== 'Orçamento' && isTodayVal(s.data)).length;
+          const prevWeeklyVal = getWeeklyNonBudgetOrdersCount(current);
+          const newWeeklyVal = getWeeklyNonBudgetOrdersCount(updated);
+
+          if (prevWeeklyVal < 50 && newWeeklyVal >= 50) {
+            setTimeout(() => setShowCelebration('weekly_50_orders'), 50);
+          } else if (prevTodayVal < 10 && newTodayVal >= 10) {
+            setTimeout(() => setShowCelebration('goal'), 50);
+          } else if (prevTodayVal < 5 && newTodayVal >= 5) {
+            setTimeout(() => setShowCelebration('halfway'), 50);
+          }
 
           // Notificar sobre pedidos editados em tempo real no celular se veio de outro usuário e foi um salvamento de edição manual
           const isMyEdit = sale.editadoPorEmail === currentUserEmailRef.current;
@@ -1350,7 +1417,7 @@ export default function App() {
       type: 'pedido_criado'
     });
 
-    // Se o pedido gravado NÃO for orçamento, verificamos a meta diária de 5 ou 10 pedidos
+    // Se o pedido gravado NÃO for orçamento, verificamos a meta diária e semanal de pedidos
     if (stampedSale.status !== 'Orçamento') {
       const todayPrefix = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
       const ordersToday = updated.filter(s => {
@@ -1362,7 +1429,11 @@ export default function App() {
           return false;
         }
       });
-      if (ordersToday.length === 10) {
+
+      const weeklyOrdersCount = getWeeklyNonBudgetOrdersCount(updated);
+      if (weeklyOrdersCount === 50) {
+        setShowCelebration('weekly_50_orders');
+      } else if (ordersToday.length === 10) {
         setShowCelebration('goal');
       } else if (ordersToday.length === 5) {
         setShowCelebration('halfway');
@@ -1493,6 +1564,14 @@ export default function App() {
     // 2. Atualizar a lista de vendas localmente
     const updated = currentSales.map((s) => (s.id === stampedSale.id ? stampedSale : s));
     saveSales(updated);
+
+    // Se o pedido era Orçamento e agora NÃO é mais, verificamos se bateu a meta semanal de 50 pedidos
+    if (oldSale && oldSale.status === 'Orçamento' && stampedSale.status !== 'Orçamento') {
+      const weeklyOrdersCount = getWeeklyNonBudgetOrdersCount(updated);
+      if (weeklyOrdersCount === 50) {
+        setShowCelebration('weekly_50_orders');
+      }
+    }
 
     // Se o status da arte foi alterado para 'Arte Finalizada' nesta edição, checar se bateu a meta diária de 10 artes
     if (oldSale && oldSale.statusArte !== 'Arte Finalizada' && stampedSale.statusArte === 'Arte Finalizada') {

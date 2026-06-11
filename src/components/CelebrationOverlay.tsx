@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Trophy, Star, X, Rocket, Zap, Flame, Bot, Cpu, Palette, Brain, Sun, Coffee, Heart, Truck, Gift, CheckCircle2, Calendar, Clock, AlertTriangle, AlertOctagon } from 'lucide-react';
+import { Sparkles, Trophy, Star, X, Rocket, Zap, Flame, Bot, Cpu, Palette, Brain, Sun, Coffee, Heart, Truck, Gift, CheckCircle2, Calendar, Clock, AlertTriangle, AlertOctagon, Award, Crown } from 'lucide-react';
 import { playAppSound } from '../lib/audio';
 
 interface CelebrationOverlayProps {
   onClose: () => void;
-  type?: 'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'critical_stock';
+  type?: 'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'critical_stock' | 'weekly_50_orders';
   userName?: string;
   productName?: string;
   productStock?: number;
@@ -234,6 +234,37 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName, productNa
         clearTimeout(secondBeep);
         clearTimeout(autoCloseTimer);
       };
+    } else if (type === 'weekly_50_orders') {
+      // Celestial, glamorous golden and pink cosmic star setup for weekly 50 orders
+      const generatedStars = Array.from({ length: 40 }).map((_, i) => ({
+        id: i,
+        x: Math.random() * 100,
+        y: Math.random() * 60 + 35, // starting lower and ascending
+        scale: Math.random() * 0.85 + 0.55,
+        delay: Math.random() * 3,
+        speed: Math.random() * 3.5 + 2.2,
+        rotation: Math.random() * 360
+      }));
+      setCosmicStars(generatedStars);
+
+      // Play continuous epic reward sounds
+      playAppSound('complete');
+      const secondBeep = setTimeout(() => {
+        playAppSound('complete');
+      }, 350);
+      const thirdBeep = setTimeout(() => {
+        playAppSound('success');
+      }, 700);
+
+      const autoCloseTimer = setTimeout(() => {
+        onClose();
+      }, 15000);
+
+      return () => {
+        clearTimeout(secondBeep);
+        clearTimeout(thirdBeep);
+        clearTimeout(autoCloseTimer);
+      };
     } else {
       // type === 'halfway'
       const generatedStars = Array.from({ length: 25 }).map((_, i) => ({
@@ -363,7 +394,7 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName, productNa
       )}
 
       {/* RENDER HALFWAY, DESIGNER_GOAL, WELCOME, DESIGNER_HALFWAY, ORDER_DELIVERED OR SCHEDULED_DELIVERY VISUAL LAYERS */}
-      {(type === 'halfway' || type === 'designer_goal' || type === 'welcome' || type === 'designer_halfway' || type === 'order_delivered' || type === 'critical_stock') && (
+      {(type === 'halfway' || type === 'designer_goal' || type === 'welcome' || type === 'designer_halfway' || type === 'order_delivered' || type === 'critical_stock' || type === 'weekly_50_orders') && (
         <div className="absolute inset-0 overflow-hidden pointer-events-none">
           {cosmicStars.map((star) => (
             <motion.div
@@ -435,6 +466,15 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName, productNa
                   <AlertTriangle className="h-6 w-6 text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.8)] animate-pulse" />
                 ) : (
                   <AlertOctagon className="h-5 w-5 text-amber-500 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)] animate-bounce" />
+                )
+              ) : type === 'weekly_50_orders' ? (
+                // Glorious golden/pink elements for weekly 50 orders milestone
+                star.id % 3 === 0 ? (
+                  <Trophy className="h-6 w-6 text-amber-400 drop-shadow-[0_0_10px_rgba(245,158,11,0.9)] animate-pulse" />
+                ) : star.id % 2 === 0 ? (
+                  <Award className="h-5.5 w-5.5 text-pink-400 drop-shadow-[0_0_8px_rgba(236,72,153,0.8)] animate-bounce" />
+                ) : (
+                  <Crown className="h-5 w-5 text-yellow-300 drop-shadow-[0_0_12px_rgba(253,224,71,0.95)]" />
                 )
               ) : (
                 // Traditional halfway elements
@@ -930,6 +970,106 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName, productNa
               className="w-full py-2.5 px-5 bg-gradient-to-r from-red-600 to-orange-500 hover:brightness-110 active:scale-[0.98] transition-all text-white font-extrabold text-xs rounded-xl shadow-lg shadow-red-500/15 cursor-pointer animate-pulse"
             >
               Ciente, vou verificar! 🚀
+            </button>
+          </motion.div>
+        ) : type === 'weekly_50_orders' ? (
+          // WEEKLY 50 ORDERS SYSTEM ACHIEVEMENT CARD
+          <motion.div
+            key="weekly-50-orders-card"
+            initial={{ scale: 0.7, opacity: 0, y: 70 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.7, opacity: 0, y: 70 }}
+            transition={{ type: 'spring', damping: 12, stiffness: 90, delay: 0.1 }}
+            className="relative z-10 w-full max-w-sm mx-4 bg-zinc-950 border-2 border-amber-500/50 rounded-3xl shadow-[0_0_50px_rgba(245,158,11,0.3)] p-7 text-center pointer-events-auto no-print overflow-hidden"
+          >
+            {/* Background glowing effects */}
+            <div className="absolute -top-20 -left-20 w-40 h-40 bg-pink-500/10 rounded-full blur-3xl pointer-events-none" />
+            <div className="absolute -bottom-20 -right-20 w-40 h-40 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+
+            {/* Sparkly corner highlights */}
+            <div className="absolute top-4 left-4 text-amber-400 animate-pulse">
+              <Trophy className="h-5 w-5" />
+            </div>
+            <div className="absolute bottom-4 right-4 text-pink-400 animate-pulse delay-75">
+              <Sparkles className="h-5 w-5" />
+            </div>
+
+            {/* Close Button */}
+            <button 
+              onClick={onClose}
+              className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-zinc-900 rounded-xl cursor-pointer shadow-sm"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Triumphant Symbol */}
+            <motion.div 
+              animate={{ 
+                scale: [1, 1.15, 1],
+                rotate: [0, -8, 8, 0]
+              }}
+              transition={{
+                duration: 2,
+                repeat: Infinity,
+                repeatType: 'reverse'
+              }}
+              className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-yellow-400 via-amber-500 to-pink-500 text-black shadow-xl shadow-amber-500/20 mb-5"
+            >
+              <Crown className="h-8 w-8 stroke-[2.2]" />
+            </motion.div>
+
+            {/* Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-amber-500/10 border border-amber-500/20 rounded-full text-[10px] font-bold text-amber-400 uppercase tracking-widest mb-3">
+              👑 Meta Semanal Batida! 👑
+            </div>
+
+            {/* Title */}
+            <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-yellow-300 via-amber-400 to-pink-500 tracking-tight leading-tight mb-2">
+              50 Pedidos Alcançados! 🌟🎉
+            </h1>
+
+            {/* Subtitle */}
+            <p className="text-xs text-zinc-350 font-medium px-2 mb-5 leading-relaxed">
+              Incrível! Toda a equipe está de parabéns! Vocês alcançaram a marca impressionante de <strong className="text-yellow-400">50 pedidos registrados</strong> nesta semana (segunda a sexta). A <strong className="text-pink-400">Oxente Festeje</strong> brilha cada vez mais forte com a dedicação e o amor de todos vocês! 💕🚀
+            </p>
+
+            {/* Metrics display */}
+            <div className="bg-zinc-900/80 border border-amber-500/10 p-4 rounded-xl mb-5 text-left space-y-2 relative">
+              <div className="flex justify-between items-center text-[10px]">
+                <span className="font-bold text-zinc-400 uppercase tracking-wider">Desempenho da Semana</span>
+                <span className="px-2 py-0.5 bg-amber-500/10 border border-amber-500/20 rounded text-[9px] font-black text-amber-400 uppercase tracking-widest animate-pulse">Meta Superada!</span>
+              </div>
+              
+              {/* Progress visual */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-[10px] font-mono text-zinc-500">
+                  <span>Progresso de Seg a Sex:</span>
+                  <span className="font-extrabold text-amber-400">50 / 50 Pedidos (100%)</span>
+                </div>
+                <div className="w-full bg-zinc-950 h-2.5 p-0.5 rounded-full overflow-hidden border border-zinc-850">
+                  <motion.div 
+                    initial={{ width: 0 }}
+                    animate={{ width: '100%' }}
+                    transition={{ duration: 1.5, ease: 'easeOut' }}
+                    className="h-full rounded-full bg-gradient-to-r from-pink-500 via-amber-500 to-yellow-400 relative overflow-hidden"
+                  >
+                    <span className="absolute inset-0 bg-[linear-gradient(45deg,rgba(255,255,255,0.25)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.25)_50%,rgba(255,255,255,0.25)_75%,transparent_75%,transparent)] bg-[length:15px_15px] animate-[shimmer_1.5s_infinite_linear]" />
+                  </motion.div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between text-[10px] pt-1 border-t border-zinc-850">
+                <span className="text-zinc-550 font-medium">Balanço Semanal:</span>
+                <strong className="text-amber-400 font-extrabold">Sucesso absoluto! 🥳🍿</strong>
+              </div>
+            </div>
+
+            {/* CTA button */}
+            <button
+              onClick={onClose}
+              className="w-full py-2.5 px-5 bg-gradient-to-r from-yellow-500 to-pink-500 hover:brightness-110 active:scale-[0.98] transition-all text-black font-black text-xs rounded-xl shadow-lg shadow-amber-500/20 cursor-pointer"
+            >
+              Continuar Brilhando! 🚀✨
             </button>
           </motion.div>
         ) : (
