@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS oxente_products (
   estoque_infinito BOOLEAN,
   preco_custo NUMERIC,
   precos_progressivos TEXT,
+  conferido BOOLEAN DEFAULT FALSE,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -82,6 +83,7 @@ ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS imagem_base64 TEXT;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS estoque_infinito BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS preco_custo NUMERIC;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS adicional BOOLEAN DEFAULT FALSE;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS conferido BOOLEAN DEFAULT FALSE;
 
 -- Desabilitar RLS para permitir que o Realtime distribua as atualizações instantaneamente e sem restrições de token para clientes anônimos (anon key)
 ALTER TABLE oxente_products DISABLE ROW LEVEL SECURITY;
@@ -263,6 +265,7 @@ const mapProductToDb = (product: Product) => ({
   adicional: product.adicional || false,
   preco_custo: product.precoCusto || null,
   precos_progressivos: product.faixasPreco ? JSON.stringify(product.faixasPreco) : null,
+  conferido: product.conferido || false,
   updated_at: new Date().toISOString()
 });
 
@@ -277,6 +280,25 @@ export const mapDbToProduct = (dbItem: any): Product => {
       console.error('Falha ao parsear precos_progressivos do banco de dados:', e);
     }
   }
+
+  // 🛡️ SISTEMA DE REDUNDÂNCIA E COORDENAÇÃO LOCAL (Evita redefinição involuntária via Cache do Supabase)
+  let isLocalConferido = false;
+  let hasLocalReg = false;
+  try {
+    const cached = localStorage.getItem('oxente_local_conferidos');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed[dbItem.id] !== undefined) {
+        isLocalConferido = !!parsed[dbItem.id];
+        hasLocalReg = true;
+      }
+    }
+  } catch (e) {}
+
+  // Se já temos a marcação local recente no dispositivo, nós a priorizamos 
+  // caso o retorno do banco ainda esteja se auto-ajustando ou com cache defasado.
+  const finalConferido = hasLocalReg ? isLocalConferido : !!dbItem.conferido;
+
   return {
     id: dbItem.id,
     nome: dbItem.nome,
@@ -286,7 +308,8 @@ export const mapDbToProduct = (dbItem: any): Product => {
     estoqueInfinito: dbItem.estoque_infinito || undefined,
     adicional: dbItem.adicional || undefined,
     precoCusto: dbItem.preco_custo ? Number(dbItem.preco_custo) : undefined,
-    faixasPreco
+    faixasPreco,
+    conferido: finalConferido
   };
 };
 
@@ -456,6 +479,16 @@ const realDbSupabase = {
   },
 
   async saveProduct(product: Product): Promise<boolean> {
+    // Sincronizar localmente primeiro para responder instantaneamente e evitar latências de conexão ou cache de schema do Supabase
+    try {
+      const cached = localStorage.getItem('oxente_local_conferidos');
+      const parsed = cached ? JSON.parse(cached) : {};
+      parsed[product.id] = !!product.conferido;
+      localStorage.setItem('oxente_local_conferidos', JSON.stringify(parsed));
+    } catch (e) {
+      console.warn('Erro ao guardar status conferido no cache local:', e);
+    }
+
     try {
       const dbRow = mapProductToDb(product);
       const currentPayload = { ...dbRow };

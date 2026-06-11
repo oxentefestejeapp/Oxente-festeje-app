@@ -166,6 +166,11 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
 
     setIsResettingAudits(true);
     try {
+      // Limpar cache local instantaneamente para resposta visual imediata
+      try {
+        localStorage.removeItem('oxente_local_conferidos');
+      } catch {}
+
       const checkedProducts = products.filter(p => p.conferido);
       for (const p of checkedProducts) {
         await onUpdateProduct({ ...p, conferido: false });
