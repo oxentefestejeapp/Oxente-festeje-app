@@ -108,6 +108,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   // State for Arte do design service option
   const [arteDesign, setArteDesign] = useState(false);
 
+  // State for Taxa de Urgência option
+  const [temTaxaUrgencia, setTemTaxaUrgencia] = useState(false);
+  const [valorTaxaUrgencia, setValorTaxaUrgencia] = useState('');
+
   // Track annotated (notified) sales via localStorage key for cross-session consistency on their device
   const [annotatedSaleIds, setAnnotatedSaleIds] = useState<string[]>(() => {
     try {
@@ -293,8 +297,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
   const totalVendaSemDesconto = useMemo(() => {
+    const urgenciaVal = temTaxaUrgencia ? (parseFloat(valorTaxaUrgencia) || 0) : 0;
     if (cart.length > 0) {
-      return cart.reduce((sum, item) => sum + item.total, 0) + (arteDesign ? 5 : 0);
+      return cart.reduce((sum, item) => sum + item.total, 0) + (arteDesign ? 5 : 0) + urgenciaVal;
     }
     const mainTotal = selectedProduct && typeof quantidade === 'number' 
       ? getProductUnitPrice(selectedProduct, quantidade) * quantidade 
@@ -309,8 +314,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return sum;
     }, 0);
 
-    return mainTotal + addonsTotal + (arteDesign ? 5 : 0);
-  }, [cart, selectedProduct, quantidade, selectedAddonIds, products, arteDesign]);
+    return mainTotal + addonsTotal + (arteDesign ? 5 : 0) + urgenciaVal;
+  }, [cart, selectedProduct, quantidade, selectedAddonIds, products, arteDesign, temTaxaUrgencia, valorTaxaUrgencia]);
 
   // Sincronizar o desconto calculado quando o valor total sem desconto mudar e houver desconto digitado em valor fixo R$
   useEffect(() => {
@@ -575,6 +580,20 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       });
     }
 
+    if (temTaxaUrgencia) {
+      const urgenciaVal = parseFloat(valorTaxaUrgencia) || 0;
+      if (urgenciaVal > 0) {
+        finalItens.push({
+          id: `item-taxaurgencia-${Date.now()}`,
+          produtoId: 'taxaurgencia-service',
+          produtoNome: 'Taxa de Urgência',
+          precoUn: urgenciaVal,
+          quantidade: 1,
+          total: urgenciaVal
+        });
+      }
+    }
+
     const valPagoNum = valorPagoInput.trim() === '' ? 0 : parseFloat(valorPagoInput);
     const finalValorPago = registroTipo === 'Orçamento' ? 0 : (isNaN(valPagoNum) ? 0 : valPagoNum);
     const finalValorFaltante = registroTipo === 'Orçamento' ? totalVenda : Math.max(0, totalVenda - finalValorPago);
@@ -586,7 +605,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       : mainItem.produtoNome;
     const mainPrecoUn = mainItem.precoUn;
     const mainQuantidade = finalItens
-      .filter(item => item.produtoId !== 'artedesign-service')
+      .filter(item => item.produtoId !== 'artedesign-service' && item.produtoId !== 'taxaurgencia-service')
       .reduce((sum, item) => sum + item.quantidade, 0);
 
     // Buscar vendas frescas da nuvem para garantir numeração de pedidos sem conflitos (conexão certa)
@@ -651,6 +670,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setQuantidade(1);
     setSelectedAddonIds([]);
     setArteDesign(false);
+    setTemTaxaUrgencia(false);
+    setValorTaxaUrgencia('');
     setCliente('');
     setTelefoneCliente('');
     setValorPagoInput('');
@@ -1161,21 +1182,20 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 </div>
               )}
 
-              {/* Opção Arte do Design */}
+              {/* Opções de Serviços e Taxas Adicionais */}
               {selectedProductId && (
-                <div className="mt-4 bg-zinc-900/40 border border-zinc-805 p-3 rounded-xl space-y-2 animate-fade-in text-left">
-                  <span className="block text-[11px] font-bold text-brand-pink uppercase tracking-wide flex items-center gap-1.5 select-none">
-                    <span>🎨 Arte do Design (+ R$ 5,00):</span>
+                <div className="mt-4 bg-zinc-900/40 border border-zinc-850 p-4 rounded-2xl space-y-3 animate-fade-in text-left">
+                  <span className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 select-none">
+                    <span>✨ Serviços e Taxas Adicionais do Pedido:</span>
                   </span>
-                  <p className="text-[10px] text-zinc-500 leading-normal">
-                    Selecione esta opção se o cliente contratou o serviço de criação de arte ou design personalizado.
-                  </p>
-                  <div>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Botão de Arte do Design */}
                     <label
-                      className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all w-full max-w-xs ${
+                      className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
                         arteDesign
-                          ? 'bg-brand-pink/15 border-brand-pink/50 text-brand-pink shadow-[0_0_8px_rgba(236,72,153,0.05)]'
-                          : 'bg-black/40 border-zinc-850 text-zinc-400 hover:border-zinc-700'
+                          ? 'bg-brand-pink/12 border-brand-pink/40 text-brand-pink shadow-[0_0_8px_rgba(236,72,153,0.04)]'
+                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
                       }`}
                     >
                       <input
@@ -1185,18 +1205,71 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                           setArteDesign(prev => !prev);
                           playSound(arteDesign ? 'remove' : 'add');
                         }}
-                        className="rounded border-zinc-805 text-brand-pink focus:ring-0 accent-brand-pink h-4 w-4 cursor-pointer bg-black"
+                        className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-4 w-4 cursor-pointer bg-black"
                       />
                       <div className="flex flex-col min-w-0">
                         <span className="text-xs font-semibold truncate text-zinc-200">
-                          Arte do design
+                          🎨 Arte do Design
                         </span>
                         <span className="text-[10px] font-mono text-brand-pink font-bold">
                           + R$ 5,00
                         </span>
                       </div>
                     </label>
+
+                    {/* Botão de Taxa de Urgência */}
+                    <label
+                      className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
+                        temTaxaUrgencia
+                          ? 'bg-amber-500/12 border-amber-500/40 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.04)]'
+                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={temTaxaUrgencia}
+                        onChange={() => {
+                          const nextState = !temTaxaUrgencia;
+                          setTemTaxaUrgencia(nextState);
+                          playSound(nextState ? 'add' : 'remove');
+                          if (!nextState) {
+                            setValorTaxaUrgencia('');
+                          }
+                        }}
+                        className="rounded border-zinc-800 text-amber-500 focus:ring-0 accent-amber-500 h-4 w-4 cursor-pointer bg-black"
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold truncate text-zinc-200">
+                          ⚡ Taxa de Urgência
+                        </span>
+                        <span className="text-[10px] font-mono text-amber-400 font-bold">
+                          {valorTaxaUrgencia ? `+ R$ ${parseFloat(valorTaxaUrgencia).toFixed(2)}` : 'Informa Valor'}
+                        </span>
+                      </div>
+                    </label>
                   </div>
+
+                  {temTaxaUrgencia && (
+                    <div className="mt-2 text-left animate-fade-in max-w-xs pt-1">
+                      <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5 font-sans select-none">
+                        Valor da taxa cobrado (R$):
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-2.5 text-xs text-zinc-500 font-mono font-bold">
+                          R$
+                        </span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          placeholder="Digite o valor adicional..."
+                          value={valorTaxaUrgencia}
+                          onChange={(e) => setValorTaxaUrgencia(e.target.value)}
+                          className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl py-2 pl-9 pr-4 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
