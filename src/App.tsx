@@ -50,7 +50,6 @@ import { dispatchNewOrderNotification, dispatchOrderEditedNotification } from '.
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { ShortFeedbackToast, ShortFeedback } from './components/ShortFeedbackToast';
-import { ChangePassword } from './components/ChangePassword';
 import InstallAppTab from './components/InstallAppTab';
 import { SchedulingManager } from './components/SchedulingManager';
 
@@ -2287,23 +2286,6 @@ export default function App() {
             </button>
           )}
 
-          {/* User Change Password Tab */}
-          <button
-            onClick={() => changeTab('alterar_senha')}
-            className={getTabClass('alterar_senha')}
-          >
-            <motion.div
-              animate={activeTab === 'alterar_senha' ? { scale: [1, 1.3, 1], rotate: [0, 8, -8, 0] } : { scale: 1, rotate: 0 }}
-              whileHover={{ scale: 1.25 }}
-              whileTap={{ scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Key className="h-4 w-4 text-brand-pink" />
-            </motion.div>
-            <span className="hidden sm:inline">Minha Senha</span>
-            <span className="sm:hidden">Senha</span>
-          </button>
-
           {/* Quick Sign Out Action Trigger */}
           <button
             onClick={() => {
@@ -2461,10 +2443,6 @@ export default function App() {
 
             {activeTab === 'instalar_app' && !isAdmin && isAnaClara && (
               <InstallAppTab />
-            )}
-
-            {activeTab === 'alterar_senha' && (
-              <ChangePassword currentUser={firebaseUser} />
             )}
           </motion.div>
         </AnimatePresence>

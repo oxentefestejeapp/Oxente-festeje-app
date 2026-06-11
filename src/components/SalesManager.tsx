@@ -105,6 +105,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   // Selected Addon Product IDs
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
 
+  // State for Arte do design service option
+  const [arteDesign, setArteDesign] = useState(false);
+
   // Track annotated (notified) sales via localStorage key for cross-session consistency on their device
   const [annotatedSaleIds, setAnnotatedSaleIds] = useState<string[]>(() => {
     try {
@@ -291,7 +294,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   const totalVendaSemDesconto = useMemo(() => {
     if (cart.length > 0) {
-      return cart.reduce((sum, item) => sum + item.total, 0);
+      return cart.reduce((sum, item) => sum + item.total, 0) + (arteDesign ? 5 : 0);
     }
     const mainTotal = selectedProduct && typeof quantidade === 'number' 
       ? getProductUnitPrice(selectedProduct, quantidade) * quantidade 
@@ -306,8 +309,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return sum;
     }, 0);
 
-    return mainTotal + addonsTotal;
-  }, [cart, selectedProduct, quantidade, selectedAddonIds, products]);
+    return mainTotal + addonsTotal + (arteDesign ? 5 : 0);
+  }, [cart, selectedProduct, quantidade, selectedAddonIds, products, arteDesign]);
 
   // Sincronizar o desconto calculado quando o valor total sem desconto mudar e houver desconto digitado em valor fixo R$
   useEffect(() => {
@@ -512,6 +515,17 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       ];
     }
 
+    if (arteDesign) {
+      finalItens.push({
+        id: `item-artedesign-${Date.now()}`,
+        produtoId: 'artedesign-service',
+        produtoNome: 'Arte do design',
+        precoUn: 5.0,
+        quantidade: 1,
+        total: 5.0
+      });
+    }
+
     const valPagoNum = valorPagoInput.trim() === '' ? 0 : parseFloat(valorPagoInput);
     const finalValorPago = registroTipo === 'Orçamento' ? 0 : (isNaN(valPagoNum) ? 0 : valPagoNum);
     const finalValorFaltante = registroTipo === 'Orçamento' ? totalVenda : Math.max(0, totalVenda - finalValorPago);
@@ -522,7 +536,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       ? `${mainItem.produtoNome} (+${finalItens.length - 1} itens)`
       : mainItem.produtoNome;
     const mainPrecoUn = mainItem.precoUn;
-    const mainQuantidade = finalItens.reduce((sum, item) => sum + item.quantidade, 0);
+    const mainQuantidade = finalItens
+      .filter(item => item.produtoId !== 'artedesign-service')
+      .reduce((sum, item) => sum + item.quantidade, 0);
 
     // Buscar vendas frescas da nuvem para garantir numeração de pedidos sem conflitos (conexão certa)
     let finalSalesList = sales;
@@ -585,6 +601,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setSelectedProductId('');
     setQuantidade(1);
     setSelectedAddonIds([]);
+    setArteDesign(false);
     setCliente('');
     setTelefoneCliente('');
     setValorPagoInput('');
@@ -1091,6 +1108,45 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                         </label>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* Opção Arte do Design */}
+              {selectedProductId && (
+                <div className="mt-4 bg-zinc-900/40 border border-zinc-805 p-3 rounded-xl space-y-2 animate-fade-in text-left">
+                  <span className="block text-[11px] font-bold text-brand-pink uppercase tracking-wide flex items-center gap-1.5 select-none">
+                    <span>🎨 Arte do Design (+ R$ 5,00):</span>
+                  </span>
+                  <p className="text-[10px] text-zinc-500 leading-normal">
+                    Selecione esta opção se o cliente contratou o serviço de criação de arte ou design personalizado.
+                  </p>
+                  <div>
+                    <label
+                      className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all w-full max-w-xs ${
+                        arteDesign
+                          ? 'bg-brand-pink/15 border-brand-pink/50 text-brand-pink shadow-[0_0_8px_rgba(236,72,153,0.05)]'
+                          : 'bg-black/40 border-zinc-850 text-zinc-400 hover:border-zinc-700'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={arteDesign}
+                        onChange={() => {
+                          setArteDesign(prev => !prev);
+                          playSound(arteDesign ? 'remove' : 'add');
+                        }}
+                        className="rounded border-zinc-805 text-brand-pink focus:ring-0 accent-brand-pink h-4 w-4 cursor-pointer bg-black"
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold truncate text-zinc-200">
+                          Arte do design
+                        </span>
+                        <span className="text-[10px] font-mono text-brand-pink font-bold">
+                          + R$ 5,00
+                        </span>
+                      </div>
+                    </label>
                   </div>
                 </div>
               )}

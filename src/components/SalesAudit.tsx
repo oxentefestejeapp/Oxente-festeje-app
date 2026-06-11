@@ -272,7 +272,7 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
     let maxValEmail = '';
     let maxDesignsEmail = '';
 
-    Object.entries(creatorsStats).forEach(([email, stats]) => {
+    (Object.entries(creatorsStats) as [string, { count: number; totalValue: number; designsCompleted: number }][]).forEach(([email, stats]) => {
       if (stats.totalValue > maxVal) {
         maxVal = stats.totalValue;
         maxValEmail = email;
@@ -653,7 +653,8 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
                 Nenhum dado registrado para o período filtrado.
               </div>
             ) : (
-              dailyCreatorsStats.map(([dateKey, usersRecord]) => {
+              dailyCreatorsStats.map(([dateKey, usersRecordRaw]) => {
+                const usersRecord = usersRecordRaw as Record<string, { count: number; totalValue: number; designsCompleted: number }>;
                 let maxSalesValOnDay = 0.01;
                 let maxDesignsOnDay = 0.01;
                 Object.values(usersRecord).forEach((st) => {
