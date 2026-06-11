@@ -100,7 +100,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   };
   
   // Cart state for multi-product orders
-  const [cart, setCart] = useState<{ id: string; product: Product; quantity: number; total: number }[]>([]);
+  const [cart, setCart] = useState<{ id: string; product: Product; quantity: number; total: number; addons: Product[] }[]>([]);
 
   // Selected Addon Product IDs
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
@@ -393,23 +393,51 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
     setFormError('');
 
-    const existingIdx = cart.findIndex(c => c.product.id === prod.id);
+    // Prepara os addons selecionados atualmente
+    const currentAddons = selectedAddonIds
+      .map(id => products.find(p => p.id === id))
+      .filter((p): p is Product => !!p);
+
+    // Valida estoque dos adicionais
+    if (registroTipo !== 'Orçamento') {
+      for (const addon of currentAddons) {
+        if (!addon.estoqueInfinito && qtyNum > addon.estoque) {
+          setFormError(`Quantidade do adicional "${addon.nome}" indisponível! Estoque atual: ${addon.estoque} un.`);
+          return;
+        }
+      }
+    }
+
+    const sortedNewAddonIds = [...selectedAddonIds].sort().join(',');
+    const existingIdx = cart.findIndex(c => {
+      const isSameProduct = c.product.id === prod.id;
+      const sortedItemAddonIds = (c.addons || []).map(a => a.id).sort().join(',');
+      return isSameProduct && sortedNewAddonIds === sortedItemAddonIds;
+    });
+
     if (existingIdx > -1) {
       const updatedCart = [...cart];
       const newQuantity = updatedCart[existingIdx].quantity + qtyNum;
       const unitPrice = getProductUnitPrice(prod, newQuantity);
+      
+      // Calcula preço dos addons individuais considerando a nova quantidade
+      const addonsUnitPrice = currentAddons.reduce((sum, addon) => sum + getProductUnitPrice(addon, newQuantity), 0);
+      
       updatedCart[existingIdx].quantity = newQuantity;
-      updatedCart[existingIdx].total = newQuantity * unitPrice;
+      updatedCart[existingIdx].total = newQuantity * (unitPrice + addonsUnitPrice);
       setCart(updatedCart);
     } else {
       const unitPrice = getProductUnitPrice(prod, qtyNum);
+      const addonsUnitPrice = currentAddons.reduce((sum, addon) => sum + getProductUnitPrice(addon, qtyNum), 0);
+      
       setCart([
         ...cart,
         {
           id: `item-${prod.id}-${Date.now()}`,
           product: prod,
           quantity: qtyNum,
-          total: qtyNum * unitPrice
+          total: qtyNum * (unitPrice + addonsUnitPrice),
+          addons: currentAddons
         }
       ]);
     }
@@ -458,14 +486,35 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     let finalItens: SaleItem[] = [];
 
     if (cart.length > 0) {
-      finalItens = cart.map(item => ({
-        id: item.id,
-        produtoId: item.product.id,
-        produtoNome: item.product.nome,
-        precoUn: getProductUnitPrice(item.product, item.quantity),
-        quantidade: item.quantity,
-        total: item.total
-      }));
+      const itemsList: SaleItem[] = [];
+      for (const item of cart) {
+        // Adiciona o produto principal
+        const mainUnitPrice = getProductUnitPrice(item.product, item.quantity);
+        itemsList.push({
+          id: item.id,
+          produtoId: item.product.id,
+          produtoNome: item.product.nome,
+          precoUn: mainUnitPrice,
+          quantidade: item.quantity,
+          total: mainUnitPrice * item.quantity
+        });
+
+        // Adiciona os adicionais deste item do carrinho
+        if (item.addons && item.addons.length > 0) {
+          for (const addon of item.addons) {
+            const addonPrice = getProductUnitPrice(addon, item.quantity);
+            itemsList.push({
+              id: `item-${addon.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+              produtoId: addon.id,
+              produtoNome: `Adicional: ${addon.nome}`,
+              precoUn: addonPrice,
+              quantidade: item.quantity,
+              total: addonPrice * item.quantity
+            });
+          }
+        }
+      }
+      finalItens = itemsList;
     } else {
       if (!selectedProduct) {
         setFormError('Produto não encontrado no banco de dados.');
@@ -1310,12 +1359,22 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
 
                 <div className="divide-y divide-zinc-800/40 max-h-[220px] overflow-y-auto pr-1">
                   {cart.map((item, idx) => (
-                    <div key={item.id} className="py-2.5 flex items-center justify-between gap-3 text-xs">
+                    <div key={item.id} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                       <div className="min-w-0 flex-1">
                         <span className="font-bold text-zinc-100 truncate block">{item.product.nome}</span>
                         <span className="text-[10px] text-zinc-500 font-mono">
-                          {item.quantity}x de R$ {item.product.preco.toFixed(2)}
+                          {item.quantity}x de R$ {getProductUnitPrice(item.product, item.quantity).toFixed(2)}
                         </span>
+                        {item.addons && item.addons.length > 0 && (
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {item.addons.map(addon => (
+                              <span key={addon.id} className="inline-flex items-center gap-1 bg-emerald-950/40 border border-emerald-900/30 text-emerald-400 text-[9px] px-1.5 py-0.5 rounded-md font-medium select-none">
+                                <span className="text-[10px]">✨</span>
+                                {addon.nome} (+ R$ {getProductUnitPrice(addon, item.quantity).toFixed(2)})
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                       
                       <div className="flex items-center gap-4">
