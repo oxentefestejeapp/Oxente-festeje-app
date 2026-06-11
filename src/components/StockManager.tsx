@@ -149,6 +149,10 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
   const [isResettingAudits, setIsResettingAudits] = useState(false);
 
   const handleToggleConferido = async (p: Product) => {
+    if (!isAdmin) {
+      alert('Acesso Restrito: Apenas administradores podem marcar a conferência do estoque físico!');
+      return;
+    }
     if (onUpdateProduct) {
       await onUpdateProduct({
         ...p,
@@ -158,6 +162,10 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
   };
 
   const handleResetAllAudits = async () => {
+    if (!isAdmin) {
+      alert('Acesso Restrito: Apenas administradores podem limpar as marcações de conferência!');
+      return;
+    }
     if (!onUpdateProduct) return;
     const confirmReset = window.confirm(
       'Tem certeza que deseja redefinir todas as marcações de conferência do estoque físico? Isso limpará a sinalização de todos os produtos para reiniciar a conferência.'
