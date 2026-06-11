@@ -1565,11 +1565,26 @@ export default function App() {
     const updated = currentSales.map((s) => (s.id === stampedSale.id ? stampedSale : s));
     saveSales(updated);
 
-    // Se o pedido era Orçamento e agora NÃO é mais, verificamos se bateu a meta semanal de 50 pedidos
+    // Se o pedido era Orçamento e agora NÃO é mais, verificamos se bateu a meta semanal de 50 pedidos ou as metas diárias de 5 ou 10
     if (oldSale && oldSale.status === 'Orçamento' && stampedSale.status !== 'Orçamento') {
+      const todayPrefix = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD local
+      const ordersToday = updated.filter(s => {
+        if (s.status === 'Orçamento') return false;
+        try {
+          const sDateLocal = new Date(s.data).toLocaleDateString('en-CA');
+          return sDateLocal === todayPrefix;
+        } catch {
+          return false;
+        }
+      });
+
       const weeklyOrdersCount = getWeeklyNonBudgetOrdersCount(updated);
       if (weeklyOrdersCount === 50) {
         setShowCelebration('weekly_50_orders');
+      } else if (ordersToday.length === 10) {
+        setShowCelebration('goal');
+      } else if (ordersToday.length === 5) {
+        setShowCelebration('halfway');
       }
     }
 

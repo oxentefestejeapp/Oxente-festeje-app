@@ -5,6 +5,7 @@
 
 import React, { useState, useMemo, useRef, DragEvent, ChangeEvent } from 'react';
 import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box, Check, X, Pencil, Upload, Loader2, Sparkles, AlertCircle, Layers, Undo2, History } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Product, PricingTier } from '../types';
 
 // Client-side image compression using HTML5 Canvas to keep Base64 strings tiny (~30KB-50KB)
@@ -143,6 +144,37 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
         }, 3000);
       }
     }, 100);
+  };
+
+  const [isResettingAudits, setIsResettingAudits] = useState(false);
+
+  const handleToggleConferido = async (p: Product) => {
+    if (onUpdateProduct) {
+      await onUpdateProduct({
+        ...p,
+        conferido: !p.conferido
+      });
+    }
+  };
+
+  const handleResetAllAudits = async () => {
+    if (!onUpdateProduct) return;
+    const confirmReset = window.confirm(
+      'Tem certeza que deseja redefinir todas as marcações de conferência do estoque físico? Isso limpará a sinalização de todos os produtos para reiniciar a conferência.'
+    );
+    if (!confirmReset) return;
+
+    setIsResettingAudits(true);
+    try {
+      const checkedProducts = products.filter(p => p.conferido);
+      for (const p of checkedProducts) {
+        await onUpdateProduct({ ...p, conferido: false });
+      }
+    } catch (e) {
+      console.error('Erro ao redefinir conferências:', e);
+    } finally {
+      setIsResettingAudits(false);
+    }
   };
 
   // Edit Modal State
@@ -368,6 +400,17 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
     };
   }, [products]);
 
+  const auditMetrics = useMemo(() => {
+    const total = products.length;
+    const checked = products.filter(p => p.conferido).length;
+    const percentage = total > 0 ? Math.round((checked / total) * 100) : 0;
+    return {
+      total,
+      checked,
+      percentage
+    };
+  }, [products]);
+
   const filteredProducts = products.filter(product =>
     product.nome.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -561,6 +604,69 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
         </div>
       )}
       
+      {/* 📝 PAINEL DE CONFERÊNCIA DE ESTOQUE FÍSICO */}
+      <div className="bg-gradient-to-r from-zinc-950 to-zinc-900 border border-zinc-800 rounded-2xl p-5 shadow-lg space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-450 shrink-0">
+              <Check className="h-6 w-6 stroke-[2.5]" />
+            </div>
+            <div>
+              <h3 className="font-display font-semibold text-base text-zinc-100 flex items-center gap-2">
+                Conferência de Estoque Físico
+                <span className="text-[10px] bg-emerald-500/20 text-emerald-300 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  Auditoria de Caixa
+                </span>
+              </h3>
+              <p className="text-xs text-zinc-450 leading-relaxed max-w-xl">
+                Marque cada brinde abaixo ao contar o estoque físico na loja. Verifique se as quantidades físicas batem com as mostradas no aplicativo para evitar divergências e quebras de caixa!
+              </p>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-end gap-1 shrink-0 bg-black/40 border border-zinc-850 p-3 rounded-xl min-w-[160px] text-center sm:text-right">
+            <span className="text-[10px] text-zinc-550 font-bold uppercase tracking-wider block">Progresso da Auditoria</span>
+            <div className="flex items-baseline gap-1 mt-0.5 justify-center sm:justify-end w-full">
+              <span className="text-2xl font-mono font-black text-emerald-400">{auditMetrics.checked}</span>
+              <span className="text-sm font-medium text-zinc-550">de</span>
+              <span className="text-sm font-mono font-bold text-zinc-350">{auditMetrics.total}</span>
+            </div>
+            
+            {auditMetrics.checked > 0 && (
+              <button
+                type="button"
+                onClick={handleResetAllAudits}
+                disabled={isResettingAudits}
+                className="mt-2 text-[10px] text-zinc-500 hover:text-red-400 font-black uppercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer select-none disabled:opacity-50"
+              >
+                {isResettingAudits ? (
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                ) : (
+                  <X className="h-3 w-3" />
+                )}
+                <span>Limpar Marcações</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Barra de Progresso Real */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between text-[11px] text-zinc-500 font-semibold">
+            <span>{auditMetrics.percentage}% Concluído</span>
+            <span>{auditMetrics.total - auditMetrics.checked} restantes para verificação completa</span>
+          </div>
+          <div className="h-2 w-full bg-zinc-900 rounded-full overflow-hidden border border-zinc-850">
+            <motion.div
+              initial={{ width: 0 }}
+              animate={{ width: `${auditMetrics.percentage}%` }}
+              className="h-full bg-gradient-to-r from-emerald-500 to-teal-400"
+              transition={{ duration: 0.5 }}
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Search and Filters Bar */}
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-zinc-900 rounded-xl border border-zinc-800 p-4 shadow-md">
         <div className="relative w-full sm:max-w-md">
@@ -788,6 +894,38 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                       </div>
                     )}
                   </div>
+
+                  {/* ☑️ CONFERÊNCIA DE ESTOQUE FÍSICO */}
+                  {onUpdateProduct && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleConferido(p)}
+                      className={`w-full py-2 px-3 rounded-xl border flex items-center justify-between transition-all active:scale-[0.98] text-xs cursor-pointer ${
+                        p.conferido 
+                          ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-300 hover:bg-emerald-950/35'
+                          : 'bg-zinc-900/35 border-zinc-850 text-zinc-400 hover:bg-zinc-900/65 hover:text-zinc-300'
+                      }`}
+                      title="Sinalizar que a contagem do estoque na loja bate com o app"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className={`h-4.5 w-4.5 rounded-md border flex items-center justify-center transition-all shrink-0 ${
+                          p.conferido
+                            ? 'bg-emerald-500 border-emerald-400 text-black shadow-[0_0_8px_rgba(16,185,129,0.3)]'
+                            : 'border-zinc-700 bg-black'
+                        }`}>
+                          {p.conferido && <Check className="h-3.5 w-3.5 stroke-[3]" />}
+                        </div>
+                        <span className="font-bold">Quantidade Conferida</span>
+                      </div>
+                      {p.conferido ? (
+                        <span className="text-[9px] bg-emerald-500/15 border border-emerald-400/20 px-2 py-0.5 rounded text-emerald-400 font-extrabold uppercase tracking-widest animate-pulse">
+                          OK!
+                        </span>
+                      ) : (
+                        <span className="text-[9px] text-zinc-550 font-medium">Pendente</span>
+                      )}
+                    </button>
+                  )}
 
                   {/* Delete or Confirmation Actions (Admin Only) */}
                   {isAdmin && (

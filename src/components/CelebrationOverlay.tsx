@@ -468,8 +468,10 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName, productNa
                   <AlertOctagon className="h-5 w-5 text-amber-500 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)] animate-bounce" />
                 )
               ) : type === 'weekly_50_orders' ? (
-                // Glorious golden/pink elements for weekly 50 orders milestone
-                star.id % 3 === 0 ? (
+                // Glorious golden/pink elements for weekly 50 orders milestone with chocolate sprinkles
+                star.id % 4 === 0 ? (
+                  <span className="text-2xl drop-shadow-[0_0_8px_rgba(245,158,11,0.85)] animate-bounce select-none">🍫</span>
+                ) : star.id % 3 === 0 ? (
                   <Trophy className="h-6 w-6 text-amber-400 drop-shadow-[0_0_10px_rgba(245,158,11,0.9)] animate-pulse" />
                 ) : star.id % 2 === 0 ? (
                   <Award className="h-5.5 w-5.5 text-pink-400 drop-shadow-[0_0_8px_rgba(236,72,153,0.8)] animate-bounce" />
@@ -1029,9 +1031,33 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName, productNa
             </h1>
 
             {/* Subtitle */}
-            <p className="text-xs text-zinc-350 font-medium px-2 mb-5 leading-relaxed">
-              Incrível! Toda a equipe está de parabéns! Vocês alcançaram a marca impressionante de <strong className="text-yellow-400">50 pedidos registrados</strong> nesta semana (segunda a sexta). A <strong className="text-pink-400">Oxente Festeje</strong> brilha cada vez mais forte com a dedicação e o amor de todos vocês! 💕🚀
+            <p className="text-xs text-zinc-350 font-medium px-2 mb-4 leading-relaxed">
+              Incrível! Toda a equipe está de parabéns! Vocês alcançaram a marca impressionante de <strong className="text-yellow-400">50 pedidos registrados</strong> nesta semana (segunda a sexta). 💕🚀
             </p>
+
+            {/* 🍫 CHOCOLATE PRIZE CALLOUT BANNER 🍫 */}
+            <motion.div 
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ delay: 0.4, type: 'spring', damping: 12, stiffness: 100 }}
+              className="bg-gradient-to-r from-amber-950/80 to-yellow-950/80 border-2 border-amber-600/40 p-4 rounded-2xl mb-5 text-center relative overflow-hidden shadow-lg shadow-amber-950/50"
+            >
+              {/* Floating sweet elements */}
+              <div className="absolute -top-1 right-2 text-2xl animate-bounce" style={{ animationDuration: '2.5s' }}>🍫</div>
+              <div className="absolute bottom-1 left-2 text-xl animate-pulse">✨</div>
+              
+              <h3 className="text-xs font-black text-amber-400 tracking-wider flex items-center justify-center gap-1.5 mb-1.5 uppercase">
+                🍫 RECOMPENSA MERECIDA! 🍫
+              </h3>
+              
+              <p className="text-sm font-black text-white leading-normal drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                "Você ganhou um chocolate, aproveite e coma! 🎉🥳"
+              </p>
+              
+              <p className="text-[10px] text-yellow-100/70 mt-1.5 leading-tight font-medium">
+                Saborinho de vitória! A <strong>Oxente Festeje</strong> brilha por causa do seu empenho e dedicação! 🌟
+              </p>
+            </motion.div>
 
             {/* Metrics display */}
             <div className="bg-zinc-900/80 border border-amber-500/10 p-4 rounded-xl mb-5 text-left space-y-2 relative">
