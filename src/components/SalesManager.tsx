@@ -292,7 +292,21 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
     // 2. Text Search filtering
     const term = salesSearchTerm.toLowerCase().trim();
-    if (!term) return true;
+    if (!term) {
+      // Se não houver pesquisa textual, omitir pedidos que já foram Entregues há mais de 15 dias
+      if (sale.statusProducao === 'Entregue') {
+        try {
+          const saleDate = new Date(sale.data);
+          const now = new Date();
+          const diffTime = Math.abs(now.getTime() - saleDate.getTime());
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          if (diffDays > 15) return false;
+        } catch {
+          // fail safe
+        }
+      }
+      return true;
+    }
     
     const matchName = sale.cliente.toLowerCase().includes(term);
     const matchProduct = sale.produtoNome.toLowerCase().includes(term);

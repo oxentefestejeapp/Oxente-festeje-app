@@ -153,7 +153,22 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
       list = list.filter(s => (s.statusProducao || 'Agendado') === productionStatusFilter);
     }
     
-    if (!term) return list;
+    if (!term) {
+      if (category === 'Entregues') {
+        const now = new Date();
+        return list.filter(sale => {
+          try {
+            const saleDate = new Date(sale.data);
+            const diffTime = Math.abs(now.getTime() - saleDate.getTime());
+            const diffDays = diffTime / (1000 * 60 * 60 * 24);
+            return diffDays <= 15;
+          } catch {
+            return true;
+          }
+        });
+      }
+      return list;
+    }
     
     return list.filter((sale) => {
       const matchName = sale.cliente.toLowerCase().includes(term);

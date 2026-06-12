@@ -690,29 +690,8 @@ const realDbSupabase = {
   },
 
   async purgeOldDeliveredSales(): Promise<boolean> {
-    try {
-      const tenDaysAgo = new Date();
-      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
-      const dateString = tenDaysAgo.toISOString();
-
-      const { error } = await supabase
-        .from('oxente_sales')
-        .delete()
-        .eq('status_producao', 'Entregue')
-        .lt('updated_at', dateString);
-
-      if (error) {
-        lastSupabaseError = error;
-        console.warn('Erro ao expurgar vendas entregues antigas do Supabase:', error.message);
-        return false;
-      }
-      lastSupabaseError = null;
-      return true;
-    } catch (e: any) {
-      lastSupabaseError = { message: e.message || String(e) };
-      console.warn('Falha ao conectar com Supabase ao expurgar vendas entregues:', e);
-      return false;
-    }
+    // Desativado por solicitação do usuário. Os pedidos agora permanecem no banco de dados para buscas futuras.
+    return true;
   },
 
   async purgeOldEstimates(): Promise<boolean> {
