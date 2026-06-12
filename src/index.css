@@ -53,6 +53,13 @@
 
 /* Custom styles for receipt printing */
 @media print {
+  html, body {
+    height: auto !important;
+    min-height: auto !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
   /* Hide all elements on the page except the printable-receipt class */
   body * {
     visibility: hidden;
@@ -69,14 +76,25 @@
     width: 100% !important;
     max-width: 80mm !important; /* Width for standard thermal receipt printers */
     margin: 0 !important;
-    padding: 0 !important;
+    padding: 10px !important;
     border: none !important;
     box-shadow: none !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  /* Prevent table lines, headers, and individual blocks from breaking */
+  #printable-receipt tr, 
+  #printable-receipt table, 
+  #printable-receipt div, 
+  #printable-receipt p {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
   
-  /* Remove page margins / headers / footers provided by browser */
+  /* Completely remove margins to stop browsers from creating empty first/second pages */
   @page {
-    margin: 4mm;
+    margin: 0 !important;
     size: auto;
   }
 }

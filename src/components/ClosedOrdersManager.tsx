@@ -17,6 +17,7 @@ import {
   FolderOpen,
   Copy,
   Check,
+  QrCode,
   Pencil,
   Trash,
   Plus,
@@ -39,7 +40,8 @@ interface ClosedOrdersManagerProps {
 export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, currentUserEmail }: ClosedOrdersManagerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [viewedSale, setViewedSale] = useState<Sale | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copiedText, setCopiedText] = useState(false);
+  const [copiedQr, setCopiedQr] = useState(false);
   const [notesText, setNotesText] = useState('');
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -917,27 +919,28 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
               {/* Right Column: Copy-able Text Block */}
               <div className="bg-zinc-950 border border-zinc-800/80 rounded-xl p-5 space-y-4 h-full self-stretch flex flex-col justify-between">
                 <div className="space-y-4">
-                  <div className="flex justify-between items-center border-b border-zinc-900 pb-3">
+                  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-zinc-900 pb-3">
                     <div>
                       <h4 className="text-xs font-bold text-zinc-200 uppercase tracking-wide">Resumo para Copiar</h4>
                       <p className="text-[10px] text-zinc-500 font-medium">Básico estruturado para compartilhamento rápido</p>
                     </div>
                     
-                    <button
-                      onClick={() => {
-                        const numPed = viewedSale.numeroPedido || viewedSale.id.substring(0, 5);
-                        const tel = viewedSale.telefoneCliente || 'Não informado';
-                        const pagou = viewedSale.valorPago ?? 0;
-                        const falta = viewedSale.valorFaltante !== undefined ? viewedSale.valorFaltante : (viewedSale.total - (viewedSale.valorPago ?? 0));
-                        const entrega = viewedSale.dataRetirada 
-                          ? new Date(viewedSale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR') 
-                          : 'Não cadastrada';
+                    <div className="flex gap-2 shrink-0">
+                      <button
+                        onClick={() => {
+                          const numPed = viewedSale.numeroPedido || viewedSale.id.substring(0, 5);
+                          const tel = viewedSale.telefoneCliente || 'Não informado';
+                          const pagou = viewedSale.valorPago ?? 0;
+                          const falta = viewedSale.valorFaltante !== undefined ? viewedSale.valorFaltante : (viewedSale.total - (viewedSale.valorPago ?? 0));
+                          const entrega = viewedSale.dataRetirada 
+                            ? new Date(viewedSale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR') 
+                            : 'Não cadastrada';
 
-                        const produtosTexto = viewedSale.itens && viewedSale.itens.length > 0 
-                          ? viewedSale.itens.map(item => `• ${item.produtoNome} (Qtd: ${item.quantidade})`).join('\n')
-                          : `• ${viewedSale.produtoNome} (Qtd: ${viewedSale.quantidade})`;
+                          const produtosTexto = viewedSale.itens && viewedSale.itens.length > 0 
+                            ? viewedSale.itens.map(item => `• ${item.produtoNome} (Qtd: ${item.quantidade})`).join('\n')
+                            : `• ${viewedSale.produtoNome} (Qtd: ${viewedSale.quantidade})`;
 
-                        const finalString = `Número do Pedido: #${numPed}
+                          const finalString = `Número do Pedido: #${numPed}
 Telefone: ${tel}
 Quanto pagou: R$ ${pagou.toFixed(2)}
 Quanto falta pagar: R$ ${falta.toFixed(2)}
@@ -945,63 +948,85 @@ Data de entrega: ${entrega}
 Produto e a quantidade:
 ${produtosTexto}`;
 
-                        // Generate QR Code image base64, convert to Blob and copy both text and QR Code
-                        const codeValue = `oxente:${viewedSale.id}`;
-                        QRCode.toDataURL(
-                          codeValue,
-                          {
-                            margin: 1,
-                            width: 180,
-                            color: { dark: '#000000', light: '#ffffff' }
-                          },
-                          async (err, url) => {
-                            if (err) {
-                              console.warn('Erro ao gerar código QR para cópia:', err);
-                              navigator.clipboard.writeText(finalString);
-                            } else {
-                              try {
-                                const res = await fetch(url);
-                                const blob = await res.blob();
-                                
-                                // Modern Clipboard API support for copying complex types (text + image)
-                                if (navigator.clipboard && window.ClipboardItem) {
-                                  const item = new ClipboardItem({
-                                    'text/plain': new Blob([finalString], { type: 'text/plain' }),
-                                    'image/png': blob
-                                  });
-                                  await navigator.clipboard.write([item]);
-                                } else {
-                                  navigator.clipboard.writeText(finalString);
+                          navigator.clipboard.writeText(finalString);
+                          playAppSound('success');
+                          setCopiedText(true);
+                          setTimeout(() => setCopiedText(false), 2000);
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                          copiedText 
+                            ? 'bg-emerald-600 text-white' 
+                            : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700'
+                        }`}
+                      >
+                        {copiedText ? (
+                          <>
+                            <Check className="h-3.5 w-3.5" />
+                            <span>Texto Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="h-3.5 w-3.5" />
+                            <span>Copiar Texto</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          const codeValue = `oxente:${viewedSale.id}`;
+                          QRCode.toDataURL(
+                            codeValue,
+                            {
+                              margin: 1,
+                              width: 300,
+                              color: { dark: '#000000', light: '#ffffff' }
+                            },
+                            async (err, url) => {
+                              if (err) {
+                                console.warn('Erro ao gerar código QR para cópia:', err);
+                              } else {
+                                try {
+                                  const res = await fetch(url);
+                                  const blob = await res.blob();
+                                  
+                                  if (navigator.clipboard && window.ClipboardItem) {
+                                    const item = new ClipboardItem({
+                                      'image/png': blob
+                                    });
+                                    await navigator.clipboard.write([item]);
+                                    playAppSound('success');
+                                    setCopiedQr(true);
+                                    setTimeout(() => setCopiedQr(false), 2000);
+                                  } else {
+                                    console.warn('Clipboard API not fully supported for images.');
+                                  }
+                                } catch (writeErr) {
+                                  console.warn('Falha ao gravar imagem QR no clipboard:', writeErr);
                                 }
-                              } catch (writeErr) {
-                                console.warn('Falha ao gravar imagem no clipboard, usando apenas texto:', writeErr);
-                                navigator.clipboard.writeText(finalString);
                               }
                             }
-                            playAppSound('success');
-                            setCopied(true);
-                            setTimeout(() => setCopied(false), 2000);
-                          }
-                        );
-                      }}
-                      className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
-                        copied 
-                          ? 'bg-emerald-600 text-white' 
-                          : 'bg-brand-pink text-black hover:bg-opacity-95'
-                      }`}
-                    >
-                      {copied ? (
-                        <>
-                          <Check className="h-3.5 w-3.5" />
-                          <span>Resumo + QR Copiados!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy className="h-3.5 w-3.5" />
-                          <span>Copiar Resumo + QR</span>
-                        </>
-                      )}
-                    </button>
+                          );
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
+                          copiedQr 
+                            ? 'bg-emerald-600 text-white' 
+                            : 'bg-brand-pink text-black hover:bg-opacity-95'
+                        }`}
+                      >
+                        {copiedQr ? (
+                          <>
+                            <Check className="h-3.5 w-3.5" />
+                            <span>QR Copiado!</span>
+                          </>
+                        ) : (
+                          <>
+                            <QrCode className="h-3.5 w-3.5" />
+                            <span>Copiar QR Code</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
                   </div>
 
                   {/* Styled preview box containing exact user request options */}

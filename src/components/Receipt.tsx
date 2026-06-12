@@ -283,9 +283,6 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
               <div className="bg-white p-2 border border-black rounded inline-block">
                 <img src={qrCodeUrl} alt="Controle de Entrega" className="w-24 h-24" />
               </div>
-              <span className="text-[8px] text-black font-extrabold uppercase mt-2 tracking-wide block max-w-[190px] mx-auto text-center leading-normal">
-                ESCANEAR NO PAINEL PARA MANDAR COBRANÇA OU AVISO DE PRONTO!
-              </span>
             </div>
           )}
         </div>
