@@ -316,7 +316,7 @@ export function OrderTrackingPage() {
               
               <div className="flex flex-col gap-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase text-brand-pink tracking-wider">Cliente Feliz</span>
+                  <span className="text-[10px] font-black uppercase text-brand-pink tracking-wider">Cliente</span>
                   <div className="py-1 px-2.5 bg-brand-pink/15 rounded-full border border-brand-pink/20 text-brand-pink text-[9px] font-black uppercase tracking-wider">
                     Pedido #{sale.numeroPedido || sale.id.substring(0, 5)}
                   </div>
