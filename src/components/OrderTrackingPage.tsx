@@ -305,9 +305,6 @@ export function OrderTrackingPage() {
                 <ArrowLeft className="h-3.5 w-3.5" />
                 <span>Nova Consulta</span>
               </button>
-              <span className="text-[9.5px] font-mono px-2 py-0.5 bg-zinc-900 border border-zinc-800 rounded-md text-zinc-400">
-                Cód: {sale.id.substring(0, 8)}
-              </span>
             </div>
 
             {/* CARD 1: OVERVIEW HERO */}
