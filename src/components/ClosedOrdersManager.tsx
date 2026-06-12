@@ -21,7 +21,9 @@ import {
   Pencil,
   Trash,
   Plus,
-  ShoppingBag
+  ShoppingBag,
+  MessageSquare,
+  Smartphone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sale, StoreInfo, Product, SaleItem } from '../types';
@@ -1061,6 +1063,151 @@ ${produtosTexto}`;
                           • {viewedSale.produtoNome} <span className="text-brand-pink font-bold font-mono">({viewedSale.quantidade}x)</span>
                         </div>
                       )}
+                    </div>
+                  </div>
+
+                  {/* IDEIA 3: WhatsApp Quick Notifications Hub */}
+                  <div className="pt-3 border-t border-zinc-900 space-y-2.5">
+                    <div className="flex items-center gap-1.5 select-none">
+                      <Smartphone className="h-3.5 w-3.5 text-brand-pink" />
+                      <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Disparos Rápidos de Whatsapp</span>
+                    </div>
+                    {viewedSale.telefoneCliente ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        {/* 1. Cobrança de Saldo */}
+                        <a
+                          href={(() => {
+                            const phoneOnly = viewedSale.telefoneCliente.replace(/\D/g, '');
+                            const finalPhone = (phoneOnly.length === 10 || phoneOnly.length === 11) ? `55${phoneOnly}` : phoneOnly;
+                            const numPed = viewedSale.numeroPedido || viewedSale.id.substring(0, 5);
+                            const falta = viewedSale.valorFaltante !== undefined ? viewedSale.valorFaltante : (viewedSale.total - (viewedSale.valorPago ?? 0));
+                            const text = `Olá *${viewedSale.cliente}*! Passando para relembrar sobre o acerto do seu pedido *#${numPed}* da *Oxente Festeje*.\n\nAtualmente o saldo restante é de *R$ ${falta.toFixed(2)}*.\n\nSe precisar da nossa chave Pix ou de outra forma de pagamento, é só avisar! Muito obrigado pela parceria e confiança! 🤝💳`;
+                            return `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(text)}`;
+                          })()}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() => playAppSound('success')}
+                          className="py-2 px-2.5 bg-red-950/20 hover:bg-red-900/15 border border-red-900/35 hover:border-red-650 rounded-xl text-center cursor-pointer transition-all active:scale-95 text-[10px] font-bold text-red-300 flex flex-col justify-center items-center gap-1"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 text-red-400" />
+                          <span>Cobrar Saldo</span>
+                        </a>
+
+                        {/* 2. Aprovação de Arte */}
+                        <a
+                          href={(() => {
+                            const phoneOnly = viewedSale.telefoneCliente.replace(/\D/g, '');
+                            const finalPhone = (phoneOnly.length === 10 || phoneOnly.length === 11) ? `55${phoneOnly}` : phoneOnly;
+                            const numPed = viewedSale.numeroPedido || viewedSale.id.substring(0, 5);
+                            const text = `Olá *${viewedSale.cliente}*, tudo bem? 🌸\n\nSou da equipe da *Oxente Festeje*! Passando para avisar que a arte do seu pedido *#${numPed}* está pronta para sua aprovação!\n\nPor favor, nos confirme se está tudo correto para prosseguirmos com a produção física! 😊🎨`;
+                            return `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(text)}`;
+                          })()}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() => playAppSound('success')}
+                          className="py-2 px-2.5 bg-blue-950/20 hover:bg-blue-900/15 border border-blue-900/35 hover:border-blue-650 rounded-xl text-center cursor-pointer transition-all active:scale-95 text-[10px] font-bold text-blue-300 flex flex-col justify-center items-center gap-1"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 text-blue-400" />
+                          <span>Mandar Arte</span>
+                        </a>
+
+                        {/* 3. Pedido Pronto */}
+                        <a
+                          href={(() => {
+                            const phoneOnly = viewedSale.telefoneCliente.replace(/\D/g, '');
+                            const finalPhone = (phoneOnly.length === 10 || phoneOnly.length === 11) ? `55${phoneOnly}` : phoneOnly;
+                            const numPed = viewedSale.numeroPedido || viewedSale.id.substring(0, 5);
+                            const text = `Boas notícias, *${viewedSale.cliente}*! 🎉🥳\n\nSeu pedido *#${numPed}* na *Oxente Festeje* foi finalizado e já está *Prontinho para Retirada*! \n\nVocê já pode vir retirar quando desejar. Qualquer dúvida de endereço ou de horário de atendimento, fique à vontade para nos chamar aqui! 📦💖`;
+                            return `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(text)}`;
+                          })()}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={() => playAppSound('success')}
+                          className="py-2 px-2.5 bg-emerald-950/20 hover:bg-emerald-900/15 border border-emerald-900/35 hover:border-emerald-650 rounded-xl text-center cursor-pointer transition-all active:scale-95 text-[10px] font-bold text-emerald-300 flex flex-col justify-center items-center gap-1"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>Avisar Pronto!</span>
+                        </a>
+                      </div>
+                    ) : (
+                      <p className="text-[10px] text-zinc-550 italic">Telefone do cliente não cadastrado para disparos automáticos.</p>
+                    )}
+                  </div>
+
+                  {/* IDEIA 1: Linha do Tempo da Jornada do Pedido */}
+                  <div className="pt-3 border-t border-zinc-900 space-y-3 select-none">
+                    <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider block">Jornada Temporal do Pedido</span>
+                    
+                    <div className="relative pl-5 border-l-2 border-zinc-900 space-y-4 ml-1.5 pt-1.5 pb-1.5">
+                      {/* Step 1: Pedido Registrado */}
+                      <div className="relative">
+                        <div className="absolute -left-[25.5px] top-0.5 w-3 h-3 rounded-full bg-emerald-500 border-2 border-zinc-950 shadow-inner" />
+                        <h5 className="text-[10.5px] font-bold text-zinc-200 font-sans">🛒 Pedido Registrado</h5>
+                        <p className="text-[9px] text-zinc-550 mt-0.5 leading-normal">
+                          Lançado por <span className="text-zinc-400 font-mono font-bold">{viewedSale.criadoPorEmail || 'Sistema/Legado'}</span> em {new Date(viewedSale.data).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                        </p>
+                      </div>
+
+                      {/* Step 2: Designer Assignment */}
+                      <div className="relative font-sans">
+                        <div className={`absolute -left-[25.5px] top-0.5 w-3 h-3 rounded-full border-2 border-zinc-950 ${
+                          viewedSale.statusArte === 'Arte Finalizada'
+                            ? 'bg-emerald-500'
+                            : viewedSale.puxadoPor
+                              ? 'bg-blue-500'
+                              : 'bg-zinc-800'
+                        }`} />
+                        <h5 className="text-[10.5px] font-bold text-zinc-200">🎨 Criação de Arte (Design)</h5>
+                        <p className="text-[9px] text-zinc-550 mt-0.5 leading-normal">
+                          {viewedSale.statusArte === 'Arte Finalizada' ? (
+                            <span>Aprovada e Finalizada por <strong className="text-emerald-400">{viewedSale.arteFinalizadaPorEmail || viewedSale.puxadoPor || 'Designer'}</strong>{viewedSale.arteFinalizadaEm && ` em ${new Date(viewedSale.arteFinalizadaEm).toLocaleString('pt-BR')}`}</span>
+                          ) : viewedSale.puxadoPor ? (
+                            <span>Em elaboração por <strong className="text-blue-400">{viewedSale.puxadoPor}</strong>{viewedSale.puxadoEm && ` desde ${new Date(viewedSale.puxadoEm).toLocaleString('pt-BR')}`}</span>
+                          ) : (
+                            <span className="text-amber-500/80">Aguardando designer puxar a arte</span>
+                          )}
+                        </p>
+                      </div>
+
+                      {/* Step 3: Produção Física */}
+                      <div className="relative font-sans">
+                        <div className={`absolute -left-[25.5px] top-0.5 w-3 h-3 rounded-full border-2 border-zinc-950 ${
+                          viewedSale.statusProducao === 'Entregue'
+                            ? 'bg-emerald-500'
+                            : ['Pronto para Retirada', 'Agendado para Entrega'].includes(viewedSale.statusProducao || '')
+                              ? 'bg-amber-400'
+                              : viewedSale.statusProducao === 'Em Produção'
+                                ? 'bg-amber-600'
+                                : 'bg-zinc-800'
+                        }`} />
+                        <h5 className="text-[10.5px] font-bold text-zinc-200">📦 Produção & Logística</h5>
+                        <p className="text-[9px] text-zinc-550 mt-0.5 leading-normal">
+                          Etapa atual: <strong className="text-zinc-300 font-mono text-[9px]">{viewedSale.statusProducao || 'Agendado'}</strong>{viewedSale.dataRetirada && ` (Previsão: ${new Date(viewedSale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')})`}
+                        </p>
+                      </div>
+
+                      {/* Step 4: Fluxo Financeiro */}
+                      <div className="relative font-sans">
+                        {(() => {
+                          const falta = viewedSale.valorFaltante !== undefined ? viewedSale.valorFaltante : (viewedSale.total - (viewedSale.valorPago ?? 0));
+                          const paidFull = falta <= 0;
+                          return (
+                            <>
+                              <div className={`absolute -left-[25.5px] top-0.5 w-3 h-3 rounded-full border-2 border-zinc-950 ${
+                                paidFull ? 'bg-emerald-500' : 'bg-red-500/80'
+                              }`} />
+                              <h5 className="text-[10.5px] font-bold text-zinc-200">💰 Balancete Financeiro</h5>
+                              <p className="text-[9px] text-zinc-550 mt-0.5 leading-normal">
+                                {paidFull ? (
+                                  <span className="text-emerald-400 font-bold">Totalmente Quitado! 💳 Valor Total de R$ {viewedSale.total.toFixed(2)}</span>
+                                ) : (
+                                  <span className="text-red-400/90 font-bold">Aguardando quitação: Restam R$ {falta.toFixed(2)} pendentes (Total R$ {viewedSale.total.toFixed(2)})</span>
+                                )}
+                              </p>
+                            </>
+                          );
+                        })()}
+                      </div>
                     </div>
                   </div>
 

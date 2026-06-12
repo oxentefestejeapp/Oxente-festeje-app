@@ -16,9 +16,25 @@ import {
   Sparkles,
   Check,
   RotateCcw,
-  DollarSign
+  DollarSign,
+  ChevronDown,
+  ChevronUp,
+  TrendingUp,
+  Activity
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
+import { 
+  ResponsiveContainer, 
+  AreaChart, 
+  Area, 
+  XAxis, 
+  YAxis, 
+  CartesianGrid, 
+  Tooltip, 
+  BarChart, 
+  Bar, 
+  Cell
+} from 'recharts';
 import { Sale, StoreInfo } from '../types';
 import { Receipt } from './Receipt';
 
@@ -184,6 +200,7 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
   const [selectedUserFilter, setSelectedUserFilter] = useState<string>('all');
   const [specialFilter, setSpecialFilter] = useState<'all' | 'edited' | 'has_designer' | 'finished_art'>('all');
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
+  const [showCharts, setShowCharts] = useState(true);
 
   // User Comparison specific filters
   const [compDateFilter, setCompDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('all');
@@ -428,6 +445,60 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
     };
   }, [auditLogs]);
 
+  // Memoized Chart Data
+  const chartsData = useMemo(() => {
+    // 1. Faturamento ao longo do tempo (Dias com faturamento)
+    const dailyIncome: Record<string, number> = {};
+    const paymentBreakdown: Record<string, { count: number; value: number }> = {
+      'Pix': { count: 0, value: 0 },
+      'Dinheiro': { count: 0, value: 0 },
+      'Cartão de Crédito': { count: 0, value: 0 },
+      'Cartão de Débito': { count: 0, value: 0 },
+    };
+
+    auditLogs.forEach(sale => {
+      // Income over time
+      try {
+        const dateObj = new Date(sale.data);
+        const dayKey = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+        dailyIncome[dayKey] = (dailyIncome[dayKey] || 0) + sale.total;
+      } catch {}
+
+      // Payments
+      const method = sale.formaPagamento || 'Pix';
+      if (paymentBreakdown[method]) {
+        paymentBreakdown[method].count += 1;
+        paymentBreakdown[method].value += sale.total;
+      }
+    });
+
+    // Format income list sorted chronologically
+    const parsedIncomeList = Object.entries(dailyIncome).map(([date, total]) => ({
+      date,
+      total: Number(total.toFixed(2)),
+    }));
+    
+    // Sort chronological: standard parse of date to enforce correct chronological flow of timeline
+    parsedIncomeList.sort((a, b) => {
+      const [dayA, monthA] = a.date.split('/').map(Number);
+      const [dayB, monthB] = b.date.split('/').map(Number);
+      if (monthA !== monthB) return monthA - monthB;
+      return dayA - dayB;
+    });
+
+    // Format payments
+    const parsedPaymentList = Object.entries(paymentBreakdown).map(([name, data]) => ({
+      name,
+      vendas: data.count,
+      valor: Number(data.value.toFixed(2)),
+    }));
+
+    return {
+      incomeTimeline: parsedIncomeList.slice(-10), // Limit to last 10 record days for premium compact look
+      payments: parsedPaymentList,
+    };
+  }, [auditLogs]);
+
   return (
     <div className="space-y-6 select-text text-zinc-100">
       
@@ -485,6 +556,113 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
           <div className="text-2xl font-black font-mono text-emerald-450">{filteredMetrics.artworkFinishedCount}</div>
           <p className="text-[10px] text-zinc-450 mt-1">Designs de pedidos totalmente concluídos</p>
         </div>
+      </div>
+
+      {/* IDEIA 2: Dashboard Visual de Estatísticas e Desempenho (Painel Gráfico com Recharts) */}
+      <div className="bg-zinc-900 border border-zinc-805 rounded-2xl shadow-sm overflow-hidden">
+        <button
+          onClick={() => setShowCharts(!showCharts)}
+          className="w-full flex items-center justify-between p-4.5 text-zinc-150 hover:text-white hover:bg-zinc-850/30 transition-all cursor-pointer font-display select-none"
+        >
+          <div className="flex items-center gap-2">
+            <TrendingUp className="h-4.5 w-4.5 text-brand-pink" />
+            <span className="text-xs font-bold uppercase tracking-wider">📊 Painel Gráfico e Faturamento Visuais</span>
+            <span className="text-[9.5px] px-2 py-0.5 bg-brand-pink/10 border border-brand-pink/20 rounded font-bold text-brand-pink ml-2">Premium</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] text-zinc-500 font-bold uppercase">{showCharts ? 'Ocultar Gráficos' : 'Expandir Gráficos'}</span>
+            {showCharts ? <ChevronUp className="h-4 w-4 text-zinc-400" /> : <ChevronDown className="h-4 w-4 text-zinc-400" />}
+          </div>
+        </button>
+
+        <AnimatePresence initial={false}>
+          {showCharts && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.25, ease: "easeInOut" }}
+              className="overflow-hidden"
+            >
+              <div className="border-t border-zinc-855 p-5 bg-zinc-950/20 space-y-6">
+                {chartsData.incomeTimeline.length === 0 ? (
+                  <div className="py-8 text-center text-zinc-550 border border-dashed border-zinc-850 rounded-xl">
+                    <Activity className="h-8 w-8 mx-auto mb-2 text-zinc-650" />
+                    <p className="text-xs font-bold">Sem movimentações financeiras no período selecionado.</p>
+                    <p className="text-[10px] mt-0.5 text-zinc-600">Ajuste os filtros de data no topo da página de auditoria.</p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* AREA CHART - EVOLUÇÃO DO FATURAMENTO */}
+                    <div className="bg-zinc-950/50 p-4 border border-zinc-850/70 rounded-xl space-y-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">Evolução do Faturamento (Últimos Dias)</h4>
+                        <p className="text-[10px] text-zinc-500 font-medium font-sans">Histórico dinâmico de vendas acumuladas por dia</p>
+                      </div>
+                      <div className="h-[200px] w-full text-[9px] font-mono leading-none">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={chartsData.incomeTimeline} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
+                            <defs>
+                              <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
+                                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                              </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e1e24" />
+                            <XAxis dataKey="date" stroke="#52525b" tickLine={false} />
+                            <YAxis stroke="#52525b" tickLine={false} />
+                            <Tooltip 
+                              contentStyle={{ 
+                                backgroundColor: '#09090b', 
+                                border: '1px solid #27272a', 
+                                borderRadius: '10px',
+                                color: '#f4f4f5' 
+                              }}
+                              itemStyle={{ color: '#10b981', fontWeight: 'bold' }}
+                            />
+                            <Area type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorTotal)" name="Faturamento R$" />
+                          </AreaChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* BAR CHART - MEIOS DE PAGAMENTO */}
+                    <div className="bg-zinc-950/50 p-4 border border-zinc-850/70 rounded-xl space-y-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">Desempenho por Forma de Pagamento</h4>
+                        <p className="text-[10px] text-zinc-500 font-medium font-sans">Balanço do volume financeiro total por canais de pagamento</p>
+                      </div>
+                      <div className="h-[200px] w-full text-[9px] font-mono leading-none">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={chartsData.payments} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e1e24" />
+                            <XAxis dataKey="name" stroke="#52525b" tickLine={false} />
+                            <YAxis stroke="#52525b" tickLine={false} />
+                            <Tooltip
+                              contentStyle={{ 
+                                backgroundColor: '#09090b', 
+                                border: '1px solid #27272a', 
+                                borderRadius: '10px',
+                                color: '#f4f4f5' 
+                              }}
+                              itemStyle={{ color: '#ec4899', fontWeight: 'bold' }}
+                            />
+                            <Bar dataKey="valor" radius={[6, 6, 0, 0]} name="Valor R$">
+                              {chartsData.payments.map((entry, index) => {
+                                const colors = ['#ec4899', '#f59e0b', '#3b82f6', '#10b981'];
+                                return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                              })}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Collaborator Contributions Leaderboard */}
