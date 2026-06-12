@@ -462,12 +462,12 @@ export function OrderTrackingPage() {
                 <div className="flex items-start gap-2.5 text-xs text-zinc-450 leading-tight">
                   <Instagram className="h-4 w-4 text-brand-pink shrink-0" />
                   <a 
-                    href={`https://instagram.com/${storeInfo.instagram.replace('@', '')}`} 
+                    href="https://instagram.com/oxentefesteje" 
                     target="_blank" 
                     rel="noreferrer" 
                     className="hover:underline font-bold text-brand-pink font-sans"
                   >
-                    {storeInfo.instagram}
+                    @oxentefesteje
                   </a>
                 </div>
               </div>
