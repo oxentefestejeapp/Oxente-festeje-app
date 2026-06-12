@@ -71,6 +71,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
   const [success, setSuccess] = useState('');
   const [isCompressing, setIsCompressing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [prazoUrgencia, setPrazoUrgencia] = useState<number | ''>('');
   
   // Progressive Pricing Tiers State
   const [faixasPreco, setFaixasPreco] = useState<PricingTier[]>([]);
@@ -209,6 +210,12 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       return;
     }
 
+    const prazoUrgenciaNum = prazoUrgencia !== '' ? Number(prazoUrgencia) : undefined;
+    if (prazoUrgenciaNum !== undefined && (isNaN(prazoUrgenciaNum) || prazoUrgenciaNum < 1)) {
+      setError('O prazo de urgência deve ser de pelo menos 1 dia.');
+      return;
+    }
+
     const newProduct: Product = {
       id: `prod-${Date.now()}`,
       nome: nome.trim(),
@@ -219,6 +226,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       estoqueInfinito: estoqueInfinito || undefined,
       adicional: adicional || undefined,
       faixasPreco: faixasPreco.length > 0 ? faixasPreco : undefined,
+      prazoUrgencia: prazoUrgenciaNum,
     };
 
     setIsSaving(true);
@@ -242,6 +250,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
         setFaixasPreco([]);
         setNovaQuantidadeMinima('');
         setNovoPrecoFaixa('');
+        setPrazoUrgencia('');
         
         setTimeout(() => {
           setSuccess('');
@@ -377,6 +386,27 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
               value={estoqueInfinito ? "" : estoque}
               onChange={(e) => setEstoque(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
               className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-600 text-sm disabled:opacity-50 disabled:text-zinc-500 disabled:border-zinc-850"
+            />
+          </div>
+        </div>
+
+        {/* Custom Urgency Deadline (Aviso de Urgência) Section */}
+        <div className="bg-zinc-950/40 p-4 border border-zinc-800/50 rounded-2xl space-y-3 text-left">
+          <div className="flex items-center gap-1.5 text-xs font-bold text-amber-500 uppercase tracking-wider select-none font-sans">
+            <span>⚡ Alerta de Prazo de Urgência Personalizado (Aviso Antecipado)</span>
+          </div>
+          <p className="text-[11px] text-zinc-550 leading-relaxed font-sans">
+            Especifique quantos dias antes do agendamento (data de retirada) o pedido com este produto acenderá em vermelho na aba <strong className="text-zinc-200">Aguardando Designer</strong>. Caso fique vazio, o sistema usará o prazo padrão de <strong className="text-zinc-200 font-mono">3 dias</strong>.
+          </p>
+          <div className="relative max-w-xs">
+            <input
+              type="number"
+              min="1"
+              step="1"
+              placeholder="Ex: Bolsa 10 dias, Copo 3 dias"
+              value={prazoUrgencia}
+              onChange={(e) => setPrazoUrgencia(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+              className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-colors text-zinc-100 placeholder-zinc-650 text-xs font-medium"
             />
           </div>
         </div>

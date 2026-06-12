@@ -289,16 +289,34 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   }, [sales, searchTerm, showRemovedFromDesign]);
 
   // Split into columns
-  const isUrgent = (dataRetirada?: string) => {
-    if (!dataRetirada) return false;
+  const isUrgent = (sale: Sale) => {
+    if (!sale.dataRetirada) return false;
     try {
+      let limitDays = 3; // Default warning timeframe of 3 days
+      
+      if (sale.itens && sale.itens.length > 0) {
+        sale.itens.forEach(item => {
+          const prod = products.find(p => p.id === item.produtoId);
+          if (prod && prod.prazoUrgencia !== undefined && prod.prazoUrgencia !== null) {
+            if (prod.prazoUrgencia > limitDays) {
+              limitDays = prod.prazoUrgencia;
+            }
+          }
+        });
+      } else if (sale.produtoId) {
+        const prod = products.find(p => p.id === sale.produtoId);
+        if (prod && prod.prazoUrgencia !== undefined && prod.prazoUrgencia !== null) {
+          limitDays = prod.prazoUrgencia;
+        }
+      }
+
       const today = new Date();
       today.setHours(0, 0, 0, 0);
-      const pickupDate = new Date(dataRetirada + 'T12:00:00');
+      const pickupDate = new Date(sale.dataRetirada + 'T12:00:00');
       pickupDate.setHours(0, 0, 0, 0);
       const diffTime = pickupDate.getTime() - today.getTime();
       const diffDays = diffTime / (1000 * 60 * 60 * 24);
-      return diffDays <= 3;
+      return diffDays <= limitDays;
     } catch {
       return false;
     }
@@ -479,7 +497,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
               </div>
             ) : (
               unassignedOrders.map((sale, idx) => {
-                const urgent = isUrgent(sale.dataRetirada);
+                const urgent = isUrgent(sale);
                 return (
                   <div 
                     key={sale.id}

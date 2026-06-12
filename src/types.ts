@@ -19,6 +19,7 @@ export interface Product {
   faixasPreco?: PricingTier[];
   adicional?: boolean;
   conferido?: boolean;
+  prazoUrgencia?: number;
 }
 
 export type PaymentMethod = 'Pix' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito';

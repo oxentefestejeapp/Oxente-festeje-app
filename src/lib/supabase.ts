@@ -266,6 +266,7 @@ const mapProductToDb = (product: Product) => ({
   preco_custo: product.precoCusto || null,
   precos_progressivos: product.faixasPreco ? JSON.stringify(product.faixasPreco) : null,
   conferido: product.conferido || false,
+  prazo_urgencia: product.prazoUrgencia !== undefined && product.prazoUrgencia !== null ? product.prazoUrgencia : null,
   updated_at: new Date().toISOString()
 });
 
@@ -309,7 +310,8 @@ export const mapDbToProduct = (dbItem: any): Product => {
     adicional: dbItem.adicional || undefined,
     precoCusto: dbItem.preco_custo ? Number(dbItem.preco_custo) : undefined,
     faixasPreco,
-    conferido: finalConferido
+    conferido: finalConferido,
+    prazoUrgencia: dbItem.prazo_urgencia !== null && dbItem.prazo_urgencia !== undefined ? Number(dbItem.prazo_urgencia) : undefined
   };
 };
 

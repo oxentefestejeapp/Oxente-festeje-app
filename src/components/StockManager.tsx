@@ -204,6 +204,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
   const [editSuccess, setEditSuccess] = useState('');
   const [isEditCompressing, setIsEditCompressing] = useState(false);
   const [isEditSaving, setIsEditSaving] = useState(false);
+  const [editPrazoUrgencia, setEditPrazoUrgencia] = useState<number | ''>('');
   
   // Progressive Pricing Tiers State for Edit
   const [editFaixasPreco, setEditFaixasPreco] = useState<PricingTier[]>([]);
@@ -224,6 +225,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
     setEditFaixasPreco(product.faixasPreco ? [...product.faixasPreco] : []);
     setEditNovaQuantidadeMinima('');
     setEditNovoPrecoFaixa('');
+    setEditPrazoUrgencia(product.prazoUrgencia !== undefined && product.prazoUrgencia !== null ? product.prazoUrgencia : '');
     setEditError('');
     setEditSuccess('');
   };
@@ -345,6 +347,12 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
       return;
     }
 
+    const prazoUrgenciaNum = editPrazoUrgencia !== '' ? Number(editPrazoUrgencia) : undefined;
+    if (prazoUrgenciaNum !== undefined && (isNaN(prazoUrgenciaNum) || prazoUrgenciaNum < 1)) {
+      setEditError('O prazo de urgência deve ser de pelo menos 1 dia.');
+      return;
+    }
+
     const updatedProduct: Product = {
       ...editingProduct,
       nome: editNome.trim(),
@@ -355,6 +363,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
       estoqueInfinito: editEstoqueInfinito || undefined,
       adicional: editAdicional || undefined,
       faixasPreco: editFaixasPreco.length > 0 ? editFaixasPreco : undefined,
+      prazoUrgencia: prazoUrgenciaNum,
     };
 
     setIsEditSaving(true);
@@ -1132,6 +1141,27 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                     value={editEstoqueInfinito ? "" : editEstoque}
                     onChange={(e) => setEditEstoque(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                     className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-sm disabled:opacity-50 disabled:text-zinc-500"
+                  />
+                </div>
+              </div>
+
+              {/* Custom Urgency Deadline input in Editing Modal */}
+              <div className="bg-zinc-950/40 p-4 border border-zinc-850 p-4 rounded-xl space-y-3 text-left">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-500 uppercase tracking-wider select-none font-sans">
+                  <span>⚡ Alerta de Prazo de Urgência (Aviso Antecipado)</span>
+                </div>
+                <p className="text-[10.5px] text-zinc-400 leading-snug font-sans">
+                  Configure com quantos dias de antecedência do agendamento o pedido contendo este item deve acender em vermelho. Se vazio, o padrão de <strong className="text-zinc-200">3 dias</strong> será mantido.
+                </p>
+                <div className="relative max-w-xs">
+                  <input
+                    type="number"
+                    min="1"
+                    step="1"
+                    placeholder="Padrão: 3 dias (Ex: Bolsa 10, Copo 3)"
+                    value={editPrazoUrgencia}
+                    onChange={(e) => setEditPrazoUrgencia(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                    className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 transition-colors text-zinc-100 placeholder-zinc-650 text-xs font-semibold"
                   />
                 </div>
               </div>
