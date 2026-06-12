@@ -1066,73 +1066,7 @@ ${produtosTexto}`;
                     </div>
                   </div>
 
-                  {/* IDEIA 3: WhatsApp Quick Notifications Hub */}
-                  <div className="pt-3 border-t border-zinc-900 space-y-2.5">
-                    <div className="flex items-center gap-1.5 select-none">
-                      <Smartphone className="h-3.5 w-3.5 text-brand-pink" />
-                      <span className="text-[10px] font-black uppercase text-zinc-400 tracking-wider">Disparos Rápidos de Whatsapp</span>
-                    </div>
-                    {viewedSale.telefoneCliente ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                        {/* 1. Cobrança de Saldo */}
-                        <a
-                          href={(() => {
-                            const phoneOnly = viewedSale.telefoneCliente.replace(/\D/g, '');
-                            const finalPhone = (phoneOnly.length === 10 || phoneOnly.length === 11) ? `55${phoneOnly}` : phoneOnly;
-                            const numPed = viewedSale.numeroPedido || viewedSale.id.substring(0, 5);
-                            const falta = viewedSale.valorFaltante !== undefined ? viewedSale.valorFaltante : (viewedSale.total - (viewedSale.valorPago ?? 0));
-                            const text = `Olá *${viewedSale.cliente}*! Passando para relembrar sobre o acerto do seu pedido *#${numPed}* da *Oxente Festeje*.\n\nAtualmente o saldo restante é de *R$ ${falta.toFixed(2)}*.\n\nSe precisar da nossa chave Pix ou de outra forma de pagamento, é só avisar! Muito obrigado pela parceria e confiança! 🤝💳`;
-                            return `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(text)}`;
-                          })()}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={() => playAppSound('success')}
-                          className="py-2 px-2.5 bg-red-950/20 hover:bg-red-900/15 border border-red-900/35 hover:border-red-650 rounded-xl text-center cursor-pointer transition-all active:scale-95 text-[10px] font-bold text-red-300 flex flex-col justify-center items-center gap-1"
-                        >
-                          <MessageSquare className="h-3.5 w-3.5 text-red-400" />
-                          <span>Cobrar Saldo</span>
-                        </a>
 
-                        {/* 2. Aprovação de Arte */}
-                        <a
-                          href={(() => {
-                            const phoneOnly = viewedSale.telefoneCliente.replace(/\D/g, '');
-                            const finalPhone = (phoneOnly.length === 10 || phoneOnly.length === 11) ? `55${phoneOnly}` : phoneOnly;
-                            const numPed = viewedSale.numeroPedido || viewedSale.id.substring(0, 5);
-                            const text = `Olá *${viewedSale.cliente}*, tudo bem? 🌸\n\nSou da equipe da *Oxente Festeje*! Passando para avisar que a arte do seu pedido *#${numPed}* está pronta para sua aprovação!\n\nPor favor, nos confirme se está tudo correto para prosseguirmos com a produção física! 😊🎨`;
-                            return `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(text)}`;
-                          })()}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={() => playAppSound('success')}
-                          className="py-2 px-2.5 bg-blue-950/20 hover:bg-blue-900/15 border border-blue-900/35 hover:border-blue-650 rounded-xl text-center cursor-pointer transition-all active:scale-95 text-[10px] font-bold text-blue-300 flex flex-col justify-center items-center gap-1"
-                        >
-                          <MessageSquare className="h-3.5 w-3.5 text-blue-400" />
-                          <span>Mandar Arte</span>
-                        </a>
-
-                        {/* 3. Pedido Pronto */}
-                        <a
-                          href={(() => {
-                            const phoneOnly = viewedSale.telefoneCliente.replace(/\D/g, '');
-                            const finalPhone = (phoneOnly.length === 10 || phoneOnly.length === 11) ? `55${phoneOnly}` : phoneOnly;
-                            const numPed = viewedSale.numeroPedido || viewedSale.id.substring(0, 5);
-                            const text = `Boas notícias, *${viewedSale.cliente}*! 🎉🥳\n\nSeu pedido *#${numPed}* na *Oxente Festeje* foi finalizado e já está *Prontinho para Retirada*! \n\nVocê já pode vir retirar quando desejar. Qualquer dúvida de endereço ou de horário de atendimento, fique à vontade para nos chamar aqui! 📦💖`;
-                            return `https://api.whatsapp.com/send?phone=${finalPhone}&text=${encodeURIComponent(text)}`;
-                          })()}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={() => playAppSound('success')}
-                          className="py-2 px-2.5 bg-emerald-950/20 hover:bg-emerald-900/15 border border-emerald-900/35 hover:border-emerald-650 rounded-xl text-center cursor-pointer transition-all active:scale-95 text-[10px] font-bold text-emerald-300 flex flex-col justify-center items-center gap-1"
-                        >
-                          <MessageSquare className="h-3.5 w-3.5 text-emerald-400" />
-                          <span>Avisar Pronto!</span>
-                        </a>
-                      </div>
-                    ) : (
-                      <p className="text-[10px] text-zinc-550 italic">Telefone do cliente não cadastrado para disparos automáticos.</p>
-                    )}
-                  </div>
 
                   {/* IDEIA 1: Linha do Tempo da Jornada do Pedido */}
                   <div className="pt-3 border-t border-zinc-900 space-y-3 select-none">
