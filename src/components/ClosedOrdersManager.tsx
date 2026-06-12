@@ -982,7 +982,7 @@ ${produtosTexto}`;
                             {
                               margin: 1,
                               width: 300,
-                              color: { dark: '#000000', light: '#ffffff' }
+                              color: { dark: '#dc2626', light: '#ffffff' }
                             },
                             async (err, url) => {
                               if (err) {
