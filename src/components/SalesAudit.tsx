@@ -127,6 +127,49 @@ const getChanges = (sale: Sale) => {
   return changes;
 };
 
+const isDateInFilter = (
+  dateStr: string | undefined, 
+  filter: 'all' | 'today' | '7days' | 'this_month' | 'custom',
+  startStr?: string,
+  endStr?: string
+) => {
+  if (!dateStr) return false;
+  try {
+    const saleDate = new Date(dateStr);
+    const now = new Date();
+
+    if (filter === 'all') return true;
+    
+    if (filter === 'today') {
+      return saleDate.toDateString() === now.toDateString();
+    }
+    
+    if (filter === '7days') {
+      const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
+      return diffDays <= 7 && diffDays >= 0;
+    }
+    
+    if (filter === 'this_month') {
+      return saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear();
+    }
+    
+    if (filter === 'custom') {
+      if (startStr) {
+        const start = new Date(startStr + 'T00:00:00');
+        if (saleDate < start) return false;
+      }
+      if (endStr) {
+        const end = new Date(endStr + 'T23:59:59');
+        if (saleDate > end) return false;
+      }
+      return true;
+    }
+  } catch (e) {
+    console.error('Error filtering date:', e);
+  }
+  return false;
+};
+
 interface SalesAuditProps {
   sales: Sale[];
   storeInfo: StoreInfo;
@@ -157,41 +200,6 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
     }
   };
 
-  // Filter Sales for Comparison specifically
-  const comparisonFilteredSales = useMemo(() => {
-    return sales.filter(s => {
-      if (s.status === 'Orçamento') return false;
-
-      try {
-        const saleDate = parseSaleDate(s.data);
-        const now = new Date();
-
-        if (compDateFilter === 'today') {
-          if (saleDate.toDateString() !== now.toDateString()) return false;
-        } else if (compDateFilter === '7days') {
-          const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
-          if (diffDays > 7 || diffDays < 0) return false;
-        } else if (compDateFilter === 'this_month') {
-          if (saleDate.getMonth() !== now.getMonth() || saleDate.getFullYear() !== now.getFullYear()) {
-            return false;
-          }
-        } else if (compDateFilter === 'custom') {
-          if (compStartDateStr) {
-            const start = new Date(compStartDateStr + 'T00:00:00');
-            if (saleDate < start) return false;
-          }
-          if (compEndDateStr) {
-            const end = new Date(compEndDateStr + 'T23:59:59');
-            if (saleDate > end) return false;
-          }
-        }
-      } catch (e) {
-        console.error('Comparison date filtering error:', e);
-      }
-      return true;
-    });
-  }, [sales, compDateFilter, compStartDateStr, compEndDateStr]);
-
   // Consolidated Creators stats for layout (when compCombineDays is true)
   const creatorsStats = useMemo(() => {
     const stats: Record<string, { count: number; totalValue: number; designsCompleted: number }> = {};
@@ -202,56 +210,84 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
       }
     };
 
-    comparisonFilteredSales.forEach(sale => {
-      const creatorEmail = sale.criadoPorEmail || 'Sistema/Legado';
-      ensureUser(creatorEmail);
-      stats[creatorEmail].count += 1;
-      stats[creatorEmail].totalValue += sale.total;
+    sales.forEach(sale => {
+      if (sale.status === 'Orçamento') return;
 
+      // 1. Process Sale (Venda) contribution
+      if (isDateInFilter(sale.data, compDateFilter, compStartDateStr, compEndDateStr)) {
+        const creatorEmail = sale.criadoPorEmail || 'Sistema/Legado';
+        ensureUser(creatorEmail);
+        stats[creatorEmail].count += 1;
+        stats[creatorEmail].totalValue += sale.total;
+      }
+
+      // 2. Process Art Finalizada contribution
       if (sale.statusArte === 'Arte Finalizada') {
-        const designerEmail = sale.arteFinalizadaPorEmail || sale.puxadoPor;
-        if (designerEmail) {
-          ensureUser(designerEmail);
-          stats[designerEmail].designsCompleted += 1;
+        const artDate = sale.arteFinalizadaEm || sale.puxadoEm || sale.data;
+        if (isDateInFilter(artDate, compDateFilter, compStartDateStr, compEndDateStr)) {
+          const designerEmail = sale.arteFinalizadaPorEmail || sale.puxadoPor;
+          if (designerEmail) {
+            ensureUser(designerEmail);
+            stats[designerEmail].designsCompleted += 1;
+          }
         }
       }
     });
 
     return stats;
-  }, [comparisonFilteredSales]);
+  }, [sales, compDateFilter, compStartDateStr, compEndDateStr]);
 
   // Daily breakdown creators stats (when compCombineDays is false)
   const dailyCreatorsStats = useMemo(() => {
     const breakdown: Record<string, Record<string, { count: number; totalValue: number; designsCompleted: number }>> = {};
 
-    comparisonFilteredSales.forEach(sale => {
-      let dateKey = 'Data Desconhecida';
-      try {
-        const saleDate = parseSaleDate(sale.data);
-        dateKey = saleDate.toLocaleDateString('pt-BR');
-      } catch {}
-
+    const getDayGroup = (dateKey: string) => {
       if (!breakdown[dateKey]) {
         breakdown[dateKey] = {};
       }
+      return breakdown[dateKey];
+    };
 
-      const dayGroup = breakdown[dateKey];
-      const ensureUser = (email: string) => {
-        if (!dayGroup[email]) {
-          dayGroup[email] = { count: 0, totalValue: 0, designsCompleted: 0 };
-        }
-      };
+    const ensureUser = (dayGroup: Record<string, { count: number; totalValue: number; designsCompleted: number }>, email: string) => {
+      if (!dayGroup[email]) {
+        dayGroup[email] = { count: 0, totalValue: 0, designsCompleted: 0 };
+      }
+    };
 
-      const creatorEmail = sale.criadoPorEmail || 'Sistema/Legado';
-      ensureUser(creatorEmail);
-      dayGroup[creatorEmail].count += 1;
-      dayGroup[creatorEmail].totalValue += sale.total;
+    sales.forEach(sale => {
+      if (sale.status === 'Orçamento') return;
 
+      // 1. Process Sale (Venda) contribution
+      if (isDateInFilter(sale.data, compDateFilter, compStartDateStr, compEndDateStr)) {
+        let saleDateKey = 'Data Desconhecida';
+        try {
+          const saleDate = parseSaleDate(sale.data);
+          saleDateKey = saleDate.toLocaleDateString('pt-BR');
+        } catch {}
+
+        const dayGroup = getDayGroup(saleDateKey);
+        const creatorEmail = sale.criadoPorEmail || 'Sistema/Legado';
+        ensureUser(dayGroup, creatorEmail);
+        dayGroup[creatorEmail].count += 1;
+        dayGroup[creatorEmail].totalValue += sale.total;
+      }
+
+      // 2. Process Art Finalizada contribution
       if (sale.statusArte === 'Arte Finalizada') {
-        const designerEmail = sale.arteFinalizadaPorEmail || sale.puxadoPor;
-        if (designerEmail) {
-          ensureUser(designerEmail);
-          dayGroup[designerEmail].designsCompleted += 1;
+        const artDate = sale.arteFinalizadaEm || sale.puxadoEm || sale.data;
+        if (isDateInFilter(artDate, compDateFilter, compStartDateStr, compEndDateStr)) {
+          let artDateKey = 'Data Desconhecida';
+          try {
+            const artDateParsed = parseSaleDate(artDate);
+            artDateKey = artDateParsed.toLocaleDateString('pt-BR');
+          } catch {}
+
+          const dayGroup = getDayGroup(artDateKey);
+          const designerEmail = sale.arteFinalizadaPorEmail || sale.puxadoPor;
+          if (designerEmail) {
+            ensureUser(dayGroup, designerEmail);
+            dayGroup[designerEmail].designsCompleted += 1;
+          }
         }
       }
     });
@@ -263,7 +299,7 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
       const dateB = new Date(Number(partsB[2]), Number(partsB[1]) - 1, Number(partsB[0]));
       return dateB.getTime() - dateA.getTime();
     });
-  }, [comparisonFilteredSales]);
+  }, [sales, compDateFilter, compStartDateStr, compEndDateStr]);
 
   // Determine leaders for gamified presentation & comparison
   const leaderboardMeta = useMemo(() => {
@@ -319,7 +355,10 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
 
       // 2. Date Filter
       try {
-        const saleDate = parseSaleDate(sale.data);
+        const targetDateStr = (specialFilter === 'finished_art' && sale.statusArte === 'Arte Finalizada')
+          ? (sale.arteFinalizadaEm || sale.puxadoEm || sale.data)
+          : sale.data;
+        const saleDate = parseSaleDate(targetDateStr);
         const now = new Date();
 
         if (dateFilter === 'today') {
