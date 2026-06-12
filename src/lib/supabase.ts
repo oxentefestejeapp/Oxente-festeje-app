@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS oxente_products (
   preco_custo NUMERIC,
   precos_progressivos TEXT,
   conferido BOOLEAN DEFAULT FALSE,
+  prazo_urgencia INTEGER,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -84,6 +85,7 @@ ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS estoque_infinito BOOLEAN DE
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS preco_custo NUMERIC;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS adicional BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS conferido BOOLEAN DEFAULT FALSE;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS prazo_urgencia INTEGER;
 
 -- Desabilitar RLS para permitir que o Realtime distribua as atualizações instantaneamente e sem restrições de token para clientes anônimos (anon key)
 ALTER TABLE oxente_products DISABLE ROW LEVEL SECURITY;
