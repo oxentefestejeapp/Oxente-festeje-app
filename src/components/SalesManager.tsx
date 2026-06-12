@@ -894,6 +894,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       itensDetail = sale.itens.map(item => `• ${item.produtoNome} (x${item.quantidade})`).join('\n');
     }
 
+    const trackingUrl = `${window.location.origin}/?acompanhar=${sale.id}`;
+
     const message = `Seu pedido foi anotado! 📝✨
 
 *Número do Pedido:* ${orderNum}
@@ -903,6 +905,9 @@ ${itensDetail}
 *Quanto pagou:* R$ ${valorPago.toFixed(2)}
 *Quanto falta:* R$ ${valorFaltante.toFixed(2)}
 *Data de retirada:* ${dataRetiradaFormatted}
+
+*Acompanhe o status do seu pedido em tempo real pelo link:*
+${trackingUrl}
 
 Muito obrigado pela preferência! Oxente Festeje 🎈
 

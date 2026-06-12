@@ -55,6 +55,7 @@ import { ShortFeedbackToast, ShortFeedback } from './components/ShortFeedbackToa
 import InstallAppTab from './components/InstallAppTab';
 import { SchedulingManager } from './components/SchedulingManager';
 import QrScannerTab from './components/QrScannerTab';
+import { OrderTrackingPage } from './components/OrderTrackingPage';
 
 import { Product, Sale, StoreInfo } from './types';
 import { defaultProducts, defaultSales, defaultStoreInfo } from './defaultData';
@@ -1979,6 +1980,14 @@ export default function App() {
     }
   };
 
+  // Check if we have tracking parameter in URL to bypass authentication completely for public visitors
+  const trackingParams = new URLSearchParams(window.location.search);
+  const isTracking = trackingParams.has('acompanhar') || trackingParams.has('pedido');
+
+  if (isTracking) {
+    return <OrderTrackingPage />;
+  }
+
   if (userStatus === 'loading') {
     return (
       <div className="min-h-screen bg-black flex flex-col items-center justify-center font-sans select-none antialiased">
@@ -2294,21 +2303,23 @@ export default function App() {
             <span className="sm:hidden">Whats Web</span>
           </button>
 
-          <button
-            onClick={() => changeTab('leitor_qr')}
-            className={getTabClass('leitor_qr')}
-          >
-            <motion.div
-              animate={activeTab === 'leitor_qr' ? { scale: [1, 1.3, 1], rotate: [0, 8, -8, 0] } : { scale: 1, rotate: 0 }}
-              whileHover={{ scale: 1.25 }}
-              whileTap={{ scale: 0.9 }}
-              transition={{ duration: 0.3 }}
+          {isAdmin && (
+            <button
+              onClick={() => changeTab('leitor_qr')}
+              className={getTabClass('leitor_qr')}
             >
-              <QrCode className="h-4 w-4" />
-            </motion.div>
-            <span className="hidden sm:inline">Leitor QR</span>
-            <span className="sm:hidden">Scanner QR</span>
-          </button>
+              <motion.div
+                animate={activeTab === 'leitor_qr' ? { scale: [1, 1.3, 1], rotate: [0, 8, -8, 0] } : { scale: 1, rotate: 0 }}
+                whileHover={{ scale: 1.25 }}
+                whileTap={{ scale: 0.9 }}
+                transition={{ duration: 0.3 }}
+              >
+                <QrCode className="h-4 w-4" />
+              </motion.div>
+              <span className="hidden sm:inline">Leitor QR</span>
+              <span className="sm:hidden">Scanner QR</span>
+            </button>
+          )}
 
 
           <button
@@ -2552,7 +2563,7 @@ export default function App() {
               />
             )}
 
-            {activeTab === 'leitor_qr' && (
+            {activeTab === 'leitor_qr' && isAdmin && (
               <QrScannerTab
                 sales={sales}
                 storeInfo={storeInfo}
