@@ -25,6 +25,8 @@ import {
   MessageSquare,
   Key,
   Smartphone,
+  Phone,
+  QrCode,
   CalendarCheck,
   RefreshCw,
   AlertTriangle,
@@ -52,6 +54,7 @@ import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { ShortFeedbackToast, ShortFeedback } from './components/ShortFeedbackToast';
 import InstallAppTab from './components/InstallAppTab';
 import { SchedulingManager } from './components/SchedulingManager';
+import QrScannerTab from './components/QrScannerTab';
 
 import { Product, Sale, StoreInfo } from './types';
 import { defaultProducts, defaultSales, defaultStoreInfo } from './defaultData';
@@ -140,9 +143,9 @@ export default function App() {
     localStorage.setItem('oxente_pending_products', JSON.stringify(updated));
   };
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(defaultStoreInfo);
-  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'agendamento' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web' | 'instalar_app'>(() => {
+  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'agendamento' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web' | 'instalar_app' | 'leitor_qr'>(() => {
     const saved = localStorage.getItem('oxente_active_tab');
-    const allowedTabs = ['vendas', 'a_receber', 'entregas', 'agendamento', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'lembretes', 'pedidos_fechados', 'whatsapp_web', 'instalar_app'];
+    const allowedTabs = ['vendas', 'a_receber', 'entregas', 'agendamento', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'lembretes', 'pedidos_fechados', 'whatsapp_web', 'instalar_app', 'leitor_qr'];
     return (allowedTabs.includes(saved || '') ? saved : 'vendas') as any;
   });
   const [preselectedSaleId, setPreselectedSaleId] = useState<string | null>(null);
@@ -2042,6 +2045,9 @@ export default function App() {
       case 'instalar_app':
         activeGradient = 'bg-gradient-to-r from-cyan-400 to-emerald-450 text-black shadow-[0_0_15px_rgba(6,182,212,0.35)]';
         break;
+      case 'leitor_qr':
+        activeGradient = 'bg-gradient-to-r from-pink-500 via-rose-500 to-red-500 text-white shadow-[0_0_15px_rgba(236,72,153,0.35)]';
+        break;
     }
 
     return `w-full flex items-center justify-center gap-2 rounded-xl font-bold transition-all duration-300 cursor-pointer select-none whitespace-nowrap min-w-0 ${
@@ -2288,6 +2294,22 @@ export default function App() {
             <span className="sm:hidden">Whats Web</span>
           </button>
 
+          <button
+            onClick={() => changeTab('leitor_qr')}
+            className={getTabClass('leitor_qr')}
+          >
+            <motion.div
+              animate={activeTab === 'leitor_qr' ? { scale: [1, 1.3, 1], rotate: [0, 8, -8, 0] } : { scale: 1, rotate: 0 }}
+              whileHover={{ scale: 1.25 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ duration: 0.3 }}
+            >
+              <QrCode className="h-4 w-4" />
+            </motion.div>
+            <span className="hidden sm:inline">Leitor QR</span>
+            <span className="sm:hidden">Scanner QR</span>
+          </button>
+
 
           <button
             onClick={() => changeTab('estoque')}
@@ -2527,6 +2549,14 @@ export default function App() {
               <WhatsAppWebTab
                 sales={sales}
                 storeInfo={storeInfo}
+              />
+            )}
+
+            {activeTab === 'leitor_qr' && (
+              <QrScannerTab
+                sales={sales}
+                storeInfo={storeInfo}
+                onUpdateSale={handleUpdateSale}
               />
             )}
 

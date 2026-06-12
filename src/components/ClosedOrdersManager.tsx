@@ -26,6 +26,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Sale, StoreInfo, Product, SaleItem } from '../types';
 import { Receipt } from './Receipt';
 import { playAppSound } from '../lib/audio';
+import QRCode from 'qrcode';
 
 interface ClosedOrdersManagerProps {
   products: Product[];
@@ -944,9 +945,44 @@ Data de entrega: ${entrega}
 Produto e a quantidade:
 ${produtosTexto}`;
 
-                        navigator.clipboard.writeText(finalString);
-                        setCopied(true);
-                        setTimeout(() => setCopied(false), 2000);
+                        // Generate QR Code image base64, convert to Blob and copy both text and QR Code
+                        const codeValue = `oxente:${viewedSale.id}`;
+                        QRCode.toDataURL(
+                          codeValue,
+                          {
+                            margin: 1,
+                            width: 180,
+                            color: { dark: '#000000', light: '#ffffff' }
+                          },
+                          async (err, url) => {
+                            if (err) {
+                              console.warn('Erro ao gerar código QR para cópia:', err);
+                              navigator.clipboard.writeText(finalString);
+                            } else {
+                              try {
+                                const res = await fetch(url);
+                                const blob = await res.blob();
+                                
+                                // Modern Clipboard API support for copying complex types (text + image)
+                                if (navigator.clipboard && window.ClipboardItem) {
+                                  const item = new ClipboardItem({
+                                    'text/plain': new Blob([finalString], { type: 'text/plain' }),
+                                    'image/png': blob
+                                  });
+                                  await navigator.clipboard.write([item]);
+                                } else {
+                                  navigator.clipboard.writeText(finalString);
+                                }
+                              } catch (writeErr) {
+                                console.warn('Falha ao gravar imagem no clipboard, usando apenas texto:', writeErr);
+                                navigator.clipboard.writeText(finalString);
+                              }
+                            }
+                            playAppSound('success');
+                            setCopied(true);
+                            setTimeout(() => setCopied(false), 2000);
+                          }
+                        );
                       }}
                       className={`px-3.5 py-2 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 ${
                         copied 
@@ -957,12 +993,12 @@ ${produtosTexto}`;
                       {copied ? (
                         <>
                           <Check className="h-3.5 w-3.5" />
-                          <span>Copiado!</span>
+                          <span>Resumo + QR Copiados!</span>
                         </>
                       ) : (
                         <>
                           <Copy className="h-3.5 w-3.5" />
-                          <span>Copiar Resumo</span>
+                          <span>Copiar Resumo + QR</span>
                         </>
                       )}
                     </button>

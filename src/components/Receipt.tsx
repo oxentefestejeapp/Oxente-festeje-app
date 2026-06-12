@@ -3,9 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
-import { Printer, Calendar, User, CreditCard, ShoppingBag, Eye, MessageSquare, Pencil } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Printer, Calendar, User, CreditCard, ShoppingBag, Eye, MessageSquare, Pencil, QrCode } from 'lucide-react';
 import { motion } from 'motion/react';
+import QRCode from 'qrcode';
 import { Sale, StoreInfo } from '../types';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound } from '../lib/audio';
@@ -25,6 +26,27 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
   const [paidValue, setPaidValue] = useState<string>('');
   const [pickupDate, setPickupDate] = useState<string>(sale.dataRetirada || '');
   const [confirmForce, setConfirmForce] = useState(false);
+  const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+
+  useEffect(() => {
+    if (!sale || sale.status === 'Orçamento') return;
+    const codeValue = `oxente:${sale.id}`;
+    QRCode.toDataURL(
+      codeValue,
+      {
+        margin: 1,
+        width: 140,
+        color: { dark: '#000000', light: '#ffffff' }
+      },
+      (err, url) => {
+        if (!err) {
+          setQrCodeUrl(url);
+        } else {
+          console.warn('Erro ao gerar QR Code para o recibo:', err);
+        }
+      }
+    );
+  }, [sale.id, sale.status]);
 
   // Helper to extract items from sale
   const getSaleItems = (s: Sale): { produtoId: string; quantidade: number; produtoNome: string }[] => {
@@ -253,6 +275,19 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
             <p className="text-xs font-bold text-black select-text">Muito obrigado pela preferência!</p>
           )}
           <p className="text-[10px] text-black font-bold select-text">Siga no Instagram: {storeInfo.instagram}</p>
+          
+          {/* QR Code de Controle no Recibo */}
+          {sale.status !== 'Orçamento' && qrCodeUrl && (
+            <div className="flex flex-col items-center justify-center mt-4 pt-4 border-t border-dashed border-black select-none text-center">
+              <span className="text-[9px] text-black font-black uppercase tracking-wider mb-2">QR Code de Controle</span>
+              <div className="bg-white p-2 border border-black rounded inline-block">
+                <img src={qrCodeUrl} alt="Controle de Entrega" className="w-24 h-24" />
+              </div>
+              <span className="text-[8px] text-black font-extrabold uppercase mt-2 tracking-wide block max-w-[190px] mx-auto text-center leading-normal">
+                ESCANEAR NO PAINEL PARA MANDAR COBRANÇA OU AVISO DE PRONTO!
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
