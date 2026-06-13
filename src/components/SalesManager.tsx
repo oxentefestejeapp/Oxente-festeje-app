@@ -55,6 +55,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [formaPagamento, setFormaPagamento] = useState<PaymentMethod>('Pix');
   const [valorPagoInput, setValorPagoInput] = useState('');
   const [numeroPedido, setNumeroPedido] = useState('');
+  const [pedidoVinculoNumero, setPedidoVinculoNumero] = useState('');
   const [salesSearchTerm, setSalesSearchTerm] = useState('');
   const [dataRetirada, setDataRetirada] = useState('');
   const [statusProducao, setStatusProducao] = useState<'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Entregue'>('Agendado');
@@ -228,6 +229,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [editCliente, setEditCliente] = useState('');
   const [editTelefone, setEditTelefone] = useState('');
   const [editNumeroPedido, setEditNumeroPedido] = useState('');
+  const [editPedidoVinculoNumero, setEditPedidoVinculoNumero] = useState('');
   const [editFormaPagamento, setEditFormaPagamento] = useState<PaymentMethod>('Pix');
   const [editValorPago, setEditValorPago] = useState('');
   const [editDataRetirada, setEditDataRetirada] = useState('');
@@ -252,6 +254,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       setEditCliente(editingSale.cliente);
       setEditTelefone(editingSale.telefoneCliente || '');
       setEditNumeroPedido(editingSale.numeroPedido || '');
+      setEditPedidoVinculoNumero(editingSale.pedidoVinculoNumero || '');
       setEditFormaPagamento(editingSale.formaPagamento);
       setEditValorPago(editingSale.valorPago !== undefined ? editingSale.valorPago.toString() : editingSale.total.toString());
       setEditDataRetirada(editingSale.dataRetirada || '');
@@ -855,7 +858,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       indicadoCodigo: isReferralApplied ? referralCodeInput.trim().toUpperCase() : undefined,
       descontoReferral: isReferralApplied ? referralDiscountApplied : undefined,
       cashbackGasto: appliedCashbackDiscount > 0 ? appliedCashbackDiscount : undefined,
-      referralSended: false
+      referralSended: false,
+      pedidoVinculoNumero: pedidoVinculoNumero.trim() ? pedidoVinculoNumero.trim() : undefined
     };
 
     // Salvar venda (que agora deduz o estoque de forma atômica no pai)
@@ -898,6 +902,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setTelefoneCliente('');
     setValorPagoInput('');
     setNumeroPedido('');
+    setPedidoVinculoNumero('');
     setDataRetirada('');
     setStatusProducao('Agendado');
     setDescontoPercent(0);
@@ -1002,6 +1007,13 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       }
     }
 
+    const hasStructuralChanges = 
+      (editingSale.cliente !== (editCliente.trim() || 'Consumidor')) ||
+      (editingSale.telefoneCliente !== (editTelefone.trim() ? editTelefone.trim() : undefined)) ||
+      (editingSale.total !== editTotal) ||
+      (editingSale.valorPago !== finalValorPago) ||
+      (JSON.stringify(editingSale.itens || []) !== JSON.stringify(finalItensToSave));
+
     const updatedSale: Sale = {
       ...editingSale,
       cliente: editCliente.trim() || 'Consumidor',
@@ -1015,13 +1027,14 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       valorPago: finalValorPago,
       valorFaltante: finalValorFaltante,
       numeroPedido: editNumeroPedido.trim() ? editNumeroPedido.trim() : undefined,
+      pedidoVinculoNumero: editPedidoVinculoNumero.trim() ? editPedidoVinculoNumero.trim() : undefined,
       status: isBudget ? 'Orçamento' : (finalValorFaltante > 0 ? 'Pendente' : 'Pago total'),
       dataRetirada: editDataRetirada || undefined,
       statusProducao: isBudget ? undefined : editStatusProducao,
       itens: finalItensToSave,
-      foiAlterado: true,
-      editadoPorEmail: currentUserEmail,
-      editadoEm: new Date().toISOString(),
+      foiAlterado: hasStructuralChanges ? true : (editingSale.foiAlterado || false),
+      editadoPorEmail: hasStructuralChanges ? currentUserEmail : (editingSale.editadoPorEmail || undefined),
+      editadoEm: hasStructuralChanges ? new Date().toISOString() : (editingSale.editadoEm || undefined),
       valoresOriginais: originalValues
     };
 
@@ -2128,6 +2141,60 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               )}
             </div>
 
+            {/* Linked Order/Pedido Conjunto para Nova Venda */}
+            <div className="bg-sky-950/20 border border-sky-900/40 p-4 rounded-xl space-y-2">
+              <span className="block text-xs font-bold text-sky-400 uppercase select-none flex items-center gap-1.5 font-sans">
+                🔗 Vínculo de Pedido Conjunto (Retirada Casada)
+              </span>
+              <p className="text-[10px] text-zinc-400 leading-normal font-sans">
+                Se este pedido deve ser retirado junto com outro pedido do mesmo cliente, informe o número do outro pedido. Os avisos de lembrete ficarão bloqueados até que ambos estejam prontos!
+              </p>
+              <div>
+                <input
+                  type="text"
+                  placeholder="Ex: 30125"
+                  value={pedidoVinculoNumero}
+                  onChange={(e) => setPedidoVinculoNumero(e.target.value)}
+                  className="w-full px-3 py-1.5 bg-black border border-sky-900/40 rounded-lg text-xs font-bold text-sky-300 font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-sky-500 placeholder-zinc-700 uppercase"
+                />
+                
+                {/* Sibling orders helper */}
+                {cliente.trim().length >= 3 && (() => {
+                  const clientNamePrefix = cliente.trim().split(' ')[0].toLowerCase();
+                  const siblingActiveSales = sales.filter(s => 
+                    s.numeroPedido && 
+                    s.cliente && 
+                    s.cliente.trim().toLowerCase().includes(clientNamePrefix) && 
+                    s.statusProducao !== 'Entregue'
+                  );
+                  
+                  if (siblingActiveSales.length > 0) {
+                    return (
+                      <div className="mt-2 space-y-1">
+                        <span className="block text-[9px] text-sky-400 font-bold uppercase select-none">
+                          Sugestões de pedidos do mesmo cliente para vincular:
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {siblingActiveSales.map(sib => (
+                            <button
+                              key={sib.id}
+                              type="button"
+                              onClick={() => setPedidoVinculoNumero(sib.numeroPedido || '')}
+                              className="px-2 py-1 bg-sky-950/40 hover:bg-sky-900/50 text-sky-300 border border-sky-900/40 hover:border-sky-500 rounded text-[9px] font-mono transition-colors flex items-center gap-1 cursor-pointer"
+                            >
+                              <span>#{sib.numeroPedido}</span>
+                              <span className="opacity-60">({sib.produtoNome})</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+              </div>
+            </div>
+
             {/* Total Indicator Panel */}
             <div className="bg-black/40 border border-zinc-800 rounded-xl p-4 flex items-center justify-between">
               <div className="flex items-center gap-2 text-zinc-300">
@@ -3086,6 +3153,61 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     </p>
                   </div>
                 )}
+
+                {/* Linked Order/Pedido Conjunto para Edição */}
+                <div className="bg-sky-950/20 border border-sky-900/40 p-4 rounded-xl space-y-2 mt-4">
+                  <span className="block text-xs font-bold text-sky-400 uppercase select-none flex items-center gap-1.5 font-sans">
+                    🔗 Vínculo de Pedido Conjunto (Retirada Casada)
+                  </span>
+                  <p className="text-[10px] text-zinc-400 leading-normal font-sans">
+                    Vincule este pedido a outro número de pedido já cadastrado. Os lembretes de aviso de pronto para ambos os pedidos serão sincronizados e bloqueados até que ambos estejam prontos!
+                  </p>
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Ex: 30125"
+                      value={editPedidoVinculoNumero}
+                      onChange={(e) => setEditPedidoVinculoNumero(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-black border border-sky-900/40 rounded-lg text-xs font-bold text-sky-300 font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-sky-500 placeholder-zinc-700 uppercase"
+                    />
+                    
+                    {/* Sibling orders helper */}
+                    {editingSale && (() => {
+                      const clientNamePrefix = editCliente.trim().split(' ')[0].toLowerCase();
+                      const siblingActiveSales = sales.filter(s => 
+                        s.id !== editingSale.id &&
+                        s.numeroPedido && 
+                        s.cliente && 
+                        s.cliente.trim().toLowerCase().includes(clientNamePrefix) && 
+                        s.statusProducao !== 'Entregue'
+                      );
+                      
+                      if (siblingActiveSales.length > 0) {
+                        return (
+                          <div className="mt-2 space-y-1">
+                            <span className="block text-[9px] text-sky-400 font-bold uppercase select-none">
+                              Sugestões de pedidos do mesmo cliente para vincular:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {siblingActiveSales.map(sib => (
+                                <button
+                                  key={sib.id}
+                                  type="button"
+                                  onClick={() => setEditPedidoVinculoNumero(sib.numeroPedido || '')}
+                                  className="px-2 py-1 bg-sky-950/40 hover:bg-sky-900/50 text-sky-300 border border-sky-900/40 hover:border-sky-500 rounded text-[9px] font-mono transition-colors flex items-center gap-1 cursor-pointer"
+                                >
+                                  <span>#{sib.numeroPedido}</span>
+                                  <span className="opacity-60">({sib.produtoNome})</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                </div>
 
                 {/* Footer Buttons */}
                 <div className="flex gap-3 justify-end pt-3 border-t border-zinc-850">

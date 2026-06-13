@@ -129,6 +129,7 @@ CREATE TABLE IF NOT EXISTS oxente_sales (
   aviso_pronto_sended BOOLEAN DEFAULT FALSE,
   turno_entrega TEXT,
   bloqueado_lembrete BOOLEAN DEFAULT FALSE,
+  pedido_vinculo_numero TEXT,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -167,6 +168,7 @@ ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS desconto_referral NUMERIC;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS cashback_gasto NUMERIC;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS referral_sended BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS bloqueado_lembrete BOOLEAN DEFAULT FALSE;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS pedido_vinculo_numero TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Desabilitar RLS para garantir que as atualizações de pedidos sejam propagadas instantaneamente entre todos os computadores e celulares
@@ -363,6 +365,7 @@ const mapSaleToDb = (sale: Sale) => ({
   cashback_gasto: sale.cashbackGasto || null,
   referral_sended: sale.referralSended || false,
   bloqueado_lembrete: sale.bloqueadoLembrete || false,
+  pedido_vinculo_numero: sale.pedidoVinculoNumero || null,
   updated_at: sale.updatedAt || new Date().toISOString()
 });
 
@@ -406,6 +409,7 @@ export const mapDbToSale = (dbItem: any): Sale => ({
   cashbackGasto: dbItem.cashback_gasto !== null && dbItem.cashback_gasto !== undefined ? Number(dbItem.cashback_gasto) : undefined,
   referralSended: dbItem.referral_sended || false,
   bloqueadoLembrete: dbItem.bloqueado_lembrete || false,
+  pedidoVinculoNumero: dbItem.pedido_vinculo_numero || undefined,
   updatedAt: dbItem.updated_at || undefined
 });
 
@@ -691,6 +695,7 @@ const realDbSupabase = {
             delete dbRow.aviso_pronto_sended;
             delete dbRow.turno_entrega;
             delete dbRow.bloqueado_lembrete;
+            delete dbRow.pedido_vinculo_numero;
             attempt++;
             continue;
           }

@@ -46,6 +46,7 @@ export interface SaleOriginalValues {
   itens?: SaleItem[];
   notasInternas?: string;
   turnoEntrega?: 'Manhã' | 'Tarde';
+  pedidoVinculoNumero?: string;
 }
 
 export interface Sale {
@@ -94,6 +95,7 @@ export interface Sale {
   updatedAt?: string;
   pendingSync?: boolean;
   bloqueadoLembrete?: boolean;
+  pedidoVinculoNumero?: string;
 }
 
 export interface StoreInfo {
