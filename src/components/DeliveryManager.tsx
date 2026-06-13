@@ -196,6 +196,28 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
     }
   }, [selectedSale]);
 
+  const sendWhatsAppDeliveryMessage = (sale: Sale) => {
+    if (!sale.telefoneCliente) return;
+
+    const cleanPhone = sale.telefoneCliente.replace(/\D/g, '');
+    let finalPhone = cleanPhone;
+    if (cleanPhone.length > 0) {
+      if (!cleanPhone.startsWith('55') && (cleanPhone.length === 10 || cleanPhone.length === 11)) {
+        finalPhone = `55${cleanPhone}`;
+      }
+    }
+
+    const orderNum = sale.numeroPedido || sale.id.substring(0, 5).toUpperCase();
+    const clientName = sale.cliente || 'Consumidor';
+    
+    const messageText = `Olá, *${clientName}*! 🌟\n\nSeu pedido *#${orderNum}* foi entregue e finalizado com sucesso! 🎉\n\n*Detalhes:*\n📦 Produto: ${sale.produtoNome || 'Personalizado'} (qtd: ${sale.quantidade || 1})\n💰 Total: R$ ${(sale.total || 0).toFixed(2)}\n✅ Status Financeiro: Pago Total (Obrigado!)\n\nAgradecemos imensamente pela preferência e confiança em nosso trabalho. Esperamos que tenha uma excelente experiência com seus produtos! 🥰\n\nDúvidas ou feedbacks? Estamos à disposição!\n\nAtenciosamente,\n*Oxente Festeje* 🌸`;
+
+    const encodedText = encodeURIComponent(messageText);
+    const url = `whatsapp://send?phone=${finalPhone}&text=${encodedText}`;
+    
+    window.location.href = url;
+  };
+
   const handleConfirmDeliveryAndPayment = (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedSale) return;
@@ -217,6 +239,9 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
     };
 
     onUpdateSale(updated);
+    
+    // Disparar envio de aviso por WhatsApp Desktop
+    sendWhatsAppDeliveryMessage(updated);
 
     setSuccessMessage(`Pedido #${selectedSale.numeroPedido || selectedSale.id.substring(5, 9)} entregue e concluído com sucesso!`);
     
@@ -669,6 +694,9 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                                 observacoesDesign: localObservacoes,
                               };
                               onUpdateSale(updated);
+                              if (st === 'Entregue') {
+                                sendWhatsAppDeliveryMessage(updated);
+                              }
                             }}
                             className={`py-3 px-2 rounded-xl text-[11px] font-extrabold text-center transition-all duration-300 transform active:scale-95 border-2 cursor-pointer flex items-center justify-center gap-1.5 shadow-sm ${
                               isCurrent

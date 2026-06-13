@@ -81,6 +81,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   // Referral / Cupom states
   const [referralCodeInput, setReferralCodeInput] = useState('');
   const [isReferralApplied, setIsReferralApplied] = useState(false);
+  const [appliedCouponPercentage, setAppliedCouponPercentage] = useState<number>(5);
   const [referralMatchSuccess, setReferralMatchSuccess] = useState<string | null>(null);
   const [referralMatchError, setReferralMatchError] = useState<string | null>(null);
 
@@ -446,15 +447,45 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   }, [totalVendaSemDesconto, customValInput]);
 
   const referralDiscountApplied = useMemo(() => {
-    return isReferralApplied ? Number((totalVendaSemDesconto * 0.05).toFixed(2)) : 0;
-  }, [isReferralApplied, totalVendaSemDesconto]);
+    return isReferralApplied ? Number((totalVendaSemDesconto * (appliedCouponPercentage / 100)).toFixed(2)) : 0;
+  }, [isReferralApplied, totalVendaSemDesconto, appliedCouponPercentage]);
 
-  const handleValidateReferralCode = (code: string) => {
+  const handleValidateReferralCode = (code: string, isSilent = false) => {
     const cleanCode = code.trim().toUpperCase();
     if (!cleanCode) {
-      setReferralMatchSuccess(null);
+      if (!isSilent) {
+        setReferralMatchSuccess(null);
+        setReferralMatchError(null);
+        setIsReferralApplied(false);
+      }
+      return;
+    }
+
+    // Suporte para cupons comerciais / promocionais estáticos da loja
+    const staticCoupons: { [key: string]: { pct: number, label: string } } = {
+      'OXENTE5': { pct: 5, label: 'Cupom Oxente 5% de Desconto!' },
+      'OXENTE10': { pct: 10, label: 'Cupom Oxente 10% de Desconto!' },
+      'OXENTE15': { pct: 15, label: 'Cupom Oxente 15% de Desconto!' },
+      'DESCONTO5': { pct: 5, label: 'Cupom Especial 5% de Desconto!' },
+      'DESCONTO10': { pct: 10, label: 'Cupom Especial 10% de Desconto!' },
+      'DESCONTO15': { pct: 15, label: 'Cupom Especial 15% de Desconto!' },
+      'BOASVINDAS5': { pct: 5, label: 'Cupom Boas-vindas 5% de Desconto!' },
+      'BOASVINDAS10': { pct: 10, label: 'Cupom Boas-vindas 10% de Desconto!' },
+      'FESTEJE5': { pct: 5, label: 'Cupom Festeje 5% de Desconto!' },
+      'FESTEJE10': { pct: 10, label: 'Cupom Festeje 10% de Desconto!' },
+      'CUPOM5': { pct: 5, label: 'Cupom Especial de Cliente 5% Off!' },
+      'CUPOM10': { pct: 10, label: 'Cupom Especial de Cliente 10% Off!' },
+    };
+
+    if (staticCoupons[cleanCode]) {
+      const coupon = staticCoupons[cleanCode];
+      setReferralMatchSuccess(`Cupom ativo: ${coupon.label}`);
       setReferralMatchError(null);
-      setIsReferralApplied(false);
+      setAppliedCouponPercentage(coupon.pct);
+      setIsReferralApplied(true);
+      if (!isSilent) {
+        playSound('success');
+      }
       return;
     }
 
@@ -469,14 +500,30 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     if (matchedSale) {
       setReferralMatchSuccess(`Indicação válida! Você ganhou 5% de desconto de indicado na hora! E "${matchedSale.cliente}" acumulará créditos de desconto (+5%)!`);
       setReferralMatchError(null);
+      setAppliedCouponPercentage(5);
       setIsReferralApplied(true);
-      playSound('success');
+      if (!isSilent) {
+        playSound('success');
+      }
     } else {
-      setReferralMatchSuccess(null);
-      setReferralMatchError('Código de indicação não encontrado.');
-      setIsReferralApplied(false);
+      if (!isSilent) {
+        setReferralMatchSuccess(null);
+        setReferralMatchError('Código de indicação ou cupom não encontrado.');
+        setIsReferralApplied(false);
+      }
     }
   };
+
+  // Efeito elegante de validação automática silenciosa ao digitar o cupom
+  useEffect(() => {
+    if (referralCodeInput) {
+      handleValidateReferralCode(referralCodeInput, true);
+    } else {
+      setIsReferralApplied(false);
+      setReferralMatchSuccess(null);
+      setReferralMatchError(null);
+    }
+  }, [referralCodeInput, sales]);
 
   const totalVenda = useMemo(() => {
     let finalPrice = totalVendaSemDesconto;
@@ -484,9 +531,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     // 1. Manual percentage discount (descontoPercent)
     finalPrice = finalPrice * (1 - descontoPercent / 100);
     
-    // 2. Referred code discount (5% for being referred)
+    // 2. Referred code or Promo coupon discount
     if (isReferralApplied) {
-      finalPrice = finalPrice - (totalVendaSemDesconto * 0.05);
+      finalPrice = finalPrice - (totalVendaSemDesconto * (appliedCouponPercentage / 100));
     }
     
     // 3. Accumulated referrer discount (e.g. 5%, 10%, 15% applied to their own order)
@@ -495,7 +542,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }
     
     return Number(Math.max(0, finalPrice).toFixed(2));
-  }, [totalVendaSemDesconto, descontoPercent, isReferralApplied, appliedCashbackDiscount]);
+  }, [totalVendaSemDesconto, descontoPercent, isReferralApplied, appliedCouponPercentage, appliedCashbackDiscount]);
 
   // Calcule o faturamento diário para o período selecionado de dias
   const getDailyRevenueData = (days: number) => {
@@ -1952,10 +1999,23 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
 
             {/* Paid Amount and Missing Amount inputs */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-zinc-950/40 border border-zinc-800/80 p-4 rounded-xl">
-              <div>
-                <label htmlFor="sale-paid-amount" className="block text-xs font-semibold text-zinc-400 mb-1.5">
-                  Quanto o cliente pagou? (R$) <span className="text-red-400 font-bold">*</span>
-                </label>
+              <div className="flex flex-col">
+                <div className="flex justify-between items-center mb-1.5 w-full">
+                  <label htmlFor="sale-paid-amount" className="block text-xs font-semibold text-zinc-400">
+                    Quanto o cliente pagou? (R$) <span className="text-red-400 font-bold">*</span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setValorPagoInput(totalVenda.toFixed(2));
+                      playSound('success');
+                    }}
+                    className="text-[10px] font-black text-brand-pink hover:text-brand-pink/80 bg-brand-pink/10 hover:bg-brand-pink/15 px-2 py-0.5 rounded transition-all cursor-pointer select-none"
+                    title="Preencher o valor pago com o valor integral com desconto do pedido"
+                  >
+                    Quitar (Pagar Tudo)
+                  </button>
+                </div>
                 <input
                   id="sale-paid-amount"
                   type="text"
@@ -2209,7 +2269,12 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 )}
                 {referralDiscountApplied > 0 && (
                   <span className="text-[10px] text-purple-400 font-bold block mb-0.5 animate-pulse font-sans">
-                    🎁 Indicação: -R$ {referralDiscountApplied.toFixed(2)} + Cashback p/ Indicador Ativado!
+                    🎁 Cupom/Indicação: -R$ {referralDiscountApplied.toFixed(2)}
+                  </span>
+                )}
+                {appliedCashbackDiscount > 0 && (
+                  <span className="text-[10px] text-emerald-400 font-bold block mb-0.5 animate-pulse font-sans">
+                    ✨ Cashback Acumulado: -R$ {(totalVendaSemDesconto * (appliedCashbackDiscount / 100)).toFixed(2)}
                   </span>
                 )}
                 <span className="text-2xl font-bold text-brand-pink block font-mono">

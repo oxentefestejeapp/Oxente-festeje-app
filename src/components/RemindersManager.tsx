@@ -402,7 +402,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
             }`}
           >
             <Gift className="h-3.5 w-3.5 text-emerald-300" />
-            <span>🎁 Indicação R$10</span>
+            <span>🎁 Indicação 5%</span>
           </button>
         </div>
       )}
@@ -1497,7 +1497,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                   <span>Adesão do Amigo</span>
                 </div>
                 <p className="text-[11px] leading-relaxed">
-                  O amigo indicado informa o código no momento da compra. O app valida e concede <strong>R$ 5,00 de desconto na hora</strong> na nova compra.
+                  O amigo indicado informa o código no momento da compra. O app valida e concede <strong>5% de desconto na hora</strong> na nova compra.
                 </p>
               </div>
 
