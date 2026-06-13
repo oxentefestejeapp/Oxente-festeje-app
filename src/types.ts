@@ -86,6 +86,11 @@ export interface Sale {
   valorFaltanteAntesConcluir?: number;
   statusProducaoAntesConcluir?: 'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Agendado para Entrega' | 'Entregue';
   turnoEntrega?: 'Manhã' | 'Tarde';
+  referralCode?: string;
+  indicadoCodigo?: string;
+  descontoReferral?: number;
+  cashbackGasto?: number;
+  referralSended?: boolean;
   updatedAt?: string;
   pendingSync?: boolean;
 }

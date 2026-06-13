@@ -244,6 +244,18 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
             </span>
             <span className="font-extrabold">R$ {sale.total.toFixed(2)}</span>
           </div>
+          {sale.descontoReferral && (
+            <div className="flex justify-between items-center text-black font-bold border-t border-dashed border-black/45 pt-1">
+              <span className="select-none uppercase text-[10px]">Cupom Amigo:</span>
+              <span className="font-extrabold">- R$ {sale.descontoReferral.toFixed(2)}</span>
+            </div>
+          )}
+          {sale.cashbackGasto && (
+            <div className="flex justify-between items-center text-black font-bold border-t border-dashed border-black/45 pt-1">
+              <span className="select-none uppercase text-[10px]/relaxed">Cashback Usado:</span>
+              <span className="font-extrabold">- R$ {sale.cashbackGasto.toFixed(2)}</span>
+            </div>
+          )}
           {sale.status !== 'Orçamento' && (
             <>
               <div className="flex justify-between items-center text-black font-bold">

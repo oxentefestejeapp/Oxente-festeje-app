@@ -161,6 +161,10 @@ ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS notas_internas TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS pedido_anotado BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS aviso_pronto_sended BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS turno_entrega TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS indicado_codigo TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS desconto_referral NUMERIC;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS cashback_gasto NUMERIC;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS referral_sended BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Desabilitar RLS para garantir que as atualizações de pedidos sejam propagadas instantaneamente entre todos os computadores e celulares
@@ -352,6 +356,10 @@ const mapSaleToDb = (sale: Sale) => ({
   pedido_anotado: sale.pedidoAnotado || false,
   aviso_pronto_sended: sale.avisoProntoSended || false,
   turno_entrega: sale.turnoEntrega || null,
+  indicado_codigo: sale.indicadoCodigo || null,
+  desconto_referral: sale.descontoReferral || null,
+  cashback_gasto: sale.cashbackGasto || null,
+  referral_sended: sale.referralSended || false,
   updated_at: sale.updatedAt || new Date().toISOString()
 });
 
@@ -390,6 +398,10 @@ export const mapDbToSale = (dbItem: any): Sale => ({
   pedidoAnotado: dbItem.pedido_anotado || false,
   avisoProntoSended: dbItem.aviso_pronto_sended || false,
   turnoEntrega: dbItem.turno_entrega || undefined,
+  indicadoCodigo: dbItem.indicado_codigo || undefined,
+  descontoReferral: dbItem.desconto_referral !== null && dbItem.desconto_referral !== undefined ? Number(dbItem.desconto_referral) : undefined,
+  cashbackGasto: dbItem.cashback_gasto !== null && dbItem.cashback_gasto !== undefined ? Number(dbItem.cashback_gasto) : undefined,
+  referralSended: dbItem.referral_sended || false,
   updatedAt: dbItem.updated_at || undefined
 });
 

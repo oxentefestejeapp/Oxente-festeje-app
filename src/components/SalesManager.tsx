@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check, CheckSquare } from 'lucide-react';
+import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check, CheckSquare, TrendingUp, TrendingDown, Sparkles, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice } from '../types';
 import { Receipt } from './Receipt';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
@@ -48,6 +48,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdateStock, onUpdateSale, onDeleteSale, currentUserEmail = '' }: SalesManagerProps) {
   const isAdmin = currentUserEmail.trim().toLowerCase() === 'oxentefesteje@gmail.com' || currentUserEmail.trim().toLowerCase() === 'abraaoapp@oxente.com';
   const [selectedProductId, setSelectedProductId] = useState('');
+  const [billingPeriod, setBillingPeriod] = useState<7 | 15 | 30>(7);
   const [cliente, setCliente] = useState('');
   const [telefoneCliente, setTelefoneCliente] = useState('');
   const [quantidade, setQuantidade] = useState<number | ''>(1);
@@ -75,6 +76,65 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
    const [descontoPercent, setDescontoPercent] = useState<number>(0);
   const [customPctInput, setCustomPctInput] = useState('');
   const [customValInput, setCustomValInput] = useState('');
+
+  // Referral / Cupom states
+  const [referralCodeInput, setReferralCodeInput] = useState('');
+  const [referralDiscountApplied, setReferralDiscountApplied] = useState(0);
+  const [referralMatchSuccess, setReferralMatchSuccess] = useState<string | null>(null);
+  const [referralMatchError, setReferralMatchError] = useState<string | null>(null);
+
+  // Spent cashback applied as discount on indicator's own new purchase
+  const [appliedCashbackDiscount, setAppliedCashbackDiscount] = useState(0);
+
+  // Dynamically calculate the active client's available cashback balance from prior indicators
+  const clientCashbackBalance = useMemo(() => {
+    const cleanClient = cliente.trim().toLowerCase();
+    const cleanPhone = telefoneCliente.replace(/\D/g, '');
+    
+    if (!cleanClient && !cleanPhone) return 0;
+    
+    // Find previous sales belonging to this client (exclude budgets, but check all-time orders)
+    const clientPreviousSales = sales.filter(s => {
+      if (s.status === 'Orçamento') return false;
+      const matchByName = cleanClient.length >= 3 && s.cliente && s.cliente.trim().toLowerCase() === cleanClient;
+      const matchByPhone = cleanPhone.length >= 8 && s.telefoneCliente && s.telefoneCliente.replace(/\D/g, '') === cleanPhone;
+      return matchByName || matchByPhone;
+    });
+    
+    if (clientPreviousSales.length === 0) return 0;
+    
+    // Generate codes for these sales
+    const clientCodes = clientPreviousSales.map(s => {
+      const firstName = s.cliente.trim().split(' ')[0].replace(/[^a-zA-Z]/g, '').toUpperCase();
+      const pedNum = s.numeroPedido || s.id.substring(s.id.length - 5).toUpperCase();
+      return `${firstName}${pedNum}`;
+    });
+    
+    // Earned cashback is earned when friends use their codes (R$ 10 per usage)
+    let totalCashbackEarned = 0;
+    sales.forEach(s => {
+      if (s.status === 'Orçamento') return;
+      if (s.indicadoCodigo) {
+        const codeUsed = s.indicadoCodigo.trim().toUpperCase();
+        if (clientCodes.includes(codeUsed)) {
+          const isOwnOrder = clientPreviousSales.some(ps => ps.id === s.id);
+          if (!isOwnOrder) {
+            totalCashbackEarned += 10;
+          }
+        }
+      }
+    });
+    
+    // Total cashback spent so far
+    let totalCashbackSpent = 0;
+    clientPreviousSales.forEach(s => {
+      if (s.cashbackGasto) {
+        totalCashbackSpent += s.cashbackGasto;
+      }
+    });
+    
+    return Math.max(0, totalCashbackEarned - totalCashbackSpent);
+  }, [cliente, telefoneCliente, sales]);
 
   const playSound = (type: 'add' | 'remove' | 'success') => {
     if (getIsAudioMuted()) return;
@@ -139,6 +199,15 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   useEffect(() => {
     setSelectedAddonIds([]);
   }, [selectedProductId]);
+
+  // Safeguard: reset or cap applied cashback discount when customer changes or balance changes
+  useEffect(() => {
+    if (clientCashbackBalance === 0) {
+      setAppliedCashbackDiscount(0);
+    } else if (appliedCashbackDiscount > clientCashbackBalance) {
+      setAppliedCashbackDiscount(clientCashbackBalance);
+    }
+  }, [clientCashbackBalance, appliedCashbackDiscount]);
 
   // States for editing a sale
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
@@ -362,17 +431,46 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }
   }, [totalVendaSemDesconto, customValInput]);
 
-  const totalVenda = useMemo(() => {
-    const discountedValue = totalVendaSemDesconto * (1 - descontoPercent / 100);
-    return Number(Math.max(0, discountedValue).toFixed(2));
-  }, [totalVendaSemDesconto, descontoPercent]);
+  const handleValidateReferralCode = (code: string) => {
+    const cleanCode = code.trim().toUpperCase();
+    if (!cleanCode) {
+      setReferralMatchSuccess(null);
+      setReferralMatchError(null);
+      setReferralDiscountApplied(0);
+      return;
+    }
 
-  // Calcule o faturamento diário dos últimos 7 dias
-  const getDailyRevenueData = () => {
+    const matchedSale = sales.find(s => {
+      if (!s.cliente) return false;
+      const firstName = s.cliente.trim().split(' ')[0].replace(/[^a-zA-Z]/g, '').toUpperCase();
+      const pedNum = s.numeroPedido || s.id.substring(s.id.length - 5).toUpperCase();
+      const computedCode = `${firstName}${pedNum}`;
+      return computedCode === cleanCode;
+    });
+
+    if (matchedSale) {
+      setReferralMatchSuccess(`Indicação válida! Você ganhou R$ 5,00 de desconto e "${matchedSale.cliente}" acumulará R$ 10,00 de cashback!`);
+      setReferralMatchError(null);
+      setReferralDiscountApplied(5);
+      playSound('success');
+    } else {
+      setReferralMatchSuccess(null);
+      setReferralMatchError('Código de indicação não encontrado.');
+      setReferralDiscountApplied(0);
+    }
+  };
+
+  const totalVenda = useMemo(() => {
+    const discountedValue = totalVendaSemDesconto * (1 - descontoPercent / 100) - referralDiscountApplied - appliedCashbackDiscount;
+    return Number(Math.max(0, discountedValue).toFixed(2));
+  }, [totalVendaSemDesconto, descontoPercent, referralDiscountApplied, appliedCashbackDiscount]);
+
+  // Calcule o faturamento diário para o período selecionado de dias
+  const getDailyRevenueData = (days: number) => {
     const dataMap: { [dateStr: string]: number } = {};
     
-    // Inicializar os últimos 7 dias com 0
-    for (let i = 6; i >= 0; i--) {
+    // Inicializar os últimos dias com 0 (em ordem cronológica)
+    for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
@@ -387,7 +485,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         if (!isNaN(saleDate.getTime())) {
           const dateStr = saleDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
           if (dataMap[dateStr] !== undefined) {
-            dataMap[dateStr] += sale.total;
+             dataMap[dateStr] += sale.total;
           }
         }
       } catch (err) {
@@ -402,7 +500,29 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }));
   };
 
-  const chartData = getDailyRevenueData();
+  const chartData = useMemo(() => getDailyRevenueData(billingPeriod), [sales, billingPeriod]);
+
+  // Premium widgets metrics
+  const todayRevenue = useMemo(() => {
+    const todayStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    const match = chartData.find(d => d.date === todayStr);
+    return match ? match.value : 0;
+  }, [chartData]);
+
+  const averageDailyRevenue = useMemo(() => {
+    if (chartData.length === 0) return 0;
+    const total = chartData.reduce((acc, curr) => acc + curr.value, 0);
+    return Number((total / chartData.length).toFixed(2));
+  }, [chartData]);
+
+  const peakRevenueDay = useMemo(() => {
+    if (chartData.length === 0) return { date: '-', value: 0 };
+    return chartData.reduce((max, curr) => (curr.value > max.value ? curr : max), { date: '-', value: 0 });
+  }, [chartData]);
+
+  const activeOrdersCount = useMemo(() => {
+    return sales.filter(s => s.status !== 'Orçamento' && s.statusProducao !== 'Entregue').length;
+  }, [sales]);
 
   const handleAddToCart = () => {
     if (!selectedProductId) {
@@ -661,6 +781,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       ? Math.max(...numericPedidoNumbers, 29999) + 1 
       : 30000;
 
+    const customerFirstName = cliente.trim().split(' ')[0].replace(/[^a-zA-Z]/g, '').toUpperCase();
+    const customerPedNum = registroTipo === 'Orçamento' ? Date.now().toString().substring(8) : String(nextPedidoNumber);
+    const selfCode = `${customerFirstName}${customerPedNum}`;
+
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
       cliente: cliente.trim(),
@@ -679,7 +803,12 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       itens: finalItens,
       criadoPorEmail: currentUserEmail || 'Desconhecido',
       dataRetirada: dataRetirada || undefined,
-      statusProducao: registroTipo === 'Orçamento' ? undefined : 'Agendado'
+      statusProducao: registroTipo === 'Orçamento' ? undefined : 'Agendado',
+      referralCode: selfCode,
+      indicadoCodigo: referralDiscountApplied > 0 ? referralCodeInput.trim().toUpperCase() : undefined,
+      descontoReferral: referralDiscountApplied > 0 ? referralDiscountApplied : undefined,
+      cashbackGasto: appliedCashbackDiscount > 0 ? appliedCashbackDiscount : undefined,
+      referralSended: false
     };
 
     // Salvar venda (que agora deduz o estoque de forma atômica no pai)
@@ -716,6 +845,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setCustomPctInput('');
     setCustomValInput('');
     setCart([]);
+    setReferralCodeInput('');
+    setReferralDiscountApplied(0);
+    setAppliedCashbackDiscount(0);
+    setReferralMatchSuccess(null);
+    setReferralMatchError(null);
 
     setTimeout(() => {
       setSuccessMsg('');
@@ -997,83 +1131,175 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
       
-      {/* CHART SECTION: Daily Revenue Chart in beautiful Gold Style */}
+      {/* CHART SECTION: Daily Revenue Chart in beautiful Premium Model */}
       {isAdmin && (
-        <div className="lg:col-span-12 no-print bg-zinc-900 rounded-2xl border border-zinc-800/80 p-6 shadow-md">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
-            <div className="flex items-center gap-2">
-              <div className="p-2 bg-brand-pink/10 border border-brand-pink/20 rounded-lg text-brand-pink">
-                <Calendar className="h-5 w-5" />
+        <div className="lg:col-span-12 no-print bg-zinc-900 border border-zinc-800/80 rounded-2xl p-6 shadow-xl relative overflow-hidden">
+          {/* Subtle glowing shadow behind */}
+          <div className="absolute top-0 right-0 w-80 h-80 bg-brand-pink/5 rounded-full filter blur-[80px] pointer-events-none" />
+          
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 relative z-10">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-brand-pink/10 border border-brand-pink/20 rounded-xl text-brand-pink shadow-inner shadow-brand-pink/5">
+                <Activity className="h-5.5 w-5.5 animate-pulse" />
               </div>
               <div>
-                <h2 className="font-display font-semibold text-lg text-zinc-100">Desempenho de Faturamento</h2>
-                <p className="text-xs text-zinc-400 mt-0.5">Faturamento diário dos últimos 7 dias</p>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-display font-black text-lg text-zinc-100 tracking-tight">Desempenho de Faturamento</h2>
+                  <span className="text-[9px] font-bold bg-brand-pink/10 border border-brand-pink/20 text-brand-pink px-2 py-0.5 rounded-full select-none uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles className="h-2.5 w-2.5" /> Premium Model
+                  </span>
+                </div>
+                <p className="text-xs text-zinc-400 mt-0.5">Visão analítica de faturamento diário</p>
               </div>
             </div>
-            <div className="flex flex-col text-left sm:text-right">
-              <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Total Acumulado (7 Dias)</span>
-              <span className="text-xl font-extrabold text-brand-pink mt-0.5">
-                R$ {chartData.reduce((acc, curr) => acc + curr.value, 0).toFixed(2)}
-              </span>
+
+            {/* Interactive Period Switcher */}
+            <div className="flex bg-zinc-950 p-1 border border-zinc-850 rounded-xl self-start sm:self-auto shadow-inner select-none">
+              {[7, 15, 30].map((period) => (
+                <button
+                  key={period}
+                  type="button"
+                  onClick={() => {
+                    setBillingPeriod(period as any);
+                    playSound('success');
+                  }}
+                  className={`py-1 px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                    billingPeriod === period
+                      ? 'bg-brand-pink text-black font-black shadow-lg scale-[1.03]'
+                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/10'
+                  }`}
+                >
+                  {period} Dias
+                </button>
+              ))}
             </div>
           </div>
-          
-          {/* Chart Area */}
-          <div className="relative h-48 w-full min-w-0 mt-6">
-            <ResponsiveContainer width="100%" height={192} minWidth={0}>
-              <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#27272a" vertical={false} />
-                <XAxis 
-                  dataKey="date" 
-                  stroke="#71717a" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false}
-                  dy={8}
-                  fontFamily="JetBrains Mono"
-                />
-                <YAxis 
-                  stroke="#71717a" 
-                  fontSize={10} 
-                  tickLine={false} 
-                  axisLine={false}
-                  tickFormatter={(val) => `R$ ${val}`}
-                  dx={-8}
-                  fontFamily="JetBrains Mono"
-                />
-                <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(197, 146, 24, 0.05)' }} />
-                <Bar 
-                  dataKey="value" 
-                  fill="#c59218" 
-                  radius={[4, 4, 0, 0]}
-                  maxBarSize={32}
-                />
-              </BarChart>
-            </ResponsiveContainer>
+
+          <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end relative z-10">
+            {/* Chart Area */}
+            <div className="md:col-span-8 bg-black/40 border border-zinc-850/50 p-4 rounded-xl min-w-0">
+              <div className="flex items-center justify-between mb-4 px-2">
+                <span className="text-[10.5px] text-zinc-500 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                  <TrendingUp className="h-3.5 w-3.5 text-brand-pink" /> Fluxo Diário
+                </span>
+                <span className="text-xs text-zinc-400 font-bold font-mono">
+                  Total no período: <span className="text-brand-pink font-extrabold text-sm font-sans">R$ {chartData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                </span>
+              </div>
+              <div className="relative h-56 w-full min-w-0">
+                <ResponsiveContainer width="100%" height={224} minWidth={0}>
+                  <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#ec4899" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#ec4899" stopOpacity={0.0} />
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1f1f22" vertical={false} />
+                    <XAxis 
+                      dataKey="date" 
+                      stroke="#52525b" 
+                      fontSize={10} 
+                      tickLine={false} 
+                      axisLine={false}
+                      dy={8}
+                      fontFamily="JetBrains Mono"
+                    />
+                    <YAxis 
+                      stroke="#52525b" 
+                      fontSize={10} 
+                      tickLine={false} 
+                      axisLine={false}
+                      tickFormatter={(val) => `R$ ${val}`}
+                      dx={-8}
+                      fontFamily="JetBrains Mono"
+                    />
+                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#ec4899', strokeWidth: 1, strokeDasharray: '3 3' }} />
+                    <Area 
+                      type="monotone" 
+                      dataKey="value" 
+                      stroke="#ec4899" 
+                      strokeWidth={2.5}
+                      fillOpacity={1} 
+                      fill="url(#colorRevenue)" 
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            {/* Premium Bento Grid KPIs */}
+            <div className="md:col-span-4 space-y-4 self-stretch flex flex-col justify-between">
+              {/* Today's revenue */}
+              <div className="group border border-emerald-500/15 hover:border-emerald-500/25 bg-emerald-500/[0.01] hover:bg-emerald-500/[0.03] rounded-xl p-4 transition-all duration-300">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block font-mono">Faturamento de Hoje</span>
+                  <span className="text-[9px] font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded tracking-wide">AO VIVO</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-black text-emerald-400 font-sans tracking-tight">R$ {todayRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                  <span className="text-[10px] text-zinc-500 font-bold">líquido</span>
+                </div>
+              </div>
+
+              {/* Average Daily */}
+              <div className="group border border-zinc-800 hover:border-zinc-700 bg-zinc-950/30 hover:bg-zinc-950/55 rounded-xl p-4 transition-all duration-300">
+                <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block mb-1.5 font-mono">Média Diária ({billingPeriod}D)</span>
+                <div className="flex items-baseline gap-1.5">
+                  <span className="text-xl font-bold text-zinc-150 tracking-tight font-sans">R$ {averageDailyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              </div>
+
+              {/* Peak Revenue day */}
+              <div className="group border border-zinc-800 hover:border-zinc-700 bg-zinc-950/30 hover:bg-zinc-950/55 rounded-xl p-4 transition-all duration-300">
+                <span className="text-[10px] text-zinc-500 uppercase font-bold tracking-wider block mb-1.5 font-mono">Pico do Período</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-lg font-bold text-zinc-200">
+                    R$ {peakRevenueDay.value.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-[10px] font-bold text-zinc-500 bg-zinc-900 border border-zinc-800 px-2 py-0.5 rounded font-mono">
+                    Dia {peakRevenueDay.date}
+                  </span>
+                </div>
+              </div>
+
+              {/* Active Pipeline Orders */}
+              <div className="group border border-amber-500/15 hover:border-amber-500/25 bg-amber-500/[0.01] hover:bg-amber-500/[0.03] rounded-xl p-4 transition-all duration-300">
+                <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block mb-1.5 font-mono">Pipeline em Andamento</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-xl font-black text-amber-400">
+                    {activeOrdersCount} {activeOrdersCount === 1 ? 'Pedido' : 'Pedidos'}
+                  </span>
+                  <span className="text-[10px] font-extrabold text-amber-500/80 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded tracking-wide font-mono">
+                    ATIVOS
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
 
-          {/* New Green Closed Orders Metric Section */}
-          <div id="closed-orders-metric-container" className="mt-6 pt-6 border-t border-zinc-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          {/* New Green Closed Orders Metric Section (Preserving functionality) */}
+          <div id="closed-orders-metric-container" className="mt-8 pt-6 border-t border-zinc-850/70 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative z-10">
             <div className="flex items-center gap-3">
-              <div id="closed-orders-icon-badge" className="p-2 bg-emerald-950/20 border border-emerald-500/20 rounded-xl text-emerald-400">
+              <div id="closed-orders-icon-badge" className="p-2.5 bg-emerald-500/10 border border-emerald-500/20 rounded-xl text-emerald-400 shadow-sm shadow-emerald-500/5">
                 <CheckSquare className="h-5 w-5" />
               </div>
               <div>
-                <span className="block text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Pedidos Fechados</span>
-                <span id="closed-orders-count-value" className="text-xl font-extrabold text-emerald-400 mt-0.5 block">
-                  {closedOrdersCount} {closedOrdersCount === 1 ? 'pedido fechado' : 'pedidos fechados'}
+                <span className="block text-[10px] text-zinc-500 uppercase font-black tracking-wider font-mono">Filtro de Pedidos Fechados</span>
+                <span id="closed-orders-count-value" className="text-[15px] font-extrabold text-emerald-400 mt-0.5 block">
+                  {closedOrdersCount} {closedOrdersCount === 1 ? 'pedido fechado' : 'pedidos fechados'} no filtro
                 </span>
               </div>
             </div>
             
-            <div id="closed-orders-date-selector" className="flex items-center gap-2 bg-black/30 px-3 py-1.5 rounded-xl border border-zinc-800/80">
-              <span className="text-[10px] text-zinc-400 font-medium">A partir de:</span>
+            <div id="closed-orders-date-selector" className="flex items-center gap-2.5 bg-black/50 px-3.5 py-2 rounded-xl border border-zinc-800/80 shadow-md">
+              <span className="text-[10.5px] text-zinc-400 font-bold select-none uppercase tracking-wider font-mono">Início do Filtro:</span>
               <input
                 id="metric-start-date-picker"
                 type="date"
                 value={metricStartDate}
                 onChange={(e) => setMetricStartDate(e.target.value)}
-                className="px-2 py-0.5 bg-zinc-950 border border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink text-zinc-200 text-xs font-mono h-7"
+                className="px-3 py-1 bg-zinc-950 border border-zinc-800 hover:border-zinc-700/80 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-pink/40 text-zinc-200 text-xs font-mono h-8 cursor-pointer transition-colors"
               />
             </div>
           </div>
@@ -1394,6 +1620,52 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               </div>
             </div>
 
+            {/* Live Cashback Lookup Alert */}
+            {clientCashbackBalance > 0 && (
+              <motion.div 
+                initial={{ opacity: 0, y: -8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-emerald-500/10 border border-emerald-500/20 rounded-xl p-3.5 flex items-center justify-between gap-3 shadow-sm"
+              >
+                <div className="flex items-center gap-2.5">
+                  <span className="h-8 w-8 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                    <Wallet className="h-4.5 w-4.5" />
+                  </span>
+                  <div>
+                    <h5 className="text-xs font-bold text-emerald-400">Cashback Acumulado Disponível!</h5>
+                    <p className="text-[11px] text-zinc-400">
+                      Este cliente possui <span className="font-mono font-bold text-emerald-400">R$ {clientCashbackBalance.toFixed(2)}</span> de saldo acumulado.
+                    </p>
+                  </div>
+                </div>
+                <div>
+                  {appliedCashbackDiscount > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppliedCashbackDiscount(0);
+                        playSound('remove');
+                      }}
+                      className="px-3 py-1.5 bg-zinc-850 hover:bg-zinc-800 text-zinc-300 font-bold text-[11px] rounded-lg border border-zinc-750 transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <X className="h-3 w-3" /> Remover Desconto
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAppliedCashbackDiscount(clientCashbackBalance);
+                        playSound('success');
+                      }}
+                      className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] rounded-lg transition-all flex items-center gap-1 cursor-pointer"
+                    >
+                      <Check className="h-3 w-3" /> Aplicar R$ {clientCashbackBalance.toFixed(2)}
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
             {/* Quantity row */}
             <div className="w-full">
               <div>
@@ -1708,6 +1980,51 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               )}
             </div>
 
+            {/* Cupom de Indicação / Referral Club */}
+            <div className="bg-purple-950/10 border border-purple-900/30 p-4 rounded-xl space-y-2">
+              <span className="block text-xs font-bold text-purple-400 uppercase select-none flex items-center gap-1.5 font-sans">
+                🎁 Programa de Indicação (Referral Club)
+              </span>
+              <p className="text-[10px] text-zinc-400 leading-normal font-sans">
+                Insira o código de indicação do amigo indicador para obter <strong className="text-emerald-400 font-semibold">R$ 5,00 de desconto imediato</strong> nesta nova compra e gerar <strong className="text-emerald-400 font-semibold">R$ 10,00 de cashback</strong> para ele quando você fechar esta compra!
+              </p>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Ex: ANA30012"
+                  value={referralCodeInput}
+                  onChange={(e) => {
+                    const val = e.target.value.toUpperCase();
+                    setReferralCodeInput(val);
+                    if (val === '') {
+                      setReferralDiscountApplied(0);
+                      setReferralMatchSuccess(null);
+                      setReferralMatchError(null);
+                    }
+                  }}
+                  className="flex-1 px-3 py-1.5 bg-black border border-purple-900/40 rounded-lg text-xs font-bold text-purple-300 font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-zinc-700 uppercase"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleValidateReferralCode(referralCodeInput)}
+                  className="px-3 bg-purple-750 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                >
+                  Validar
+                </button>
+              </div>
+              
+              {referralMatchSuccess && (
+                <div className="text-[10px] text-emerald-450 font-bold bg-emerald-950/25 border border-emerald-900/30 p-2 rounded-lg animate-fade-in flex items-center gap-1 font-sans">
+                  <span>✅</span> {referralMatchSuccess}
+                </div>
+              )}
+              {referralMatchError && (
+                <div className="text-[10px] text-red-400 font-bold bg-red-950/25 border border-red-900/30 p-2 rounded-lg animate-fade-in flex items-center gap-1 font-sans">
+                  <span>❌</span> {referralMatchError}
+                </div>
+              )}
+            </div>
+
             {/* Total Indicator Panel */}
             <div className="bg-black/40 border border-zinc-800 rounded-xl p-4 flex items-center justify-between">
               <div className="flex items-center gap-2 text-zinc-300">
@@ -1718,6 +2035,11 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 {descontoPercent > 0 && (
                   <span className="text-[10px] text-emerald-450 font-bold block mb-0.5">
                     Economia: R$ {(totalVendaSemDesconto * (descontoPercent / 100)).toFixed(2)}
+                  </span>
+                )}
+                {referralDiscountApplied > 0 && (
+                  <span className="text-[10px] text-purple-400 font-bold block mb-0.5 animate-pulse font-sans">
+                    🎁 Indicação: -R$ {referralDiscountApplied.toFixed(2)} + Cashback p/ Indicador Ativado!
                   </span>
                 )}
                 <span className="text-2xl font-bold text-brand-pink block font-mono">

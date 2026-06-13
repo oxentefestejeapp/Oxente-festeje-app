@@ -2543,6 +2543,7 @@ export default function App() {
                 sales={sales}
                 storeInfo={storeInfo}
                 onUpdateSale={handleUpdateSale}
+                isAdmin={isAdmin}
               />
             )}
 
