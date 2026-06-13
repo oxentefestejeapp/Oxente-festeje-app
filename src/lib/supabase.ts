@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS oxente_sales (
   pedido_anotado BOOLEAN DEFAULT FALSE,
   aviso_pronto_sended BOOLEAN DEFAULT FALSE,
   turno_entrega TEXT,
+  bloqueado_lembrete BOOLEAN DEFAULT FALSE,
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -165,6 +166,7 @@ ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS indicado_codigo TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS desconto_referral NUMERIC;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS cashback_gasto NUMERIC;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS referral_sended BOOLEAN DEFAULT FALSE;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS bloqueado_lembrete BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Desabilitar RLS para garantir que as atualizações de pedidos sejam propagadas instantaneamente entre todos os computadores e celulares
@@ -360,6 +362,7 @@ const mapSaleToDb = (sale: Sale) => ({
   desconto_referral: sale.descontoReferral || null,
   cashback_gasto: sale.cashbackGasto || null,
   referral_sended: sale.referralSended || false,
+  bloqueado_lembrete: sale.bloqueadoLembrete || false,
   updated_at: sale.updatedAt || new Date().toISOString()
 });
 
@@ -402,6 +405,7 @@ export const mapDbToSale = (dbItem: any): Sale => ({
   descontoReferral: dbItem.desconto_referral !== null && dbItem.desconto_referral !== undefined ? Number(dbItem.desconto_referral) : undefined,
   cashbackGasto: dbItem.cashback_gasto !== null && dbItem.cashback_gasto !== undefined ? Number(dbItem.cashback_gasto) : undefined,
   referralSended: dbItem.referral_sended || false,
+  bloqueadoLembrete: dbItem.bloqueado_lembrete || false,
   updatedAt: dbItem.updated_at || undefined
 });
 
@@ -680,12 +684,13 @@ const realDbSupabase = {
         const { error } = await supabase.from('oxente_sales').upsert(dbRow);
         if (error) {
           lastSupabaseError = error;
-          // Se as colunas novas 'pedido_anotado' ou 'aviso_pronto_sended' não existirem no banco (erro 42703), omitimos e tentamos de novo
+          // Se as colunas novas não existirem no banco (erro 42703), omitimos e tentamos de novo
           if (error.code === '42703') {
             console.warn('Colunas novas podem não existir no Supabase, tentando salvar sem elas.');
             delete dbRow.pedido_anotado;
             delete dbRow.aviso_pronto_sended;
             delete dbRow.turno_entrega;
+            delete dbRow.bloqueado_lembrete;
             attempt++;
             continue;
           }

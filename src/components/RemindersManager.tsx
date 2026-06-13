@@ -21,7 +21,9 @@ import {
   Send,
   Zap,
   FileText,
-  Eye
+  Eye,
+  Lock,
+  Unlock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sale, StoreInfo } from '../types';
@@ -79,7 +81,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
         indicatorPhone: string;
         code: string;
         referredSales: { friendName: string; saleDate: string; total: number; orderNum: string }[];
-        cashbackEarned: number;
+        cashbackEarned: number; // Storing active discount percentage (e.g. 5, 10, 15) for backward compatibility
         originalSale: Sale;
       }
     } = {};
@@ -117,20 +119,46 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
             total: sale.total,
             orderNum: sale.numeroPedido || ''
           });
-          indicatorsMap[uppercaseCode].cashbackEarned += 10;
           totalCompletedReferrals += 1;
           totalReferredRevenue += sale.total;
         }
       }
     });
 
+    // 3. Post-process to calculate spent and available percentage-based coupons for each indicator
     const indicatorsList = Object.values(indicatorsMap).filter(ind => ind.code && ind.indicatorName);
+    
+    indicatorsList.forEach(ind => {
+      const cleanClient = ind.indicatorName.trim().toLowerCase();
+      const cleanPhone = ind.indicatorPhone.replace(/\D/g, '');
+      
+      // Find indicators' own completed purchases where they used their discount
+      const clientPreviousSales = sales.filter(s => {
+        if (s.status === 'Orçamento') return false;
+        const matchByName = cleanClient.length >= 3 && s.cliente && s.cliente.trim().toLowerCase() === cleanClient;
+        const matchByPhone = cleanPhone.length >= 8 && s.telefoneCliente && s.telefoneCliente.replace(/\D/g, '') === cleanPhone;
+        return matchByName || matchByPhone;
+      });
+      
+      let totalReferralsSpent = 0;
+      clientPreviousSales.forEach(s => {
+        if (s.cashbackGasto) {
+          totalReferralsSpent += (s.cashbackGasto / 5);
+        }
+      });
+      
+      const totalReferralsEarned = ind.referredSales.length;
+      const availableReferrals = Math.max(0, totalReferralsEarned - totalReferralsSpent);
+      const availableDiscountPercent = Math.min(15, availableReferrals * 5);
+      
+      ind.cashbackEarned = availableDiscountPercent; // Store active percentage (0, 5, 10, 15)
+    });
 
     return {
       indicatorsList,
       totalCompletedReferrals,
       totalReferredRevenue,
-      totalCashbackEarned: totalCompletedReferrals * 10
+      totalCashbackEarned: totalCompletedReferrals * 5 // Each completed referral is 5% base value
     };
   }, [sales]);
 
@@ -465,11 +493,13 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.35 }}
                   className={`border rounded-2xl p-5 transition-all duration-300 relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-5 ${
-                    isReadyForPickup
-                      ? 'border-emerald-500/35 bg-emerald-950/15 hover:border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.06)]'
-                      : isPending 
-                        ? 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-750' 
-                        : 'border-zinc-900 bg-zinc-950/30 opacity-65'
+                    sale.bloqueadoLembrete
+                      ? 'border-red-500/35 bg-red-955/15 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.06)]'
+                      : isReadyForPickup
+                        ? 'border-emerald-500/35 bg-emerald-950/15 hover:border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.06)]'
+                        : isPending 
+                          ? 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-750' 
+                          : 'border-zinc-900 bg-zinc-950/30 opacity-65'
                   }`}
                 >
                   {/* Absolute Green Overlay celebration when readyId is active */}
@@ -572,6 +602,35 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                           Pago Integral
                         </span>
                       )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          playAppSound('click');
+                          onUpdateSale({
+                            ...sale,
+                            bloqueadoLembrete: !sale.bloqueadoLembrete
+                          });
+                        }}
+                        className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 cursor-pointer transition-all border ${
+                          sale.bloqueadoLembrete
+                            ? 'bg-red-500/20 hover:bg-red-500/30 text-red-400 border-red-500/35 shadow-xs'
+                            : 'bg-zinc-950 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-200 border-zinc-850'
+                        }`}
+                        title={sale.bloqueadoLembrete ? "Clique para DESBLOQUEAR avisos deste pedido" : "Clique para BLOQUEAR avisos por atraso de produção"}
+                      >
+                        {sale.bloqueadoLembrete ? (
+                          <>
+                            <Lock className="h-3 w-3 text-red-400 animate-pulse" />
+                            <span>Atrasado/Bloqueado 🔒</span>
+                          </>
+                        ) : (
+                          <>
+                            <Unlock className="h-3 w-3 text-zinc-500" />
+                            <span>Bloquear Lembrete</span>
+                          </>
+                        )}
+                      </button>
                     </div>
 
                     {/* Client header information */}
@@ -622,27 +681,39 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                   <div className="flex flex-col sm:flex-row md:flex-col gap-2 w-full md:w-auto shrink-0 self-stretch md:self-auto justify-center md:border-l md:border-zinc-850/40 md:pl-5">
                     {isPending ? (
                       <>
-                        <button
-                          type="button"
-                          onClick={() => handleReminderAction(sale)}
-                          className={`flex-1 py-2.5 px-4 font-extrabold rounded-xl text-[11px] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-95 ${
-                            sale.avisoProntoSended
-                              ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-950/45'
-                              : isReadyForPickup
-                                ? 'bg-emerald-600 hover:bg-emerald-555 text-white shadow-emerald-950/40'
-                                : 'bg-brand-pink hover:bg-brand-pink/90 text-black shadow-black/45'
-                          }`}
-                        >
-                          <MessageSquare className="h-4 w-4 shrink-0" />
-                          <span>
-                            {sale.avisoProntoSended
-                              ? 'Aviso Pronto Enviado 🍊'
-                              : isReadyForPickup
-                                ? 'Compartilhar Mensagem'
-                                : 'Avisar Pronto & Contatar'}
-                          </span>
-                          <ArrowRight className="h-3 w-3 shrink-0 animate-bounce-horizontal" />
-                        </button>
+                        {sale.bloqueadoLembrete ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="flex-1 py-2.5 px-4 font-extrabold rounded-xl text-[11px] bg-red-955/35 text-red-400 border border-red-900/40 cursor-not-allowed flex items-center justify-center gap-1.5 shadow-none select-none"
+                            title="Esse contato está bloqueado pois há um atraso na produção interna!"
+                          >
+                            <Lock className="h-4 w-4 shrink-0 text-red-400" />
+                            <span>Aviso Bloqueado (Atraso)</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleReminderAction(sale)}
+                            className={`flex-1 py-2.5 px-4 font-extrabold rounded-xl text-[11px] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-md active:scale-95 ${
+                              sale.avisoProntoSended
+                                ? 'bg-orange-600 hover:bg-orange-500 text-white shadow-orange-950/45'
+                                : isReadyForPickup
+                                  ? 'bg-emerald-600 hover:bg-emerald-555 text-white shadow-emerald-950/40'
+                                  : 'bg-brand-pink hover:bg-brand-pink/90 text-black shadow-black/45'
+                            }`}
+                          >
+                            <MessageSquare className="h-4 w-4 shrink-0" />
+                            <span>
+                              {sale.avisoProntoSended
+                                ? 'Aviso Pronto Enviado 🍊'
+                                : isReadyForPickup
+                                  ? 'Compartilhar Mensagem'
+                                  : 'Avisar Pronto & Contatar'}
+                            </span>
+                            <ArrowRight className="h-3 w-3 shrink-0 animate-bounce-horizontal" />
+                          </button>
+                        )}
                         
                         {schedulingSaleId === sale.id ? (
                           <div className="bg-purple-950/30 border border-purple-800/60 rounded-xl p-2.5 space-y-2 mt-1 animate-fade-in no-print">
@@ -828,8 +899,12 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
               return (
                 <div 
                   key={sale.id}
-                  className={`bg-black/35 border border-zinc-850 rounded-xl p-4 space-y-3.5 transition-all hover:border-zinc-800 ${
-                    !isPending ? 'opacity-55' : ''
+                  className={`border rounded-xl p-4 space-y-3.5 transition-all ${
+                    sale.bloqueadoLembrete
+                      ? 'border-red-500/35 bg-red-955/10 hover:border-red-500/50 shadow-[0_0_12px_rgba(239,68,68,0.04)]'
+                      : 'bg-black/35 border-zinc-850 hover:border-zinc-800'
+                  } ${
+                    !isPending && !sale.bloqueadoLembrete ? 'opacity-55' : ''
                   }`}
                 >
                   <div className="space-y-1">
@@ -854,6 +929,25 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                           title="Visualizar Recibo"
                         >
                           <Eye className="h-3.5 w-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playAppSound('click');
+                            onUpdateSale({
+                              ...sale,
+                              bloqueadoLembrete: !sale.bloqueadoLembrete
+                            });
+                          }}
+                          className={`p-1 border rounded-md cursor-pointer transition-colors flex items-center justify-center ${
+                            sale.bloqueadoLembrete
+                              ? 'bg-red-500/20 hover:bg-red-500/30 text-red-450 border-red-500/35'
+                              : 'bg-zinc-950 hover:bg-zinc-900 text-zinc-500 hover:text-zinc-355 border-zinc-850'
+                          }`}
+                          title={sale.bloqueadoLembrete ? "Clique para DESBLOQUEAR avisos deste pedido" : "Clique para BLOQUEAR avisos por atraso de produção"}
+                        >
+                          {sale.bloqueadoLembrete ? <Lock className="h-3.5 w-3.5 text-red-400 animate-pulse" /> : <Unlock className="h-3.5 w-3.5 text-zinc-500" />}
                         </button>
                       </div>
                     </div>
@@ -906,19 +1000,31 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                     </select>
 
                     {isPending ? (
-                      <button
-                        type="button"
-                        onClick={() => handleReminderAction(sale)}
-                        className={`py-1 px-2.5 transition-all font-black text-[9px] rounded-md flex items-center gap-1 cursor-pointer select-none ${
-                          sale.avisoProntoSended
-                            ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-600 hover:text-white border border-orange-500/30'
-                            : 'bg-brand-pink/15 hover:bg-brand-pink text-brand-pink hover:text-black'
-                        }`}
-                        title="Diga que está pronto preventivamente e envie WhatsApp"
-                      >
-                        <span>{sale.avisoProntoSended ? 'Zap Enviado 🍊' : 'WhatsApp'}</span>
-                        <ArrowRight className="h-2.5 w-2.5" />
-                      </button>
+                      sale.bloqueadoLembrete ? (
+                        <button
+                          type="button"
+                          disabled
+                          className="py-1 px-2.5 bg-red-955/35 text-red-400 border border-red-900/40 text-[9px] font-black rounded-md flex items-center gap-1 cursor-not-allowed select-none"
+                          title="Esse contato está bloqueado pois há um atraso na produção interna!"
+                        >
+                          <Lock className="h-3 w-3 text-red-400" />
+                          <span>Bloqueado 🔒</span>
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleReminderAction(sale)}
+                          className={`py-1 px-2.5 transition-all font-black text-[9px] rounded-md flex items-center gap-1 cursor-pointer select-none ${
+                            sale.avisoProntoSended
+                              ? 'bg-orange-500/20 text-orange-400 hover:bg-orange-600 hover:text-white border border-orange-500/30'
+                              : 'bg-brand-pink/15 hover:bg-brand-pink text-brand-pink hover:text-black'
+                          }`}
+                          title="Diga que está pronto preventivamente e envie WhatsApp"
+                        >
+                          <span>{sale.avisoProntoSended ? 'Zap Enviado 🍊' : 'WhatsApp'}</span>
+                          <ArrowRight className="h-2.5 w-2.5" />
+                        </button>
+                      )
                     ) : (
                       <span className="text-[9px] font-black uppercase text-emerald-400 flex items-center gap-1 select-none">
                         <CheckCircle className="h-3 w-3" /> Entregue
@@ -1215,7 +1321,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                   <span className="text-[9px] uppercase tracking-widest font-black bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-1.5 py-0.5 rounded">Referral Club • Premium</span>
                 </div>
                 <p className="text-xs text-zinc-400 mt-1 leading-relaxed">
-                  Estimule o crescimento orgânico da <strong className="text-brand-pink font-semibold">Oxente Festeje</strong>! Seus clientes indicam amigos enviando um cupom com código de indicação personalizado. Quando o amigo realiza uma compra informando esse código, ele ganha <strong className="text-emerald-400 font-semibold">R$ 5,00 de desconto imediato</strong> e o cliente indicador ganha <strong className="text-emerald-400 font-semibold">R$ 10,00 de cashback automático</strong> para ser descontado na sua próxima compra ou festa.
+                  Estimule o crescimento orgânico da <strong className="text-brand-pink font-semibold">Oxente Festeje</strong>! Seus clientes indicam amigos enviando um cupom com código de indicação personalizado. Quando o amigo realiza uma compra informando esse código, ele ganha <strong className="text-emerald-400 font-semibold">5% de desconto imediato</strong> e o cliente indicador ganha <strong className="text-emerald-400 font-semibold">+5% de desconto acumulativo</strong> para ser descontado na sua própria próxima compra ou festa, podendo somar até <strong className="text-emerald-400 font-semibold">15% de desconto total</strong>.
                 </p>
               </div>
             </div>
@@ -1250,9 +1356,9 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                 <TrendingUp className="h-5 w-5" />
               </div>
               <div>
-                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Cashback Distribuído</span>
-                <span className="text-xl font-mono font-bold text-amber-500">R$ {referralMetrics.totalCashbackEarned.toFixed(2)}</span>
-                <span className="text-[9px] text-zinc-500 block">Créditos acumulados pelos indicadores</span>
+                <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider block">Clientes Indicadores</span>
+                <span className="text-xl font-mono font-bold text-amber-500">{referralMetrics.indicatorsList.length}</span>
+                <span className="text-[9px] text-zinc-500 block">Clientes com códigos e cupons ativos</span>
               </div>
             </div>
           </div>
@@ -1286,10 +1392,10 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
               <div className="space-y-1.5 bg-black/45 border border-zinc-900 p-3 rounded-xl">
                 <div className="flex items-center gap-1.5 text-zinc-300 font-bold">
                   <span className="text-amber-500 font-mono text-sm">3.</span>
-                  <span>Cashback Automático</span>
+                  <span>Desconto Acumulativo</span>
                 </div>
                 <p className="text-[11px] leading-relaxed">
-                  O cliente originário que indicou ganha <strong>R$ 10,00 de cashback automático</strong> para ser descontado na sua próxima compra ou festa, incentivando a fidelização!
+                  O cliente originário ganha <strong>+5% para cada indicação</strong> finalizada, podendo acumular até <strong>15% de desconto total</strong> para usar na sua próxima festa Oxente!
                 </p>
               </div>
             </div>
@@ -1313,7 +1419,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                     <th className="py-3 px-4">Cliente Indicador</th>
                     <th className="py-3 px-4">Código / Cupom</th>
                     <th className="py-3 px-4 text-center">Contratos Indicados</th>
-                    <th className="py-3 px-4 text-emerald-500 text-right">Cashback Acumulado</th>
+                    <th className="py-3 px-4 text-emerald-500 text-right">Desconto Acumulado</th>
                     <th className="py-3 px-4 text-center">Compartilhar</th>
                   </tr>
                 </thead>
@@ -1332,10 +1438,10 @@ Sua compra foi concluída com sucesso e para comemorar, você acaba de entrar no
 
 Funciona assim:
 1. Compartilhe o seu código exclusivo *${ind.code}* com seus amigos que estão organizando festa.
-2. Na primeira compra deles, eles informam o seu código no momento da compra e ganham *R$ 5,00 de desconto imediato* na hora!
-3. Assim que eles fecharem a compra, você ganha *R$ 10,00 de cashback automático* para descontar na sua próxima compra conosco!
+2. Na primeira compra deles, eles informam o seu código no momento da compra e ganham *5% de desconto na festa/pedido* na hora no valor total da compra!
+3. Assim que eles completarem a compra, você ganha *+5% de desconto acumulado*, podendo juntar indicações para receber até *15% de desconto no valor total* da sua próxima festa!
 
-Compartilhe com quem vai festejar, dê desconto aos amigos e turbine seu saldo de cashback! 🥳`;
+Dê desconto para os seus amigos e ganhe até 15% de desconto total na sua próxima compra da Oxente! 🥳🎈`;
 
                       const cleanPhone = ind.indicatorPhone.replace(/\D/g, '');
                       const formattedPhoneForWA = cleanPhone.length > 0
@@ -1373,8 +1479,8 @@ Compartilhe com quem vai festejar, dê desconto aos amigos e turbine seu saldo d
                               <span className="text-zinc-500 text-[10.5px] font-normal italic">Ninguém ainda</span>
                             )}
                           </td>
-                          <td className="py-3.5 px-4 text-right font-black font-mono text-emerald-400 text-sm">
-                            R$ {ind.cashbackEarned.toFixed(2)}
+                          <td className="py-3.5 px-4 text-right font-black font-mono text-emerald-450 text-sm">
+                            {ind.cashbackEarned}% desct.
                           </td>
                           <td className="py-3 px-4 text-center">
                             <div className="inline-flex items-center justify-center gap-1.5">

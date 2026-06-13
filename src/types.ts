@@ -93,6 +93,7 @@ export interface Sale {
   referralSended?: boolean;
   updatedAt?: string;
   pendingSync?: boolean;
+  bloqueadoLembrete?: boolean;
 }
 
 export interface StoreInfo {

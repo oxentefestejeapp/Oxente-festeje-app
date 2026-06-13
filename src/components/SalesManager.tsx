@@ -79,14 +79,22 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   // Referral / Cupom states
   const [referralCodeInput, setReferralCodeInput] = useState('');
-  const [referralDiscountApplied, setReferralDiscountApplied] = useState(0);
+  const [isReferralApplied, setIsReferralApplied] = useState(false);
   const [referralMatchSuccess, setReferralMatchSuccess] = useState<string | null>(null);
   const [referralMatchError, setReferralMatchError] = useState<string | null>(null);
 
   // Spent cashback applied as discount on indicator's own new purchase
   const [appliedCashbackDiscount, setAppliedCashbackDiscount] = useState(0);
 
-  // Dynamically calculate the active client's available cashback balance from prior indicators
+  // Spent referral notification after sale finalization
+  const [referralNotificationInfo, setReferralNotificationInfo] = useState<{
+    indicatorName: string;
+    indicatorPhone: string;
+    indicatedName: string;
+    referralCode: string;
+  } | null>(null);
+
+  // Dynamically calculate the active client's available accumulated referral discount percentage from prior indicators
   const clientCashbackBalance = useMemo(() => {
     const cleanClient = cliente.trim().toLowerCase();
     const cleanPhone = telefoneCliente.replace(/\D/g, '');
@@ -110,8 +118,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return `${firstName}${pedNum}`;
     });
     
-    // Earned cashback is earned when friends use their codes (R$ 10 per usage)
-    let totalCashbackEarned = 0;
+    // Count how many unique times referred friends used their codes and made a purchase
+    let totalReferralsEarned = 0;
     sales.forEach(s => {
       if (s.status === 'Orçamento') return;
       if (s.indicadoCodigo) {
@@ -119,21 +127,24 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         if (clientCodes.includes(codeUsed)) {
           const isOwnOrder = clientPreviousSales.some(ps => ps.id === s.id);
           if (!isOwnOrder) {
-            totalCashbackEarned += 10;
+            totalReferralsEarned += 1;
           }
         }
       }
     });
     
-    // Total cashback spent so far
-    let totalCashbackSpent = 0;
+    // Calculate referrals spent by this client in their past sales (cashbackGasto stores the percentage like 5, 10, or 15)
+    let totalReferralsSpent = 0;
     clientPreviousSales.forEach(s => {
       if (s.cashbackGasto) {
-        totalCashbackSpent += s.cashbackGasto;
+        totalReferralsSpent += (s.cashbackGasto / 5);
       }
     });
     
-    return Math.max(0, totalCashbackEarned - totalCashbackSpent);
+    const availableReferrals = Math.max(0, totalReferralsEarned - totalReferralsSpent);
+    const availableDiscountPercent = Math.min(15, availableReferrals * 5);
+    
+    return availableDiscountPercent;
   }, [cliente, telefoneCliente, sales]);
 
   const playSound = (type: 'add' | 'remove' | 'success') => {
@@ -431,12 +442,16 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }
   }, [totalVendaSemDesconto, customValInput]);
 
+  const referralDiscountApplied = useMemo(() => {
+    return isReferralApplied ? Number((totalVendaSemDesconto * 0.05).toFixed(2)) : 0;
+  }, [isReferralApplied, totalVendaSemDesconto]);
+
   const handleValidateReferralCode = (code: string) => {
     const cleanCode = code.trim().toUpperCase();
     if (!cleanCode) {
       setReferralMatchSuccess(null);
       setReferralMatchError(null);
-      setReferralDiscountApplied(0);
+      setIsReferralApplied(false);
       return;
     }
 
@@ -449,21 +464,35 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     });
 
     if (matchedSale) {
-      setReferralMatchSuccess(`Indicação válida! Você ganhou R$ 5,00 de desconto e "${matchedSale.cliente}" acumulará R$ 10,00 de cashback!`);
+      setReferralMatchSuccess(`Indicação válida! Você ganhou 5% de desconto de indicado na hora! E "${matchedSale.cliente}" acumulará créditos de desconto (+5%)!`);
       setReferralMatchError(null);
-      setReferralDiscountApplied(5);
+      setIsReferralApplied(true);
       playSound('success');
     } else {
       setReferralMatchSuccess(null);
       setReferralMatchError('Código de indicação não encontrado.');
-      setReferralDiscountApplied(0);
+      setIsReferralApplied(false);
     }
   };
 
   const totalVenda = useMemo(() => {
-    const discountedValue = totalVendaSemDesconto * (1 - descontoPercent / 100) - referralDiscountApplied - appliedCashbackDiscount;
-    return Number(Math.max(0, discountedValue).toFixed(2));
-  }, [totalVendaSemDesconto, descontoPercent, referralDiscountApplied, appliedCashbackDiscount]);
+    let finalPrice = totalVendaSemDesconto;
+    
+    // 1. Manual percentage discount (descontoPercent)
+    finalPrice = finalPrice * (1 - descontoPercent / 100);
+    
+    // 2. Referred code discount (5% for being referred)
+    if (isReferralApplied) {
+      finalPrice = finalPrice - (totalVendaSemDesconto * 0.05);
+    }
+    
+    // 3. Accumulated referrer discount (e.g. 5%, 10%, 15% applied to their own order)
+    if (appliedCashbackDiscount > 0) {
+      finalPrice = finalPrice - (totalVendaSemDesconto * (appliedCashbackDiscount / 100));
+    }
+    
+    return Number(Math.max(0, finalPrice).toFixed(2));
+  }, [totalVendaSemDesconto, descontoPercent, isReferralApplied, appliedCashbackDiscount]);
 
   // Calcule o faturamento diário para o período selecionado de dias
   const getDailyRevenueData = (days: number) => {
@@ -785,6 +814,24 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     const customerPedNum = registroTipo === 'Orçamento' ? Date.now().toString().substring(8) : String(nextPedidoNumber);
     const selfCode = `${customerFirstName}${customerPedNum}`;
 
+    let indicatorName = '';
+    let indicatorPhone = '';
+    
+    if (isReferralApplied) {
+      const cleanCode = referralCodeInput.trim().toUpperCase();
+      const matchedSale = sales.find(s => {
+        if (!s.cliente) return false;
+        const firstName = s.cliente.trim().split(' ')[0].replace(/[^a-zA-Z]/g, '').toUpperCase();
+        const pedNum = s.numeroPedido || s.id.substring(s.id.length - 5).toUpperCase();
+        const computedCode = `${firstName}${pedNum}`;
+        return computedCode === cleanCode;
+      });
+      if (matchedSale) {
+        indicatorName = matchedSale.cliente;
+        indicatorPhone = matchedSale.telefoneCliente || '';
+      }
+    }
+
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
       cliente: cliente.trim(),
@@ -805,8 +852,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       dataRetirada: dataRetirada || undefined,
       statusProducao: registroTipo === 'Orçamento' ? undefined : 'Agendado',
       referralCode: selfCode,
-      indicadoCodigo: referralDiscountApplied > 0 ? referralCodeInput.trim().toUpperCase() : undefined,
-      descontoReferral: referralDiscountApplied > 0 ? referralDiscountApplied : undefined,
+      indicadoCodigo: isReferralApplied ? referralCodeInput.trim().toUpperCase() : undefined,
+      descontoReferral: isReferralApplied ? referralDiscountApplied : undefined,
       cashbackGasto: appliedCashbackDiscount > 0 ? appliedCashbackDiscount : undefined,
       referralSended: false
     };
@@ -819,6 +866,18 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       playSound('success');
     } else {
       playSound('add');
+    }
+
+    // Trigger referral indicator warning message block
+    if (isReferralApplied && indicatorName) {
+      setReferralNotificationInfo({
+        indicatorName,
+        indicatorPhone,
+        indicatedName: cliente.trim(),
+        referralCode: referralCodeInput.trim().toUpperCase()
+      });
+    } else {
+      setReferralNotificationInfo(null);
     }
 
     // Define newly registered sale as the viewed receipt
@@ -846,7 +905,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setCustomValInput('');
     setCart([]);
     setReferralCodeInput('');
-    setReferralDiscountApplied(0);
+    setIsReferralApplied(false);
     setAppliedCashbackDiscount(0);
     setReferralMatchSuccess(null);
     setReferralMatchError(null);
@@ -1334,6 +1393,50 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               </div>
             )}
 
+            {referralNotificationInfo && (
+              <div className="bg-purple-950/25 border border-purple-500/20 rounded-xl p-4 space-y-3 animate-fade-in no-print">
+                <div className="flex items-start gap-2.5">
+                  <span className="p-2 bg-purple-500/10 border border-purple-500/20 rounded-xl text-purple-400 block shrink-0">
+                    <Sparkles className="h-4 w-4" />
+                  </span>
+                  <div className="flex-1">
+                    <h5 className="text-xs font-bold text-purple-400">Nova Indicação Concluída! 🎁</h5>
+                    <p className="text-[11px] text-zinc-300 leading-relaxed mt-0.5 font-sans">
+                      <strong>{referralNotificationInfo.indicatedName}</strong> realizou uma compra usando o cupom de <strong>{referralNotificationInfo.indicatorName}</strong>! 
+                      Envie uma mensagem para o indicador avisando-o do seu novo desconto acumulado de <strong>+5%</strong>.
+                    </p>
+                  </div>
+                </div>
+                
+                <div className="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setReferralNotificationInfo(null)}
+                    className="px-2.5 py-1 text-[10.5px] font-bold text-zinc-400 hover:text-zinc-200 transition-colors cursor-pointer"
+                  >
+                    Ignorar
+                  </button>
+                  <a
+                    href={`https://api.whatsapp.com/send?phone=${encodeURIComponent(
+                      referralNotificationInfo.indicatorPhone.replace(/\D/g, '').length > 0
+                        ? (referralNotificationInfo.indicatorPhone.replace(/\D/g, '').startsWith('55')
+                            ? `+${referralNotificationInfo.indicatorPhone.replace(/\D/g, '')}`
+                            : `+55${referralNotificationInfo.indicatorPhone.replace(/\D/g, '')}`)
+                        : ''
+                    )}&text=${encodeURIComponent(
+                      `Olá, *${referralNotificationInfo.indicatorName.split(' ')[0]}*! Boas notícias! 🎉\n\nSeu amigo(a) *${referralNotificationInfo.indicatedName}* acabou de realizar uma compra de balões e personalizados na *Oxente Festeje* usando seu código de indicação! 😍🎈\n\nCom isso, você acumulou mais *+5% de desconto* para sua próxima compra ou festa (podendo acumular até *15% de desconto total*)! Seus descontos foram creditados no seu cadastro. Muito obrigado por nos indicar! ❤️`
+                    )}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => setReferralNotificationInfo(null)}
+                    className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-550 active:scale-98 text-white rounded-lg text-[11px] font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-md shadow-purple-950/20"
+                  >
+                    <MessageSquare className="h-3.5 w-3.5" /> Avisar no WhatsApp
+                  </a>
+                </div>
+              </div>
+            )}
+
             {/* Segmented control for Type of Registration: Venda vs Orçamento */}
             <div className="space-y-2 bg-zinc-950/40 p-3 rounded-xl border border-zinc-800/60 max-w-md">
               <span className="block text-[10px] font-black uppercase tracking-wider text-zinc-400 select-none">
@@ -1620,7 +1723,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               </div>
             </div>
 
-            {/* Live Cashback Lookup Alert */}
+            {/* Live Referral Discount Lookup Alert */}
             {clientCashbackBalance > 0 && (
               <motion.div 
                 initial={{ opacity: 0, y: -8 }}
@@ -1632,9 +1735,9 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     <Wallet className="h-4.5 w-4.5" />
                   </span>
                   <div>
-                    <h5 className="text-xs font-bold text-emerald-400">Cashback Acumulado Disponível!</h5>
-                    <p className="text-[11px] text-zinc-400">
-                      Este cliente possui <span className="font-mono font-bold text-emerald-400">R$ {clientCashbackBalance.toFixed(2)}</span> de saldo acumulado.
+                    <h5 className="text-xs font-bold text-emerald-400">Desconto de Indicação Acumulado!</h5>
+                    <p className="text-[11px] text-zinc-400 leading-normal">
+                      Este cliente recebeu indicações bem-sucedidas e possui <span className="font-mono font-bold text-emerald-400">{clientCashbackBalance}% de Desconto</span> acumulado!
                     </p>
                   </div>
                 </div>
@@ -1648,7 +1751,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                       }}
                       className="px-3 py-1.5 bg-zinc-850 hover:bg-zinc-800 text-zinc-300 font-bold text-[11px] rounded-lg border border-zinc-750 transition-all flex items-center gap-1 cursor-pointer"
                     >
-                      <X className="h-3 w-3" /> Remover Desconto
+                      <X className="h-3 w-3" /> Remover
                     </button>
                   ) : (
                     <button
@@ -1659,7 +1762,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                       }}
                       className="px-3 py-1.5 bg-emerald-500 hover:bg-emerald-400 text-black font-bold text-[11px] rounded-lg transition-all flex items-center gap-1 cursor-pointer"
                     >
-                      <Check className="h-3 w-3" /> Aplicar R$ {clientCashbackBalance.toFixed(2)}
+                      <Check className="h-3 w-3" /> Aplicar {clientCashbackBalance}%
                     </button>
                   )}
                 </div>
@@ -1986,7 +2089,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 🎁 Programa de Indicação (Referral Club)
               </span>
               <p className="text-[10px] text-zinc-400 leading-normal font-sans">
-                Insira o código de indicação do amigo indicador para obter <strong className="text-emerald-400 font-semibold">R$ 5,00 de desconto imediato</strong> nesta nova compra e gerar <strong className="text-emerald-400 font-semibold">R$ 10,00 de cashback</strong> para ele quando você fechar esta compra!
+                Insira o código de indicação do amigo indicador para obter <strong className="text-emerald-400 font-semibold">5% de desconto imediato</strong> nesta nova compra e acumular <strong className="text-emerald-400 font-semibold">+5% de desconto</strong> para ele quando você fechar esta compra!
               </p>
               <div className="flex gap-2">
                 <input
@@ -1997,7 +2100,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     const val = e.target.value.toUpperCase();
                     setReferralCodeInput(val);
                     if (val === '') {
-                      setReferralDiscountApplied(0);
+                      setIsReferralApplied(false);
                       setReferralMatchSuccess(null);
                       setReferralMatchError(null);
                     }
