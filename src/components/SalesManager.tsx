@@ -181,6 +181,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   // State for Arte do design service option
   const [arteDesign, setArteDesign] = useState(false);
 
+  // State for Segunda Arte service option
+  const [segundaArte, setSegundaArte] = useState(false);
+
   // State for Taxa de Urgência option
   const [temTaxaUrgencia, setTemTaxaUrgencia] = useState(false);
   const [valorTaxaUrgencia, setValorTaxaUrgencia] = useState('');
@@ -240,14 +243,16 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [editItens, setEditItens] = useState<SaleItem[]>([]);
   const [selectedAddProductId, setSelectedAddProductId] = useState('');
   const [editArteDesign, setEditArteDesign] = useState(false);
+  const [editSegundaArte, setEditSegundaArte] = useState(false);
   const [editTemTaxaUrgencia, setEditTemTaxaUrgencia] = useState(false);
   const [editValorTaxaUrgencia, setEditValorTaxaUrgencia] = useState('');
 
   const editTotal = useMemo(() => {
     const artVal = editArteDesign ? 5 : 0;
+    const segundaArtVal = editSegundaArte ? 5 : 0;
     const urgVal = editTemTaxaUrgencia ? (parseFloat(editValorTaxaUrgencia) || 0) : 0;
-    return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0) + artVal + urgVal;
-  }, [editItens, editArteDesign, editTemTaxaUrgencia, editValorTaxaUrgencia]);
+    return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0) + artVal + segundaArtVal + urgVal;
+  }, [editItens, editArteDesign, editSegundaArte, editTemTaxaUrgencia, editValorTaxaUrgencia]);
 
   // Sync edit states when editingSale shifts
   React.useEffect(() => {
@@ -277,9 +282,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       }
 
       const hasArte = rawItens.some(item => item.produtoId === 'artedesign-service');
+      const hasSegundaArte = rawItens.some(item => item.produtoId === 'segundaarte-service');
       const urgenciaItem = rawItens.find(item => item.produtoId === 'taxaurgencia-service');
 
       setEditArteDesign(hasArte);
+      setEditSegundaArte(hasSegundaArte);
       if (urgenciaItem) {
         setEditTemTaxaUrgencia(true);
         setEditValorTaxaUrgencia(String(urgenciaItem.precoUn));
@@ -288,7 +295,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         setEditValorTaxaUrgencia('');
       }
 
-      setEditItens(rawItens.filter(item => item.produtoId !== 'artedesign-service' && item.produtoId !== 'taxaurgencia-service'));
+      setEditItens(rawItens.filter(item => item.produtoId !== 'artedesign-service' && item.produtoId !== 'segundaarte-service' && item.produtoId !== 'taxaurgencia-service'));
     }
   }, [editingSale]);
   
@@ -416,8 +423,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   const totalVendaSemDesconto = useMemo(() => {
     const urgenciaVal = temTaxaUrgencia ? (parseFloat(valorTaxaUrgencia) || 0) : 0;
+    const secondArtVal = segundaArte ? 5 : 0;
     if (cart.length > 0) {
-      return cart.reduce((sum, item) => sum + item.total, 0) + (arteDesign ? 5 : 0) + urgenciaVal;
+      return cart.reduce((sum, item) => sum + item.total, 0) + (arteDesign ? 5 : 0) + secondArtVal + urgenciaVal;
     }
     const mainTotal = selectedProduct && typeof quantidade === 'number' 
       ? getProductUnitPrice(selectedProduct, quantidade) * quantidade 
@@ -432,8 +440,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return sum;
     }, 0);
 
-    return mainTotal + addonsTotal + (arteDesign ? 5 : 0) + urgenciaVal;
-  }, [cart, selectedProduct, quantidade, selectedAddonIds, products, arteDesign, temTaxaUrgencia, valorTaxaUrgencia]);
+    return mainTotal + addonsTotal + (arteDesign ? 5 : 0) + secondArtVal + urgenciaVal;
+  }, [cart, selectedProduct, quantidade, selectedAddonIds, products, arteDesign, segundaArte, temTaxaUrgencia, valorTaxaUrgencia]);
 
   // Sincronizar o desconto calculado quando o valor total sem desconto mudar e houver desconto digitado em valor fixo R$
   useEffect(() => {
@@ -813,6 +821,17 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       });
     }
 
+    if (segundaArte) {
+      finalItens.push({
+        id: `item-segundaarte-${Date.now()}`,
+        produtoId: 'segundaarte-service',
+        produtoNome: 'Segunda Arte',
+        precoUn: 5.0,
+        quantidade: 1,
+        total: 5.0
+      });
+    }
+
     if (temTaxaUrgencia) {
       const urgenciaVal = parseFloat(valorTaxaUrgencia) || 0;
       if (urgenciaVal > 0) {
@@ -838,7 +857,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       : mainItem.produtoNome;
     const mainPrecoUn = mainItem.precoUn;
     const mainQuantidade = finalItens
-      .filter(item => item.produtoId !== 'artedesign-service' && item.produtoId !== 'taxaurgencia-service')
+      .filter(item => item.produtoId !== 'artedesign-service' && item.produtoId !== 'segundaarte-service' && item.produtoId !== 'taxaurgencia-service')
       .reduce((sum, item) => sum + item.quantidade, 0);
 
     // Buscar vendas frescas da nuvem para garantir numeração de pedidos sem conflitos (conexão certa)
@@ -943,6 +962,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setQuantidade(1);
     setSelectedAddonIds([]);
     setArteDesign(false);
+    setSegundaArte(false);
     setTemTaxaUrgencia(false);
     setValorTaxaUrgencia('');
     setCliente('');
@@ -1036,6 +1056,16 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         id: `item-artedesign-${Date.now()}`,
         produtoId: 'artedesign-service',
         produtoNome: 'Arte do design',
+        precoUn: 5.0,
+        quantidade: 1,
+        total: 5.0
+      });
+    }
+    if (editSegundaArte) {
+      finalItensToSave.push({
+        id: `item-segundaarte-${Date.now()}`,
+        produtoId: 'segundaarte-service',
+        produtoNome: 'Segunda Arte',
         precoUn: 5.0,
         quantidade: 1,
         total: 5.0
@@ -1643,7 +1673,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     <span>✨ Serviços e Taxas Adicionais do Pedido:</span>
                   </span>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {/* Botão de Arte do Design */}
                     <label
                       className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
@@ -1666,6 +1696,33 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                           🎨 Arte do Design
                         </span>
                         <span className="text-[10px] font-mono text-brand-pink font-bold">
+                          + R$ 5,00
+                        </span>
+                      </div>
+                    </label>
+
+                    {/* Botão de Segunda Arte */}
+                    <label
+                      className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
+                        segundaArte
+                          ? 'bg-purple-500/12 border-purple-500/40 text-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.04)]'
+                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={segundaArte}
+                        onChange={() => {
+                          setSegundaArte(prev => !prev);
+                          playSound(segundaArte ? 'remove' : 'add');
+                        }}
+                        className="rounded border-zinc-800 text-purple-500 focus:ring-0 accent-purple-500 h-4 w-4 cursor-pointer bg-black"
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold truncate text-zinc-200">
+                          🎨 Segunda Arte
+                        </span>
+                        <span className="text-[10px] font-mono text-purple-400 font-bold">
                           + R$ 5,00
                         </span>
                       </div>
@@ -2929,7 +2986,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     <span>✨ Serviços e Taxas Adicionais do Pedido:</span>
                   </span>
                   
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     {/* Botão de Arte do Design */}
                     <label
                       className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
@@ -2952,6 +3009,33 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                           🎨 Arte do Design
                         </span>
                         <span className="text-[10px] font-mono text-brand-pink font-bold">
+                          + R$ 5,00
+                        </span>
+                      </div>
+                    </label>
+
+                    {/* Botão de Segunda Arte */}
+                    <label
+                      className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
+                        editSegundaArte
+                          ? 'bg-purple-500/12 border-purple-500/40 text-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.04)]'
+                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editSegundaArte}
+                        onChange={() => {
+                          setEditSegundaArte(prev => !prev);
+                          playSound(editSegundaArte ? 'remove' : 'add');
+                        }}
+                        className="rounded border-zinc-800 text-purple-500 focus:ring-0 accent-purple-500 h-4 w-4 cursor-pointer bg-black"
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold truncate text-zinc-200">
+                          🎨 Segunda Arte
+                        </span>
+                        <span className="text-[10px] font-mono text-purple-400 font-bold">
                           + R$ 5,00
                         </span>
                       </div>
