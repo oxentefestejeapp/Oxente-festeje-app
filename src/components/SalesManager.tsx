@@ -178,6 +178,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   // Selected Addon Product IDs
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
 
+  // State to show/hide optional addons list
+  const [showAddons, setShowAddons] = useState(false);
+
   // State for Arte do design service option
   const [arteDesign, setArteDesign] = useState(false);
 
@@ -214,6 +217,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   // Reset selected addons when selected product changes
   useEffect(() => {
     setSelectedAddonIds([]);
+    setShowAddons(false);
   }, [selectedProductId]);
 
   // Safeguard: reset or cap applied cashback discount when customer changes or balance changes
@@ -1621,48 +1625,74 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               {/* Seleção de Adicionais Opcionais */}
               {selectedProductId && availableAddons.length > 0 && (
                 <div className="mt-3 bg-zinc-900/40 border border-zinc-800/80 p-3 rounded-xl space-y-2 animate-fade-in">
-                  <span className="block text-[11px] font-bold text-emerald-400 uppercase tracking-wide flex items-center gap-1.5">
-                    <span>✨ Brinde Adicional / Opcionais do Pedido:</span>
-                  </span>
-                  <p className="text-[10px] text-zinc-500 leading-normal">
-                    A quantidade dos adicionais marcados acompanhará automaticamente a quantidade do produto principal ({quantidade || 1} un.).
-                  </p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
-                    {availableAddons.map(addon => {
-                      const isChecked = selectedAddonIds.includes(addon.id);
-                      return (
-                        <label
-                          key={addon.id}
-                          className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
-                            isChecked
-                              ? 'bg-emerald-950/20 border-emerald-500/50 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.05)]'
-                              : 'bg-black/40 border-zinc-850 text-zinc-400 hover:border-zinc-700'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={() => {
-                              setSelectedAddonIds(prev =>
-                                prev.includes(addon.id)
-                                  ? prev.filter(id => id !== addon.id)
-                                  : [...prev, addon.id]
-                              );
-                            }}
-                            className="rounded border-zinc-800 text-emerald-500 focus:ring-0 accent-emerald-500 h-4 w-4 cursor-pointer bg-black"
-                          />
-                          <div className="flex flex-col min-w-0">
-                            <span className="text-xs font-semibold truncate text-zinc-250">
-                              {addon.nome}
-                            </span>
-                            <span className="text-[10px] font-mono text-emerald-400 font-bold">
-                              + R$ {addon.preco.toFixed(2)} /un
-                            </span>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddons(prev => !prev);
+                      playSound('add');
+                    }}
+                    className="w-full flex items-center justify-between text-left focus:outline-none select-none group"
+                  >
+                    <span className="block text-[11px] font-bold text-emerald-400 uppercase tracking-wide flex items-center gap-1.5">
+                      <span>✨ Brinde Adicional / Opcionais do Pedido:</span>
+                      {selectedAddonIds.length > 0 && (
+                        <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[9px] font-extrabold animate-pulse">
+                          {selectedAddonIds.length} selecionado{selectedAddonIds.length > 1 ? 's' : ''}
+                        </span>
+                      )}
+                    </span>
+                    <span className="text-[10.5px] font-bold text-zinc-400 group-hover:text-zinc-200 transition-colors flex items-center gap-1 bg-zinc-850/60 hover:bg-zinc-800/80 px-2 py-1 rounded-lg">
+                      {showAddons ? (
+                        <>Ocultar <span className="font-mono text-[9px]">▲</span></>
+                      ) : (
+                        <>Ver opcionais ({availableAddons.length}) <span className="font-mono text-[9px]">▼</span></>
+                      )}
+                    </span>
+                  </button>
+
+                  {showAddons && (
+                    <div className="pt-2 border-t border-zinc-800/50 mt-1 animate-fade-in space-y-2 text-left">
+                      <p className="text-[10px] text-zinc-500 leading-normal">
+                        A quantidade dos adicionais marcados acompanhará automaticamente a quantidade do produto principal ({quantidade || 1} un.).
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
+                        {availableAddons.map(addon => {
+                          const isChecked = selectedAddonIds.includes(addon.id);
+                          return (
+                            <label
+                              key={addon.id}
+                              className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
+                                isChecked
+                                  ? 'bg-emerald-950/20 border-emerald-500/50 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.05)]'
+                                  : 'bg-black/40 border-zinc-850 text-zinc-400 hover:border-zinc-700'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={isChecked}
+                                onChange={() => {
+                                  setSelectedAddonIds(prev =>
+                                    prev.includes(addon.id)
+                                      ? prev.filter(id => id !== addon.id)
+                                      : [...prev, addon.id]
+                                  );
+                                }}
+                                className="rounded border-zinc-800 text-emerald-500 focus:ring-0 accent-emerald-500 h-4 w-4 cursor-pointer bg-black"
+                              />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-semibold truncate text-zinc-250">
+                                  {addon.nome}
+                                </span>
+                                <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                                  + R$ {addon.preco.toFixed(2)} /un
+                                </span>
+                              </div>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
