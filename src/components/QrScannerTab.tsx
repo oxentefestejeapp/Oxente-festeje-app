@@ -27,6 +27,7 @@ interface ScanHistoryItem {
 export default function QrScannerTab({ sales, storeInfo, onUpdateSale }: QrScannerTabProps) {
   const qrCodeRegionId = "oxente-qr-scanner-viewfinder";
   const html5QrCodeRef = useRef<Html5Qrcode | null>(null);
+  const lastScannedRef = useRef<{ id: string; time: number } | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [cameraPermission, setCameraPermission] = useState<'granted' | 'denied' | 'prompt' | 'unknown'>('unknown');
   const [cameras, setCameras] = useState<MediaDeviceInfo[]>([]);
@@ -194,8 +195,7 @@ Sábados de 8:30h às 12h
   };
 
   const handleSuccessScan = (text: string) => {
-    playAppSound('pop');
-    
+    const now = Date.now();
     let saleId = '';
     let parsedText = text.trim();
 
@@ -210,6 +210,13 @@ Sábados de 8:30h às 12h
     const foundSale = sales.find(s => s.id === saleId || s.numeroPedido === saleId);
 
     if (foundSale) {
+      // Cooldown to prevent repeating the scan of the same sale in rapid succession
+      if (lastScannedRef.current && lastScannedRef.current.id === foundSale.id && (now - lastScannedRef.current.time) < 4000) {
+        return;
+      }
+      lastScannedRef.current = { id: foundSale.id, time: now };
+
+      playAppSound('pop');
       playAppSound('success');
       
       const targetStatus = scanMode === 'pronto' ? 'Pronto para Retirada' : 'Entregue';
@@ -239,10 +246,7 @@ Sábados de 8:30h às 12h
         return [newItem, ...prev];
       });
 
-      // Pause scanning so they can interact or scan next manually
-      stopScanning();
-
-      // REDIRECT TO WHATSAPP AUTOMATICALLY - ZERO CLICKS NEEDED!
+      // REDIRECT TO WHATSAPP AUTOMATICALLY - ZERO CLICKS NEEDED! Keep camera active!
       try {
         const link = getWhatsAppLink(updated, scanMode);
         window.location.href = link;
@@ -250,6 +254,12 @@ Sábados de 8:30h às 12h
         console.warn('Erro ao abrir link de WhatsApp automaticamente:', err);
       }
     } else {
+      // Cooldown for unknown barcodes/QRs to prevent alarm sound spam
+      if (lastScannedRef.current && lastScannedRef.current.id === saleId && (now - lastScannedRef.current.time) < 4000) {
+        return;
+      }
+      lastScannedRef.current = { id: saleId, time: now };
+
       playAppSound('alert');
       // Look for a close match in numbers if the scanner read raw code or text
       setScanHistory(prev => [

@@ -683,7 +683,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                               const updated: Sale = {
                                 ...selectedSale,
                                 statusProducao: st,
-                                ...(st === 'Entregue' ? { 
+                                ...(st === 'Entregue' || st === 'Agendado para Entrega' ? { 
                                   status: 'Pago total', 
                                   valorPagoAntesConcluir: selectedSale.valorPago ?? 0,
                                   valorFaltanteAntesConcluir: selectedSale.valorFaltante ?? (selectedSale.total - (selectedSale.valorPago ?? 0)),

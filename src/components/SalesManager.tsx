@@ -995,9 +995,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       if (!hasStockBypass) return;
     }
 
-    const valPagoNum = isBudget ? 0 : (editValorPago.trim() === '' ? editTotal : parseFloat(editValorPago));
+    const isScheduledDelivery = !isBudget && editStatusProducao === 'Agendado para Entrega';
+    const valPagoNum = isBudget ? 0 : (isScheduledDelivery ? editTotal : (editValorPago.trim() === '' ? editTotal : parseFloat(editValorPago)));
     const finalValorPago = isBudget ? 0 : (isNaN(valPagoNum) ? editTotal : valPagoNum);
-    const finalValorFaltante = isBudget ? editTotal : Math.max(0, editTotal - finalValorPago);
+    const finalValorFaltante = isBudget ? editTotal : (isScheduledDelivery ? 0 : Math.max(0, editTotal - finalValorPago));
 
     const mainItem = editItens[0];
     const mainProdutoId = mainItem.produtoId;
@@ -2616,7 +2617,10 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                                       if (onUpdateSale) {
                                         onUpdateSale({
                                           ...sale,
-                                          statusProducao: 'Agendado para Entrega'
+                                          statusProducao: 'Agendado para Entrega',
+                                          status: 'Pago total',
+                                          valorPago: sale.total,
+                                          valorFaltante: 0
                                         });
                                       }
                                     }

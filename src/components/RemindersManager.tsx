@@ -807,6 +807,9 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                                   onUpdateSale({
                                     ...sale,
                                     statusProducao: 'Agendado para Entrega',
+                                    status: 'Pago total',
+                                    valorPago: sale.total,
+                                    valorFaltante: 0,
                                     turnoEntrega: 'Manhã',
                                     foiAlterado: true,
                                     editadoEm: new Date().toISOString()
@@ -824,6 +827,9 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                                   onUpdateSale({
                                     ...sale,
                                     statusProducao: 'Agendado para Entrega',
+                                    status: 'Pago total',
+                                    valorPago: sale.total,
+                                    valorFaltante: 0,
                                     turnoEntrega: 'Tarde',
                                     foiAlterado: true,
                                     editadoEm: new Date().toISOString()
