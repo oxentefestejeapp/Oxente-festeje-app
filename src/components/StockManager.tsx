@@ -4,9 +4,9 @@
  */
 
 import React, { useState, useMemo, useRef, DragEvent, ChangeEvent } from 'react';
-import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box, Check, X, Pencil, Upload, Loader2, Sparkles, AlertCircle, Layers, Undo2, History } from 'lucide-react';
+import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box, Check, X, Pencil, Upload, Loader2, Sparkles, AlertCircle, Layers, Undo2, History, Palette } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Product, PricingTier } from '../types';
+import { Product, PricingTier, ProductColor } from '../types';
 
 // Client-side image compression using HTML5 Canvas to keep Base64 strings tiny (~30KB-50KB)
 const compressImage = (file: File, maxWidth = 480, maxHeight = 480, quality = 0.6): Promise<string> => {
@@ -206,6 +206,11 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
   const [isEditSaving, setIsEditSaving] = useState(false);
   const [editPrazoUrgencia, setEditPrazoUrgencia] = useState<number | ''>('');
   
+  // Color Options State for Edit
+  const [editCores, setEditCores] = useState<ProductColor[]>([]);
+  const [editNovaCorNome, setEditNovaCorNome] = useState('');
+  const [editNovaCorEstoque, setEditNovaCorEstoque] = useState<number | ''>('');
+  
   // Progressive Pricing Tiers State for Edit
   const [editFaixasPreco, setEditFaixasPreco] = useState<PricingTier[]>([]);
   const [editNovaQuantidadeMinima, setEditNovaQuantidadeMinima] = useState<number | ''>('');
@@ -222,6 +227,9 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
     setEditEstoqueInfinito(!!product.estoqueInfinito);
     setEditAdicional(!!product.adicional);
     setEditPhoto(product.imagemBase64 || '');
+    setEditCores(product.cores ? [...product.cores] : []);
+    setEditNovaCorNome('');
+    setEditNovaCorEstoque('');
     setEditFaixasPreco(product.faixasPreco ? [...product.faixasPreco] : []);
     setEditNovaQuantidadeMinima('');
     setEditNovoPrecoFaixa('');
@@ -310,11 +318,42 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
     }
   };
 
-  const handleEditFileChange = (e: ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault();
-    if (e.target.files && e.target.files[0]) {
-      processEditFile(e.target.files[0]);
+  const handleEditFileChange = (changeEvent: ChangeEvent<HTMLInputElement>) => {
+    changeEvent.preventDefault();
+    if (changeEvent.target.files && changeEvent.target.files[0]) {
+      processEditFile(changeEvent.target.files[0]);
     }
+  };
+
+  const handleEditAddCor = () => {
+    if (!editNovaCorNome.trim()) {
+      setEditError('Por favor, digite o nome da cor.');
+      return;
+    }
+    if (editNovaCorEstoque === '') {
+      setEditError('Por favor, informe a quantidade para a cor.');
+      return;
+    }
+    const qty = Number(editNovaCorEstoque);
+    if (isNaN(qty) || qty < 0) {
+      setEditError('A quantidade da cor deve ser maior ou igual a zero.');
+      return;
+    }
+
+    if (editCores.some(c => c.nome.toLowerCase() === editNovaCorNome.trim().toLowerCase())) {
+      setEditError(`A cor "${editNovaCorNome.trim()}" já foi adicionada.`);
+      return;
+    }
+
+    setEditCores([...editCores, { nome: editNovaCorNome.trim(), estoque: Math.floor(qty) }]);
+    setEditNovaCorNome('');
+    setEditNovaCorEstoque('');
+    setEditError('');
+  };
+
+  const handleEditRemoveCor = (index: number) => {
+    const updated = editCores.filter((_, i) => i !== index);
+    setEditCores(updated);
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -341,8 +380,12 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
       return;
     }
 
-    const estoqueNum = editEstoqueInfinito ? 0 : Number(editEstoque);
-    if (!editEstoqueInfinito && (editEstoque === '' || isNaN(estoqueNum) || estoqueNum < 0)) {
+    let estoqueNum = editEstoqueInfinito ? 0 : Number(editEstoque);
+    if (editCores.length > 0 && !editEstoqueInfinito) {
+      estoqueNum = editCores.reduce((sum, c) => sum + c.estoque, 0);
+    }
+
+    if (!editEstoqueInfinito && editCores.length === 0 && (editEstoque === '' || isNaN(estoqueNum) || estoqueNum < 0)) {
       setEditError('O estoque precisa ser maior ou igual a zero.');
       return;
     }
@@ -359,6 +402,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
       preco: precoNum,
       precoCusto: precoCustoNum,
       estoque: Math.floor(estoqueNum),
+      cores: editCores.length > 0 ? editCores : undefined,
       imagemBase64: editPhoto || undefined,
       estoqueInfinito: editEstoqueInfinito || undefined,
       adicional: editAdicional || undefined,
@@ -802,6 +846,28 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                       </span>
                     </div>
                   </div>
+
+                  {/* Colors Stock list indicator on card */}
+                  {p.cores && p.cores.length > 0 && (
+                    <div className="bg-zinc-900/40 p-2.5 rounded-xl border border-zinc-850 text-left text-xs space-y-1.5 mt-2">
+                      <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 uppercase font-black tracking-wider">
+                        <Palette className="h-3 w-3 text-brand-pink" />
+                        <span>Cores no Estoque</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {p.cores.map((cor, i) => (
+                          <span
+                            key={i}
+                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-black text-[10px] font-bold text-zinc-300 border border-zinc-800"
+                          >
+                            <span className="w-1.5 h-1.5 rounded-full bg-brand-pink" />
+                            <span>{cor.nome}:</span>
+                            <span className="font-mono text-brand-pink">{cor.estoque}</span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Info and Actions Area */}
@@ -1134,16 +1200,78 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                   </div>
                   <input
                     type="number"
-                    disabled={editEstoqueInfinito}
+                    disabled={editEstoqueInfinito || editCores.length > 0}
                     min="0"
                     step="1"
-                    placeholder={editEstoqueInfinito ? "Sem limites (Estoque Infinito)" : "Ex: 50"}
-                    value={editEstoqueInfinito ? "" : editEstoque}
+                    placeholder={editEstoqueInfinito ? "Sem limites (Estoque Infinito)" : (editCores.length > 0 ? "Estoque calculado pelas cores" : "Ex: 50")}
+                    value={editEstoqueInfinito ? "" : (editCores.length > 0 ? editCores.reduce((sum, c) => sum + c.estoque, 0) : editEstoque)}
                     onChange={(e) => setEditEstoque(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                     className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-sm disabled:opacity-50 disabled:text-zinc-500"
                   />
                 </div>
               </div>
+
+              {/* Edit Color stock sub-form */}
+              {!editEstoqueInfinito && (
+                <div className="bg-zinc-950/60 p-4 border border-zinc-850 rounded-xl space-y-3">
+                  <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-2">
+                    <Palette className="h-4 w-4 text-brand-pink" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+                      Editar Opções de Cores no Estoque (Opcional)
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-zinc-500 leading-relaxed">
+                    Personalize as cores e suas respectivas quantidades em estoque. Ao salvar, o estoque geral do produto será recalculado baseado no total das cores.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <input
+                      type="text"
+                      placeholder="Ex Nome da cor: Vermelho, Azul, Transparente"
+                      value={editNovaCorNome}
+                      onChange={(e) => setEditNovaCorNome(e.target.value)}
+                      className="flex-1 px-3 py-2 bg-black border border-zinc-800 rounded-lg text-xs text-zinc-100 placeholder-zinc-700 focus:outline-none focus:ring-1 focus:ring-brand-pink/50"
+                    />
+                    <input
+                      type="number"
+                      min="0"
+                      placeholder="Qtd em estoque"
+                      value={editNovaCorEstoque}
+                      onChange={(e) => setEditNovaCorEstoque(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                      className="w-full sm:w-28 px-3 py-2 bg-black border border-zinc-800 rounded-lg text-xs text-zinc-100 placeholder-zinc-700 focus:outline-none focus:ring-1 focus:ring-brand-pink/50"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleEditAddCor}
+                      className="px-4 py-2 bg-zinc-800 hover:bg-zinc-755 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-zinc-750"
+                    >
+                      <Plus className="h-3.5 w-3.5 text-brand-pink" />
+                      <span>Adicionar</span>
+                    </button>
+                  </div>
+
+                  {editCores.length > 0 && (
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {editCores.map((cor, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 shadow-sm"
+                        >
+                          <span className="w-2 h-2 rounded-full bg-brand-pink" />
+                          <span className="font-semibold">{cor.nome}:</span>
+                          <span className="font-mono text-zinc-400 font-bold">{cor.estoque} un</span>
+                          <button
+                            type="button"
+                            onClick={() => handleEditRemoveCor(index)}
+                            className="ml-1 text-zinc-500 hover:text-red-400 p-0.5 rounded transition-colors cursor-pointer"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Custom Urgency Deadline input in Editing Modal */}
               <div className="bg-zinc-950/40 p-4 border border-zinc-850 p-4 rounded-xl space-y-3 text-left">

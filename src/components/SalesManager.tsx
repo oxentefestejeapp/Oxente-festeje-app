@@ -48,6 +48,7 @@ const CustomTooltip = ({ active, payload }: any) => {
 export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdateStock, onUpdateSale, onDeleteSale, currentUserEmail = '' }: SalesManagerProps) {
   const isAdmin = currentUserEmail.trim().toLowerCase() === 'oxentefesteje@gmail.com' || currentUserEmail.trim().toLowerCase() === 'abraaoapp@oxente.com';
   const [selectedProductId, setSelectedProductId] = useState('');
+  const [selectedColor, setSelectedColor] = useState('');
   const [billingPeriod, setBillingPeriod] = useState<7 | 15 | 30>(7);
   const [cliente, setCliente] = useState('');
   const [telefoneCliente, setTelefoneCliente] = useState('');
@@ -173,7 +174,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   };
   
   // Cart state for multi-product orders
-  const [cart, setCart] = useState<{ id: string; product: Product; quantity: number; total: number; addons: Product[] }[]>([]);
+  const [cart, setCart] = useState<{ id: string; product: Product; quantity: number; total: number; addons: Product[]; corSelecionada?: string }[]>([]);
 
   // Selected Addon Product IDs
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
@@ -218,6 +219,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   useEffect(() => {
     setSelectedAddonIds([]);
     setShowAddons(false);
+    setSelectedColor('');
   }, [selectedProductId]);
 
   // Safeguard: reset or cap applied cashback discount when customer changes or balance changes
@@ -637,13 +639,35 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return;
     }
 
-    const alreadyInCartQty = cart
-      .filter(item => item.product.id === prod.id)
-      .reduce((sum, item) => sum + item.quantity, 0);
-
-    if (registroTipo !== 'Orçamento' && !prod.estoqueInfinito && (qtyNum + alreadyInCartQty) > prod.estoque) {
-      setFormError(`Quantidade indisponível no estoque! Estoque atual de "${prod.nome}": ${prod.estoque} un. (Já possui ${alreadyInCartQty} no carrinho).`);
+    // Color option validation
+    if (prod.cores && prod.cores.length > 0 && !selectedColor) {
+      setFormError('Este produto possui opções de cores. Por favor, selecione uma cor antes de adicionar.');
       return;
+    }
+
+    // Stock checks considering color variations
+    if (registroTipo !== 'Orçamento' && !prod.estoqueInfinito) {
+      if (prod.cores && prod.cores.length > 0) {
+        const matchingColor = prod.cores.find(c => c.nome === selectedColor);
+        const colorStock = matchingColor ? matchingColor.estoque : 0;
+        const alreadyInCartColorQty = cart
+          .filter(item => item.product.id === prod.id && item.corSelecionada === selectedColor)
+          .reduce((sum, item) => sum + item.quantity, 0);
+
+        if ((qtyNum + alreadyInCartColorQty) > colorStock) {
+          setFormError(`Quantidade indisponível para a cor "${selectedColor}"! Estoque atual dessa cor: ${colorStock} un. (Já possui ${alreadyInCartColorQty} no carrinho).`);
+          return;
+        }
+      } else {
+        const alreadyInCartQty = cart
+          .filter(item => item.product.id === prod.id)
+          .reduce((sum, item) => sum + item.quantity, 0);
+
+        if ((qtyNum + alreadyInCartQty) > prod.estoque) {
+          setFormError(`Quantidade indisponível no estoque! Estoque atual de "${prod.nome}": ${prod.estoque} un. (Já possui ${alreadyInCartQty} no carrinho).`);
+          return;
+        }
+      }
     }
 
     setFormError('');
@@ -666,8 +690,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     const sortedNewAddonIds = [...selectedAddonIds].sort().join(',');
     const existingIdx = cart.findIndex(c => {
       const isSameProduct = c.product.id === prod.id;
+      const isSameColor = prod.cores && prod.cores.length > 0 ? c.corSelecionada === selectedColor : true;
       const sortedItemAddonIds = (c.addons || []).map(a => a.id).sort().join(',');
-      return isSameProduct && sortedNewAddonIds === sortedItemAddonIds;
+      return isSameProduct && isSameColor && sortedNewAddonIds === sortedItemAddonIds;
     });
 
     if (existingIdx > -1) {
@@ -688,11 +713,12 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       setCart([
         ...cart,
         {
-          id: `item-${prod.id}-${Date.now()}`,
+          id: `item-${prod.id}-${selectedColor ? `${selectedColor}-` : ''}${Date.now()}`,
           product: prod,
           quantity: qtyNum,
           total: qtyNum * (unitPrice + addonsUnitPrice),
-          addons: currentAddons
+          addons: currentAddons,
+          corSelecionada: selectedColor || undefined
         }
       ]);
     }
@@ -702,9 +728,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
     // Reset single item selector fields
     setSelectedProductId('');
+    setSelectedColor('');
     setQuantidade(1);
     setSelectedAddonIds([]);
-    setSuccessMsg(`"${prod.nome}" adicionado ao carrinho!`);
+    setSuccessMsg(`"${prod.nome}"${selectedColor ? ` (${selectedColor})` : ''} adicionado ao carrinho!`);
     setTimeout(() => setSuccessMsg(''), 2500);
   };
 
@@ -1627,6 +1654,28 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 )}
               </div>
 
+              {/* Color variation selector */}
+              {selectedProduct && selectedProduct.cores && selectedProduct.cores.length > 0 && (
+                <div className="mt-3 animate-fade-in">
+                  <label htmlFor="sale-p-color" className="block text-xs font-semibold text-zinc-400 mb-1">
+                    Cor do Produto <span className="text-brand-pink font-bold">*</span>
+                  </label>
+                  <select
+                    id="sale-p-color"
+                    value={selectedColor}
+                    onChange={(e) => setSelectedColor(e.target.value)}
+                    className="w-full px-4 py-2.5 border border-zinc-800 rounded-xl bg-black focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-150 text-sm"
+                  >
+                    <option value="" className="text-zinc-500">-- Selecione a cor --</option>
+                    {selectedProduct.cores.map(c => (
+                      <option key={c.nome} value={c.nome} className="bg-zinc-900 text-zinc-100" disabled={registroTipo !== 'Orçamento' && c.estoque <= 0}>
+                        {c.nome} (Estoque: {c.estoque} un.) {registroTipo !== 'Orçamento' && c.estoque <= 0 ? '-- ESGOTADO' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               {/* Seleção de Adicionais Opcionais */}
               {selectedProductId && availableAddons.length > 0 && (
                 <div className="mt-3 bg-zinc-900/40 border border-zinc-800/80 p-3 rounded-xl space-y-2 animate-fade-in">
@@ -2026,7 +2075,14 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   {cart.map((item, idx) => (
                     <div key={item.id} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                       <div className="min-w-0 flex-1">
-                        <span className="font-bold text-zinc-100 truncate block">{item.product.nome}</span>
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="font-bold text-zinc-100 truncate block">{item.product.nome}</span>
+                          {item.corSelecionada && (
+                            <span className="inline-flex items-center gap-1 bg-brand-pink/10 border border-brand-pink/20 text-brand-pink text-[9px] px-1.5 py-0.5 rounded-full font-bold select-none">
+                              🎨 {item.corSelecionada}
+                            </span>
+                          )}
+                        </div>
                         <span className="text-[10px] text-zinc-500 font-mono">
                           {item.quantity}x de R$ {getProductUnitPrice(item.product, item.quantity).toFixed(2)}
                         </span>

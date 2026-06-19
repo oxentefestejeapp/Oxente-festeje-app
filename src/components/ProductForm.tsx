@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useRef, DragEvent, ChangeEvent } from 'react';
-import { Upload, X, Sparkles, AlertCircle, ShoppingBag, Plus, Trash2, Layers, Loader2 } from 'lucide-react';
-import { Product, PricingTier } from '../types';
+import { Upload, X, Sparkles, AlertCircle, ShoppingBag, Plus, Trash2, Layers, Loader2, Palette } from 'lucide-react';
+import { Product, PricingTier, ProductColor } from '../types';
 import { getFormattedSupabaseError } from '../lib/supabase';
 
 interface ProductFormProps {
@@ -77,6 +77,11 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
   const [faixasPreco, setFaixasPreco] = useState<PricingTier[]>([]);
   const [novaQuantidadeMinima, setNovaQuantidadeMinima] = useState<number | ''>('');
   const [novoPrecoFaixa, setNovoPrecoFaixa] = useState<number | ''>('');
+
+  // Color Options State
+  const [cores, setCores] = useState<ProductColor[]>([]);
+  const [novaCorNome, setNovaCorNome] = useState('');
+  const [novaCorEstoque, setNovaCorEstoque] = useState<number | ''>('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -180,6 +185,37 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
     setFaixasPreco(updated);
   };
 
+  const handleAddCor = () => {
+    if (!novaCorNome.trim()) {
+      setError('Por favor, digite o nome da cor.');
+      return;
+    }
+    if (novaCorEstoque === '') {
+      setError('Por favor, informe a quantidade para a cor.');
+      return;
+    }
+    const qty = Number(novaCorEstoque);
+    if (isNaN(qty) || qty < 0) {
+      setError('A quantidade da cor deve ser maior ou igual a zero.');
+      return;
+    }
+
+    if (cores.some(c => c.nome.toLowerCase() === novaCorNome.trim().toLowerCase())) {
+      setError(`A cor "${novaCorNome.trim()}" já foi adicionada.`);
+      return;
+    }
+
+    setCores([...cores, { nome: novaCorNome.trim(), estoque: Math.floor(qty) }]);
+    setNovaCorNome('');
+    setNovaCorEstoque('');
+    setError('');
+  };
+
+  const handleRemoveCor = (index: number) => {
+    const updated = cores.filter((_, i) => i !== index);
+    setCores(updated);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSaving || isCompressing) return;
@@ -204,8 +240,12 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       return;
     }
 
-    const estoqueNum = estoqueInfinito ? 0 : Number(estoque);
-    if (!estoqueInfinito && (estoque === '' || isNaN(estoqueNum) || estoqueNum < 0)) {
+    let estoqueNum = estoqueInfinito ? 0 : Number(estoque);
+    if (cores.length > 0 && !estoqueInfinito) {
+      estoqueNum = cores.reduce((sum, c) => sum + c.estoque, 0);
+    }
+
+    if (!estoqueInfinito && cores.length === 0 && (estoque === '' || isNaN(estoqueNum) || estoqueNum < 0)) {
       setError('O estoque inicial precisa ser maior ou igual a zero.');
       return;
     }
@@ -222,6 +262,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       preco: precoNum,
       precoCusto: precoCustoNum,
       estoque: Math.floor(estoqueNum),
+      cores: cores.length > 0 ? cores : undefined,
       imagemBase64: photo || undefined,
       estoqueInfinito: estoqueInfinito || undefined,
       adicional: adicional || undefined,
@@ -251,6 +292,9 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
         setNovaQuantidadeMinima('');
         setNovoPrecoFaixa('');
         setPrazoUrgencia('');
+        setCores([]);
+        setNovaCorNome('');
+        setNovaCorEstoque('');
         
         setTimeout(() => {
           setSuccess('');
@@ -379,16 +423,78 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
             <input
               id="product-stock"
               type="number"
-              disabled={estoqueInfinito}
+              disabled={estoqueInfinito || cores.length > 0}
               min="0"
               step="1"
-              placeholder={estoqueInfinito ? "Sem limites (Estoque Infinito)" : "Ex: 50"}
-              value={estoqueInfinito ? "" : estoque}
+              placeholder={estoqueInfinito ? "Sem limites (Estoque Infinito)" : (cores.length > 0 ? "Estoque calculado pelas cores" : "Ex: 50")}
+              value={estoqueInfinito ? "" : (cores.length > 0 ? cores.reduce((sum, c) => sum + c.estoque, 0) : estoque)}
               onChange={(e) => setEstoque(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
-              className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-600 text-sm disabled:opacity-50 disabled:text-zinc-500 disabled:border-zinc-850"
+              className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-sm disabled:opacity-50 disabled:text-zinc-500 disabled:border-zinc-850"
             />
           </div>
         </div>
+
+        {/* Color stock sub-form */}
+        {!estoqueInfinito && (
+          <div className="bg-zinc-950/60 p-4 border border-zinc-850 rounded-xl space-y-3">
+            <div className="flex items-center gap-2 border-b border-zinc-800/80 pb-2">
+              <Palette className="h-4 w-4 text-brand-pink" />
+              <span className="text-xs font-bold uppercase tracking-wider text-zinc-300">
+                Opções de Cores no Estoque (Opcional)
+              </span>
+            </div>
+            <p className="text-[11px] text-zinc-500 leading-relaxed">
+              Adicione cores e suas quantidades específicas para controlar de forma exata. Se adicionar cores aqui, o estoque total do produto será o somatório de todas as cores.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="text"
+                placeholder="Ex Nome da cor: Vermelho, Azul, Transparente"
+                value={novaCorNome}
+                onChange={(e) => setNovaCorNome(e.target.value)}
+                className="flex-1 px-3 py-2 bg-black border border-zinc-800 rounded-lg text-xs text-zinc-100 placeholder-zinc-700 focus:outline-none focus:ring-1 focus:ring-brand-pink/50"
+              />
+              <input
+                type="number"
+                min="0"
+                placeholder="Qtd em estoque"
+                value={novaCorEstoque}
+                onChange={(e) => setNovaCorEstoque(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
+                className="w-full sm:w-28 px-3 py-2 bg-black border border-zinc-800 rounded-lg text-xs text-zinc-100 placeholder-zinc-700 focus:outline-none focus:ring-1 focus:ring-brand-pink/50"
+              />
+              <button
+                type="button"
+                onClick={handleAddCor}
+                className="px-4 py-2 bg-zinc-800 hover:bg-zinc-750 text-white font-bold rounded-lg text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer border border-zinc-750"
+              >
+                <Plus className="h-3.5 w-3.5 text-brand-pink" />
+                <span>Adicionar</span>
+              </button>
+            </div>
+
+            {cores.length > 0 && (
+              <div className="flex flex-wrap gap-2 pt-1">
+                {cores.map((cor, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center gap-1.5 px-2.5 py-1 bg-zinc-900 border border-zinc-800 rounded-xl text-xs text-zinc-200 shadow-sm"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-brand-pink" />
+                    <span className="font-semibold">{cor.nome}:</span>
+                    <span className="font-mono text-zinc-400 font-bold">{cor.estoque} un</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCor(index)}
+                      className="ml-1 text-zinc-500 hover:text-red-400 p-0.5 rounded transition-colors cursor-pointer"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Custom Urgency Deadline (Aviso de Urgência) Section */}
         <div className="bg-zinc-950/40 p-4 border border-zinc-800/50 rounded-2xl space-y-3 text-left">

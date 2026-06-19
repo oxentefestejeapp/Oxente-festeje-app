@@ -8,11 +8,17 @@ export interface PricingTier {
   preco: number;
 }
 
+export interface ProductColor {
+  nome: string;
+  estoque: number;
+}
+
 export interface Product {
   id: string;
   nome: string;
   preco: number;
   estoque: number;
+  cores?: ProductColor[]; // Supports individual stock counts per color
   imagemBase64?: string; // Stored as data URL (base64) for robust local storage persistence
   estoqueInfinito?: boolean;
   precoCusto?: number;
@@ -31,6 +37,7 @@ export interface SaleItem {
   precoUn: number;
   quantidade: number;
   total: number;
+  corSelecionada?: string; // Optional track color chosen for this item
 }
 
 export interface SaleOriginalValues {
@@ -47,6 +54,7 @@ export interface SaleOriginalValues {
   notasInternas?: string;
   turnoEntrega?: 'Manhã' | 'Tarde';
   pedidoVinculoNumero?: string;
+  corSelecionada?: string;
 }
 
 export interface Sale {
@@ -96,6 +104,7 @@ export interface Sale {
   pendingSync?: boolean;
   bloqueadoLembrete?: boolean;
   pedidoVinculoNumero?: string;
+  corSelecionada?: string;
 }
 
 export interface StoreInfo {

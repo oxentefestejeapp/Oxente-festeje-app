@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Product, Sale, StoreInfo } from '../types';
+import { Product, Sale, StoreInfo, ProductColor } from '../types';
 
 export interface SupabaseErrorDetail {
   message: string;
@@ -277,6 +277,7 @@ const mapProductToDb = (product: Product) => ({
   precos_progressivos: product.faixasPreco ? JSON.stringify(product.faixasPreco) : null,
   conferido: product.conferido || false,
   prazo_urgencia: product.prazoUrgencia !== undefined && product.prazoUrgencia !== null ? product.prazoUrgencia : null,
+  cores: product.cores ? JSON.stringify(product.cores) : null,
   updated_at: new Date().toISOString()
 });
 
@@ -289,6 +290,17 @@ export const mapDbToProduct = (dbItem: any): Product => {
         : dbItem.precos_progressivos;
     } catch (e) {
       console.error('Falha ao parsear precos_progressivos do banco de dados:', e);
+    }
+  }
+
+  let cores = undefined;
+  if (dbItem.cores) {
+    try {
+      cores = typeof dbItem.cores === 'string'
+        ? JSON.parse(dbItem.cores)
+        : dbItem.cores;
+    } catch (e) {
+      console.error('Falha ao parsear cores do banco de dados:', e);
     }
   }
 
@@ -321,7 +333,8 @@ export const mapDbToProduct = (dbItem: any): Product => {
     precoCusto: dbItem.preco_custo ? Number(dbItem.preco_custo) : undefined,
     faixasPreco,
     conferido: finalConferido,
-    prazoUrgencia: dbItem.prazo_urgencia !== null && dbItem.prazo_urgencia !== undefined ? Number(dbItem.prazo_urgencia) : undefined
+    prazoUrgencia: dbItem.prazo_urgencia !== null && dbItem.prazo_urgencia !== undefined ? Number(dbItem.prazo_urgencia) : undefined,
+    cores: cores || undefined
   };
 };
 
@@ -341,6 +354,7 @@ const mapSaleToDb = (sale: Sale) => ({
   numero_pedido: sale.numeroPedido || null,
   status: sale.status || null,
   itens: sale.itens ? JSON.stringify(sale.itens) : null,
+  cor_selecionada: sale.corSelecionada || null,
   criado_por_email: sale.criadoPorEmail || null,
   data_retirada: sale.dataRetirada || null,
   status_producao: sale.statusProducao || null,
@@ -385,6 +399,7 @@ export const mapDbToSale = (dbItem: any): Sale => ({
   numeroPedido: dbItem.numero_pedido || undefined,
   status: dbItem.status as any,
   itens: dbItem.itens ? (typeof dbItem.itens === 'string' ? JSON.parse(dbItem.itens) : dbItem.itens) : undefined,
+  corSelecionada: dbItem.cor_selecionada || undefined,
   criadoPorEmail: dbItem.criado_por_email || undefined,
   dataRetirada: dbItem.data_retirada || undefined,
   statusProducao: (dbItem.status_producao as any) || 'Agendado',
@@ -581,7 +596,7 @@ const realDbSupabase = {
     }
   },
 
-  async updateProductStock(id: string, newStock: number, isInfinite?: boolean): Promise<boolean> {
+  async updateProductStock(id: string, newStock: number, isInfinite?: boolean, cores?: ProductColor[]): Promise<boolean> {
     try {
       const updateData: any = {
         estoque: newStock,
@@ -589,6 +604,9 @@ const realDbSupabase = {
       };
       if (isInfinite !== undefined) {
         updateData.estoque_infinito = isInfinite;
+      }
+      if (cores !== undefined) {
+        updateData.cores = cores ? JSON.stringify(cores) : null;
       }
       
       const currentPayload = { ...updateData };
@@ -1133,7 +1151,7 @@ const sandboxDbSupabase = {
     return true;
   },
 
-  updateProductStock: async (id: string, newStock: number, isInfinite?: boolean): Promise<boolean> => {
+  updateProductStock: async (id: string, newStock: number, isInfinite?: boolean, cores?: ProductColor[]): Promise<boolean> => {
     const cached = localStorage.getItem('oxente_products');
     if (cached) {
       const list: Product[] = JSON.parse(cached);
@@ -1141,6 +1159,7 @@ const sandboxDbSupabase = {
       if (product) {
         product.estoque = newStock;
         if (isInfinite !== undefined) product.estoqueInfinito = isInfinite;
+        if (cores !== undefined) product.cores = cores;
         localStorage.setItem('oxente_products', JSON.stringify(list));
       }
     }

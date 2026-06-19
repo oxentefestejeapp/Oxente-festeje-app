@@ -1480,11 +1480,36 @@ export default function App() {
 
     const productsToSync: Product[] = [];
     const updatedProducts = currentProducts.map((p) => {
-      const soldItem = itemsToDecrease.find((item) => item.produtoId === p.id);
-      if (soldItem && !p.estoqueInfinito) {
+      const soldItemsForProduct = itemsToDecrease.filter((item) => item.produtoId === p.id);
+      if (soldItemsForProduct.length > 0 && !p.estoqueInfinito) {
+        let updatedCores = p.cores ? [...p.cores] : undefined;
+        let totalSoldQty = 0;
+
+        for (const soldItem of soldItemsForProduct) {
+          totalSoldQty += soldItem.quantidade;
+          
+          if (updatedCores && soldItem.corSelecionada) {
+            updatedCores = updatedCores.map(c => {
+              if (c.nome === soldItem.corSelecionada) {
+                return {
+                  ...c,
+                  estoque: Math.max(0, c.estoque - soldItem.quantidade)
+                };
+              }
+              return c;
+            });
+          }
+        }
+
+        let newEstoque = Math.max(0, p.estoque - totalSoldQty);
+        if (updatedCores && updatedCores.length > 0) {
+          newEstoque = updatedCores.reduce((sum, c) => sum + c.estoque, 0);
+        }
+
         const updatedProduct = {
           ...p,
-          estoque: Math.max(0, p.estoque - soldItem.quantidade)
+          estoque: newEstoque,
+          cores: updatedCores
         };
         productsToSync.push(updatedProduct);
         return updatedProduct;
@@ -1513,7 +1538,7 @@ export default function App() {
       // Async update each product's stock in Supabase using the fast optimized method
       try {
         const results = await Promise.all(
-          productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito))
+          productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito, p.cores))
         );
         if (results.some(r => !r)) {
           setSupabaseSyncStatus('error');

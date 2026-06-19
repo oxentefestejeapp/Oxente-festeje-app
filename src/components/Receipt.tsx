@@ -217,6 +217,9 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
                 <tr key={item.id || idx} className="border-b border-dashed border-black/60 text-xs">
                   <td className="py-2 max-w-[150px] break-words align-top select-text">
                     <span className="font-bold text-black">{item.produtoNome}</span>
+                    {item.corSelecionada && (
+                      <span className="block text-[9px] text-black font-semibold">Cor: {item.corSelecionada}</span>
+                    )}
                     <span className="block text-[9px] text-black font-normal">Preço Un: R$ {item.precoUn.toFixed(2)}</span>
                   </td>
                   <td className="py-2 text-center align-top select-text font-bold text-black">{item.quantidade}</td>
@@ -227,6 +230,9 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
               <tr className="border-b border-dashed border-black/60 text-xs">
                 <td className="py-2.5 max-w-[150px] break-words align-top select-text">
                   <span className="font-bold text-black">{sale.produtoNome}</span>
+                  {sale.corSelecionada && (
+                    <span className="block text-[9px] text-black font-semibold">Cor: {sale.corSelecionada}</span>
+                  )}
                   <span className="block text-[9px] text-black font-normal">Preço Un: R$ {sale.precoUn.toFixed(2)}</span>
                 </td>
                 <td className="py-2.5 text-center align-top select-text font-bold text-black">{sale.quantidade}</td>
