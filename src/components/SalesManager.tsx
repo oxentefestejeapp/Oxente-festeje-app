@@ -192,6 +192,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [temTaxaUrgencia, setTemTaxaUrgencia] = useState(false);
   const [valorTaxaUrgencia, setValorTaxaUrgencia] = useState('');
 
+  // State for Taxa do Cartão option
+  const [temTaxaCartao, setTemTaxaCartao] = useState(false);
+  const [valorTaxaCartao, setValorTaxaCartao] = useState('');
+
   // Track annotated (notified) sales via localStorage key for cross-session consistency on their device
   const [annotatedSaleIds, setAnnotatedSaleIds] = useState<string[]>(() => {
     try {
@@ -252,13 +256,16 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [editSegundaArte, setEditSegundaArte] = useState(false);
   const [editTemTaxaUrgencia, setEditTemTaxaUrgencia] = useState(false);
   const [editValorTaxaUrgencia, setEditValorTaxaUrgencia] = useState('');
+  const [editTemTaxaCartao, setEditTemTaxaCartao] = useState(false);
+  const [editValorTaxaCartao, setEditValorTaxaCartao] = useState('');
 
   const editTotal = useMemo(() => {
     const artVal = editArteDesign ? 5 : 0;
     const segundaArtVal = editSegundaArte ? 5 : 0;
     const urgVal = editTemTaxaUrgencia ? (parseFloat(editValorTaxaUrgencia) || 0) : 0;
-    return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0) + artVal + segundaArtVal + urgVal;
-  }, [editItens, editArteDesign, editSegundaArte, editTemTaxaUrgencia, editValorTaxaUrgencia]);
+    const cartaoVal = editTemTaxaCartao ? (parseFloat(editValorTaxaCartao) || 0) : 0;
+    return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0) + artVal + segundaArtVal + urgVal + cartaoVal;
+  }, [editItens, editArteDesign, editSegundaArte, editTemTaxaUrgencia, editValorTaxaUrgencia, editTemTaxaCartao, editValorTaxaCartao]);
 
   // Sync edit states when editingSale shifts
   React.useEffect(() => {
@@ -290,6 +297,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       const hasArte = rawItens.some(item => item.produtoId === 'artedesign-service');
       const hasSegundaArte = rawItens.some(item => item.produtoId === 'segundaarte-service');
       const urgenciaItem = rawItens.find(item => item.produtoId === 'taxaurgencia-service');
+      const cartaoItem = rawItens.find(item => item.produtoId === 'taxacartao-service');
 
       setEditArteDesign(hasArte);
       setEditSegundaArte(hasSegundaArte);
@@ -301,7 +309,15 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         setEditValorTaxaUrgencia('');
       }
 
-      setEditItens(rawItens.filter(item => item.produtoId !== 'artedesign-service' && item.produtoId !== 'segundaarte-service' && item.produtoId !== 'taxaurgencia-service'));
+      if (cartaoItem) {
+        setEditTemTaxaCartao(true);
+        setEditValorTaxaCartao(String(cartaoItem.precoUn));
+      } else {
+        setEditTemTaxaCartao(false);
+        setEditValorTaxaCartao('');
+      }
+
+      setEditItens(rawItens.filter(item => item.produtoId !== 'artedesign-service' && item.produtoId !== 'segundaarte-service' && item.produtoId !== 'taxaurgencia-service' && item.produtoId !== 'taxacartao-service'));
     }
   }, [editingSale]);
   
@@ -434,9 +450,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   const totalVendaSemDesconto = useMemo(() => {
     const urgenciaVal = temTaxaUrgencia ? (parseFloat(valorTaxaUrgencia) || 0) : 0;
+    const cartaoVal = temTaxaCartao ? (parseFloat(valorTaxaCartao) || 0) : 0;
     const secondArtVal = segundaArte ? 5 : 0;
     if (cart.length > 0) {
-      return cart.reduce((sum, item) => sum + item.total, 0) + (arteDesign ? 5 : 0) + secondArtVal + urgenciaVal;
+      return cart.reduce((sum, item) => sum + item.total, 0) + (arteDesign ? 5 : 0) + secondArtVal + urgenciaVal + cartaoVal;
     }
     const mainTotal = selectedProduct && typeof quantidade === 'number' 
       ? getProductUnitPrice(selectedProduct, quantidade) * quantidade 
@@ -451,8 +468,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return sum;
     }, 0);
 
-    return mainTotal + addonsTotal + (arteDesign ? 5 : 0) + secondArtVal + urgenciaVal;
-  }, [cart, selectedProduct, quantidade, selectedAddonIds, products, arteDesign, segundaArte, temTaxaUrgencia, valorTaxaUrgencia]);
+    return mainTotal + addonsTotal + (arteDesign ? 5 : 0) + secondArtVal + urgenciaVal + cartaoVal;
+  }, [cart, selectedProduct, quantidade, selectedAddonIds, products, arteDesign, segundaArte, temTaxaUrgencia, valorTaxaUrgencia, temTaxaCartao, valorTaxaCartao]);
 
   // Sincronizar o desconto calculado quando o valor total sem desconto mudar e houver desconto digitado em valor fixo R$
   useEffect(() => {
@@ -882,6 +899,20 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       }
     }
 
+    if (temTaxaCartao) {
+      const cartaoVal = parseFloat(valorTaxaCartao) || 0;
+      if (cartaoVal > 0) {
+        finalItens.push({
+          id: `item-taxacartao-${Date.now()}`,
+          produtoId: 'taxacartao-service',
+          produtoNome: 'Taxa do Cartão',
+          precoUn: cartaoVal,
+          quantidade: 1,
+          total: cartaoVal
+        });
+      }
+    }
+
     const valPagoNum = valorPagoInput.trim() === '' ? 0 : parseFloat(valorPagoInput);
     const finalValorPago = registroTipo === 'Orçamento' ? 0 : (isNaN(valPagoNum) ? 0 : valPagoNum);
     const finalValorFaltante = registroTipo === 'Orçamento' ? totalVenda : Math.max(0, totalVenda - finalValorPago);
@@ -893,7 +924,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       : mainItem.produtoNome;
     const mainPrecoUn = mainItem.precoUn;
     const mainQuantidade = finalItens
-      .filter(item => item.produtoId !== 'artedesign-service' && item.produtoId !== 'segundaarte-service' && item.produtoId !== 'taxaurgencia-service')
+      .filter(item => item.produtoId !== 'artedesign-service' && item.produtoId !== 'segundaarte-service' && item.produtoId !== 'taxaurgencia-service' && item.produtoId !== 'taxacartao-service')
       .reduce((sum, item) => sum + item.quantidade, 0);
 
     // Buscar vendas frescas da nuvem para garantir numeração de pedidos sem conflitos (conexão certa)
@@ -1001,6 +1032,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setSegundaArte(false);
     setTemTaxaUrgencia(false);
     setValorTaxaUrgencia('');
+    setTemTaxaCartao(false);
+    setValorTaxaCartao('');
     setCliente('');
     setTelefoneCliente('');
     setValorPagoInput('');
@@ -1117,6 +1150,20 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
           precoUn: urgenciaVal,
           quantidade: 1,
           total: urgenciaVal
+        });
+      }
+    }
+
+    if (editTemTaxaCartao) {
+      const cartaoVal = parseFloat(editValorTaxaCartao) || 0;
+      if (cartaoVal > 0) {
+        finalItensToSave.push({
+          id: `item-taxacartao-${Date.now()}`,
+          produtoId: 'taxacartao-service',
+          produtoNome: 'Taxa do Cartão',
+          precoUn: cartaoVal,
+          quantidade: 1,
+          total: cartaoVal
         });
       }
     }
@@ -1842,29 +1889,84 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                         </span>
                       </div>
                     </label>
+
+                    {/* Botão de Taxa do Cartão */}
+                    <label
+                      className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
+                        temTaxaCartao
+                          ? 'bg-blue-500/12 border-blue-500/40 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.04)]'
+                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={temTaxaCartao}
+                        onChange={() => {
+                          const nextState = !temTaxaCartao;
+                          setTemTaxaCartao(nextState);
+                          playSound(nextState ? 'add' : 'remove');
+                          if (!nextState) {
+                            setValorTaxaCartao('');
+                          }
+                        }}
+                        className="rounded border-zinc-800 text-blue-500 focus:ring-0 accent-blue-500 h-4 w-4 cursor-pointer bg-black"
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold truncate text-zinc-200">
+                          💳 Taxa do Cartão
+                        </span>
+                        <span className="text-[10px] font-mono text-blue-400 font-bold">
+                          {valorTaxaCartao ? `+ R$ ${parseFloat(valorTaxaCartao).toFixed(2)}` : 'Informa Valor'}
+                        </span>
+                      </div>
+                    </label>
                   </div>
 
-                  {temTaxaUrgencia && (
-                    <div className="mt-2 text-left animate-fade-in max-w-xs pt-1">
-                      <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5 font-sans select-none">
-                        Valor da taxa cobrado (R$):
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-2.5 text-xs text-zinc-500 font-mono font-bold">
-                          R$
-                        </span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="Digite o valor adicional..."
-                          value={valorTaxaUrgencia}
-                          onChange={(e) => setValorTaxaUrgencia(e.target.value)}
-                          className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl py-2 pl-9 pr-4 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500 transition-colors"
-                        />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                    {temTaxaUrgencia && (
+                      <div className="text-left animate-fade-in pt-1">
+                        <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5 font-sans select-none">
+                          Valor da taxa de urgência (R$):
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-2.5 text-xs text-zinc-500 font-mono font-bold">
+                            R$
+                          </span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Digite o valor..."
+                            value={valorTaxaUrgencia}
+                            onChange={(e) => setValorTaxaUrgencia(e.target.value)}
+                            className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl py-2 pl-9 pr-4 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500 transition-colors"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+
+                    {temTaxaCartao && (
+                      <div className="text-left animate-fade-in pt-1">
+                        <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1.5 font-sans select-none">
+                          Valor da taxa do cartão (R$):
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-2.5 text-xs text-zinc-500 font-mono font-bold">
+                            R$
+                          </span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Digite o valor..."
+                            value={valorTaxaCartao}
+                            onChange={(e) => setValorTaxaCartao(e.target.value)}
+                            className="w-full bg-zinc-950 border border-blue-500/30 rounded-xl py-2 pl-9 pr-4 text-xs font-mono text-blue-300 focus:outline-none focus:border-blue-500 transition-colors"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
@@ -3173,29 +3275,84 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                         </span>
                       </div>
                     </label>
+
+                    {/* Botão de Taxa do Cartão */}
+                    <label
+                      className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
+                        editTemTaxaCartao
+                          ? 'bg-blue-500/12 border-blue-500/40 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.04)]'
+                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={editTemTaxaCartao}
+                        onChange={() => {
+                          const nextState = !editTemTaxaCartao;
+                          setEditTemTaxaCartao(nextState);
+                          playSound(nextState ? 'add' : 'remove');
+                          if (!nextState) {
+                            setEditValorTaxaCartao('');
+                          }
+                        }}
+                        className="rounded border-zinc-800 text-blue-500 focus:ring-0 accent-blue-500 h-4 w-4 cursor-pointer bg-black"
+                      />
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-xs font-semibold truncate text-zinc-200">
+                          💳 Taxa do Cartão
+                        </span>
+                        <span className="text-[10px] font-mono text-blue-400 font-bold">
+                          {editValorTaxaCartao ? `+ R$ ${parseFloat(editValorTaxaCartao).toFixed(2)}` : 'Informa Valor'}
+                        </span>
+                      </div>
+                    </label>
                   </div>
 
-                  {editTemTaxaUrgencia && (
-                    <div className="mt-2 text-left animate-fade-in max-w-xs pt-1">
-                      <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5 font-sans select-none">
-                        Valor da taxa cobrado (R$):
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-3.5 top-2 text-xs text-zinc-500 font-mono font-bold">
-                          R$
-                        </span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          placeholder="Digite o valor adicional..."
-                          value={editValorTaxaUrgencia}
-                          onChange={(e) => setEditValorTaxaUrgencia(e.target.value)}
-                          className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl py-1.5 pl-9 pr-4 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500 transition-colors"
-                        />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                    {editTemTaxaUrgencia && (
+                      <div className="text-left animate-fade-in pt-1">
+                        <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5 font-sans select-none">
+                          Valor da taxa de urgência (R$):
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-2 text-xs text-zinc-500 font-mono font-bold">
+                            R$
+                          </span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Digite o valor..."
+                            value={editValorTaxaUrgencia}
+                            onChange={(e) => setEditValorTaxaUrgencia(e.target.value)}
+                            className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl py-1.5 pl-9 pr-4 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500 transition-colors"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  )}
+                    )}
+
+                    {editTemTaxaCartao && (
+                      <div className="text-left animate-fade-in pt-1">
+                        <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1.5 font-sans select-none">
+                          Valor da taxa do cartão (R$):
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-3.5 top-2 text-xs text-zinc-500 font-mono font-bold">
+                            R$
+                          </span>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="Digite o valor..."
+                            value={editValorTaxaCartao}
+                            onChange={(e) => setEditValorTaxaCartao(e.target.value)}
+                            className="w-full bg-zinc-950 border border-blue-500/30 rounded-xl py-1.5 pl-9 pr-4 text-xs font-mono text-blue-300 focus:outline-none focus:border-blue-500 transition-colors"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {editingSale && editingSale.status === 'Orçamento' && (

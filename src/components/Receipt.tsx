@@ -30,9 +30,9 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
 
   useEffect(() => {
     if (!sale || sale.status === 'Orçamento') return;
-    const codeValue = `oxente:${sale.id}`;
+    const trackingUrl = `${window.location.origin}${window.location.pathname}?acompanhar=${sale.id}`;
     QRCode.toDataURL(
-      codeValue,
+      trackingUrl,
       {
         margin: 1,
         width: 140,
@@ -297,9 +297,10 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
           {/* QR Code de Controle no Recibo */}
           {sale.status !== 'Orçamento' && qrCodeUrl && (
             <div className="flex flex-col items-center justify-center mt-4 pt-4 border-t border-dashed border-black select-none text-center">
-              <span className="text-[9px] text-black font-black uppercase tracking-wider mb-2">QR Code de Controle</span>
+              <span className="text-[10px] text-black font-black uppercase tracking-wider mb-1">Acompanhe seu Pedido</span>
+              <span className="text-[8px] text-black/80 font-semibold mb-2">Escaneie o QR Code acima para ver o status em tempo real</span>
               <div className="bg-white p-2 border border-black rounded inline-block">
-                <img src={qrCodeUrl} alt="Controle de Entrega" className="w-24 h-24" />
+                <img src={qrCodeUrl} alt="Acompanhar Pedido" className="w-24 h-24" />
               </div>
             </div>
           )}

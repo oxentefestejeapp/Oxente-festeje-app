@@ -199,8 +199,13 @@ Sábados de 8:30h às 12h
     let saleId = '';
     let parsedText = text.trim();
 
-    // Check if the QR code conforms to standard "oxente:id"
-    if (parsedText.startsWith('oxente:')) {
+    // Check if the QR code conforms to tracking URLs or standard "oxente:id"
+    if (parsedText.includes('acompanhar=')) {
+      const parts = parsedText.split('acompanhar=');
+      if (parts.length > 1) {
+        saleId = parts[1].split('&')[0];
+      }
+    } else if (parsedText.startsWith('oxente:')) {
       saleId = parsedText.substring(7);
     } else {
       saleId = parsedText;
