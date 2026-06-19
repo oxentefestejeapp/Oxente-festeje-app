@@ -333,7 +333,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [whatsAppSale, setWhatsAppSale] = useState<Sale | null>(null);
 
   // States for Date filtering
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'yesterday' | '7days' | 'this_month' | 'custom'>('all');
   const [startDateStr, setStartDateStr] = useState('');
   const [endDateStr, setEndDateStr] = useState('');
 
@@ -364,6 +364,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       if (dateFilter === 'today') {
         const isToday = saleDate.toDateString() === now.toDateString();
         if (!isToday) return false;
+      } else if (dateFilter === 'yesterday') {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const isYesterday = saleDate.toDateString() === yesterday.toDateString();
+        if (!isYesterday) return false;
       } else if (dateFilter === '7days') {
         const diffTime = Math.abs(now.getTime() - saleDate.getTime());
         const diffDays = diffTime / (1000 * 60 * 60 * 24);
@@ -2473,6 +2478,17 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   }`}
                 >
                   Hoje
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDateFilter('yesterday')}
+                  className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                    dateFilter === 'yesterday' 
+                      ? 'bg-brand-pink text-black' 
+                      : 'text-zinc-400 hover:text-zinc-100'
+                  }`}
+                >
+                  Ontem
                 </button>
                 <button
                   type="button"
