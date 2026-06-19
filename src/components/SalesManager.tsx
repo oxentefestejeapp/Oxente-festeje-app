@@ -196,6 +196,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [temTaxaCartao, setTemTaxaCartao] = useState(false);
   const [valorTaxaCartao, setValorTaxaCartao] = useState('');
 
+  // State to show/hide services and taxes list (registration)
+  const [showServicosTaxas, setShowServicosTaxas] = useState(false);
+
   // Track annotated (notified) sales via localStorage key for cross-session consistency on their device
   const [annotatedSaleIds, setAnnotatedSaleIds] = useState<string[]>(() => {
     try {
@@ -258,6 +261,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [editValorTaxaUrgencia, setEditValorTaxaUrgencia] = useState('');
   const [editTemTaxaCartao, setEditTemTaxaCartao] = useState(false);
   const [editValorTaxaCartao, setEditValorTaxaCartao] = useState('');
+  const [editShowServicosTaxas, setEditShowServicosTaxas] = useState(false);
 
   const editTotal = useMemo(() => {
     const artVal = editArteDesign ? 5 : 0;
@@ -1778,177 +1782,205 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               )}
 
               {/* Opções de Serviços e Taxas Adicionais */}
-              {(selectedProductId || cart.length > 0) && (
-                <div className="mt-4 bg-zinc-900/40 border border-zinc-850 p-4 rounded-2xl space-y-3 animate-fade-in text-left">
-                  <span className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 select-none">
-                    <span>✨ Serviços e Taxas Adicionais do Pedido:</span>
-                  </span>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* Botão de Arte do Design */}
-                    <label
-                      className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
-                        arteDesign
-                          ? 'bg-brand-pink/12 border-brand-pink/40 text-brand-pink shadow-[0_0_8px_rgba(236,72,153,0.04)]'
-                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
-                      }`}
+              {(selectedProductId || cart.length > 0) && (() => {
+                const activeServicesCount = (arteDesign ? 1 : 0) + (segundaArte ? 1 : 0) + (temTaxaUrgencia ? 1 : 0) + (temTaxaCartao ? 1 : 0);
+                return (
+                  <div className="mt-4 bg-zinc-900/40 border border-zinc-850 p-4 rounded-2xl space-y-3 animate-fade-in text-left">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowServicosTaxas(prev => !prev);
+                        playSound('add');
+                      }}
+                      className="w-full flex items-center justify-between text-left focus:outline-none select-none group"
                     >
-                      <input
-                        type="checkbox"
-                        checked={arteDesign}
-                        onChange={() => {
-                          setArteDesign(prev => !prev);
-                          playSound(arteDesign ? 'remove' : 'add');
-                        }}
-                        className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-4 w-4 cursor-pointer bg-black"
-                      />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold truncate text-zinc-200">
-                          🎨 Arte do Design
-                        </span>
-                        <span className="text-[10px] font-mono text-brand-pink font-bold">
-                          + R$ 5,00
-                        </span>
-                      </div>
-                    </label>
-
-                    {/* Botão de Segunda Arte */}
-                    <label
-                      className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
-                        segundaArte
-                          ? 'bg-purple-500/12 border-purple-500/40 text-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.04)]'
-                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={segundaArte}
-                        onChange={() => {
-                          setSegundaArte(prev => !prev);
-                          playSound(segundaArte ? 'remove' : 'add');
-                        }}
-                        className="rounded border-zinc-800 text-purple-500 focus:ring-0 accent-purple-500 h-4 w-4 cursor-pointer bg-black"
-                      />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold truncate text-zinc-200">
-                          🎨 Segunda Arte
-                        </span>
-                        <span className="text-[10px] font-mono text-purple-400 font-bold">
-                          + R$ 5,00
-                        </span>
-                      </div>
-                    </label>
-
-                    {/* Botão de Taxa de Urgência */}
-                    <label
-                      className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
-                        temTaxaUrgencia
-                          ? 'bg-amber-500/12 border-amber-500/40 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.04)]'
-                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={temTaxaUrgencia}
-                        onChange={() => {
-                          const nextState = !temTaxaUrgencia;
-                          setTemTaxaUrgencia(nextState);
-                          playSound(nextState ? 'add' : 'remove');
-                          if (!nextState) {
-                            setValorTaxaUrgencia('');
-                          }
-                        }}
-                        className="rounded border-zinc-800 text-amber-500 focus:ring-0 accent-amber-500 h-4 w-4 cursor-pointer bg-black"
-                      />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold truncate text-zinc-200">
-                          ⚡ Taxa de Urgência
-                        </span>
-                        <span className="text-[10px] font-mono text-amber-400 font-bold">
-                          {valorTaxaUrgencia ? `+ R$ ${parseFloat(valorTaxaUrgencia).toFixed(2)}` : 'Informa Valor'}
-                        </span>
-                      </div>
-                    </label>
-
-                    {/* Botão de Taxa do Cartão */}
-                    <label
-                      className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
-                        temTaxaCartao
-                          ? 'bg-blue-500/12 border-blue-500/40 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.04)]'
-                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={temTaxaCartao}
-                        onChange={() => {
-                          const nextState = !temTaxaCartao;
-                          setTemTaxaCartao(nextState);
-                          playSound(nextState ? 'add' : 'remove');
-                          if (!nextState) {
-                            setValorTaxaCartao('');
-                          }
-                        }}
-                        className="rounded border-zinc-800 text-blue-500 focus:ring-0 accent-blue-500 h-4 w-4 cursor-pointer bg-black"
-                      />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold truncate text-zinc-200">
-                          💳 Taxa do Cartão
-                        </span>
-                        <span className="text-[10px] font-mono text-blue-400 font-bold">
-                          {valorTaxaCartao ? `+ R$ ${parseFloat(valorTaxaCartao).toFixed(2)}` : 'Informa Valor'}
-                        </span>
-                      </div>
-                    </label>
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                    {temTaxaUrgencia && (
-                      <div className="text-left animate-fade-in pt-1">
-                        <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5 font-sans select-none">
-                          Valor da taxa de urgência (R$):
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3.5 top-2.5 text-xs text-zinc-500 font-mono font-bold">
-                            R$
+                      <span className="block text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-sans">
+                        <span>✨ Serviços e Taxas Adicionais do Pedido:</span>
+                        {activeServicesCount > 0 && (
+                          <span className="bg-brand-pink/20 text-brand-pink px-2 py-0.5 rounded-full text-[9px] font-extrabold animate-pulse">
+                            {activeServicesCount} selecionado{activeServicesCount > 1 ? 's' : ''}
                           </span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="Digite o valor..."
-                            value={valorTaxaUrgencia}
-                            onChange={(e) => setValorTaxaUrgencia(e.target.value)}
-                            className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl py-2 pl-9 pr-4 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500 transition-colors"
-                          />
+                        )}
+                      </span>
+                      <span className="text-[10.5px] font-bold text-zinc-400 group-hover:text-zinc-200 transition-colors flex items-center gap-1 bg-zinc-850/60 hover:bg-zinc-800/80 px-2 py-1 rounded-lg">
+                        {showServicosTaxas ? (
+                          <>Ocultar <span className="font-mono text-[9px]">▲</span></>
+                        ) : (
+                          <>Ver taxas/serviços <span className="font-mono text-[9px]">▼</span></>
+                        )}
+                      </span>
+                    </button>
+                    
+                    {showServicosTaxas && (
+                      <div className="pt-3 border-t border-zinc-850/50 mt-1 animate-fade-in space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                          {/* Botão de Arte do Design */}
+                          <label
+                            className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
+                              arteDesign
+                                ? 'bg-brand-pink/12 border-brand-pink/40 text-brand-pink shadow-[0_0_8px_rgba(236,72,153,0.04)]'
+                                : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={arteDesign}
+                              onChange={() => {
+                                setArteDesign(prev => !prev);
+                                playSound(arteDesign ? 'remove' : 'add');
+                              }}
+                              className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-4 w-4 cursor-pointer bg-black"
+                            />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-semibold truncate text-zinc-200">
+                                🎨 Arte do Design
+                              </span>
+                              <span className="text-[10px] font-mono text-brand-pink font-bold">
+                                + R$ 5,00
+                              </span>
+                            </div>
+                          </label>
+
+                          {/* Botão de Segunda Arte */}
+                          <label
+                            className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
+                              segundaArte
+                                ? 'bg-purple-500/12 border-purple-500/40 text-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.04)]'
+                                : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={segundaArte}
+                              onChange={() => {
+                                setSegundaArte(prev => !prev);
+                                playSound(segundaArte ? 'remove' : 'add');
+                              }}
+                              className="rounded border-zinc-800 text-purple-500 focus:ring-0 accent-purple-500 h-4 w-4 cursor-pointer bg-black"
+                            />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-semibold truncate text-zinc-200">
+                                🎨 Segunda Arte
+                              </span>
+                              <span className="text-[10px] font-mono text-purple-400 font-bold">
+                                + R$ 5,00
+                              </span>
+                            </div>
+                          </label>
+
+                          {/* Botão de Taxa de Urgência */}
+                          <label
+                            className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
+                              temTaxaUrgencia
+                                ? 'bg-amber-500/12 border-amber-500/40 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.04)]'
+                                : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={temTaxaUrgencia}
+                              onChange={() => {
+                                const nextState = !temTaxaUrgencia;
+                                setTemTaxaUrgencia(nextState);
+                                playSound(nextState ? 'add' : 'remove');
+                                if (!nextState) {
+                                  setValorTaxaUrgencia('');
+                                }
+                              }}
+                              className="rounded border-zinc-800 text-amber-500 focus:ring-0 accent-amber-500 h-4 w-4 cursor-pointer bg-black"
+                            />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-semibold truncate text-zinc-200">
+                                ⚡ Taxa de Urgência
+                              </span>
+                              <span className="text-[10px] font-mono text-amber-400 font-bold">
+                                {valorTaxaUrgencia ? `+ R$ ${parseFloat(valorTaxaUrgencia).toFixed(2)}` : 'Informa Valor'}
+                              </span>
+                            </div>
+                          </label>
+
+                          {/* Botão de Taxa do Cartão */}
+                          <label
+                            className={`flex items-center gap-2.5 px-3.5 py-2.5 border rounded-xl cursor-pointer select-none transition-all ${
+                              temTaxaCartao
+                                ? 'bg-blue-500/12 border-blue-500/40 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.04)]'
+                                : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={temTaxaCartao}
+                              onChange={() => {
+                                const nextState = !temTaxaCartao;
+                                setTemTaxaCartao(nextState);
+                                playSound(nextState ? 'add' : 'remove');
+                                if (!nextState) {
+                                  setValorTaxaCartao('');
+                                }
+                              }}
+                              className="rounded border-zinc-800 text-blue-500 focus:ring-0 accent-blue-500 h-4 w-4 cursor-pointer bg-black"
+                            />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-xs font-semibold truncate text-zinc-200">
+                                💳 Taxa do Cartão
+                              </span>
+                              <span className="text-[10px] font-mono text-blue-400 font-bold">
+                                {valorTaxaCartao ? `+ R$ ${parseFloat(valorTaxaCartao).toFixed(2)}` : 'Informa Valor'}
+                              </span>
+                            </div>
+                          </label>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                          {temTaxaUrgencia && (
+                            <div className="text-left animate-fade-in pt-1">
+                              <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5 font-sans select-none">
+                                Valor da taxa de urgência (R$):
+                              </label>
+                              <div className="relative">
+                                <span className="absolute left-3.5 top-2.5 text-xs text-zinc-500 font-mono font-bold">
+                                  R$
+                                </span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="Digite o valor..."
+                                  value={valorTaxaUrgencia}
+                                  onChange={(e) => setValorTaxaUrgencia(e.target.value)}
+                                  className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl py-2 pl-9 pr-4 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500 transition-colors"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          {temTaxaCartao && (
+                            <div className="text-left animate-fade-in pt-1">
+                              <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1.5 font-sans select-none">
+                                Valor da taxa do cartão (R$):
+                              </label>
+                              <div className="relative">
+                                <span className="absolute left-3.5 top-2.5 text-xs text-zinc-500 font-mono font-bold">
+                                  R$
+                                </span>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  placeholder="Digite o valor..."
+                                  value={valorTaxaCartao}
+                                  onChange={(e) => setValorTaxaCartao(e.target.value)}
+                                  className="w-full bg-zinc-950 border border-blue-500/30 rounded-xl py-2 pl-9 pr-4 text-xs font-mono text-blue-300 focus:outline-none focus:border-blue-500 transition-colors"
+                                />
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
                     )}
-
-                    {temTaxaCartao && (
-                      <div className="text-left animate-fade-in pt-1">
-                        <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1.5 font-sans select-none">
-                          Valor da taxa do cartão (R$):
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3.5 top-2.5 text-xs text-zinc-500 font-mono font-bold">
-                            R$
-                          </span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="Digite o valor..."
-                            value={valorTaxaCartao}
-                            onChange={(e) => setValorTaxaCartao(e.target.value)}
-                            className="w-full bg-zinc-950 border border-blue-500/30 rounded-xl py-2 pl-9 pr-4 text-xs font-mono text-blue-300 focus:outline-none focus:border-blue-500 transition-colors"
-                          />
-                        </div>
-                      </div>
-                    )}
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
 
             {/* Client and Phone fields row */}
@@ -2740,7 +2772,10 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/40">
-                    {[...filteredSales].reverse().slice(0, visibleSalesCount).map((sale) => {
+                    {[...filteredSales]
+                      .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
+                      .slice(0, visibleSalesCount)
+                      .map((sale) => {
                       const isActive = viewedSale?.id === sale.id;
                       return (
                         <tr 
@@ -3156,175 +3191,205 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 </div>
 
                 {/* Opções de Serviços e Taxas Adicionais na Edição */}
-                <div className="bg-zinc-950/40 border border-zinc-850 p-4 rounded-xl space-y-3 text-left">
-                  <span className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-sans">
-                    <span>✨ Serviços e Taxas Adicionais do Pedido:</span>
-                  </span>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    {/* Botão de Arte do Design */}
-                    <label
-                      className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
-                        editArteDesign
-                          ? 'bg-brand-pink/12 border-brand-pink/40 text-brand-pink shadow-[0_0_8px_rgba(236,72,153,0.04)]'
-                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={editArteDesign}
-                        onChange={() => {
-                          setEditArteDesign(prev => !prev);
-                          playSound(editArteDesign ? 'remove' : 'add');
+                {(() => {
+                  const activeEditServicesCount = (editArteDesign ? 1 : 0) + (editSegundaArte ? 1 : 0) + (editTemTaxaUrgencia ? 1 : 0) + (editTemTaxaCartao ? 1 : 0);
+                  return (
+                    <div className="bg-zinc-950/40 border border-zinc-850 p-4 rounded-xl space-y-3 text-left">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditShowServicosTaxas(prev => !prev);
+                          playSound('add');
                         }}
-                        className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-4 w-4 cursor-pointer bg-black"
-                      />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold truncate text-zinc-200">
-                          🎨 Arte do Design
+                        className="w-full flex items-center justify-between text-left focus:outline-none select-none group"
+                      >
+                        <span className="block text-[10px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-sans">
+                          <span>✨ Serviços e Taxas Adicionais do Pedido:</span>
+                          {activeEditServicesCount > 0 && (
+                            <span className="bg-brand-pink/20 text-brand-pink px-2 py-0.5 rounded-full text-[9px] font-extrabold animate-pulse">
+                              {activeEditServicesCount} selecionado{activeEditServicesCount > 1 ? 's' : ''}
+                            </span>
+                          )}
                         </span>
-                        <span className="text-[10px] font-mono text-brand-pink font-bold">
-                          + R$ 5,00
+                        <span className="text-[10.5px] font-bold text-zinc-400 group-hover:text-zinc-200 transition-colors flex items-center gap-1 bg-zinc-850/60 hover:bg-zinc-800/80 px-2 py-1 rounded-lg">
+                          {editShowServicosTaxas ? (
+                            <>Ocultar <span className="font-mono text-[9px]">▲</span></>
+                          ) : (
+                            <>Ver taxas/serviços <span className="font-mono text-[9px]">▼</span></>
+                          )}
                         </span>
-                      </div>
-                    </label>
+                      </button>
+                      
+                      {editShowServicosTaxas && (
+                        <div className="pt-3 border-t border-zinc-850/50 mt-1 animate-fade-in space-y-3">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            {/* Botão de Arte do Design */}
+                            <label
+                              className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
+                                editArteDesign
+                                  ? 'bg-brand-pink/12 border-brand-pink/40 text-brand-pink shadow-[0_0_8px_rgba(236,72,153,0.04)]'
+                                  : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={editArteDesign}
+                                onChange={() => {
+                                  setEditArteDesign(prev => !prev);
+                                  playSound(editArteDesign ? 'remove' : 'add');
+                                }}
+                                className="rounded border-zinc-800 text-brand-pink focus:ring-0 accent-brand-pink h-4 w-4 cursor-pointer bg-black"
+                              />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-semibold truncate text-zinc-200">
+                                  🎨 Arte do Design
+                                </span>
+                                <span className="text-[10px] font-mono text-brand-pink font-bold">
+                                  + R$ 5,00
+                                </span>
+                              </div>
+                            </label>
 
-                    {/* Botão de Segunda Arte */}
-                    <label
-                      className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
-                        editSegundaArte
-                          ? 'bg-purple-500/12 border-purple-500/40 text-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.04)]'
-                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={editSegundaArte}
-                        onChange={() => {
-                          setEditSegundaArte(prev => !prev);
-                          playSound(editSegundaArte ? 'remove' : 'add');
-                        }}
-                        className="rounded border-zinc-800 text-purple-500 focus:ring-0 accent-purple-500 h-4 w-4 cursor-pointer bg-black"
-                      />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold truncate text-zinc-200">
-                          🎨 Segunda Arte
-                        </span>
-                        <span className="text-[10px] font-mono text-purple-400 font-bold">
-                          + R$ 5,00
-                        </span>
-                      </div>
-                    </label>
+                            {/* Botão de Segunda Arte */}
+                            <label
+                              className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
+                                editSegundaArte
+                                  ? 'bg-purple-500/12 border-purple-500/40 text-purple-400 shadow-[0_0_8px_rgba(168,85,247,0.04)]'
+                                  : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={editSegundaArte}
+                                onChange={() => {
+                                  setEditSegundaArte(prev => !prev);
+                                  playSound(editSegundaArte ? 'remove' : 'add');
+                                }}
+                                className="rounded border-zinc-800 text-purple-500 focus:ring-0 accent-purple-500 h-4 w-4 cursor-pointer bg-black"
+                              />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-semibold truncate text-zinc-200">
+                                  🎨 Segunda Arte
+                                </span>
+                                <span className="text-[10px] font-mono text-purple-400 font-bold">
+                                  + R$ 5,00
+                                </span>
+                              </div>
+                            </label>
 
-                    {/* Botão de Taxa de Urgência */}
-                    <label
-                      className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
-                        editTemTaxaUrgencia
-                          ? 'bg-amber-500/12 border-amber-500/40 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.04)]'
-                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={editTemTaxaUrgencia}
-                        onChange={() => {
-                          const nextState = !editTemTaxaUrgencia;
-                          setEditTemTaxaUrgencia(nextState);
-                          playSound(nextState ? 'add' : 'remove');
-                          if (!nextState) {
-                            setEditValorTaxaUrgencia('');
-                          }
-                        }}
-                        className="rounded border-zinc-800 text-amber-500 focus:ring-0 accent-amber-500 h-4 w-4 cursor-pointer bg-black"
-                      />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold truncate text-zinc-200">
-                          ⚡ Taxa de Urgência
-                        </span>
-                        <span className="text-[10px] font-mono text-amber-400 font-bold">
-                          {editValorTaxaUrgencia ? `+ R$ ${parseFloat(editValorTaxaUrgencia).toFixed(2)}` : 'Informa Valor'}
-                        </span>
-                      </div>
-                    </label>
+                            {/* Botão de Taxa de Urgência */}
+                            <label
+                              className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
+                                editTemTaxaUrgencia
+                                  ? 'bg-amber-500/12 border-amber-500/40 text-amber-400 shadow-[0_0_8px_rgba(245,158,11,0.04)]'
+                                  : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={editTemTaxaUrgencia}
+                                onChange={() => {
+                                  const nextState = !editTemTaxaUrgencia;
+                                  setEditTemTaxaUrgencia(nextState);
+                                  playSound(nextState ? 'add' : 'remove');
+                                  if (!nextState) {
+                                    setEditValorTaxaUrgencia('');
+                                  }
+                                }}
+                                className="rounded border-zinc-800 text-amber-500 focus:ring-0 accent-amber-500 h-4 w-4 cursor-pointer bg-black"
+                              />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-semibold truncate text-zinc-200">
+                                  ⚡ Taxa de Urgência
+                                </span>
+                                <span className="text-[10px] font-mono text-amber-400 font-bold">
+                                  {editValorTaxaUrgencia ? `+ R$ ${parseFloat(editValorTaxaUrgencia).toFixed(2)}` : 'Informa Valor'}
+                                </span>
+                              </div>
+                            </label>
 
-                    {/* Botão de Taxa do Cartão */}
-                    <label
-                      className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
-                        editTemTaxaCartao
-                          ? 'bg-blue-500/12 border-blue-500/40 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.04)]'
-                          : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={editTemTaxaCartao}
-                        onChange={() => {
-                          const nextState = !editTemTaxaCartao;
-                          setEditTemTaxaCartao(nextState);
-                          playSound(nextState ? 'add' : 'remove');
-                          if (!nextState) {
-                            setEditValorTaxaCartao('');
-                          }
-                        }}
-                        className="rounded border-zinc-800 text-blue-500 focus:ring-0 accent-blue-500 h-4 w-4 cursor-pointer bg-black"
-                      />
-                      <div className="flex flex-col min-w-0">
-                        <span className="text-xs font-semibold truncate text-zinc-200">
-                          💳 Taxa do Cartão
-                        </span>
-                        <span className="text-[10px] font-mono text-blue-400 font-bold">
-                          {editValorTaxaCartao ? `+ R$ ${parseFloat(editValorTaxaCartao).toFixed(2)}` : 'Informa Valor'}
-                        </span>
-                      </div>
-                    </label>
-                  </div>
+                            {/* Botão de Taxa do Cartão */}
+                            <label
+                              className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
+                                editTemTaxaCartao
+                                  ? 'bg-blue-500/12 border-blue-500/40 text-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.04)]'
+                                  : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                              }`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={editTemTaxaCartao}
+                                onChange={() => {
+                                  const nextState = !editTemTaxaCartao;
+                                  setEditTemTaxaCartao(nextState);
+                                  playSound(nextState ? 'add' : 'remove');
+                                  if (!nextState) {
+                                    setEditValorTaxaCartao('');
+                                  }
+                                }}
+                                className="rounded border-zinc-800 text-blue-500 focus:ring-0 accent-blue-500 h-4 w-4 cursor-pointer bg-black"
+                              />
+                              <div className="flex flex-col min-w-0">
+                                <span className="text-xs font-semibold truncate text-zinc-200">
+                                  💳 Taxa do Cartão
+                                </span>
+                                <span className="text-[10px] font-mono text-blue-400 font-bold">
+                                  {editValorTaxaCartao ? `+ R$ ${parseFloat(editValorTaxaCartao).toFixed(2)}` : 'Informa Valor'}
+                                </span>
+                              </div>
+                            </label>
+                          </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                    {editTemTaxaUrgencia && (
-                      <div className="text-left animate-fade-in pt-1">
-                        <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5 font-sans select-none">
-                          Valor da taxa de urgência (R$):
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3.5 top-2 text-xs text-zinc-500 font-mono font-bold">
-                            R$
-                          </span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="Digite o valor..."
-                            value={editValorTaxaUrgencia}
-                            onChange={(e) => setEditValorTaxaUrgencia(e.target.value)}
-                            className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl py-1.5 pl-9 pr-4 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500 transition-colors"
-                          />
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
+                            {editTemTaxaUrgencia && (
+                              <div className="text-left animate-fade-in pt-1">
+                                <label className="block text-[10px] font-bold text-amber-400 uppercase tracking-wider mb-1.5 font-sans select-none">
+                                  Valor da taxa de urgência (R$):
+                                </label>
+                                <div className="relative">
+                                  <span className="absolute left-3.5 top-2 text-xs text-zinc-500 font-mono font-bold">
+                                    R$
+                                  </span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="Digite o valor..."
+                                    value={editValorTaxaUrgencia}
+                                    onChange={(e) => setEditValorTaxaUrgencia(e.target.value)}
+                                    className="w-full bg-zinc-950 border border-amber-500/30 rounded-xl py-1.5 pl-9 pr-4 text-xs font-mono text-amber-300 focus:outline-none focus:border-amber-500 transition-colors"
+                                  />
+                                </div>
+                              </div>
+                            )}
+
+                            {editTemTaxaCartao && (
+                              <div className="text-left animate-fade-in pt-1">
+                                <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1.5 font-sans select-none">
+                                  Valor da taxa do cartão (R$):
+                                </label>
+                                <div className="relative">
+                                  <span className="absolute left-3.5 top-2 text-xs text-zinc-500 font-mono font-bold">
+                                    R$
+                                  </span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="Digite o valor..."
+                                    value={editValorTaxaCartao}
+                                    onChange={(e) => setEditValorTaxaCartao(e.target.value)}
+                                    className="w-full bg-zinc-950 border border-blue-500/30 rounded-xl py-1.5 pl-9 pr-4 text-xs font-mono text-blue-300 focus:outline-none focus:border-blue-500 transition-colors"
+                                  />
+                                </div>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    )}
-
-                    {editTemTaxaCartao && (
-                      <div className="text-left animate-fade-in pt-1">
-                        <label className="block text-[10px] font-bold text-blue-400 uppercase tracking-wider mb-1.5 font-sans select-none">
-                          Valor da taxa do cartão (R$):
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3.5 top-2 text-xs text-zinc-500 font-mono font-bold">
-                            R$
-                          </span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="Digite o valor..."
-                            value={editValorTaxaCartao}
-                            onChange={(e) => setEditValorTaxaCartao(e.target.value)}
-                            className="w-full bg-zinc-950 border border-blue-500/30 rounded-xl py-1.5 pl-9 pr-4 text-xs font-mono text-blue-300 focus:outline-none focus:border-blue-500 transition-colors"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {editingSale && editingSale.status === 'Orçamento' && (
                   <div className="p-3.5 bg-emerald-950/20 border border-emerald-900/40 rounded-xl flex items-center justify-between gap-3 select-none transition-all">
