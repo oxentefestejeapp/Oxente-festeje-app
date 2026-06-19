@@ -290,7 +290,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
   // Apply visual status filters on today's sales
   const filteredSales = useMemo(() => {
     return todaySales.filter(sale => {
-      const isPending = sale.statusProducao !== 'Entregue' && sale.status !== 'Concluído' && sale.status !== 'Pago total';
+      const isPending = sale.statusProducao !== 'Entregue';
       
       if (filterType === 'pendentes') {
         return isPending;
@@ -304,7 +304,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
 
   // Counts for Today
   const pendingCount = useMemo(() => {
-    return todaySales.filter(s => s.statusProducao !== 'Entregue' && s.status !== 'Concluído' && s.status !== 'Pago total').length;
+    return todaySales.filter(s => s.statusProducao !== 'Entregue').length;
   }, [todaySales]);
 
   const completedCount = todaySales.length - pendingCount;
@@ -501,7 +501,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
           {/* List of today's reminders */}
           <div className="space-y-4">
             {filteredSales.map((sale) => {
-              const isPending = sale.statusProducao !== 'Entregue' && sale.status !== 'Concluído' && sale.status !== 'Pago total';
+              const isPending = sale.statusProducao !== 'Entregue';
               const isReadyForPickup = sale.statusProducao === 'Pronto para Retirada';
               const linkedSales = getLinkedSales(sale, sales);
               const unreadyLinkedSales = linkedSales.filter(s => s.statusProducao === 'Agendado' || s.statusProducao === 'Em Produção');
@@ -873,7 +873,11 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                         <button
                           type="button"
                           onClick={() => {
-                            const confirmDel = window.confirm(`Deseja liquidar todo o saldo faltante e marcar o pedido de ${sale.cliente} como entregue agora?`);
+                            const isAlreadyPaid = sale.status === 'Pago total' || (sale.valorFaltante !== undefined && sale.valorFaltante <= 0);
+                            const confirmMessage = isAlreadyPaid
+                              ? `Deseja marcar o pedido de ${sale.cliente} como entregue agora?`
+                              : `Deseja liquidar todo o saldo faltante e marcar o pedido de ${sale.cliente} como entregue agora?`;
+                            const confirmDel = window.confirm(confirmMessage);
                             if (confirmDel) {
                               playNotificationChime();
                               onUpdateSale({
@@ -891,14 +895,18 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                           className="py-2.5 px-4 bg-zinc-850 hover:bg-zinc-800 text-zinc-300 hover:text-zinc-100 font-bold rounded-xl text-[10px] transition-colors cursor-pointer flex items-center justify-center gap-1.5"
                         >
                           <CheckCircle className="h-3.5 w-3.5 shrink-0" />
-                          <span>Liquidar &amp; Entregar</span>
+                          <span>
+                            {sale.status === 'Pago total' || (sale.valorFaltante !== undefined && sale.valorFaltante <= 0)
+                              ? 'Marcar como Entregue'
+                              : 'Liquidar & Entregar'}
+                          </span>
                         </button>
                       </>
                     ) : (
                       <div className="text-center py-2 px-3 flex flex-col items-center justify-center gap-2 select-none">
                         <div className="flex flex-col items-center justify-center text-emerald-500 gap-1.5">
                           <CheckCircle className="h-5 w-5 stroke-[3]" />
-                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-450">Status Pago Total</span>
+                          <span className="text-[10px] font-extrabold uppercase tracking-widest text-zinc-450">Pedido Entregue</span>
                         </div>
                         <button
                           type="button"
@@ -915,7 +923,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
 
                               onUpdateSale({
                                 ...sale,
-                                status: 'Pendente',
+                                status: prevValorFaltante <= 0 ? 'Pago total' : 'Pendente',
                                 valorPago: prevValorPago,
                                 valorFaltante: prevValorFaltante,
                                 statusProducao: sale.statusProducaoAntesConcluir || 'Agendado',
@@ -926,7 +934,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                           }}
                           className="px-2.5 py-1 bg-zinc-800 hover:bg-zinc-700 hover:text-zinc-100 text-zinc-300 border border-zinc-750 rounded-lg text-[9.5px] font-bold cursor-pointer transition-colors flex items-center gap-1.5 shadow-sm"
                         >
-                          <span>↩️ Desfazer Conclusão</span>
+                          <span>↩️ Desfazer Entrega</span>
                         </button>
                       </div>
                     )}
@@ -979,7 +987,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
           {/* Tomorrow's entries list */}
           <div className="space-y-3">
             {tomorrowSales.map((sale) => {
-              const isPending = sale.statusProducao !== 'Entregue' && sale.status !== 'Concluído' && sale.status !== 'Pago total';
+              const isPending = sale.statusProducao !== 'Entregue';
               const linkedSales = getLinkedSales(sale, sales);
               const unreadyLinkedSales = linkedSales.filter(s => s.statusProducao === 'Agendado' || s.statusProducao === 'Em Produção');
               const hasUnreadyLinkedSale = unreadyLinkedSales.length > 0;
