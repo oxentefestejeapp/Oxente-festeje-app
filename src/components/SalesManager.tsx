@@ -704,41 +704,21 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       }
     }
 
-    const sortedNewAddonIds = [...selectedAddonIds].sort().join(',');
-    const existingIdx = cart.findIndex(c => {
-      const isSameProduct = c.product.id === prod.id;
-      const isSameColor = prod.cores && prod.cores.length > 0 ? c.corSelecionada === selectedColor : true;
-      const sortedItemAddonIds = (c.addons || []).map(a => a.id).sort().join(',');
-      return isSameProduct && isSameColor && sortedNewAddonIds === sortedItemAddonIds;
-    });
-
-    if (existingIdx > -1) {
-      const updatedCart = [...cart];
-      const newQuantity = updatedCart[existingIdx].quantity + qtyNum;
-      const unitPrice = getProductUnitPrice(prod, newQuantity);
-      
-      // Calcula preço dos addons individuais considerando a nova quantidade
-      const addonsUnitPrice = currentAddons.reduce((sum, addon) => sum + getProductUnitPrice(addon, newQuantity), 0);
-      
-      updatedCart[existingIdx].quantity = newQuantity;
-      updatedCart[existingIdx].total = newQuantity * (unitPrice + addonsUnitPrice);
-      setCart(updatedCart);
-    } else {
-      const unitPrice = getProductUnitPrice(prod, qtyNum);
-      const addonsUnitPrice = currentAddons.reduce((sum, addon) => sum + getProductUnitPrice(addon, qtyNum), 0);
-      
-      setCart([
-        ...cart,
-        {
-          id: `item-${prod.id}-${selectedColor ? `${selectedColor}-` : ''}${Date.now()}`,
-          product: prod,
-          quantity: qtyNum,
-          total: qtyNum * (unitPrice + addonsUnitPrice),
-          addons: currentAddons,
-          corSelecionada: selectedColor || undefined
-        }
-      ]);
-    }
+    const unitPrice = getProductUnitPrice(prod, qtyNum);
+    const addonsUnitPrice = currentAddons.reduce((sum, addon) => sum + getProductUnitPrice(addon, qtyNum), 0);
+    const uniqueIdSuffix = Math.random().toString(36).substring(2, 7);
+    
+    setCart([
+      ...cart,
+      {
+        id: `item-${prod.id}-${selectedColor ? `${selectedColor}-` : ''}${Date.now()}-${uniqueIdSuffix}`,
+        product: prod,
+        quantity: qtyNum,
+        total: qtyNum * (unitPrice + addonsUnitPrice),
+        addons: currentAddons,
+        corSelecionada: selectedColor || undefined
+      }
+    ]);
 
     // Play subtle audio cue
     playSound('add');
@@ -3152,27 +3132,18 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                           if (!selectedAddProductId) return;
                           const dbProd = products.find(p => p.id === selectedAddProductId);
                           if (dbProd) {
-                            const existingIdx = editItens.findIndex(item => item.produtoId === dbProd.id);
-                            if (existingIdx > -1) {
-                              const updated = editItens.map((item, i) => i === existingIdx ? {
-                                ...item,
-                                quantidade: item.quantidade + 1,
-                                total: item.precoUn * (item.quantidade + 1)
-                              } : item);
-                              setEditItens(updated);
-                            } else {
-                              setEditItens([
-                                ...editItens,
-                                {
-                                  id: `item-${dbProd.id}-${Date.now()}`,
-                                  produtoId: dbProd.id,
-                                  produtoNome: dbProd.nome,
-                                  precoUn: dbProd.preco,
-                                  quantidade: 1,
-                                  total: dbProd.preco
-                                }
-                              ]);
-                            }
+                            const uniqueIdSuffix = Math.random().toString(36).substring(2, 7);
+                            setEditItens([
+                              ...editItens,
+                              {
+                                id: `item-${dbProd.id}-${Date.now()}-${uniqueIdSuffix}`,
+                                produtoId: dbProd.id,
+                                produtoNome: dbProd.nome,
+                                precoUn: dbProd.preco,
+                                quantidade: 1,
+                                total: dbProd.preco
+                              }
+                            ]);
                             setSelectedAddProductId('');
                           }
                         }}
