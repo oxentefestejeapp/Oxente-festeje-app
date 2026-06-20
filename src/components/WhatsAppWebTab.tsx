@@ -1,6 +1,46 @@
 import React, { useState, useMemo } from 'react';
-import { MessageSquare, Search, Phone, User, Send, FileText } from 'lucide-react';
+import { MessageSquare, Search, Phone, User, Send, FileText, Settings, Plus, Trash2, RotateCcw, Check, X } from 'lucide-react';
 import { Sale, StoreInfo } from '../types';
+
+interface MessageTemplate {
+  id: string;
+  title: string;
+  text: string;
+  isDefault?: boolean;
+}
+
+const DEFAULT_TEMPLATES: MessageTemplate[] = [
+  {
+    id: 'anotado',
+    title: 'Pedido Anotado 📝',
+    text: 'Olá, {cliente}! Seu pedido foi anotado com sucesso e já está em nossa linha de produção! Logo entraremos em contato com mais novidades. Muito obrigado pela preferência! Oxente Festeje 🎈\n\n🎨A partir de agora, será encaminhado para fila de artes do design.\n\n🚨 Ele poderá entrar em contato com 1 a 3 dias uteis, sem alteração da data da entrega.',
+    isDefault: true
+  },
+  {
+    id: 'retirada',
+    title: 'Pronto para Retirada 📦',
+    text: 'Olá, {cliente}! Passando para avisar que o seu pedido está prontinho e embalado para retirada! Aguardamos por você! Oxente Festeje ✨',
+    isDefault: true
+  },
+  {
+    id: 'entregue',
+    title: 'Pedido Entregue 🎉',
+    text: 'Olá, *{cliente}*! 🌟\n\nSeu pedido *#{pedido}* foi entregue e finalizado com sucesso! 🎉\n\n*Detalhes:*\n📦 Produto: {produto}\n\nAgradecemos imensamente pela preferência e confiança em nosso trabalho. Esperamos que tenha uma excelente experiência com seus produtos! 🥰\n\nAtenciosamente,\n*Oxente Festeje* 🌸',
+    isDefault: true
+  },
+  {
+    id: 'pendente_pagamento',
+    title: 'Pendente de Pagamento ⚠️',
+    text: 'Olá, {cliente}! Lembramos que há um saldo em aberto referente ao seu pedido. Poderia nos enviar o comprovante de pagamento para confirmarmos a liberação do seu pedido? Muito obrigado!',
+    isDefault: true
+  },
+  {
+    id: 'pos_venda',
+    title: 'Pós-Venda / Agradecimento 🥰',
+    text: 'Olá, {cliente}! Esperamos que tenha gostado das suas decorações e que sua festa tenha sido maravilhosa! Agradecemos muito pela confiança no trabalho da Oxente Festeje. Até a próxima! ❤',
+    isDefault: true
+  }
+];
 
 interface WhatsAppWebTabProps {
   sales: Sale[];
@@ -13,6 +53,30 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
   const [selectedClientName, setSelectedClientName] = useState('');
   const [customMessage, setCustomMessage] = useState('');
   const [sendMethod, setSendMethod] = useState<'web' | 'api'>('web');
+
+  // Custom template state
+  const [templates, setTemplates] = useState<MessageTemplate[]>(() => {
+    const stored = localStorage.getItem('oxente_whatsapp_templates');
+    if (stored) {
+      try {
+        return JSON.parse(stored);
+      } catch (e) {
+        console.warn('Erro ao carregar templates do localStorage', e);
+      }
+    }
+    return DEFAULT_TEMPLATES;
+  });
+
+  // Template Manager Modal states
+  const [isManagerOpen, setIsManagerOpen] = useState(false);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editText, setEditText] = useState('');
+
+  const saveTemplatesToStorage = (newTemplates: MessageTemplate[]) => {
+    setTemplates(newTemplates);
+    localStorage.setItem('oxente_whatsapp_templates', JSON.stringify(newTemplates));
+  };
 
   // Extract unique active customers with a valid phone number from sales
   const uniqueContacts = useMemo(() => {
@@ -49,26 +113,6 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
     );
   }, [uniqueContacts, searchQuery]);
 
-  // Pre-configured templates with {cliente} placeholder
-  const templates = [
-    {
-      title: 'Pedido Anotado 📝',
-      text: 'Olá, {cliente}! Seu pedido foi anotado com sucesso e já está em nossa linha de produção! Logo entraremos em contato com mais novidades. Muito obrigado pela preferência! Oxente Festeje 🎈\n\n🎨A partir de agora, será encaminhado para fila de artes do design.\n\n🚨 Ele poderá entrar em contato com 1 a 3 dias uteis, sem alteração da data da entrega.'
-    },
-    {
-      title: 'Pronto para Retirada 📦',
-      text: 'Olá, {cliente}! Passando para avisar que o seu pedido está prontinho e embalado para retirada! Aguardamos por você! Oxente Festeje ✨'
-    },
-    {
-      title: 'Pendente de Pagamento ⚠️',
-      text: 'Olá, {cliente}! Lembramos que há um saldo em aberto referente ao seu pedido. Poderia nos enviar o comprovante de pagamento para confirmarmos a liberação do seu pedido? Muito obrigado!'
-    },
-    {
-      title: 'Pós-Venda / Agradecimento 🥰',
-      text: 'Olá, {cliente}! Esperamos que tenha gostado das suas decorações e que sua festa tenha sido maravilhosa! Agradecemos muito pela confiança no trabalho da Oxente Festeje. Até a próxima! ❤'
-    }
-  ];
-
   const handleSelectContact = (contact: { name: string; phone: string }) => {
     setSelectedPhone(contact.phone);
     setSelectedClientName(contact.name);
@@ -76,13 +120,119 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
 
   const handleApplyTemplate = (templateText: string) => {
     let text = templateText;
+    
+    const contact = uniqueContacts.find(c => c.phone === selectedPhone || c.name === selectedClientName);
+    const orderNum = contact?.latestOrder || '';
+    
+    const associatedSale = sales.find(s => s.telefoneCliente === selectedPhone || s.cliente === selectedClientName);
+    const productLine = associatedSale 
+      ? `${associatedSale.produtoNome || 'Personalizado'} (qtd: ${associatedSale.quantidade || 1})` 
+      : 'Personalizado';
+
     if (selectedClientName) {
       text = text.replace(/{cliente}/g, selectedClientName);
     } else {
-      // If no customer is chosen, clean up the greeting naturally
       text = text.replace(/Olá, {cliente}!/g, 'Olá!').replace(/{cliente}/g, 'cliente');
     }
+    
+    if (orderNum) {
+      const cleanNum = orderNum.replace('#', '');
+      text = text.replace(/{pedido}/g, cleanNum);
+    } else {
+      text = text.replace(/{pedido}/g, '_____');
+    }
+    
+    text = text.replace(/{produto}/g, productLine);
+
+    if (selectedPhone) {
+      text = text.replace(/{telefone}/g, selectedPhone);
+    } else {
+      text = text.replace(/{telefone}/g, '');
+    }
+    
     setCustomMessage(text);
+  };
+
+  const handleOpenManager = () => {
+    setIsManagerOpen(true);
+    if (templates.length > 0) {
+      const first = templates[0];
+      setEditingTemplateId(first.id);
+      setEditTitle(first.title);
+      setEditText(first.text);
+    } else {
+      setEditingTemplateId(null);
+      setEditTitle('');
+      setEditText('');
+    }
+  };
+
+  const handleSelectToEdit = (tmpl: MessageTemplate) => {
+    setEditingTemplateId(tmpl.id);
+    setEditTitle(tmpl.title);
+    setEditText(tmpl.text);
+  };
+
+  const handleSaveEditedTemplate = () => {
+    if (!editTitle.trim()) {
+      alert('Por favor, defina um título para o modelo.');
+      return;
+    }
+    if (!editText.trim()) {
+      alert('Por favor, defina o corpo da mensagem.');
+      return;
+    }
+
+    let updated: MessageTemplate[];
+    if (editingTemplateId) {
+      updated = templates.map(t => {
+        if (t.id === editingTemplateId) {
+          return { ...t, title: editTitle, text: editText };
+        }
+        return t;
+      });
+    } else {
+      const newId = `custom-${Date.now()}`;
+      updated = [
+        ...templates,
+        { id: newId, title: editTitle, text: editText, isDefault: false }
+      ];
+      setEditingTemplateId(newId);
+    }
+    saveTemplatesToStorage(updated);
+  };
+
+  const handleCreateNewTemplate = () => {
+    setEditingTemplateId(null);
+    setEditTitle('Novo Modelo ✨');
+    setEditText('Olá, {cliente}! Seu pedido {pedido} ...');
+  };
+
+  const handleDeleteTemplate = (idForDeletion: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (confirm('Deseja realmente excluir este modelo definitivamente?')) {
+      const updated = templates.filter(t => t.id !== idForDeletion);
+      saveTemplatesToStorage(updated);
+      if (editingTemplateId === idForDeletion) {
+        if (updated.length > 0) {
+          handleSelectToEdit(updated[0]);
+        } else {
+          setEditingTemplateId(null);
+          setEditTitle('');
+          setEditText('');
+        }
+      }
+    }
+  };
+
+  const handleResetToDefaults = () => {
+    if (confirm('Deseja realmente redefinir todos os modelos para os padrões originais do Oxente Festeje? Todas as suas edições personalizadas serão descartadas.')) {
+      saveTemplatesToStorage(DEFAULT_TEMPLATES);
+      const first = DEFAULT_TEMPLATES[0];
+      setEditingTemplateId(first.id);
+      setEditTitle(first.title);
+      setEditText(first.text);
+    }
   };
 
   const handleSendAndLaunch = () => {
@@ -301,22 +451,32 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
 
           {/* Quick Templates container */}
           <div className="p-4 bg-zinc-950/20">
-            <span className="block text-[11px] font-bold text-zinc-350 tracking-wider uppercase mb-3 flex items-center gap-1.5">
-              <FileText className="h-3.5 w-3.5 text-brand-pink" />
-              Modelos Rápidos (Clique para aplicar):
-            </span>
+            <div className="flex items-center justify-between mb-3 gap-2">
+              <span className="block text-[11px] font-bold text-zinc-350 tracking-wider uppercase flex items-center gap-1.5">
+                <FileText className="h-3.5 w-3.5 text-brand-pink" />
+                Modelos Rápidos (Clique para aplicar):
+              </span>
+              <button
+                type="button"
+                onClick={handleOpenManager}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold bg-zinc-900 hover:bg-zinc-800 text-zinc-300 rounded-lg transition-colors cursor-pointer border border-zinc-800"
+              >
+                <Settings className="h-3 w-3 text-brand-pink" />
+                Configurar Modelos
+              </button>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {templates.map((tmpl) => (
                 <button
-                  key={tmpl.title}
+                  key={tmpl.id}
                   type="button"
                   onClick={() => handleApplyTemplate(tmpl.text)}
-                  className="p-2.5 text-left bg-zinc-900 border border-zinc-850 hover:border-zinc-800/80 rounded-xl hover:bg-zinc-950 transition-colors cursor-pointer"
+                  className="p-2.5 text-left bg-zinc-900 border border-zinc-850 hover:border-zinc-800/80 rounded-xl hover:bg-zinc-950 transition-colors cursor-pointer text-wrap"
                 >
                   <p className="text-[10px] font-bold text-zinc-300 truncate">
                     {tmpl.title}
                   </p>
-                  <p className="text-[9px] text-zinc-600 line-clamp-1 mt-1 font-medium">
+                  <p className="text-[9px] text-zinc-500 line-clamp-1 mt-1 font-medium">
                     {tmpl.text}
                   </p>
                 </button>
@@ -327,6 +487,150 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
         </div>
 
       </div>
+
+      {/* Template Manager Modal Overlay */}
+      {isManagerOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-zinc-950 border border-zinc-900 rounded-3xl overflow-hidden shadow-2xl max-w-3xl w-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-5 bg-zinc-900 border-b border-zinc-850 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-brand-pink/10 border border-brand-pink/20 text-brand-pink rounded-xl">
+                  <Settings className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-sm text-white">Gerenciar Modelos de Mensagens</h3>
+                  <p className="text-[11px] text-zinc-400 mt-0.5 font-sans">Crie, edite e personalize suas mensagens pré-programadas do WhatsApp</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsManagerOpen(false)}
+                className="p-1.5 text-zinc-400 hover:text-zinc-200 rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Modal Content Column Grid */}
+            <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-12 divide-y md:divide-y-0 md:divide-x divide-zinc-900">
+              
+              {/* Left Column: List of templates */}
+              <div className="md:col-span-5 p-4 flex flex-col min-h-0 space-y-2.5">
+                <div className="flex items-center justify-between gap-1.5 pt-0.5">
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider font-sans">Modelos Salvos</span>
+                  <button
+                    type="button"
+                    onClick={handleCreateNewTemplate}
+                    className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-400 hover:text-emerald-350 cursor-pointer"
+                  >
+                    <Plus className="h-3 w-3" />
+                    Novo Modelo
+                  </button>
+                </div>
+
+                <div className="flex-1 overflow-y-auto space-y-2 max-h-[220px] md:max-h-[320px] pr-1 scrollbar-thin">
+                  {templates.map((tmpl) => {
+                    const isSelected = editingTemplateId === tmpl.id;
+                    return (
+                      <div
+                        key={tmpl.id}
+                        onClick={() => handleSelectToEdit(tmpl)}
+                        className={`group p-3 rounded-xl border text-left cursor-pointer transition-all flex items-start justify-between gap-1.5 ${
+                          isSelected
+                            ? 'bg-brand-pink/10 border-brand-pink/30 text-brand-pink font-semibold'
+                            : 'bg-zinc-900 border-zinc-850 hover:bg-zinc-850/60 text-zinc-300'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <p className="font-bold text-[11px] truncate leading-tight">{tmpl.title}</p>
+                          <p className="text-[9px] text-zinc-500 line-clamp-1 mt-1 font-mono">{tmpl.text}</p>
+                        </div>
+                        
+                        <button
+                          type="button"
+                          onClick={(e) => handleDeleteTemplate(tmpl.id, e)}
+                          className="shrink-0 p-1 text-zinc-650 hover:text-rose-450 hover:bg-rose-950/20 rounded-md transition-all cursor-pointer opacity-85 hover:opacity-100"
+                          title="Excluir Modelo"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="pt-2 border-t border-zinc-900">
+                  <button
+                    type="button"
+                    onClick={handleResetToDefaults}
+                    className="w-full py-2 bg-zinc-900 hover:bg-rose-950/20 text-zinc-400 hover:text-zinc-300 rounded-xl text-[10px] font-bold transition-all border border-zinc-850/60 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="h-3 w-3 text-brand-pink" />
+                    Restaurar Padrões Oxente
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: Active Editor form */}
+              <div className="md:col-span-7 p-4 flex flex-col space-y-4">
+                <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider block font-sans">
+                  {editingTemplateId ? 'Editar Modelo Selecionado' : 'Criar Novo Modelo Personalizado'}
+                </span>
+
+                <div className="space-y-3 flex-1">
+                  <div className="space-y-1">
+                    <span className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block">Título do Modelo</span>
+                    <input
+                      type="text"
+                      placeholder="Ex: Confirmação de Entrega 🚚"
+                      value={editTitle}
+                      onChange={(e) => setEditTitle(e.target.value)}
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-850 hover:border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink rounded-xl text-xs text-zinc-100 placeholder-zinc-650 focus:outline-hidden transition-all font-bold"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-[9.5px] text-zinc-500 font-bold uppercase tracking-wider block">Texto da Mensagem</span>
+                    <textarea
+                      rows={5}
+                      placeholder="Olá, {cliente}! Seu pedido número {pedido} para o produto {produto} foi recebido."
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-850 hover:border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink rounded-xl text-xs text-zinc-205 placeholder-zinc-650 focus:outline-hidden transition-all font-sans leading-relaxed resize-none"
+                    />
+                  </div>
+
+                  {/* tags guides */}
+                  <div className="p-3 bg-zinc-900/60 border border-zinc-850/80 rounded-xl space-y-1">
+                    <span className="text-[9.5px] font-extrabold text-brand-pink tracking-wider uppercase block">🏷️ Substituições Automáticas:</span>
+                    <p className="text-[9.5px] text-zinc-450 leading-relaxed">
+                      Coloque estes termos com chaves no texto do modelo para serem preenchidos sozinhos ao aplicar:
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-1 text-[9px] font-mono text-zinc-500 pt-1">
+                      <div><span className="text-emerald-400 font-bold">{'{cliente}'}</span> : Nome do cliente</div>
+                      <div><span className="text-emerald-400 font-bold">{'{pedido}'}</span> : Número do pedido (#)</div>
+                      <div><span className="text-emerald-400 font-bold">{'{produto}'}</span> : Nome/Qtd do item</div>
+                      <div><span className="text-emerald-400 font-bold">{'{telefone}'}</span> : Tel do cliente</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-3 border-t border-zinc-900 flex justify-end gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleSaveEditedTemplate}
+                    className="px-4 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white text-[11px] font-extrabold rounded-xl transition-all shadow-md active:scale-97 cursor-pointer"
+                  >
+                    Salvar Modelo
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

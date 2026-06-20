@@ -1474,7 +1474,8 @@ export default function App() {
         produtoNome: stampedSale.produtoNome,
         precoUn: stampedSale.precoUn,
         quantidade: stampedSale.quantidade,
-        total: stampedSale.total
+        total: stampedSale.total,
+        corSelecionada: stampedSale.corSelecionada
       }
     ];
 
@@ -1711,17 +1712,19 @@ export default function App() {
     // 3. Se temos o pedido original, calcular as diferenças de estoque
     if (oldSale) {
       // Função auxiliar para consolidar os itens de uma venda
-      const getSaleItems = (sale: Sale): { produtoId: string; quantidade: number }[] => {
+      const getSaleItems = (sale: Sale): { produtoId: string; quantidade: number; corSelecionada?: string }[] => {
         if (sale.itens && sale.itens.length > 0) {
           return sale.itens.map(item => ({
             produtoId: item.produtoId,
-            quantidade: item.quantidade || 0
+            quantidade: item.quantidade || 0,
+            corSelecionada: item.corSelecionada
           }));
         }
         if (sale.produtoId) {
           return [{
             produtoId: sale.produtoId,
-            quantidade: sale.quantidade || 0
+            quantidade: sale.quantidade || 0,
+            corSelecionada: sale.corSelecionada
           }];
         }
         return [];
@@ -1755,13 +1758,52 @@ export default function App() {
       const productsToSync: Product[] = [];
       const updatedProducts = currentProducts.map((p) => {
         if (affectedProductIds.has(p.id) && !p.estoqueInfinito) {
+          // Filtrar itens específicos para este produto para lidar com variação de cores
+          const oldItemsForProduct = oldItems.filter(item => item.produtoId === p.id);
+          const newItemsForProduct = newItems.filter(item => item.produtoId === p.id);
+
+          const oldColorQtyMap: Record<string, number> = {};
+          if (oldSale.status !== 'Orçamento') {
+            oldItemsForProduct.forEach(item => {
+              const col = item.corSelecionada || '';
+              oldColorQtyMap[col] = (oldColorQtyMap[col] || 0) + item.quantidade;
+            });
+          }
+
+          const newColorQtyMap: Record<string, number> = {};
+          if (stampedSale.status !== 'Orçamento') {
+            newItemsForProduct.forEach(item => {
+              const col = item.corSelecionada || '';
+              newColorQtyMap[col] = (newColorQtyMap[col] || 0) + item.quantidade;
+            });
+          }
+
+          let updatedCores = p.cores ? [...p.cores] : undefined;
+          if (updatedCores) {
+            updatedCores = updatedCores.map(c => {
+              const oldColorQty = oldColorQtyMap[c.nome] || 0;
+              const newColorQty = newColorQtyMap[c.nome] || 0;
+              const colorDiff = newColorQty - oldColorQty;
+              return {
+                ...c,
+                estoque: Math.max(0, c.estoque - colorDiff)
+              };
+            });
+          }
+
           const oldQty = oldQtyMap[p.id] || 0;
           const newQty = newQtyMap[p.id] || 0;
           const diff = newQty - oldQty; // se diff > 0, vendeu mais (diminuir estoque); se diff < 0, retirou itens (devolver estoque)
           
+          let newEstoque = Math.max(0, p.estoque - diff);
+          if (updatedCores && updatedCores.length > 0) {
+            newEstoque = updatedCores.reduce((sum, c) => sum + c.estoque, 0);
+          }
+
           const updatedProduct = {
             ...p,
-            estoque: Math.max(0, p.estoque - diff)
+            estoque: newEstoque,
+            cores: updatedCores
           };
           productsToSync.push(updatedProduct);
           return updatedProduct;
@@ -1790,7 +1832,7 @@ export default function App() {
         // Atualizar estoque no Supabase de forma assíncrona/otimizada
         try {
           const results = await Promise.all(
-            productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito))
+            productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito, p.cores))
           );
           if (results.some(r => !r)) {
             setSupabaseSyncStatus('error');
@@ -1850,17 +1892,43 @@ export default function App() {
           produtoNome: saleToDelete.produtoNome,
           precoUn: saleToDelete.precoUn,
           quantidade: saleToDelete.quantidade,
-          total: saleToDelete.total
+          total: saleToDelete.total,
+          corSelecionada: saleToDelete.corSelecionada
         }
       ];
 
       const productsToSync: Product[] = [];
       const updatedProducts = currentProducts.map((p) => {
-        const restoredItem = itemsToRestore.find((item) => item.produtoId === p.id);
-        if (restoredItem && !p.estoqueInfinito) {
+        const restoredItemsForProduct = itemsToRestore.filter((item) => item.produtoId === p.id);
+        if (restoredItemsForProduct.length > 0 && !p.estoqueInfinito) {
+          let updatedCores = p.cores ? [...p.cores] : undefined;
+          let totalRestoredQty = 0;
+
+          for (const restoredItem of restoredItemsForProduct) {
+            totalRestoredQty += restoredItem.quantidade;
+
+            if (updatedCores && restoredItem.corSelecionada) {
+              updatedCores = updatedCores.map(c => {
+                if (c.nome === restoredItem.corSelecionada) {
+                  return {
+                    ...c,
+                    estoque: c.estoque + restoredItem.quantidade
+                  };
+                }
+                return c;
+              });
+            }
+          }
+
+          let newEstoque = p.estoque + totalRestoredQty;
+          if (updatedCores && updatedCores.length > 0) {
+            newEstoque = updatedCores.reduce((sum, c) => sum + c.estoque, 0);
+          }
+
           const updatedProduct = {
             ...p,
-            estoque: p.estoque + restoredItem.quantidade
+            estoque: newEstoque,
+            cores: updatedCores
           };
           productsToSync.push(updatedProduct);
           return updatedProduct;
@@ -1879,7 +1947,7 @@ export default function App() {
         // Atualizar estoque no Supabase de forma assíncrona/otimizada
         try {
           const results = await Promise.all(
-            productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito))
+            productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito, p.cores))
           );
           if (results.some(r => !r)) {
             setSupabaseSyncStatus('error');

@@ -210,7 +210,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
     const orderNum = sale.numeroPedido || sale.id.substring(0, 5).toUpperCase();
     const clientName = sale.cliente || 'Consumidor';
     
-    const messageText = `Olá, *${clientName}*! 🌟\n\nSeu pedido *#${orderNum}* foi entregue e finalizado com sucesso! 🎉\n\n*Detalhes:*\n📦 Produto: ${sale.produtoNome || 'Personalizado'} (qtd: ${sale.quantidade || 1})\n💰 Total: R$ ${(sale.total || 0).toFixed(2)}\n✅ Status Financeiro: Pago Total (Obrigado!)\n\nAgradecemos imensamente pela preferência e confiança em nosso trabalho. Esperamos que tenha uma excelente experiência com seus produtos! 🥰\n\nDúvidas ou feedbacks? Estamos à disposição!\n\nAtenciosamente,\n*Oxente Festeje* 🌸`;
+    const messageText = `Olá, *${clientName}*! 🌟\n\nSeu pedido *#${orderNum}* foi entregue e finalizado com sucesso! 🎉\n\n*Detalhes:*\n📦 Produto: ${sale.produtoNome || 'Personalizado'} (qtd: ${sale.quantidade || 1})\n💰 Total: R$ ${(sale.total || 0).toFixed(2)}\n✅ Status Financeiro: Pago Total (Obrigado!)\n\nAgradecemos imensamente pela preferência e confiança em nosso trabalho. Esperamos que tenha uma excelente experiência com seus produtos! 🥰\n\nAtenciosamente,\n*Oxente Festeje* 🌸`;
 
     const encodedText = encodeURIComponent(messageText);
     const url = `whatsapp://send?phone=${finalPhone}&text=${encodedText}`;

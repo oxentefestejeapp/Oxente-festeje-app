@@ -45,6 +45,31 @@ const CustomTooltip = ({ active, payload }: any) => {
   return null;
 };
 
+// Helper to calculate the progressive quantity for items in cart with different colors of the same product
+export function getCartItemEffectiveQty(
+  item: { product: { id: string }; quantity: number; corSelecionada?: string },
+  cartList: { product: { id: string }; quantity: number; corSelecionada?: string }[]
+): number {
+  const sameProductItems = cartList.filter(i => i.product.id === item.product.id);
+  
+  if (sameProductItems.length <= 1) {
+    return item.quantity;
+  }
+  
+  const colors = sameProductItems.map(i => i.corSelecionada || '');
+  const uniqueColors = Array.from(new Set(colors));
+  
+  if (uniqueColors.length <= 1) {
+    return item.quantity;
+  }
+
+  const differentColorSum = sameProductItems
+    .filter(i => i.corSelecionada !== item.corSelecionada)
+    .reduce((sum, i) => sum + i.quantity, 0);
+
+  return item.quantity + differentColorSum;
+}
+
 export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdateStock, onUpdateSale, onDeleteSale, currentUserEmail = '' }: SalesManagerProps) {
   const isAdmin = currentUserEmail.trim().toLowerCase() === 'oxentefesteje@gmail.com' || currentUserEmail.trim().toLowerCase() === 'abraaoapp@oxente.com';
   const [selectedProductId, setSelectedProductId] = useState('');
@@ -457,7 +482,13 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     const cartaoVal = temTaxaCartao ? (parseFloat(valorTaxaCartao) || 0) : 0;
     const secondArtVal = segundaArte ? 5 : 0;
     if (cart.length > 0) {
-      return cart.reduce((sum, item) => sum + item.total, 0) + (arteDesign ? 5 : 0) + secondArtVal + urgenciaVal + cartaoVal;
+      const cartTotal = cart.reduce((sum, item) => {
+        const effectiveQty = getCartItemEffectiveQty(item, cart);
+        const unitPrice = getProductUnitPrice(item.product, effectiveQty);
+        const addonsUnitPrice = item.addons ? item.addons.reduce((s, addon) => s + getProductUnitPrice(addon, effectiveQty), 0) : 0;
+        return sum + (item.quantity * (unitPrice + addonsUnitPrice));
+      }, 0);
+      return cartTotal + (arteDesign ? 5 : 0) + secondArtVal + urgenciaVal + cartaoVal;
     }
     const mainTotal = selectedProduct && typeof quantidade === 'number' 
       ? getProductUnitPrice(selectedProduct, quantidade) * quantidade 
@@ -771,21 +802,23 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     if (cart.length > 0) {
       const itemsList: SaleItem[] = [];
       for (const item of cart) {
-        // Adiciona o produto principal
-        const mainUnitPrice = getProductUnitPrice(item.product, item.quantity);
+        // Adiciona o produto principal com corSelecionada e preço progressivo
+        const effectiveQty = getCartItemEffectiveQty(item, cart);
+        const mainUnitPrice = getProductUnitPrice(item.product, effectiveQty);
         itemsList.push({
           id: item.id,
           produtoId: item.product.id,
           produtoNome: item.product.nome,
           precoUn: mainUnitPrice,
           quantidade: item.quantity,
-          total: mainUnitPrice * item.quantity
+          total: mainUnitPrice * item.quantity,
+          corSelecionada: item.corSelecionada
         });
 
         // Adiciona os adicionais deste item do carrinho
         if (item.addons && item.addons.length > 0) {
           for (const addon of item.addons) {
-            const addonPrice = getProductUnitPrice(addon, item.quantity);
+            const addonPrice = getProductUnitPrice(addon, effectiveQty);
             itemsList.push({
               id: `item-${addon.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
               produtoId: addon.id,
@@ -841,7 +874,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
           produtoNome: selectedProduct.nome,
           precoUn: progressiveUnitPrice,
           quantidade: qtyNum,
-          total: progressiveUnitPrice * qtyNum
+          total: progressiveUnitPrice * qtyNum,
+          corSelecionada: selectedColor || undefined
         },
         ...addonItems
       ];
@@ -976,7 +1010,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       descontoReferral: isReferralApplied ? referralDiscountApplied : undefined,
       cashbackGasto: appliedCashbackDiscount > 0 ? appliedCashbackDiscount : undefined,
       referralSended: false,
-      pedidoVinculoNumero: pedidoVinculoNumero.trim() ? pedidoVinculoNumero.trim() : undefined
+      pedidoVinculoNumero: pedidoVinculoNumero.trim() ? pedidoVinculoNumero.trim() : undefined,
+      corSelecionada: cart.length === 0 ? (selectedColor || undefined) : (cart.find(i => i.corSelecionada)?.corSelecionada || undefined)
     };
 
     // Salvar venda (que agora deduz o estoque de forma atômica no pai)
@@ -2197,24 +2232,43 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                             </span>
                           )}
                         </div>
-                        <span className="text-[10px] text-zinc-500 font-mono">
-                          {item.quantity}x de R$ {getProductUnitPrice(item.product, item.quantity).toFixed(2)}
-                        </span>
+                        {(() => {
+                          const effectiveQty = getCartItemEffectiveQty(item, cart);
+                          const unitPrice = getProductUnitPrice(item.product, effectiveQty);
+                          return (
+                            <span className="text-[10px] text-zinc-500 font-mono">
+                              {item.quantity}x de R$ {unitPrice.toFixed(2)}
+                              {effectiveQty !== item.quantity && (
+                                <span className="text-emerald-450 ml-1.5 font-sans font-bold">
+                                  (Desconto progressivo: {effectiveQty} un.)
+                                </span>
+                              )}
+                            </span>
+                          );
+                        })()}
                         {item.addons && item.addons.length > 0 && (
                           <div className="mt-1.5 flex flex-wrap gap-1.5">
-                            {item.addons.map(addon => (
-                              <span key={addon.id} className="inline-flex items-center gap-1 bg-emerald-950/40 border border-emerald-900/30 text-emerald-400 text-[9px] px-1.5 py-0.5 rounded-md font-medium select-none">
-                                <span className="text-[10px]">✨</span>
-                                {addon.nome} (+ R$ {getProductUnitPrice(addon, item.quantity).toFixed(2)})
-                              </span>
-                            ))}
+                            {item.addons.map(addon => {
+                              const effectiveQty = getCartItemEffectiveQty(item, cart);
+                              return (
+                                <span key={addon.id} className="inline-flex items-center gap-1 bg-emerald-950/40 border border-emerald-900/30 text-emerald-400 text-[9px] px-1.5 py-0.5 rounded-md font-medium select-none">
+                                  <span className="text-[10px]">✨</span>
+                                  {addon.nome} (+ R$ {getProductUnitPrice(addon, effectiveQty).toFixed(2)})
+                                </span>
+                              );
+                            })}
                           </div>
                         )}
                       </div>
                       
                       <div className="flex items-center gap-4">
                         <span className="font-bold text-brand-pink font-mono">
-                          R$ {item.total.toFixed(2)}
+                          R$ {(() => {
+                            const effectiveQty = getCartItemEffectiveQty(item, cart);
+                            const unitPrice = getProductUnitPrice(item.product, effectiveQty);
+                            const addonsUnitPrice = item.addons ? item.addons.reduce((sum, addon) => sum + getProductUnitPrice(addon, effectiveQty), 0) : 0;
+                            return (item.quantity * (unitPrice + addonsUnitPrice)).toFixed(2);
+                          })()}
                         </span>
                         <button
                           type="button"
