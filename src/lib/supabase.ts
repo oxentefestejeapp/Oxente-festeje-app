@@ -21,11 +21,15 @@ export function getFormattedSupabaseError(fallback = 'Erro desconhecido'): strin
   return parts.join(' ');
 }
 
-// Read configuration directly and unalterably (guaranteeing that all employees and the admin connect solely to the production Supabase database).
+// Read configuration dynamically. It defaults to the custom Hostinger platform 'https://lightgray-dugong-844289.hostingersite.com',
+// but can also be overridden dynamically in the browser's LocalStorage via the Settings panel.
 export const getSupabaseConfig = () => {
+  const savedUrl = typeof window !== 'undefined' ? localStorage.getItem('supabase_url') : null;
+  const savedKey = typeof window !== 'undefined' ? localStorage.getItem('supabase_anon_key') : null;
+
   return {
-    url: 'https://sbeyfgxvjoaulxojjguu.supabase.co',
-    key: 'sb_publishable_7aL1Xxp82aXaHTA_Zu3diA_GMfOf9oY',
+    url: (savedUrl && savedUrl.trim()) ? savedUrl.trim() : 'https://lightgray-dugong-844289.hostingersite.com',
+    key: (savedKey && savedKey.trim()) ? savedKey.trim() : 'sb_publishable_7aL1Xxp82aXaHTA_Zu3diA_GMfOf9oY',
     isConfigured: true,
   };
 };
