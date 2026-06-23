@@ -56,13 +56,13 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
 
   // Custom template state
   const [templates, setTemplates] = useState<MessageTemplate[]>(() => {
-    const stored = localStorage.getItem('oxente_whatsapp_templates');
-    if (stored) {
-      try {
+    try {
+      const stored = typeof window !== 'undefined' ? localStorage.getItem('oxente_whatsapp_templates') : null;
+      if (stored) {
         return JSON.parse(stored);
-      } catch (e) {
-        console.warn('Erro ao carregar templates do localStorage', e);
       }
+    } catch (e) {
+      console.warn('Erro ao carregar templates do localStorage', e);
     }
     return DEFAULT_TEMPLATES;
   });
@@ -83,7 +83,13 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
 
   const saveTemplatesToStorage = (newTemplates: MessageTemplate[]) => {
     setTemplates(newTemplates);
-    localStorage.setItem('oxente_whatsapp_templates', JSON.stringify(newTemplates));
+    try {
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('oxente_whatsapp_templates', JSON.stringify(newTemplates));
+      }
+    } catch (e) {
+      console.warn('Erro ao salvar templates no localStorage', e);
+    }
   };
 
   // Extract unique active customers with a valid phone number from sales
@@ -285,7 +291,22 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
       }
     }
 
-    window.open(url, '_blank');
+    try {
+      const opened = window.open(url, '_blank');
+      if (!opened) {
+        // Fallback for pop-up blockers or sandbox environments
+        setModalAlert({
+          title: 'Link do WhatsApp Gerado! 🔗',
+          message: 'O bloqueador de pop-ups do seu navegador impediu a abertura automática. Se preferir, você pode copiar a mensagem para enviar manualmente no WhatsApp.'
+        });
+      }
+    } catch (e) {
+      console.error('Falha ao abrir WhatsApp via window.open:', e);
+      setModalAlert({
+        title: 'Mensagem Pronta! 💬',
+        message: 'Clique para copiar o texto ou acesse diretamente o WhatsApp Web do seu navegador para enviar.'
+      });
+    }
   };
 
   return (
@@ -613,7 +634,7 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
                       placeholder="Olá, {cliente}! Seu pedido número {pedido} para o produto {produto} foi recebido."
                       value={editText}
                       onChange={(e) => setEditText(e.target.value)}
-                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-850 hover:border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink rounded-xl text-xs text-zinc-205 placeholder-zinc-650 focus:outline-hidden transition-all font-sans leading-relaxed resize-none"
+                      className="w-full px-3 py-2 bg-zinc-900 border border-zinc-850 hover:border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink rounded-xl text-xs text-zinc-200 placeholder-zinc-650 focus:outline-hidden transition-all font-sans leading-relaxed resize-none"
                     />
                   </div>
 
