@@ -73,6 +73,14 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
   const [editTitle, setEditTitle] = useState('');
   const [editText, setEditText] = useState('');
 
+  // Custom Alert & Confirm overlay states to avoid standard window.alert/window.confirm blockages in iframe
+  const [modalAlert, setModalAlert] = useState<{ title?: string; message: string } | null>(null);
+  const [modalConfirm, setModalConfirm] = useState<{
+    title: string;
+    message: string;
+    onConfirm: () => void;
+  } | null>(null);
+
   const saveTemplatesToStorage = (newTemplates: MessageTemplate[]) => {
     setTemplates(newTemplates);
     localStorage.setItem('oxente_whatsapp_templates', JSON.stringify(newTemplates));
@@ -175,11 +183,11 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
 
   const handleSaveEditedTemplate = () => {
     if (!editTitle.trim()) {
-      alert('Por favor, defina um título para o modelo.');
+      setModalAlert({ title: 'Atenção ⚠️', message: 'Por favor, defina um título para o modelo.' });
       return;
     }
     if (!editText.trim()) {
-      alert('Por favor, defina o corpo da mensagem.');
+      setModalAlert({ title: 'Atenção ⚠️', message: 'Por favor, defina o corpo da mensagem.' });
       return;
     }
 
@@ -210,29 +218,37 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
 
   const handleDeleteTemplate = (idForDeletion: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (confirm('Deseja realmente excluir este modelo definitivamente?')) {
-      const updated = templates.filter(t => t.id !== idForDeletion);
-      saveTemplatesToStorage(updated);
-      if (editingTemplateId === idForDeletion) {
-        if (updated.length > 0) {
-          handleSelectToEdit(updated[0]);
-        } else {
-          setEditingTemplateId(null);
-          setEditTitle('');
-          setEditText('');
+    setModalConfirm({
+      title: 'Excluir Modelo 🗑️',
+      message: 'Deseja realmente excluir este modelo definitivamente?',
+      onConfirm: () => {
+        const updated = templates.filter(t => t.id !== idForDeletion);
+        saveTemplatesToStorage(updated);
+        if (editingTemplateId === idForDeletion) {
+          if (updated.length > 0) {
+            handleSelectToEdit(updated[0]);
+          } else {
+            setEditingTemplateId(null);
+            setEditTitle('');
+            setEditText('');
+          }
         }
       }
-    }
+    });
   };
 
   const handleResetToDefaults = () => {
-    if (confirm('Deseja realmente redefinir todos os modelos para os padrões originais do Oxente Festeje? Todas as suas edições personalizadas serão descartadas.')) {
-      saveTemplatesToStorage(DEFAULT_TEMPLATES);
-      const first = DEFAULT_TEMPLATES[0];
-      setEditingTemplateId(first.id);
-      setEditTitle(first.title);
-      setEditText(first.text);
-    }
+    setModalConfirm({
+      title: 'Restaurar Padrões 🔄',
+      message: 'Deseja realmente redefinir todos os modelos para os padrões originais do Oxente Festeje? Todas as suas edições personalizadas serão descartadas.',
+      onConfirm: () => {
+        saveTemplatesToStorage(DEFAULT_TEMPLATES);
+        const first = DEFAULT_TEMPLATES[0];
+        setEditingTemplateId(first.id);
+        setEditTitle(first.title);
+        setEditText(first.text);
+      }
+    });
   };
 
   const handleSendAndLaunch = () => {
@@ -627,6 +643,62 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
                 </div>
               </div>
 
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Alert Overlay */}
+      {modalAlert && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs animate-in fade-in duration-100">
+          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl overflow-hidden shadow-2xl max-w-sm w-full p-5 space-y-4">
+            <div>
+              <h4 className="font-display font-bold text-sm text-zinc-100 flex items-center gap-1.5">
+                {modalAlert.title || 'Aviso ℹ️'}
+              </h4>
+              <p className="text-xs text-zinc-400 mt-2 leading-relaxed">{modalAlert.message}</p>
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => setModalAlert(null)}
+                className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-350 text-[10.5px] font-bold rounded-xl border border-zinc-800 transition-colors cursor-pointer"
+              >
+                Entendi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom Confirm Overlay */}
+      {modalConfirm && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs animate-in fade-in duration-100">
+          <div className="bg-zinc-950 border border-zinc-850 rounded-2xl overflow-hidden shadow-2xl max-w-sm w-full p-5 space-y-4">
+            <div>
+              <h4 className="font-display font-bold text-sm text-zinc-100 flex items-center gap-1.5">
+                {modalConfirm.title}
+              </h4>
+              <p className="text-xs text-zinc-400 mt-2 leading-relaxed">{modalConfirm.message}</p>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setModalConfirm(null)}
+                className="px-3.5 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-450 hover:text-zinc-350 text-[10.5px] font-bold rounded-xl border border-zinc-800/80 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  modalConfirm.onConfirm();
+                  setModalConfirm(null);
+                }}
+                className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-[10.5px] font-bold rounded-xl transition-colors cursor-pointer shadow-md"
+              >
+                Confirmar
+              </button>
             </div>
           </div>
         </div>
