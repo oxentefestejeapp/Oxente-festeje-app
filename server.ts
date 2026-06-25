@@ -9,6 +9,15 @@ import fs from 'fs';
 
 dotenv.config();
 
+// Register global safety error handlers to keep the server running and prevent unexpected crashes
+process.on('uncaughtException', (err) => {
+  console.error('🔥 [Critical Server Error] Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🔥 [Critical Server Error] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
 const { Pool } = pg;
 
 const app = express();
@@ -74,6 +83,11 @@ function initializePostgresPool() {
       pool.end().catch(err => console.error('Erro ao encerrar pool antigo:', err));
     }
     pool = new Pool(pgConfig);
+    
+    // Safety check to handle unexpected errors on idle PostgreSQL pool clients
+    pool.on('error', (err) => {
+      console.error('⚠️ [AWS Postgres Pool] Erro inesperado em cliente ocioso do banco de dados:', err);
+    });
 
     // Setup tables on startup
     setupDatabaseTables().catch(err => {
@@ -272,6 +286,9 @@ app.post('/api/db/configure', async (req, res) => {
     };
 
     const testPool = new pg.Pool(testConfig);
+    testPool.on('error', (err) => {
+      console.error('⚠️ [AWS Postgres testPool] Erro de rede em cliente de teste:', err);
+    });
     try {
       const testClient = await testPool.connect();
       await testClient.query('SELECT 1');

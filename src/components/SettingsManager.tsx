@@ -337,6 +337,7 @@ export function SettingsManager({
 
       setPgConfigSuccessMsg('Banco de dados PostgreSQL conectado e sincronizado com sucesso!');
       setDbProviderSelection('aws');
+      localStorage.setItem('db_provider', 'aws');
       
       // Reload page after a delay to initialize socket.io channels in client-side Supabase mapper
       setTimeout(() => {
@@ -373,6 +374,7 @@ export function SettingsManager({
 
       setPgConfigSuccessMsg('Alterado para Supabase! Carregando conexões locais...');
       setDbProviderSelection('supabase');
+      localStorage.setItem('db_provider', 'supabase');
       
       setTimeout(() => {
         window.location.reload();
