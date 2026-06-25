@@ -1203,7 +1203,12 @@ export function SettingsManager({
         </div>
 
         <p className="text-sm text-zinc-350 leading-relaxed">
-          Você também pode fazer o download off-line convencional dos dados do seu navegador para manter um arquivo físico salvo em seu computador.
+          Você pode fazer o download off-line convencional de todos os dados ativos do sistema para um arquivo físico JSON no seu computador.
+          {import.meta.env.VITE_DATABASE_PROVIDER === 'aws' && (
+            <span className="block mt-1.5 text-xs text-brand-pink font-semibold">
+              ✨ Provedor AWS/Hostinger ativo: O arquivo gerado conterá a cópia fiel e em tempo real dos seus produtos e vendas salvos na sua nuvem!
+            </span>
+          )}
         </p>
 
         {/* Database Stats Preview Card */}
@@ -1498,6 +1503,41 @@ export function SettingsManager({
                 </div>
               )}
             </form>
+
+            {/* Quick backup action inside AWS card */}
+            <div className="mt-4 p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl space-y-4">
+              {/* Export Block */}
+              <div className="flex items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
+                <div className="flex-1">
+                  <h4 className="text-xs font-bold text-zinc-200">Exportar Backup Direto do AWS</h4>
+                  <p className="text-[10px] text-zinc-450 mt-0.5">Gere e baixe um arquivo .json seguro com todos os produtos e vendas que estão ativos no seu banco PostgreSQL.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDownloadBackup}
+                  className="px-3.5 py-2.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-200 hover:text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 border border-zinc-700/50 shrink-0"
+                >
+                  <Download className="h-3.5 w-3.5 text-brand-pink" />
+                  <span>Baixar JSON</span>
+                </button>
+              </div>
+
+              {/* Import Block */}
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <h4 className="text-xs font-bold text-zinc-200">Importar Backup no AWS</h4>
+                  <p className="text-[10px] text-zinc-450 mt-0.5">Carregue um arquivo .json de backup anterior para popular instantaneamente e atualizar todo o seu banco PostgreSQL.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3.5 py-2.5 bg-gradient-to-r from-purple-900/40 to-indigo-900/40 hover:from-purple-900/60 hover:to-indigo-900/60 text-purple-200 hover:text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 border border-purple-800/40 shrink-0"
+                >
+                  <UploadCloud className="h-3.5 w-3.5 text-indigo-400" />
+                  <span>Subir JSON</span>
+                </button>
+              </div>
+            </div>
           </div>
         ) : (
           /* Supabase Legacy Panel */
