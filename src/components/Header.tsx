@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Package, TrendingUp, DollarSign, Gift, AlertTriangle, Volume2, VolumeX, Wifi, WifiOff, X } from 'lucide-react';
+import { Sparkles, Package, TrendingUp, DollarSign, Gift, AlertTriangle, Volume2, VolumeX, Wifi, WifiOff, X, Cloud, Loader2 } from 'lucide-react';
 import { Product, Sale } from '../types';
 import { BrandLogo } from './BrandLogo';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
@@ -13,9 +13,17 @@ interface HeaderProps {
   products: Product[];
   sales: Sale[];
   currentUserEmail?: string;
+  syncStatus?: 'idle' | 'syncing' | 'synced' | 'error' | 'tables_missing';
+  databaseProvider?: 'supabase' | 'aws' | 'local';
 }
 
-export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) {
+export function Header({ 
+  products, 
+  sales, 
+  currentUserEmail = '',
+  syncStatus = 'idle',
+  databaseProvider = 'supabase'
+}: HeaderProps) {
   const [audioMuted, setAudioMutedState] = useState(() => getIsAudioMuted());
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [showCriticalList, setShowCriticalList] = useState(false);
@@ -93,28 +101,83 @@ export function Header({ products, sales, currentUserEmail = '' }: HeaderProps) 
         {/* Dynamic Connection Status Indicator */}
         <div 
           className={`flex items-center gap-1.5 px-3 py-1 bg-black border rounded-xl text-xs font-black select-none shadow-sm cursor-help ${
-            isOnline 
-              ? 'border-emerald-900/30 text-emerald-500 bg-emerald-950/5' 
-              : 'border-amber-900/40 text-amber-500 bg-amber-950/20 animate-pulse'
+            !isOnline
+              ? 'border-red-900/40 text-red-500 bg-red-950/5'
+              : syncStatus === 'synced'
+              ? 'border-emerald-900/30 text-emerald-500 bg-emerald-950/5'
+              : syncStatus === 'syncing'
+              ? 'border-brand-pink/20 text-brand-pink bg-black animate-pulse'
+              : syncStatus === 'tables_missing'
+              ? 'border-amber-900/40 text-amber-500 bg-amber-950/20'
+              : syncStatus === 'error'
+              ? 'border-red-950 text-red-400 bg-red-950/10'
+              : 'border-zinc-850 text-zinc-450 bg-zinc-950'
           }`}
-          title={isOnline ? "Você está conectado à internet! Seus dados estão sincronizando em tempo real com o banco de dados." : "Você está offline! Suas alterações estão salvas localmente neste dispositivo e serão sincronizadas assim que a conexão for restabelecida."}
+          title={
+            !isOnline 
+              ? "Você está totalmente offline (sem internet). Suas alterações estão salvas no dispositivo."
+              : syncStatus === 'synced'
+              ? `Seu banco de dados (${databaseProvider === 'aws' ? 'Nuvem AWS' : 'Supabase'}) está conectado e sincronizado em tempo real.`
+              : syncStatus === 'syncing'
+              ? `Sincronizando seus lançamentos recentes com a nuvem (${databaseProvider === 'aws' ? 'Nuvem AWS' : 'Supabase'})...`
+              : syncStatus === 'error'
+              ? "Erro na conexão com o banco de dados em nuvem. Os dados estão mantidos de forma segura localmente."
+              : "As atualizações estão sendo armazenadas localmente neste dispositivo de forma offline."
+          }
         >
-          {isOnline ? (
+          {!isOnline ? (
+            <>
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-500"></span>
+              </span>
+              <WifiOff className="h-3.5 w-3.5 text-red-400 shrink-0" />
+              <span className="text-[9px] uppercase font-bold tracking-widest sm:inline hidden text-red-400">Sem Internet</span>
+            </>
+          ) : syncStatus === 'synced' ? (
             <>
               <span className="relative flex h-1.5 w-1.5">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
               </span>
-              <Wifi className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-              <span className="text-[9px] uppercase font-bold tracking-widest sm:inline hidden">Online</span>
+              <Cloud className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <span className="text-[9px] uppercase font-bold tracking-widest sm:inline hidden">
+                {databaseProvider === 'aws' ? 'AWS: Sincronizado' : 'Supabase: Ativo'}
+              </span>
             </>
-          ) : (
+          ) : syncStatus === 'syncing' ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 text-brand-pink shrink-0 animate-spin" />
+              <span className="text-[9px] uppercase font-bold tracking-widest sm:inline hidden">
+                Sincronizando...
+              </span>
+            </>
+          ) : syncStatus === 'tables_missing' ? (
             <>
               <span className="relative flex h-1.5 w-1.5">
                 <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-amber-500"></span>
               </span>
-              <WifiOff className="h-3.5 w-3.5 text-amber-400 shrink-0" />
-              <span className="text-[9px] uppercase font-bold tracking-widest sm:inline hidden text-amber-400">Offline</span>
+              <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0 animate-pulse" />
+              <span className="text-[9px] uppercase font-bold tracking-widest sm:inline hidden text-amber-400">
+                AWS: Sem Tabelas
+              </span>
+            </>
+          ) : syncStatus === 'error' ? (
+            <>
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-red-400"></span>
+              </span>
+              <WifiOff className="h-3.5 w-3.5 text-red-400 shrink-0" />
+              <span className="text-[9px] uppercase font-bold tracking-widest sm:inline hidden text-red-400">
+                AWS: Desconectado
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-zinc-550"></span>
+              </span>
+              <Cloud className="h-3.5 w-3.5 text-zinc-500 shrink-0" />
+              <span className="text-[9px] uppercase font-bold tracking-widest sm:inline hidden">Offline / Local</span>
             </>
           )}
         </div>

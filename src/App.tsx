@@ -1992,19 +1992,31 @@ export default function App() {
     localStorage.setItem('oxente_sales', JSON.stringify(newSales));
     localStorage.setItem('oxente_store_info', JSON.stringify(newStoreInfo));
 
-    // Upload whole dataset securely to Supabase
+    // Upload whole dataset securely to Supabase / AWS Postgres
     setSupabaseSyncStatus('syncing');
     try {
-      await Promise.all([
-        ...newProducts.map(p => dbSupabase.saveProduct(p)),
-        ...newSales.map(s => dbSupabase.saveSale(s)),
-        dbSupabase.saveStoreInfo(newStoreInfo)
-      ]);
+      if (import.meta.env.VITE_DATABASE_PROVIDER === 'aws') {
+        const res = await fetch('/api/db/import-backup', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ products: newProducts, sales: newSales, storeInfo: newStoreInfo })
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
+          throw new Error(errData.error || 'Falha ao importar backup no AWS Postgres');
+        }
+      } else {
+        await Promise.all([
+          ...newProducts.map(p => dbSupabase.saveProduct(p)),
+          ...newSales.map(s => dbSupabase.saveSale(s)),
+          dbSupabase.saveStoreInfo(newStoreInfo)
+        ]);
+      }
       setSupabaseSyncStatus('synced');
     } catch (err: any) {
-      console.error('Falha de restauração de backup no Supabase:', err);
+      console.error('Falha de restauração de backup:', err);
       setSupabaseSyncStatus('error');
-      setSupabaseErrorMsg(getFormattedSupabaseError(err.message || 'Erro ao sincronizar backup.'));
+      setSupabaseErrorMsg(err.message || 'Erro ao sincronizar backup.');
     }
   };
 
@@ -2184,7 +2196,13 @@ export default function App() {
       <div className="h-1.5 w-full bg-gradient-to-r from-red-500 via-orange-500 via-yellow-400 via-emerald-500 via-blue-500 via-purple-500 to-pink-500 sticky top-0 z-50 shadow-[0_3px_15px_rgba(249,115,22,0.3)] animate-pulse" />
       
       {/* Real-time Header */}
-      <Header products={products} sales={sales} currentUserEmail={firebaseUser?.email || ''} />
+      <Header 
+        products={products} 
+        sales={sales} 
+        currentUserEmail={firebaseUser?.email || ''} 
+        syncStatus={supabaseSyncStatus}
+        databaseProvider={import.meta.env.VITE_DATABASE_PROVIDER as any || 'aws'}
+      />
 
       {/* Main Container */}
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 pb-16">

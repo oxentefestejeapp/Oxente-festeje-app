@@ -1,5 +1,49 @@
 import { createClient } from '@supabase/supabase-js';
 import { Product, Sale, StoreInfo, ProductColor } from '../types';
+import { io } from 'socket.io-client';
+
+// Establish Socket.io connection for real-time push synchronization when in AWS mode
+export const socketIoClient = typeof window !== 'undefined' && import.meta.env.VITE_DATABASE_PROVIDER === 'aws'
+  ? io(window.location.origin)
+  : null;
+
+// Mock Realtime subscription client for AWS using Socket.io broadcast listeners
+const awsRealtimeClient = {
+  channel: (channelId: string) => {
+    const callbacks: { table: string; callback: (payload: any) => void }[] = [];
+    
+    const channelObj = {
+      on: (event: string, filter: { event: string; schema: string; table: string }, callback: (payload: any) => void) => {
+        callbacks.push({ table: filter.table, callback });
+        return channelObj;
+      },
+      subscribe: (statusCallback?: (status: string, err?: any) => void) => {
+        if (typeof window !== 'undefined' && socketIoClient) {
+          callbacks.forEach(({ table, callback }) => {
+            const eventName = table === 'oxente_products' ? 'products_changes' :
+                              table === 'oxente_sales' ? 'sales_changes' :
+                              table === 'oxente_store_info' ? 'store_changes' :
+                              table === 'oxente_users' ? 'users_changes' : '';
+            
+            if (eventName) {
+              socketIoClient.on(eventName, callback);
+              console.log(`🔌 [AWS Realtime] Escutando alterações da tabela '${table}' no Socket.io`);
+            }
+          });
+          
+          if (statusCallback) {
+            setTimeout(() => statusCallback('SUBSCRIBED'), 100);
+          }
+        }
+        return channelObj;
+      }
+    };
+    return channelObj;
+  },
+  removeChannel: (channelObj: any) => {
+    // Gracefully ignore or unregister if needed
+  }
+} as any;
 
 export interface SupabaseErrorDetail {
   message: string;
@@ -21,12 +65,14 @@ export function getFormattedSupabaseError(fallback = 'Erro desconhecido'): strin
   return parts.join(' ');
 }
 
-// Read configuration directly and unalterably (guaranteeing that all employees and the admin connect solely to the production Supabase database).
+// Read configuration dynamically. If none are stored or defined in env, it is marked as not configured.
 export const getSupabaseConfig = () => {
+  const url = (typeof window !== 'undefined' && localStorage.getItem('supabase_url')) || import.meta.env.VITE_SUPABASE_URL || '';
+  const key = (typeof window !== 'undefined' && localStorage.getItem('supabase_anon_key')) || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
   return {
-    url: 'https://sbeyfgxvjoaulxojjguu.supabase.co',
-    key: 'sb_publishable_7aL1Xxp82aXaHTA_Zu3diA_GMfOf9oY',
-    isConfigured: true,
+    url: url.trim(),
+    key: key.trim(),
+    isConfigured: url.trim() !== '' && key.trim() !== '',
   };
 };
 
@@ -53,10 +99,13 @@ const mockSupabase = {
   })
 } as any;
 
+const isAwsMode = typeof window !== 'undefined' && 
+  (import.meta.env.VITE_DATABASE_PROVIDER === 'aws' || !getSupabaseConfig().isConfigured);
+
 const config = getSupabaseConfig();
 export const supabase = isSandbox 
   ? mockSupabase 
-  : createClient(config.url, config.key);
+  : (isAwsMode ? awsRealtimeClient : createClient(config.url || 'https://placeholder.supabase.co', config.key || 'placeholder_key'));
 
 // Generate migration SQL for Supabase SQL Editor
 export const getSupabaseMigrationSQL = (): string => {
@@ -1297,4 +1346,288 @@ const sandboxDbSupabase = {
   }
 };
 
-export const dbSupabase = isSandbox ? sandboxDbSupabase : realDbSupabase;
+// AWS RDS/EC2 POSTGRESQL PROXY DATABASE DRIVER
+const awsDbClient = {
+  testConnection: async (): Promise<{ success: boolean; error?: string; tablesConfigured?: boolean }> => {
+    try {
+      const res = await fetch('/api/db/status');
+      const data = await res.json();
+      return { success: data.connected, tablesConfigured: data.connected };
+    } catch (e: any) {
+      return { success: false, error: e.message };
+    }
+  },
+
+  fetchProducts: async (): Promise<Product[] | null> => {
+    try {
+      const res = await fetch('/api/db/products');
+      if (!res.ok) throw new Error('Erro ao buscar produtos');
+      const data = await res.json();
+      return data.map(mapDbToProduct);
+    } catch (e) {
+      console.error('Erro ao buscar produtos no AWS Postgres:', e);
+      return null;
+    }
+  },
+
+  saveProduct: async (product: Product): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/db/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: product.id,
+          nome: product.nome,
+          preco: product.preco,
+          estoque: product.estoque,
+          imagem_base64: product.imagemBase64 || null,
+          estoque_infinito: product.estoqueInfinito || false,
+          preco_custo: product.precoCusto || null,
+          precos_progressivos: product.faixasPreco ? JSON.stringify(product.faixasPreco) : null,
+          adicional: product.adicional || false,
+          conferido: product.conferido || false,
+          prazo_urgencia: product.prazoUrgencia !== undefined && product.prazoUrgencia !== null ? product.prazoUrgencia : null,
+          cores: product.cores ? JSON.stringify(product.cores) : null
+        })
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao salvar produto no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  updateProductStock: async (id: string, newStock: number, isInfinite?: boolean, cores?: ProductColor[]): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/db/products/stock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          estoque: newStock,
+          estoque_infinito: isInfinite,
+          cores: cores ? JSON.stringify(cores) : null
+        })
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao atualizar estoque no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  deleteProduct: async (id: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/db/products/${id}`, { method: 'DELETE' });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao deletar produto no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  fetchSales: async (): Promise<Sale[] | null> => {
+    try {
+      const res = await fetch('/api/db/sales');
+      if (!res.ok) throw new Error('Erro ao buscar vendas');
+      const data = await res.json();
+      return data.map(mapDbToSale);
+    } catch (e) {
+      console.error('Erro ao buscar vendas no AWS Postgres:', e);
+      return null;
+    }
+  },
+
+  saveSale: async (sale: Sale): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/db/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: sale.id,
+          cliente: sale.cliente,
+          telefone_cliente: sale.telefoneCliente || null,
+          produto_id: sale.produtoId || null,
+          produto_nome: sale.produtoNome || null,
+          preco_un: sale.precoUn || null,
+          quantidade: sale.quantidade || null,
+          total: sale.total,
+          forma_pagamento: sale.formaPagamento,
+          data: sale.data,
+          valor_pago: sale.valorPago || null,
+          valor_faltante: sale.valorFaltante || null,
+          numero_pedido: sale.numeroPedido || null,
+          status: sale.status || null,
+          itens: sale.itens || null,
+          cor_selecionada: sale.corSelecionada || null,
+          criado_por_email: sale.criadoPorEmail || null,
+          data_retirada: sale.dataRetirada || null,
+          status_producao: sale.statusProducao || null,
+          designer_id: sale.designerId || null,
+          status_arte: sale.statusArte || null,
+          puxado_por: sale.puxadoPor || null,
+          puxado_em: sale.puxadoEm || null,
+          observacoes_design: sale.observacoesDesign || null,
+          foi_alterado: sale.foiAlterado || false,
+          remover_do_design: sale.removerDoDesign || false,
+          editado_por_email: sale.editadoPorEmail || null,
+          editado_em: sale.editadoEm || null,
+          arte_finalizada_por_email: sale.arteFinalizadaPorEmail || null,
+          arte_finalizada_em: sale.arteFinalizadaEm || null,
+          valores_originais: sale.valoresOriginais || null,
+          notas_internas: sale.notasInternas || null,
+          pedido_anotado: sale.pedidoAnotado || false,
+          aviso_pronto_sended: sale.avisoProntoSended || false,
+          turno_entrega: sale.turnoEntrega || null,
+          indicado_codigo: sale.indicadoCodigo || null,
+          desconto_referral: sale.descontoReferral || null,
+          cashback_gasto: sale.cashbackGasto || null,
+          referral_sended: sale.referralSended || false,
+          bloqueado_lembrete: sale.bloqueadoLembrete || false,
+          pedido_vinculo_numero: sale.pedidoVinculoNumero || null,
+          updated_at: sale.updatedAt || new Date().toISOString()
+        })
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao salvar venda no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  purgeOldDeliveredSales: async (): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/db/sales/purge-delivered', { method: 'POST' });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao expurgar vendas entregues no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  purgeOldEstimates: async (): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/db/sales/purge-estimates', { method: 'POST' });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao expurgar orçamentos no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  clearAllSales: async (): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/db/sales/clear-all', { method: 'POST' });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao limpar vendas no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  deleteSale: async (id: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/db/sales/${id}`, { method: 'DELETE' });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao deletar venda no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  saveStoreInfo: async (storeInfo: StoreInfo): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/db/store-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(storeInfo)
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao salvar configurações da loja no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  fetchStoreInfo: async (): Promise<StoreInfo | null> => {
+    try {
+      const res = await fetch('/api/db/store-info');
+      if (!res.ok) throw new Error('Erro ao buscar configurações');
+      const data = await res.json();
+      return {
+        nome: data.nome,
+        instagram: data.instagram,
+        telefone: data.telefone,
+        endereco: data.endereco,
+        whatsappTemplate: data.whatsapp_template
+      };
+    } catch (e) {
+      console.error('Erro ao buscar configurações da loja no AWS Postgres:', e);
+      return null;
+    }
+  },
+
+  fetchUsers: async (): Promise<any[]> => {
+    try {
+      const res = await fetch('/api/db/users');
+      if (!res.ok) throw new Error('Erro ao buscar usuários');
+      const data = await res.json();
+      return data;
+    } catch (e) {
+      console.error('Erro ao buscar usuários no AWS Postgres:', e);
+      return [];
+    }
+  },
+
+  saveUser: async (user: any): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/db/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(user)
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao salvar usuário no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  deleteUser: async (id: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/db/users/${id}`, { method: 'DELETE' });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao deletar usuário no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  updateUserStatus: async (id: string, status: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/db/users/${id}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao atualizar status do usuário no AWS Postgres:', e);
+      return false;
+    }
+  },
+
+  updateUserHeartbeat: async (id: string): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/db/users/${id}/heartbeat`, { method: 'POST' });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao enviar batimento cardíaco no AWS Postgres:', e);
+      return false;
+    }
+  }
+};
+
+export const dbSupabase = isSandbox 
+  ? sandboxDbSupabase 
+  : (isAwsMode ? awsDbClient : realDbSupabase);
