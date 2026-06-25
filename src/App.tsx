@@ -33,7 +33,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig, isUsersTableSupported } from './lib/supabase';
+import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig, isUsersTableSupported, getActiveDatabaseProvider } from './lib/supabase';
 
 import { Header } from './components/Header';
 import { ProductForm } from './components/ProductForm';
@@ -201,7 +201,7 @@ export default function App() {
 
   // Periodically check for database changes and sync state on AWS Postgres
   useDatabaseSync(
-    import.meta.env.VITE_DATABASE_PROVIDER || 'supabase',
+    getActiveDatabaseProvider(),
     products,
     setProducts,
     sales,
@@ -617,16 +617,36 @@ export default function App() {
     const syncDataWithSupabase = async () => {
       setSupabaseSyncStatus('syncing');
       try {
+        try {
+          const configRes = await fetch('/api/db/config');
+          if (configRes.ok) {
+            const configData = await configRes.json();
+            if (configData && configData.provider) {
+              const currentProvider = localStorage.getItem('db_provider');
+              if (currentProvider !== configData.provider) {
+                console.log(`🔄 [App] Sincronizando provedor de banco de dados com o servidor: ${configData.provider}`);
+                localStorage.setItem('db_provider', configData.provider);
+                window.location.reload();
+                return;
+              }
+            }
+          }
+        } catch (err) {
+          console.warn('Erro ao consultar configuração de banco de dados do servidor:', err);
+        }
+
         const testRes = await dbSupabase.testConnection();
         if (!testRes.success) {
           setSupabaseSyncStatus('error');
-          setSupabaseErrorMsg(testRes.error || 'Erro ao conectar no Supabase.');
+          const dbLabel = getActiveDatabaseProvider() === 'aws' ? 'banco de dados AWS' : 'Supabase';
+          setSupabaseErrorMsg(testRes.error || `Erro ao conectar no ${dbLabel}.`);
           return;
         }
 
         if (testRes.tablesConfigured === false) {
           setSupabaseSyncStatus('tables_missing');
-          setSupabaseErrorMsg(testRes.error || 'Tabelas do aplicativo ausentes no Supabase.');
+          const dbLabel = getActiveDatabaseProvider() === 'aws' ? 'banco de dados AWS' : 'Supabase';
+          setSupabaseErrorMsg(testRes.error || `Tabelas do aplicativo ausentes no ${dbLabel}.`);
           return;
         }
 
@@ -2089,7 +2109,7 @@ export default function App() {
     // Upload whole dataset securely to Supabase / AWS Postgres
     setSupabaseSyncStatus('syncing');
     try {
-      if (import.meta.env.VITE_DATABASE_PROVIDER === 'aws') {
+      if (getActiveDatabaseProvider() === 'aws') {
         const res = await fetch('/api/db/import-backup', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2291,7 +2311,7 @@ export default function App() {
         sales={sales} 
         currentUserEmail={firebaseUser?.email || ''} 
         syncStatus={supabaseSyncStatus}
-        databaseProvider={import.meta.env.VITE_DATABASE_PROVIDER as any || 'aws'}
+        databaseProvider={getActiveDatabaseProvider()}
       />
 
       {/* Main Container */}

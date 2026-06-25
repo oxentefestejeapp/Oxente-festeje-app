@@ -2,8 +2,28 @@ import { createClient } from '@supabase/supabase-js';
 import { Product, Sale, StoreInfo, ProductColor } from '../types';
 import { io } from 'socket.io-client';
 
+// Read configuration dynamically. If none are stored or defined in env, it is marked as not configured.
+export const getSupabaseConfig = () => {
+  const url = (typeof window !== 'undefined' && localStorage.getItem('supabase_url')) || import.meta.env.VITE_SUPABASE_URL || '';
+  const key = (typeof window !== 'undefined' && localStorage.getItem('supabase_anon_key')) || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+  return {
+    url: url.trim(),
+    key: key.trim(),
+    isConfigured: url.trim() !== '' && key.trim() !== '',
+  };
+};
+
+export const getActiveDatabaseProvider = (): 'supabase' | 'aws' => {
+  if (typeof window === 'undefined') return 'aws';
+  const localProvider = localStorage.getItem('db_provider');
+  if (localProvider === 'aws' || localProvider === 'supabase') {
+    return localProvider;
+  }
+  return (import.meta.env.VITE_DATABASE_PROVIDER === 'aws' || !getSupabaseConfig().isConfigured) ? 'aws' : 'supabase';
+};
+
 // Establish Socket.io connection for real-time push synchronization when in AWS mode
-export const socketIoClient = typeof window !== 'undefined' && import.meta.env.VITE_DATABASE_PROVIDER === 'aws'
+export const socketIoClient = typeof window !== 'undefined' && getActiveDatabaseProvider() === 'aws'
   ? io(window.location.origin)
   : null;
 
@@ -65,17 +85,6 @@ export function getFormattedSupabaseError(fallback = 'Erro desconhecido'): strin
   return parts.join(' ');
 }
 
-// Read configuration dynamically. If none are stored or defined in env, it is marked as not configured.
-export const getSupabaseConfig = () => {
-  const url = (typeof window !== 'undefined' && localStorage.getItem('supabase_url')) || import.meta.env.VITE_SUPABASE_URL || '';
-  const key = (typeof window !== 'undefined' && localStorage.getItem('supabase_anon_key')) || import.meta.env.VITE_SUPABASE_ANON_KEY || '';
-  return {
-    url: url.trim(),
-    key: key.trim(),
-    isConfigured: url.trim() !== '' && key.trim() !== '',
-  };
-};
-
 // Force isSandbox to false so all environments (including preview/sandbox/localhost) connect directly to the real cloud Supabase database for perfect cross-user synchronization.
 export const isSandbox = false;
 
@@ -99,8 +108,7 @@ const mockSupabase = {
   })
 } as any;
 
-const isAwsMode = typeof window !== 'undefined' && 
-  (import.meta.env.VITE_DATABASE_PROVIDER === 'aws' || !getSupabaseConfig().isConfigured);
+export const isAwsMode = typeof window !== 'undefined' && getActiveDatabaseProvider() === 'aws';
 
 const config = getSupabaseConfig();
 export const supabase = isSandbox 
@@ -1727,6 +1735,26 @@ const awsDbClient = {
   }
 };
 
-export const dbSupabase = isSandbox 
-  ? sandboxDbSupabase 
-  : (isAwsMode ? awsDbClient : realDbSupabase);
+export const dbSupabase = {
+  testConnection: () => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).testConnection(),
+  fetchProducts: () => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).fetchProducts(),
+  saveProduct: (product: Product) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).saveProduct(product),
+  updateProductStock: (id: string, newStock: number, isInfinite?: boolean, cores?: ProductColor[]) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).updateProductStock(id, newStock, isInfinite, cores),
+  deleteProduct: (id: string) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).deleteProduct(id),
+  fetchSales: () => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).fetchSales(),
+  saveSale: (sale: Sale) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).saveSale(sale),
+  purgeOldDeliveredSales: () => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).purgeOldDeliveredSales(),
+  purgeOldEstimates: () => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).purgeOldEstimates(),
+  clearAllSales: () => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).clearAllSales(),
+  deleteSale: (id: string) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).deleteSale(id),
+  saveStoreInfo: (storeInfo: StoreInfo) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).saveStoreInfo(storeInfo),
+  triggerAllUsersReload: (newTrigger: number) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).triggerAllUsersReload(newTrigger),
+  fetchStoreInfo: () => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).fetchStoreInfo(),
+  getUser: (id: string) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).getUser(id),
+  fetchUsers: () => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).fetchUsers(),
+  saveUser: (user: any) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).saveUser(user),
+  deleteUser: (id: string) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).deleteUser(id),
+  updateUserStatus: (id: string, status: string) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).updateUserStatus(id, status),
+  updateUserHeartbeat: (id: string) => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).updateUserHeartbeat(id),
+  checkDatabaseChanges: () => (isSandbox ? sandboxDbSupabase : (getActiveDatabaseProvider() === 'aws' ? awsDbClient : realDbSupabase)).checkDatabaseChanges()
+};

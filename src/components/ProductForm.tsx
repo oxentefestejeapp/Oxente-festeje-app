@@ -6,7 +6,7 @@
 import React, { useState, useRef, DragEvent, ChangeEvent } from 'react';
 import { Upload, X, Sparkles, AlertCircle, ShoppingBag, Plus, Trash2, Layers, Loader2, Palette } from 'lucide-react';
 import { Product, PricingTier, ProductColor } from '../types';
-import { getFormattedSupabaseError } from '../lib/supabase';
+import { getFormattedSupabaseError, getActiveDatabaseProvider } from '../lib/supabase';
 
 interface ProductFormProps {
   onAddProduct: (product: Product) => Promise<boolean> | void;
@@ -278,7 +278,8 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       // If the parent handleAddProduct returns undefined, we treat it as success, 
       // but if we update it to return boolean we check the boolean value.
       if (result === false) {
-        setError(`O produto foi registrado localmente no seu dispositivo, mas não pôde ser salvo no banco de dados em nuvem do Supabase. Detalhe do Erro: ${getFormattedSupabaseError('Sincronização pendente.')}`);
+        const dbName = getActiveDatabaseProvider() === 'aws' ? 'AWS PostgreSQL' : 'Supabase';
+        setError(`O produto foi registrado localmente no seu dispositivo, mas não pôde ser salvo no banco de dados em nuvem do ${dbName}. Detalhe do Erro: ${getFormattedSupabaseError('Sincronização pendente.')}`);
       } else {
         setSuccess(`"${newProduct.nome}" cadastrado com sucesso no sistema e sincronizado com a nuvem!`);
         setNome('');
@@ -611,7 +612,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
           {isSaving ? (
             <>
               <Loader2 className="h-5 w-5 animate-spin" />
-              <span>Sincronizando com Supabase...</span>
+              <span>Sincronizando com a Nuvem...</span>
             </>
           ) : (
             <>

@@ -55,7 +55,7 @@ import {
   DriveBackupFile 
 } from '../lib/googleDrive';
 import { User } from 'firebase/auth';
-import { getSupabaseConfig, getSupabaseMigrationSQL } from '../lib/supabase';
+import { getSupabaseConfig, getSupabaseMigrationSQL, getActiveDatabaseProvider } from '../lib/supabase';
 import { 
   getNotificationPermissionStatus,
   requestNotificationPermission,
@@ -1204,7 +1204,7 @@ export function SettingsManager({
 
         <p className="text-sm text-zinc-350 leading-relaxed">
           Você pode fazer o download off-line convencional de todos os dados ativos do sistema para um arquivo físico JSON no seu computador.
-          {import.meta.env.VITE_DATABASE_PROVIDER === 'aws' && (
+          {getActiveDatabaseProvider() === 'aws' && (
             <span className="block mt-1.5 text-xs text-brand-pink font-semibold">
               ✨ Provedor AWS/Hostinger ativo: O arquivo gerado conterá a cópia fiel e em tempo real dos seus produtos e vendas salvos na sua nuvem!
             </span>

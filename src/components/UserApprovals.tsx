@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { dbSupabase, supabase, isUsersTableSupported } from '../lib/supabase';
+import { dbSupabase, supabase, isUsersTableSupported, getActiveDatabaseProvider } from '../lib/supabase';
 import { 
   Users, 
   Search, 
@@ -126,7 +126,7 @@ export function UserApprovals() {
         setLoading(false);
       } catch (err: any) {
         console.error(err);
-        setError(import.meta.env.VITE_DATABASE_PROVIDER === 'aws' 
+        setError(getActiveDatabaseProvider() === 'aws' 
           ? 'Erro ao carregar lista de usuários do banco de dados da AWS Cloud.'
           : 'Erro ao carregar lista de usuários do banco de dados do Supabase.');
         setLoading(false);
@@ -280,7 +280,7 @@ export function UserApprovals() {
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-zinc-500">
           <Loader2 className="h-8 w-8 animate-spin text-brand-pink" />
           <span className="text-xs font-semibold">
-            {import.meta.env.VITE_DATABASE_PROVIDER === 'aws' 
+            {getActiveDatabaseProvider() === 'aws' 
               ? 'Sincronizando usuários via AWS Cloud...' 
               : 'Sincronizando usuários via Supabase...'}
           </span>
