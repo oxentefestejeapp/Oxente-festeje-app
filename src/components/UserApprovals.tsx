@@ -126,7 +126,9 @@ export function UserApprovals() {
         setLoading(false);
       } catch (err: any) {
         console.error(err);
-        setError('Erro ao carregar lista de usuários do banco de dados do Supabase.');
+        setError(import.meta.env.VITE_DATABASE_PROVIDER === 'aws' 
+          ? 'Erro ao carregar lista de usuários do banco de dados da AWS Cloud.'
+          : 'Erro ao carregar lista de usuários do banco de dados do Supabase.');
         setLoading(false);
       }
     };
@@ -247,7 +249,7 @@ export function UserApprovals() {
         <div>
           <h2 className="font-display font-bold text-xl text-white flex items-center gap-2">
             <Users className="h-5.5 w-5.5 text-brand-pink" />
-            <span>Painel de Usuários do Sistema (Supabase Cloud Sync)</span>
+            <span>Painel de Usuários do Sistema (AWS Cloud)</span>
           </h2>
           <p className="text-xs text-zinc-400 mt-1">
             Lista de contas registradas e status de conexão online/offline de colaboradores em tempo real.
@@ -277,7 +279,11 @@ export function UserApprovals() {
       {loading ? (
         <div className="flex flex-col items-center justify-center py-16 gap-3 text-zinc-500">
           <Loader2 className="h-8 w-8 animate-spin text-brand-pink" />
-          <span className="text-xs font-semibold">Sincronizando usuários via Supabase...</span>
+          <span className="text-xs font-semibold">
+            {import.meta.env.VITE_DATABASE_PROVIDER === 'aws' 
+              ? 'Sincronizando usuários via AWS Cloud...' 
+              : 'Sincronizando usuários via Supabase...'}
+          </span>
         </div>
       ) : filteredUsers.length === 0 ? (
         <div className="text-center py-16 border border-dashed border-zinc-900 rounded-2xl text-zinc-500">
