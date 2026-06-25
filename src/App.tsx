@@ -33,7 +33,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig, isUsersTableSupported, getActiveDatabaseProvider } from './lib/supabase';
+import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig, isUsersTableSupported } from './lib/supabase';
 
 import { Header } from './components/Header';
 import { ProductForm } from './components/ProductForm';
@@ -84,91 +84,6 @@ export const getWeeklyNonBudgetOrdersCount = (salesList: Sale[]): number => {
   }).length;
 };
 
-// Custom Hook to sync local state with AWS Postgres periodically
-function useDatabaseSync(
-  databaseProvider: string,
-  products: Product[],
-  setProducts: React.Dispatch<React.SetStateAction<Product[]>>,
-  sales: Sale[],
-  setSales: React.Dispatch<React.SetStateAction<Sale[]>>
-) {
-  const lastStateRef = useRef<{
-    productsCount: number;
-    productsLastUpdated: string | null;
-    salesCount: number;
-    salesLastUpdated: string | null;
-  } | null>(null);
-
-  useEffect(() => {
-    if (databaseProvider !== 'aws') return;
-
-    let active = true;
-
-    const checkSync = async () => {
-      try {
-        const result = await dbSupabase.checkDatabaseChanges();
-        if (!active || !result || !result.success) return;
-
-        const { products: remoteProds, sales: remoteSales } = result;
-        if (!remoteProds || !remoteSales) return;
-
-        // If we don't have a baseline state yet, set it and return
-        if (!lastStateRef.current) {
-          lastStateRef.current = {
-            productsCount: remoteProds.count,
-            productsLastUpdated: remoteProds.lastUpdated,
-            salesCount: remoteSales.count,
-            salesLastUpdated: remoteSales.lastUpdated
-          };
-          console.log('🔄 [useDatabaseSync] Linha de base inicializada:', lastStateRef.current);
-          return;
-        }
-
-        const prev = lastStateRef.current;
-        const productsChanged = remoteProds.count !== prev.productsCount || remoteProds.lastUpdated !== prev.productsLastUpdated;
-        const salesChanged = remoteSales.count !== prev.salesCount || remoteSales.lastUpdated !== prev.salesLastUpdated;
-
-        if (productsChanged) {
-          console.log(`🔄 [useDatabaseSync] Alteração em Produtos detectada (Qtd: ${prev.productsCount} -> ${remoteProds.count}). Sincronizando...`);
-          const freshProducts = await dbSupabase.fetchProducts();
-          if (active && freshProducts) {
-            setProducts(freshProducts);
-            localStorage.setItem('oxente_products', JSON.stringify(freshProducts));
-          }
-        }
-
-        if (salesChanged) {
-          console.log(`🔄 [useDatabaseSync] Alteração em Vendas detectada (Qtd: ${prev.salesCount} -> ${remoteSales.count}). Sincronizando...`);
-          const freshSales = await dbSupabase.fetchSales();
-          if (active && freshSales) {
-            setSales(freshSales);
-            localStorage.setItem('oxente_sales', JSON.stringify(freshSales));
-          }
-        }
-
-        // Update the baseline state
-        lastStateRef.current = {
-          productsCount: remoteProds.count,
-          productsLastUpdated: remoteProds.lastUpdated,
-          salesCount: remoteSales.count,
-          salesLastUpdated: remoteSales.lastUpdated
-        };
-      } catch (err) {
-        console.error('❌ [useDatabaseSync] Erro na verificação periódica do AWS Postgres:', err);
-      }
-    };
-
-    // Run immediately and then every 5 seconds
-    checkSync();
-    const interval = setInterval(checkSync, 5000);
-
-    return () => {
-      active = false;
-      clearInterval(interval);
-    };
-  }, [databaseProvider, setProducts, setSales]);
-}
-
 export default function App() {
   // 1. Custom Secure Credentials Auth State
   const [firebaseUser, setFirebaseUser] = useState<any | null>(null);
@@ -198,15 +113,6 @@ export default function App() {
     }
   })());
   const [sales, setSales] = useState<Sale[]>([]);
-
-  // Periodically check for database changes and sync state on AWS Postgres
-  useDatabaseSync(
-    getActiveDatabaseProvider(),
-    products,
-    setProducts,
-    sales,
-    setSales
-  );
 
   const productsRef = useRef<Product[]>([]);
   const salesRef = useRef<Sale[]>([]);
@@ -403,12 +309,12 @@ export default function App() {
           const userObj = JSON.parse(savedUserStr);
           const userIdNormal = userObj.id || userObj.uid || '';
           if (userIdNormal) {
-            // First load user details directly from database
+            // First load user details directly from Supabase
             const loadProfile = async () => {
               try {
                 if (isUsersTableSupported) {
-                  const data = await dbSupabase.getUser(userIdNormal);
-                  if (data) {
+                  const { data, error } = await supabase.from('oxente_users').select('*').eq('id', userIdNormal).maybeSingle();
+                  if (data && !error) {
                     const enhancedUser = {
                       ...userObj,
                       id: data.id,
@@ -617,36 +523,16 @@ export default function App() {
     const syncDataWithSupabase = async () => {
       setSupabaseSyncStatus('syncing');
       try {
-        try {
-          const configRes = await fetch('/api/db/config');
-          if (configRes.ok) {
-            const configData = await configRes.json();
-            if (configData && configData.provider) {
-              const currentProvider = localStorage.getItem('db_provider');
-              if (currentProvider !== configData.provider) {
-                console.log(`🔄 [App] Sincronizando provedor de banco de dados com o servidor: ${configData.provider}`);
-                localStorage.setItem('db_provider', configData.provider);
-                window.location.reload();
-                return;
-              }
-            }
-          }
-        } catch (err) {
-          console.warn('Erro ao consultar configuração de banco de dados do servidor:', err);
-        }
-
         const testRes = await dbSupabase.testConnection();
         if (!testRes.success) {
           setSupabaseSyncStatus('error');
-          const dbLabel = getActiveDatabaseProvider() === 'aws' ? 'banco de dados AWS' : 'Supabase';
-          setSupabaseErrorMsg(testRes.error || `Erro ao conectar no ${dbLabel}.`);
+          setSupabaseErrorMsg(testRes.error || 'Erro ao conectar no Supabase.');
           return;
         }
 
         if (testRes.tablesConfigured === false) {
           setSupabaseSyncStatus('tables_missing');
-          const dbLabel = getActiveDatabaseProvider() === 'aws' ? 'banco de dados AWS' : 'Supabase';
-          setSupabaseErrorMsg(testRes.error || `Tabelas do aplicativo ausentes no ${dbLabel}.`);
+          setSupabaseErrorMsg(testRes.error || 'Tabelas do aplicativo ausentes no Supabase.');
           return;
         }
 
@@ -2106,31 +1992,19 @@ export default function App() {
     localStorage.setItem('oxente_sales', JSON.stringify(newSales));
     localStorage.setItem('oxente_store_info', JSON.stringify(newStoreInfo));
 
-    // Upload whole dataset securely to Supabase / AWS Postgres
+    // Upload whole dataset securely to Supabase
     setSupabaseSyncStatus('syncing');
     try {
-      if (getActiveDatabaseProvider() === 'aws') {
-        const res = await fetch('/api/db/import-backup', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ products: newProducts, sales: newSales, storeInfo: newStoreInfo })
-        });
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({ error: 'Erro desconhecido' }));
-          throw new Error(errData.error || 'Falha ao importar backup no AWS Postgres');
-        }
-      } else {
-        await Promise.all([
-          ...newProducts.map(p => dbSupabase.saveProduct(p)),
-          ...newSales.map(s => dbSupabase.saveSale(s)),
-          dbSupabase.saveStoreInfo(newStoreInfo)
-        ]);
-      }
+      await Promise.all([
+        ...newProducts.map(p => dbSupabase.saveProduct(p)),
+        ...newSales.map(s => dbSupabase.saveSale(s)),
+        dbSupabase.saveStoreInfo(newStoreInfo)
+      ]);
       setSupabaseSyncStatus('synced');
     } catch (err: any) {
-      console.error('Falha de restauração de backup:', err);
+      console.error('Falha de restauração de backup no Supabase:', err);
       setSupabaseSyncStatus('error');
-      setSupabaseErrorMsg(err.message || 'Erro ao sincronizar backup.');
+      setSupabaseErrorMsg(getFormattedSupabaseError(err.message || 'Erro ao sincronizar backup.'));
     }
   };
 
@@ -2170,10 +2044,14 @@ export default function App() {
   const handleForceAllUsersUpdate = async (): Promise<void> => {
     try {
       const newTrigger = Date.now();
-      // Store in database oxente_store_info table under key 'app_version_trigger'
-      const success = await dbSupabase.triggerAllUsersReload(newTrigger);
+      // Store in Supabase oxente_store_info table under key 'app_version_trigger'
+      const { error } = await supabase.from('oxente_store_info').upsert({
+        key: 'app_version_trigger',
+        nome: String(newTrigger),
+        updated_at: new Date().toISOString()
+      });
       
-      if (!success) throw new Error('Erro ao salvar trigger de atualização no banco de dados.');
+      if (error) throw error;
       
       // Clear locally
       localStorage.setItem('oxente_last_reload_trigger', String(newTrigger));
@@ -2306,13 +2184,7 @@ export default function App() {
       <div className="h-1.5 w-full bg-gradient-to-r from-red-500 via-orange-500 via-yellow-400 via-emerald-500 via-blue-500 via-purple-500 to-pink-500 sticky top-0 z-50 shadow-[0_3px_15px_rgba(249,115,22,0.3)] animate-pulse" />
       
       {/* Real-time Header */}
-      <Header 
-        products={products} 
-        sales={sales} 
-        currentUserEmail={firebaseUser?.email || ''} 
-        syncStatus={supabaseSyncStatus}
-        databaseProvider={getActiveDatabaseProvider()}
-      />
+      <Header products={products} sales={sales} currentUserEmail={firebaseUser?.email || ''} />
 
       {/* Main Container */}
       <main className="flex-1 w-full max-w-[1440px] mx-auto px-4 pb-16">

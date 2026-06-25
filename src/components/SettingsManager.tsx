@@ -55,7 +55,7 @@ import {
   DriveBackupFile 
 } from '../lib/googleDrive';
 import { User } from 'firebase/auth';
-import { getSupabaseConfig, getSupabaseMigrationSQL, getActiveDatabaseProvider } from '../lib/supabase';
+import { getSupabaseConfig, getSupabaseMigrationSQL } from '../lib/supabase';
 import { 
   getNotificationPermissionStatus,
   requestNotificationPermission,
@@ -272,144 +272,6 @@ export function SettingsManager({
   const [dbSuccessMsg, setDbSuccessMsg] = useState<string | null>(null);
   const [dbErrorMsg, setDbErrorMsg] = useState<string | null>(null);
   const [copiedMigration, setCopiedMigration] = useState(false);
-
-  // States for AWS RDS/Custom PostgreSQL dynamic configuration
-  const [dbProviderSelection, setDbProviderSelection] = useState<'supabase' | 'aws'>('aws');
-  const [pgHost, setPgHost] = useState('');
-  const [pgPort, setPgPort] = useState('5432');
-  const [pgUser, setPgUser] = useState('postgres');
-  const [pgPassword, setPgPassword] = useState('');
-  const [pgDatabase, setPgDatabase] = useState('');
-  const [pgSsl, setPgSsl] = useState(true);
-  const [isSavingPgConfig, setIsSavingPgConfig] = useState(false);
-  const [pgConfigSuccessMsg, setPgConfigSuccessMsg] = useState<string | null>(null);
-  const [pgConfigErrorMsg, setPgConfigErrorMsg] = useState<string | null>(null);
-
-  // Load existing database config on mount from active server configuration
-  useEffect(() => {
-    const fetchDbConfig = async () => {
-      try {
-        const res = await fetch('/api/db/config');
-        if (res.ok) {
-          const data = await res.json();
-          setDbProviderSelection('aws');
-          setPgHost(data.pgHost || '');
-          setPgPort(data.pgPort || '5432');
-          setPgUser(data.pgUser || 'postgres');
-          setPgPassword(data.pgPassword || '');
-          setPgDatabase(data.pgDatabase || '');
-          setPgSsl(data.pgSsl !== false);
-        }
-      } catch (err) {
-        console.error('Erro ao buscar configuração de banco de dados do servidor:', err);
-      }
-    };
-    fetchDbConfig();
-  }, []);
-
-  const handleSavePgConfig = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSavingPgConfig(true);
-    setPgConfigSuccessMsg(null);
-    setPgConfigErrorMsg(null);
-
-    try {
-      const res = await fetch('/api/db/configure', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          provider: 'aws',
-          pgHost: pgHost.trim(),
-          pgPort: pgPort.trim(),
-          pgUser: pgUser.trim(),
-          pgPassword,
-          pgDatabase: pgDatabase.trim(),
-          pgSsl
-        })
-      });
-
-      let data: any = {};
-      try {
-        data = await res.json();
-      } catch (jsonErr) {
-        console.warn('Resposta não pôde ser lida como JSON, tratando como reinicialização bem-sucedida:', jsonErr);
-        data = { success: true, message: 'Banco de Dados configurado com sucesso! Sincronizando...' };
-      }
-
-      if (!res.ok && !data.success) {
-        throw new Error(data.error || 'Erro ao salvar configurações do PostgreSQL.');
-      }
-
-      setPgConfigSuccessMsg('Banco de dados PostgreSQL conectado e sincronizado com sucesso! Atualizando sistema...');
-      setDbProviderSelection('aws');
-      localStorage.setItem('db_provider', 'aws');
-      
-      // Reload page after a delay to initialize socket.io channels
-      setTimeout(() => {
-        window.location.reload();
-      }, 3500);
-
-    } catch (err: any) {
-      const isJsonError = err.message && (
-        err.message.includes('Unexpected token') || 
-        err.message.includes('not valid JSON') ||
-        err.message.includes('failed to fetch') ||
-        err.message.includes('Failed to fetch')
-      );
-
-      if (isJsonError) {
-        // Confirmed server reboot transition: treat as successful save and reload page
-        setPgConfigSuccessMsg('Banco de dados conectado e salvo com sucesso! Sincronizando dados e atualizando o aplicativo...');
-        setDbProviderSelection('aws');
-        localStorage.setItem('db_provider', 'aws');
-        setTimeout(() => {
-          window.location.reload();
-        }, 3500);
-      } else {
-        setPgConfigErrorMsg(err.message || 'Falha de comunicação com o servidor.');
-      }
-    } finally {
-      setIsSavingPgConfig(false);
-    }
-  };
-
-  const handleSwitchToSupabase = async () => {
-    setIsSavingPgConfig(true);
-    setPgConfigSuccessMsg(null);
-    setPgConfigErrorMsg(null);
-
-    try {
-      const res = await fetch('/api/db/configure', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          provider: 'supabase'
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error || 'Erro ao alterar provedor para Supabase.');
-      }
-
-      setPgConfigSuccessMsg('Alterado para Supabase! Carregando conexões locais...');
-      setDbProviderSelection('supabase');
-      localStorage.setItem('db_provider', 'supabase');
-      
-      setTimeout(() => {
-        window.location.reload();
-      }, 2500);
-
-    } catch (err: any) {
-      setPgConfigErrorMsg(err.message || 'Falha ao alterar provedor de banco.');
-    } finally {
-      setIsSavingPgConfig(false);
-    }
-  };
 
   const handleSaveSupabaseConfig = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1229,12 +1091,7 @@ export function SettingsManager({
         </div>
 
         <p className="text-sm text-zinc-350 leading-relaxed">
-          Você pode fazer o download off-line convencional de todos os dados ativos do sistema para um arquivo físico JSON no seu computador.
-          {getActiveDatabaseProvider() === 'aws' && (
-            <span className="block mt-1.5 text-xs text-brand-pink font-semibold">
-              ✨ Provedor AWS/Hostinger ativo: O arquivo gerado conterá a cópia fiel e em tempo real dos seus produtos e vendas salvos na sua nuvem!
-            </span>
-          )}
+          Você também pode fazer o download off-line convencional dos dados do seu navegador para manter um arquivo físico salvo em seu computador.
         </p>
 
         {/* Database Stats Preview Card */}
@@ -1324,19 +1181,15 @@ export function SettingsManager({
 
       </div>
 
-      {/* ⚡ CLOUD DATABASE CONFIGURATION CARD */}
+      {/* ⚡ SUPABASE DATABASE CONFIGURATION CARD */}
       <div className="bg-zinc-900 rounded-2xl border border-zinc-800/80 p-6 shadow-md space-y-6">
         
         <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-zinc-800 pb-4 gap-3">
           <div className="flex items-center gap-2">
             <Cloud className="h-5 w-5 text-brand-pink shrink-0 animate-pulse" />
             <div>
-              <h3 className="font-display font-semibold text-base text-zinc-100">
-                Sincronização de Banco de Dados
-              </h3>
-              <p className="text-[10px] text-zinc-450 mt-0.5">
-                Alterne e configure o banco de dados do seu aplicativo de forma dinâmica e descomplicada.
-              </p>
+              <h3 className="font-display font-semibold text-base text-zinc-100">Banco de Dados Supabase (Nuvem)</h3>
+              <p className="text-[10px] text-zinc-450 mt-0.5">Sincronize estoque e vendas em tempo real para hospedar em Hostinger ou localmente</p>
             </div>
           </div>
           
@@ -1345,7 +1198,7 @@ export function SettingsManager({
             {supabaseSyncStatus === 'synced' && (
               <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[10px] rounded-full font-bold bg-emerald-950/45 text-emerald-400 border border-emerald-905/40">
                 <CheckCircle className="h-3 w-3" />
-                Conectado &amp; Ativo
+                Sincronizado
               </span>
             )}
             {supabaseSyncStatus === 'syncing' && (
@@ -1385,156 +1238,81 @@ export function SettingsManager({
           </div>
         )}
 
-        {/* AWS PostgreSQL Dynamic Panel */}
-        <div className="space-y-4">
-            <div className="p-4 bg-zinc-950 border border-zinc-850 rounded-xl space-y-2 text-[11px] text-zinc-400 leading-relaxed">
-              <p className="font-semibold text-zinc-200 flex items-center gap-1.5">
-                <Terminal className="h-4 w-4 text-brand-pink" />
-                Hospedagem Hostinger / Banco Próprio
-              </p>
-              <p>
-                Insira as credenciais do seu banco de dados PostgreSQL abaixo. O servidor irá testar a conexão antes de aplicar as mudanças. Ao salvar, as tabelas serão criadas de forma automática!
-              </p>
+        {/* SQL Schema Copy/Migration Instructions block */}
+        <div className="bg-zinc-950 border border-zinc-850 p-4 rounded-xl space-y-2 select-text">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-200">
+              <Terminal className="h-4 w-4 text-brand-pink" />
+              <span>Script de Criação de Tabelas (SQL)</span>
             </div>
+            <button
+              onClick={handleCopyMigrationSQL}
+              className={`px-3 py-1.5 rounded-lg text-xxs font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
+                copiedMigration 
+                  ? 'bg-emerald-600 text-white' 
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
+              }`}
+            >
+              <Copy className="h-3 w-3" />
+              <span>{copiedMigration ? 'Copiado SQL!' : 'Copiar Roteiro SQL'}</span>
+            </button>
+          </div>
+          <p className="text-[10.5px] text-zinc-400 leading-relaxed">
+            Caso as tabelas não tenham sido criadas, abra o painel do seu Supabase, clique em <strong className="text-zinc-200">SQL Editor</strong>, crie uma "New Query", cole o conteúdo do SQL (obtido no botão acima) e clique em <strong className="text-brand-pink">Run</strong>. Isso liberará o armazenamento na nuvem de imediato!
+          </p>
+        </div>
 
-            <form onSubmit={handleSavePgConfig} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">HOST (Endpoint AWS / Hostinger)</label>
-                  <input
-                    type="text"
-                    value={pgHost}
-                    onChange={(e) => setPgHost(e.target.value)}
-                    placeholder="oxentenuvem.cfmssismksw6.us-east-2.rds.amazonaws.com"
-                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">PORTA</label>
-                  <input
-                    type="text"
-                    value={pgPort}
-                    onChange={(e) => setPgPort(e.target.value)}
-                    placeholder="5432"
-                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">USUÁRIO</label>
-                  <input
-                    type="text"
-                    value={pgUser}
-                    onChange={(e) => setPgUser(e.target.value)}
-                    placeholder="postgres"
-                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">SENHA DO BANCO</label>
-                  <input
-                    type="password"
-                    value={pgPassword}
-                    onChange={(e) => setPgPassword(e.target.value)}
-                    placeholder="Sua senha do banco PostgreSQL"
-                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">NOME DO BANCO DE DADOS (Database)</label>
-                  <input
-                    type="text"
-                    value={pgDatabase}
-                    onChange={(e) => setPgDatabase(e.target.value)}
-                    placeholder="oxentenuvem"
-                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">SSL SEGURO</label>
-                  <select
-                    value={String(pgSsl)}
-                    onChange={(e) => setPgSsl(e.target.value === 'true')}
-                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none transition-all"
-                  >
-                    <option value="true">Habilitado (SSL Criptografado - Recomendado)</option>
-                    <option value="false">Desabilitado</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <button
-                  type="submit"
-                  disabled={isSavingPgConfig}
-                  className="px-5 py-3.5 bg-brand-pink hover:bg-brand-pink/90 disabled:bg-zinc-850 disabled:text-zinc-550 text-black font-extrabold rounded-xl transition-all cursor-pointer text-xs flex-1 flex items-center justify-center gap-1.5 active:scale-97 shadow-md"
-                >
-                  {isSavingPgConfig ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Testando e Salvando Conexão...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save className="h-4 w-4" />
-                      <span>Salvar e Sincronizar Banco de Dados</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Feedback messages */}
-              {pgConfigSuccessMsg && (
-                <div className="p-3.5 bg-emerald-950/30 border border-emerald-900/40 rounded-xl text-emerald-300 text-xs font-semibold animate-fade-in text-center">
-                  {pgConfigSuccessMsg}
-                </div>
-              )}
-              {pgConfigErrorMsg && (
-                <div className="p-3.5 bg-red-950/25 border border-red-900/30 rounded-xl text-red-300 text-xs font-semibold animate-fade-in leading-relaxed">
-                  {pgConfigErrorMsg}
-                </div>
-              )}
-            </form>
-
-            {/* Quick backup action inside AWS card */}
-            <div className="mt-4 p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl space-y-4">
-              {/* Export Block */}
-              <div className="flex items-center justify-between gap-4 border-b border-zinc-800/80 pb-3">
-                <div className="flex-1">
-                  <h4 className="text-xs font-bold text-zinc-200">Exportar Backup Direto do AWS</h4>
-                  <p className="text-[10px] text-zinc-450 mt-0.5">Gere e baixe um arquivo .json seguro com todos os produtos e vendas que estão ativos no seu banco PostgreSQL.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleDownloadBackup}
-                  className="px-3.5 py-2.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-200 hover:text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 border border-zinc-700/50 shrink-0"
-                >
-                  <Download className="h-3.5 w-3.5 text-brand-pink" />
-                  <span>Baixar JSON</span>
-                </button>
-              </div>
-
-              {/* Import Block */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex-1">
-                  <h4 className="text-xs font-bold text-zinc-200">Importar Backup no AWS</h4>
-                  <p className="text-[10px] text-zinc-450 mt-0.5">Carregue um arquivo .json de backup anterior para popular instantaneamente e atualizar todo o seu banco PostgreSQL.</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="px-3.5 py-2.5 bg-gradient-to-r from-purple-900/40 to-indigo-900/40 hover:from-purple-900/60 hover:to-indigo-900/60 text-purple-200 hover:text-white text-xs font-bold rounded-lg transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 border border-purple-800/40 shrink-0"
-                >
-                  <UploadCloud className="h-3.5 w-3.5 text-indigo-400" />
-                  <span>Subir JSON</span>
-                </button>
-              </div>
+        {/* Credentials Form block */}
+        <form onSubmit={handleSaveSupabaseConfig} className="space-y-4">
+          <div className="space-y-3">
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">SUPABASE_URL (Projeto)</label>
+              <input
+                type="url"
+                value={supUrl}
+                onChange={(e) => setSupUrl(e.target.value)}
+                placeholder="https://suas-credenciais.supabase.co"
+                className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">SUPABASE_ANON_KEY (Chave Pública Anon)</label>
+              <input
+                type="text"
+                value={supKey}
+                onChange={(e) => setSupKey(e.target.value)}
+                placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
+                required
+              />
             </div>
           </div>
-        </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 pt-2">
+            <button
+              type="submit"
+              className="px-5 py-3.5 bg-brand-pink hover:bg-brand-pink/90 text-black font-extrabold rounded-xl transition-all cursor-pointer text-xs flex-1 flex items-center justify-center gap-1.5 active:scale-97 shadow-md"
+            >
+              <Save className="h-4 w-4" />
+              <span>Salvar Credenciais do Supabase</span>
+            </button>
+          </div>
+
+          {/* Local success / error feedback */}
+          {dbSuccessMsg && (
+            <div className="p-3.5 bg-emerald-950/30 border border-emerald-900/40 rounded-xl text-emerald-300 text-xs font-semibold animate-fade-in text-center">
+              {dbSuccessMsg}
+            </div>
+          )}
+          {dbErrorMsg && (
+            <div className="p-3.5 bg-red-950/25 border border-red-900/30 rounded-xl text-red-300 text-xs font-semibold animate-fade-in">
+              {dbErrorMsg}
+            </div>
+          )}
+        </form>
+
+      </div>
 
       {/* Visual Configuration of Store details & WhatsApp message template */}
       <div className="bg-zinc-900 rounded-2xl border border-zinc-805 p-6 shadow-md space-y-6 select-text">
@@ -1852,7 +1630,7 @@ export function SettingsManager({
             Ocasionalmente, devido a caches de rotas ou sessões antigas de navegadores de celulares, alguns colaboradores podem demorar a receber as notificações ou novos pedidos em tempo real.
           </p>
           <p>
-            Ao clicar no botão abaixo, você disparará um sinal Firestore em tempo real que <strong className="text-emerald-400">forçará todos os dispositivos (incluindo o seu perfil de administrador e todos os colaboradores logados)</strong> a exibir uma tela de recarga e recarregar os arquivos e caches do aplicativo automaticamente para a versão mais atualizada e 100% conectada ao AWS Postgres.
+            Ao clicar no botão abaixo, você disparará um sinal Firestore em tempo real que <strong className="text-emerald-400">forçará todos os dispositivos (incluindo o seu perfil de administrador e todos os colaboradores logados)</strong> a exibir uma tela de recarga e recarregar os arquivos e caches do aplicativo automaticamente para a versão mais atualizada e 100% conectada ao Supabase Cloud.
           </p>
         </div>
 
@@ -1910,7 +1688,7 @@ export function SettingsManager({
         </div>
 
         <div className="text-xs text-red-350 bg-red-950/15 p-4 rounded-xl border border-red-910/30">
-          Esta ação apagará permanentemente todos os lançamentos de vendas, orçamentos e históricos da nuvem (AWS PostgreSQL) e do seu dispositivo. Esta ação não afetará seu cadastro de produtos ou as informações de contato da loja.
+          Esta ação apagará permanentemente todos os lançamentos de vendas, orçamentos e históricos da nuvem (Supabase) e do seu dispositivo. Esta ação não afetará seu cadastro de produtos ou as informações de contato da loja.
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 pt-1">
