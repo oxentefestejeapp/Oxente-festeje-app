@@ -5,6 +5,7 @@ import path from 'path';
 import pg from 'pg';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
+import fs from 'fs';
 
 dotenv.config();
 
@@ -18,32 +19,77 @@ const PORT = 3000;
 app.use(express.json({ limit: '100mb' }));
 app.use(express.urlencoded({ limit: '100mb', extended: true }));
 
-// Database Provider Configuration
-const dbProvider = process.env.VITE_DATABASE_PROVIDER || 'supabase';
+// Helper to update local .env file safely
+function updateEnvFile(updates: Record<string, string>) {
+  const envPath = path.join(process.cwd(), '.env');
+  let content = '';
+  if (fs.existsSync(envPath)) {
+    content = fs.readFileSync(envPath, 'utf8');
+  }
+
+  const lines = content.split('\n');
+  const updatedKeys = new Set<string>();
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line && !line.startsWith('#') && line.includes('=')) {
+      const eqIdx = line.indexOf('=');
+      const key = line.substring(0, eqIdx).trim();
+      if (updates[key] !== undefined) {
+        lines[i] = `${key}="${updates[key].replace(/"/g, '\\"')}"`;
+        updatedKeys.add(key);
+      }
+    }
+  }
+
+  // Append any keys that weren't in the original .env
+  for (const [key, val] of Object.entries(updates)) {
+    if (!updatedKeys.has(key)) {
+      lines.push(`${key}="${val.replace(/"/g, '\\"')}"`);
+    }
+  }
+
+  fs.writeFileSync(envPath, lines.join('\n'), 'utf8');
+}
+
+// Database Provider Configuration (reassignable for dynamic switching)
+let dbProvider = process.env.VITE_DATABASE_PROVIDER || 'supabase';
 
 // Initialize PostgreSQL Connection Pool if configured for AWS
 let pool: pg.Pool | null = null;
 
-if (dbProvider === 'aws') {
-  const pgConfig = {
-    host: process.env.PG_HOST || process.env.PGHOST,
-    port: parseInt(process.env.PG_PORT || process.env.PGPORT || '5432', 10),
-    user: process.env.PG_USER || process.env.PGUSER,
-    password: process.env.PG_PASSWORD || process.env.PGPASSWORD,
-    database: process.env.PG_DATABASE || process.env.PGDATABASE,
-    ssl: process.env.PG_SSL === 'false' ? false : { rejectUnauthorized: false }
-  };
+function initializePostgresPool() {
+  if (dbProvider === 'aws') {
+    const pgConfig = {
+      host: process.env.PG_HOST || process.env.PGHOST,
+      port: parseInt(process.env.PG_PORT || process.env.PGPORT || '5432', 10),
+      user: process.env.PG_USER || process.env.PGUSER,
+      password: process.env.PG_PASSWORD || process.env.PGPASSWORD,
+      database: process.env.PG_DATABASE || process.env.PGDATABASE,
+      ssl: process.env.PG_SSL === 'false' ? false : { rejectUnauthorized: false }
+    };
 
-  console.log('🔌 [AWS Postgres] Inicializando pool de conexão para:', pgConfig.host);
-  pool = new Pool(pgConfig);
+    console.log('🔌 [AWS Postgres] Inicializando pool de conexão para:', pgConfig.host);
+    if (pool) {
+      pool.end().catch(err => console.error('Erro ao encerrar pool antigo:', err));
+    }
+    pool = new Pool(pgConfig);
 
-  // Setup tables on startup
-  setupDatabaseTables().catch(err => {
-    console.error('❌ [AWS Postgres] Falha na criação/verificação de tabelas no banco de dados:', err);
-  });
-} else {
-  console.log('📡 [Supabase] Executando em modo de comunicação direta com o Supabase.');
+    // Setup tables on startup
+    setupDatabaseTables().catch(err => {
+      console.error('❌ [AWS Postgres] Falha na criação/verificação de tabelas no banco de dados:', err);
+    });
+  } else {
+    console.log('📡 [Supabase] Executando em modo de comunicação direta com o Supabase.');
+    if (pool) {
+      pool.end().catch(err => console.error('Erro ao encerrar pool:', err));
+      pool = null;
+    }
+  }
 }
+
+// Run initial database pool setup
+initializePostgresPool();
 
 // Socket.io Server Setup
 const io = new Server(httpServer, {
@@ -191,6 +237,112 @@ async function executeQuery(queryText: string, params: any[] = []) {
 // ----------------------------------------------------
 // REST API ENDPOINTS FOR AWS POSTGRESQL PROXY
 // ----------------------------------------------------
+
+// Get current database connection settings
+app.get('/api/db/config', (req, res) => {
+  res.json({
+    provider: dbProvider,
+    pgHost: process.env.PG_HOST || '',
+    pgPort: process.env.PG_PORT || '5432',
+    pgUser: process.env.PG_USER || '',
+    pgPassword: process.env.PG_PASSWORD || '',
+    pgDatabase: process.env.PG_DATABASE || '',
+    pgSsl: process.env.PG_SSL !== 'false'
+  });
+});
+
+// Configure and persist database settings dynamically
+app.post('/api/db/configure', async (req, res) => {
+  const { provider, pgHost, pgPort, pgUser, pgPassword, pgDatabase, pgSsl } = req.body;
+
+  if (provider === 'aws') {
+    if (!pgHost || !pgUser || !pgDatabase) {
+      return res.status(400).json({ error: 'Configuração incompleta. Preencha Host, Usuário e Banco de Dados.' });
+    }
+
+    // 1. Validate the connection by attempting a test connection
+    const testConfig = {
+      host: pgHost,
+      port: parseInt(pgPort || '5432', 10),
+      user: pgUser,
+      password: pgPassword,
+      database: pgDatabase,
+      ssl: pgSsl === false ? false : { rejectUnauthorized: false },
+      connectionTimeoutMillis: 5000 // fail fast if credentials/host are wrong
+    };
+
+    const testPool = new pg.Pool(testConfig);
+    try {
+      const testClient = await testPool.connect();
+      await testClient.query('SELECT 1');
+      testClient.release();
+      await testPool.end();
+    } catch (err: any) {
+      await testPool.end();
+      console.error('❌ Erro no teste de conexão AWS Postgres:', err.message);
+      return res.status(400).json({ 
+        error: `Erro ao conectar ao banco de dados: ${err.message}. Verifique se as credenciais e o host estão corretos.` 
+      });
+    }
+
+    // 2. Persist to local .env file
+    try {
+      updateEnvFile({
+        VITE_DATABASE_PROVIDER: 'aws',
+        PG_HOST: pgHost,
+        PG_PORT: String(pgPort || '5432'),
+        PG_USER: pgUser,
+        PG_PASSWORD: pgPassword || '',
+        PG_DATABASE: pgDatabase,
+        PG_SSL: pgSsl === false ? 'false' : 'true'
+      });
+    } catch (err: any) {
+      console.error('Falha ao escrever no arquivo .env:', err);
+    }
+
+    // 3. Update active environment in-memory
+    process.env.VITE_DATABASE_PROVIDER = 'aws';
+    process.env.PG_HOST = pgHost;
+    process.env.PG_PORT = String(pgPort || '5432');
+    process.env.PG_USER = pgUser;
+    process.env.PG_PASSWORD = pgPassword || '';
+    process.env.PG_DATABASE = pgDatabase;
+    process.env.PG_SSL = pgSsl === false ? 'false' : 'true';
+
+    dbProvider = 'aws';
+
+    // 4. Reinitialize active pool and setup tables
+    initializePostgresPool();
+
+    return res.json({ 
+      success: true, 
+      message: 'Banco de Dados AWS Postgres/Hostinger configurado e conectado com sucesso!' 
+    });
+  } else if (provider === 'supabase') {
+    // 1. Persist to local .env file
+    try {
+      updateEnvFile({
+        VITE_DATABASE_PROVIDER: 'supabase'
+      });
+    } catch (err: any) {
+      console.error('Falha ao escrever no arquivo .env:', err);
+    }
+
+    // 2. Update active environment in-memory
+    process.env.VITE_DATABASE_PROVIDER = 'supabase';
+    dbProvider = 'supabase';
+
+    // 3. Reinitialize active pool
+    initializePostgresPool();
+
+    return res.json({ 
+      success: true, 
+      message: 'Provedor alterado com sucesso para Supabase!' 
+    });
+  } else {
+    return res.status(400).json({ error: 'Provedor de banco de dados inválido.' });
+  }
+});
 
 // API Status
 app.get('/api/db/status', async (req, res) => {

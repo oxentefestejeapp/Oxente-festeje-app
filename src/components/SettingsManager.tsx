@@ -273,6 +273,118 @@ export function SettingsManager({
   const [dbErrorMsg, setDbErrorMsg] = useState<string | null>(null);
   const [copiedMigration, setCopiedMigration] = useState(false);
 
+  // States for AWS RDS/Custom PostgreSQL dynamic configuration
+  const [dbProviderSelection, setDbProviderSelection] = useState<'supabase' | 'aws'>('supabase');
+  const [pgHost, setPgHost] = useState('');
+  const [pgPort, setPgPort] = useState('5432');
+  const [pgUser, setPgUser] = useState('postgres');
+  const [pgPassword, setPgPassword] = useState('');
+  const [pgDatabase, setPgDatabase] = useState('');
+  const [pgSsl, setPgSsl] = useState(true);
+  const [isSavingPgConfig, setIsSavingPgConfig] = useState(false);
+  const [pgConfigSuccessMsg, setPgConfigSuccessMsg] = useState<string | null>(null);
+  const [pgConfigErrorMsg, setPgConfigErrorMsg] = useState<string | null>(null);
+
+  // Load existing database config on mount from active server configuration
+  useEffect(() => {
+    const fetchDbConfig = async () => {
+      try {
+        const res = await fetch('/api/db/config');
+        if (res.ok) {
+          const data = await res.json();
+          setDbProviderSelection(data.provider || 'supabase');
+          setPgHost(data.pgHost || '');
+          setPgPort(data.pgPort || '5432');
+          setPgUser(data.pgUser || 'postgres');
+          setPgPassword(data.pgPassword || '');
+          setPgDatabase(data.pgDatabase || '');
+          setPgSsl(data.pgSsl !== false);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar configuração de banco de dados do servidor:', err);
+      }
+    };
+    fetchDbConfig();
+  }, []);
+
+  const handleSavePgConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingPgConfig(true);
+    setPgConfigSuccessMsg(null);
+    setPgConfigErrorMsg(null);
+
+    try {
+      const res = await fetch('/api/db/configure', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          provider: 'aws',
+          pgHost: pgHost.trim(),
+          pgPort: pgPort.trim(),
+          pgUser: pgUser.trim(),
+          pgPassword,
+          pgDatabase: pgDatabase.trim(),
+          pgSsl
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao salvar configurações do PostgreSQL.');
+      }
+
+      setPgConfigSuccessMsg('Banco de dados PostgreSQL conectado e sincronizado com sucesso!');
+      setDbProviderSelection('aws');
+      
+      // Reload page after a delay to initialize socket.io channels in client-side Supabase mapper
+      setTimeout(() => {
+        window.location.reload();
+      }, 2500);
+
+    } catch (err: any) {
+      setPgConfigErrorMsg(err.message || 'Falha de comunicação com o servidor.');
+    } finally {
+      setIsSavingPgConfig(false);
+    }
+  };
+
+  const handleSwitchToSupabase = async () => {
+    setIsSavingPgConfig(true);
+    setPgConfigSuccessMsg(null);
+    setPgConfigErrorMsg(null);
+
+    try {
+      const res = await fetch('/api/db/configure', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          provider: 'supabase'
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao alterar provedor para Supabase.');
+      }
+
+      setPgConfigSuccessMsg('Alterado para Supabase! Carregando conexões locais...');
+      setDbProviderSelection('supabase');
+      
+      setTimeout(() => {
+        window.location.reload();
+      }, 2500);
+
+    } catch (err: any) {
+      setPgConfigErrorMsg(err.message || 'Falha ao alterar provedor de banco.');
+    } finally {
+      setIsSavingPgConfig(false);
+    }
+  };
+
   const handleSaveSupabaseConfig = (e: React.FormEvent) => {
     e.preventDefault();
     if (!supUrl || !supKey) {
@@ -1189,12 +1301,10 @@ export function SettingsManager({
             <Cloud className="h-5 w-5 text-brand-pink shrink-0 animate-pulse" />
             <div>
               <h3 className="font-display font-semibold text-base text-zinc-100">
-                {import.meta.env.VITE_DATABASE_PROVIDER === 'aws' ? 'Banco de Dados em Nuvem (AWS PostgreSQL)' : 'Banco de Dados Supabase (Nuvem)'}
+                Sincronização de Banco de Dados
               </h3>
               <p className="text-[10px] text-zinc-450 mt-0.5">
-                {import.meta.env.VITE_DATABASE_PROVIDER === 'aws' 
-                  ? 'Sincronização automática em tempo real hospedada de forma segura na nuvem AWS.' 
-                  : 'Sincronize estoque e vendas em tempo real para hospedar em Hostinger ou localmente'}
+                Alterne e configure o banco de dados do seu aplicativo de forma dinâmica e descomplicada.
               </p>
             </div>
           </div>
@@ -1244,24 +1354,150 @@ export function SettingsManager({
           </div>
         )}
 
-        {import.meta.env.VITE_DATABASE_PROVIDER === 'aws' ? (
-          /* AWS Connection Panel (Clean, no fields) */
-          <div className="bg-zinc-950/40 border border-zinc-850 p-5 rounded-2xl space-y-3.5">
-            <div className="flex items-center gap-2 text-emerald-400 text-xs font-bold">
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-              </span>
-              <span>Conectado à Infraestrutura AWS RDS (PostgreSQL)</span>
+        {/* Provedor selector buttons */}
+        <div className="grid grid-cols-2 bg-zinc-950 p-1.5 rounded-xl border border-zinc-850 gap-2">
+          <button
+            type="button"
+            onClick={handleSwitchToSupabase}
+            disabled={isSavingPgConfig}
+            className={`py-2.5 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              dbProviderSelection === 'supabase'
+                ? 'bg-brand-pink text-black shadow-sm font-extrabold'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50'
+            }`}
+          >
+            <Database className="h-3.5 w-3.5 shrink-0" />
+            <span>Supabase (Nuvem Direta)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setDbProviderSelection('aws')}
+            disabled={isSavingPgConfig}
+            className={`py-2.5 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+              dbProviderSelection === 'aws'
+                ? 'bg-brand-pink text-black shadow-sm font-extrabold'
+                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50'
+            }`}
+          >
+            <Cloud className="h-3.5 w-3.5 shrink-0" />
+            <span>AWS PostgreSQL / Hostinger</span>
+          </button>
+        </div>
+
+        {dbProviderSelection === 'aws' ? (
+          /* Dynamic AWS PostgreSQL Connection Panel */
+          <div className="space-y-4">
+            <div className="p-4 bg-zinc-950 border border-zinc-850 rounded-xl space-y-2 text-[11px] text-zinc-400 leading-relaxed">
+              <p className="font-semibold text-zinc-200 flex items-center gap-1.5">
+                <Terminal className="h-4 w-4 text-brand-pink" />
+                Hospedagem Hostinger / Banco Próprio
+              </p>
+              <p>
+                Insira as credenciais do seu banco de dados PostgreSQL abaixo. O servidor irá testar a conexão antes de aplicar as mudanças. Ao salvar, as tabelas serão criadas de forma automática!
+              </p>
             </div>
-            <p className="text-zinc-400 leading-relaxed text-[11px]">
-              O aplicativo foi desvinculado com sucesso do Supabase. Todos os seus dados de produtos, estoque e histórico de vendas agora são mantidos de forma segura e síncrona na nuvem da AWS.
-            </p>
-            <div className="p-3 bg-zinc-900/50 border border-zinc-800/80 rounded-xl text-[10px] text-zinc-500 space-y-1">
-              <p>📍 Provedor Ativo: <strong className="text-zinc-300">Amazon Web Services (RDS/EC2 Proxy)</strong></p>
-              <p>🔒 Segurança: <strong className="text-zinc-300">Criptografia SSL de ponta a ponta (Servidor-para-Banco)</strong></p>
-              <p>⚙️ Configuração: <strong className="text-zinc-300">Gerenciada internamente (Zero credenciais expostas no navegador)</strong></p>
-            </div>
+
+            <form onSubmit={handleSavePgConfig} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">HOST (Endpoint AWS / Hostinger)</label>
+                  <input
+                    type="text"
+                    value={pgHost}
+                    onChange={(e) => setPgHost(e.target.value)}
+                    placeholder="oxentenuvem.cfmssismksw6.us-east-2.rds.amazonaws.com"
+                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">PORTA</label>
+                  <input
+                    type="text"
+                    value={pgPort}
+                    onChange={(e) => setPgPort(e.target.value)}
+                    placeholder="5432"
+                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">USUÁRIO</label>
+                  <input
+                    type="text"
+                    value={pgUser}
+                    onChange={(e) => setPgUser(e.target.value)}
+                    placeholder="postgres"
+                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">SENHA DO BANCO</label>
+                  <input
+                    type="password"
+                    value={pgPassword}
+                    onChange={(e) => setPgPassword(e.target.value)}
+                    placeholder="Sua senha do banco PostgreSQL"
+                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">NOME DO BANCO DE DADOS (Database)</label>
+                  <input
+                    type="text"
+                    value={pgDatabase}
+                    onChange={(e) => setPgDatabase(e.target.value)}
+                    placeholder="oxentenuvem"
+                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">SSL SEGURO</label>
+                  <select
+                    value={String(pgSsl)}
+                    onChange={(e) => setPgSsl(e.target.value === 'true')}
+                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none transition-all"
+                  >
+                    <option value="true">Habilitado (SSL Criptografado - Recomendado)</option>
+                    <option value="false">Desabilitado</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                <button
+                  type="submit"
+                  disabled={isSavingPgConfig}
+                  className="px-5 py-3.5 bg-brand-pink hover:bg-brand-pink/90 disabled:bg-zinc-850 disabled:text-zinc-550 text-black font-extrabold rounded-xl transition-all cursor-pointer text-xs flex-1 flex items-center justify-center gap-1.5 active:scale-97 shadow-md"
+                >
+                  {isSavingPgConfig ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Testando e Salvando Conexão...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      <span>Salvar e Sincronizar Banco de Dados</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Feedback messages */}
+              {pgConfigSuccessMsg && (
+                <div className="p-3.5 bg-emerald-950/30 border border-emerald-900/40 rounded-xl text-emerald-300 text-xs font-semibold animate-fade-in text-center">
+                  {pgConfigSuccessMsg}
+                </div>
+              )}
+              {pgConfigErrorMsg && (
+                <div className="p-3.5 bg-red-950/25 border border-red-900/30 rounded-xl text-red-300 text-xs font-semibold animate-fade-in leading-relaxed">
+                  {pgConfigErrorMsg}
+                </div>
+              )}
+            </form>
           </div>
         ) : (
           /* Supabase Legacy Panel */
