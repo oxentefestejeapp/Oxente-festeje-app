@@ -6,8 +6,49 @@ import pg from 'pg';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
 import fs from 'fs';
+import AWS from 'aws-sdk';
+import https from 'https';
 
 dotenv.config();
+
+// Configure AWS SDK region as requested
+AWS.config.update({ region: 'us-east-2' });
+
+// Function to safely download AWS global-bundle.pem if not present
+function downloadRdsCertificate(): Promise<void> {
+  return new Promise((resolve) => {
+    const pemPath = path.join(process.cwd(), 'global-bundle.pem');
+    if (fs.existsSync(pemPath)) {
+      console.log('✅ [AWS Certificate] global-bundle.pem já existe localmente.');
+      resolve();
+      return;
+    }
+
+    console.log('📥 [AWS Certificate] global-bundle.pem não encontrado. Baixando da AWS Truststore...');
+    const file = fs.createWriteStream(pemPath);
+    https.get('https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem', (response) => {
+      if (response.statusCode !== 200) {
+        console.error(`❌ [AWS Certificate] Falha ao baixar: Status ${response.statusCode}`);
+        file.close();
+        fs.unlink(pemPath, () => {});
+        resolve();
+        return;
+      }
+
+      response.pipe(file);
+      file.on('finish', () => {
+        file.close();
+        console.log('✅ [AWS Certificate] global-bundle.pem baixado com sucesso!');
+        resolve();
+      });
+    }).on('error', (err) => {
+      console.error('❌ [AWS Certificate] Erro de download:', err.message);
+      file.close();
+      fs.unlink(pemPath, () => {});
+      resolve();
+    });
+  });
+}
 
 // Register global safety error handlers to keep the server running and prevent unexpected crashes
 process.on('uncaughtException', (err) => {
@@ -68,15 +109,35 @@ let dbProvider = 'aws';
 let pool: pg.Pool | null = null;
 
 function initializePostgresPool() {
-  const host = process.env.PG_HOST || process.env.PGHOST;
-  if (dbProvider === 'aws' && host && host.trim() !== '') {
+  let host = process.env.PG_HOST || process.env.PGHOST;
+  if (!host || host.trim() === '') {
+    host = 'oxentenuvem.cfmssismksw6.us-east-2.rds.amazonaws.com';
+  }
+
+  if (dbProvider === 'aws') {
+    const port = parseInt(process.env.PG_PORT || process.env.PGPORT || '5432', 10);
+    const user = (process.env.PG_USER || process.env.PGUSER || 'postgres').trim();
+    const password = process.env.PG_PASSWORD || process.env.PGPASSWORD || '69oxente69';
+    const database = (process.env.PG_DATABASE || process.env.PGDATABASE || 'oxentenuvem').trim();
+
+    let sslConfig: any = { rejectUnauthorized: false };
+    const pemPath = path.join(process.cwd(), 'global-bundle.pem');
+    if (fs.existsSync(pemPath)) {
+      try {
+        sslConfig.ca = fs.readFileSync(pemPath).toString();
+        console.log('🔒 [AWS Postgres] Usando arquivo global-bundle.pem para validação SSL');
+      } catch (err: any) {
+        console.error('⚠️ [AWS Postgres] Erro ao ler certificado global-bundle.pem:', err.message);
+      }
+    }
+
     const pgConfig = {
       host: host.trim(),
-      port: parseInt(process.env.PG_PORT || process.env.PGPORT || '5432', 10),
-      user: (process.env.PG_USER || process.env.PGUSER || '').trim(),
-      password: process.env.PG_PASSWORD || process.env.PGPASSWORD || '',
-      database: (process.env.PG_DATABASE || process.env.PGDATABASE || '').trim(),
-      ssl: process.env.PG_SSL === 'false' ? false : { rejectUnauthorized: false }
+      port,
+      user,
+      password,
+      database,
+      ssl: process.env.PG_SSL === 'false' ? false : sslConfig
     };
 
     console.log('🔌 [AWS Postgres] Inicializando pool de conexão para:', pgConfig.host);
@@ -103,8 +164,10 @@ function initializePostgresPool() {
   }
 }
 
-// Run initial database pool setup
-initializePostgresPool();
+// Run initial database pool setup after ensuring AWS SSL Certificate is ready
+downloadRdsCertificate().then(() => {
+  initializePostgresPool();
+});
 
 // Socket.io Server Setup
 const io = new Server(httpServer, {
