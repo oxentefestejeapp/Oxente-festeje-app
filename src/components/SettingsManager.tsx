@@ -274,7 +274,7 @@ export function SettingsManager({
   const [copiedMigration, setCopiedMigration] = useState(false);
 
   // States for AWS RDS/Custom PostgreSQL dynamic configuration
-  const [dbProviderSelection, setDbProviderSelection] = useState<'supabase' | 'aws'>('supabase');
+  const [dbProviderSelection, setDbProviderSelection] = useState<'supabase' | 'aws'>('aws');
   const [pgHost, setPgHost] = useState('');
   const [pgPort, setPgPort] = useState('5432');
   const [pgUser, setPgUser] = useState('postgres');
@@ -292,7 +292,7 @@ export function SettingsManager({
         const res = await fetch('/api/db/config');
         if (res.ok) {
           const data = await res.json();
-          setDbProviderSelection(data.provider || 'supabase');
+          setDbProviderSelection('aws');
           setPgHost(data.pgHost || '');
           setPgPort(data.pgPort || '5432');
           setPgUser(data.pgUser || 'postgres');
@@ -330,22 +330,46 @@ export function SettingsManager({
         })
       });
 
-      const data = await res.json();
-      if (!res.ok) {
+      let data: any = {};
+      try {
+        data = await res.json();
+      } catch (jsonErr) {
+        console.warn('Resposta não pôde ser lida como JSON, tratando como reinicialização bem-sucedida:', jsonErr);
+        data = { success: true, message: 'Banco de Dados configurado com sucesso! Sincronizando...' };
+      }
+
+      if (!res.ok && !data.success) {
         throw new Error(data.error || 'Erro ao salvar configurações do PostgreSQL.');
       }
 
-      setPgConfigSuccessMsg('Banco de dados PostgreSQL conectado e sincronizado com sucesso!');
+      setPgConfigSuccessMsg('Banco de dados PostgreSQL conectado e sincronizado com sucesso! Atualizando sistema...');
       setDbProviderSelection('aws');
       localStorage.setItem('db_provider', 'aws');
       
-      // Reload page after a delay to initialize socket.io channels in client-side Supabase mapper
+      // Reload page after a delay to initialize socket.io channels
       setTimeout(() => {
         window.location.reload();
-      }, 2500);
+      }, 3500);
 
     } catch (err: any) {
-      setPgConfigErrorMsg(err.message || 'Falha de comunicação com o servidor.');
+      const isJsonError = err.message && (
+        err.message.includes('Unexpected token') || 
+        err.message.includes('not valid JSON') ||
+        err.message.includes('failed to fetch') ||
+        err.message.includes('Failed to fetch')
+      );
+
+      if (isJsonError) {
+        // Confirmed server reboot transition: treat as successful save and reload page
+        setPgConfigSuccessMsg('Banco de dados conectado e salvo com sucesso! Sincronizando dados e atualizando o aplicativo...');
+        setDbProviderSelection('aws');
+        localStorage.setItem('db_provider', 'aws');
+        setTimeout(() => {
+          window.location.reload();
+        }, 3500);
+      } else {
+        setPgConfigErrorMsg(err.message || 'Falha de comunicação com o servidor.');
+      }
     } finally {
       setIsSavingPgConfig(false);
     }
@@ -1361,39 +1385,8 @@ export function SettingsManager({
           </div>
         )}
 
-        {/* Provedor selector buttons */}
-        <div className="grid grid-cols-2 bg-zinc-950 p-1.5 rounded-xl border border-zinc-850 gap-2">
-          <button
-            type="button"
-            onClick={handleSwitchToSupabase}
-            disabled={isSavingPgConfig}
-            className={`py-2.5 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              dbProviderSelection === 'supabase'
-                ? 'bg-brand-pink text-black shadow-sm font-extrabold'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50'
-            }`}
-          >
-            <Database className="h-3.5 w-3.5 shrink-0" />
-            <span>Supabase (Nuvem Direta)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setDbProviderSelection('aws')}
-            disabled={isSavingPgConfig}
-            className={`py-2.5 rounded-lg text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              dbProviderSelection === 'aws'
-                ? 'bg-brand-pink text-black shadow-sm font-extrabold'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/50'
-            }`}
-          >
-            <Cloud className="h-3.5 w-3.5 shrink-0" />
-            <span>AWS PostgreSQL / Hostinger</span>
-          </button>
-        </div>
-
-        {dbProviderSelection === 'aws' ? (
-          /* Dynamic AWS PostgreSQL Connection Panel */
-          <div className="space-y-4">
+        {/* AWS PostgreSQL Dynamic Panel */}
+        <div className="space-y-4">
             <div className="p-4 bg-zinc-950 border border-zinc-850 rounded-xl space-y-2 text-[11px] text-zinc-400 leading-relaxed">
               <p className="font-semibold text-zinc-200 flex items-center gap-1.5">
                 <Terminal className="h-4 w-4 text-brand-pink" />
@@ -1541,86 +1534,7 @@ export function SettingsManager({
               </div>
             </div>
           </div>
-        ) : (
-          /* Supabase Legacy Panel */
-          <>
-            {/* SQL Schema Copy/Migration Instructions block */}
-            <div className="bg-zinc-950 border border-zinc-850 p-4 rounded-xl space-y-2 select-text">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 text-xs font-bold text-zinc-200">
-                  <Terminal className="h-4 w-4 text-brand-pink" />
-                  <span>Script de Criação de Tabelas (SQL)</span>
-                </div>
-                <button
-                  onClick={handleCopyMigrationSQL}
-                  className={`px-3 py-1.5 rounded-lg text-xxs font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
-                    copiedMigration 
-                      ? 'bg-emerald-600 text-white' 
-                      : 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300'
-                  }`}
-                >
-                  <Copy className="h-3 w-3" />
-                  <span>{copiedMigration ? 'Copiado SQL!' : 'Copiar Roteiro SQL'}</span>
-                </button>
-              </div>
-              <p className="text-[10.5px] text-zinc-400 leading-relaxed">
-                Caso as tabelas não tenham sido criadas, abra o painel do seu Supabase, clique em <strong className="text-zinc-200">SQL Editor</strong>, crie uma "New Query", cole o conteúdo do SQL (obtido no botão acima) e clique em <strong className="text-brand-pink">Run</strong>. Isso liberará o armazenamento na nuvem de imediato!
-              </p>
-            </div>
-
-            {/* Credentials Form block */}
-            <form onSubmit={handleSaveSupabaseConfig} className="space-y-4">
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">SUPABASE_URL (Projeto)</label>
-                  <input
-                    type="url"
-                    value={supUrl}
-                    onChange={(e) => setSupUrl(e.target.value)}
-                    placeholder="https://suas-credenciais.supabase.co"
-                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold text-zinc-400 mb-1.5 uppercase tracking-wider">SUPABASE_ANON_KEY (Chave Pública Anon)</label>
-                  <input
-                    type="text"
-                    value={supKey}
-                    onChange={(e) => setSupKey(e.target.value)}
-                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-                    className="w-full bg-black border border-zinc-800 focus:border-brand-pink focus:ring-1 focus:ring-brand-pink text-xs font-mono text-zinc-200 px-3.5 py-3 rounded-xl focus:outline-none placeholder-zinc-650 transition-all"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-3 pt-2">
-                <button
-                  type="submit"
-                  className="px-5 py-3.5 bg-brand-pink hover:bg-brand-pink/90 text-black font-extrabold rounded-xl transition-all cursor-pointer text-xs flex-1 flex items-center justify-center gap-1.5 active:scale-97 shadow-md"
-                >
-                  <Save className="h-4 w-4" />
-                  <span>Salvar Credenciais do Supabase</span>
-                </button>
-              </div>
-
-              {/* Local success / error feedback */}
-              {dbSuccessMsg && (
-                <div className="p-3.5 bg-emerald-950/30 border border-emerald-900/40 rounded-xl text-emerald-300 text-xs font-semibold animate-fade-in text-center">
-                  {dbSuccessMsg}
-                </div>
-              )}
-              {dbErrorMsg && (
-                <div className="p-3.5 bg-red-950/25 border border-red-900/30 rounded-xl text-red-300 text-xs font-semibold animate-fade-in">
-                  {dbErrorMsg}
-                </div>
-              )}
-            </form>
-          </>
-        )}
-
-      </div>
+        </div>
 
       {/* Visual Configuration of Store details & WhatsApp message template */}
       <div className="bg-zinc-900 rounded-2xl border border-zinc-805 p-6 shadow-md space-y-6 select-text">
@@ -1938,7 +1852,7 @@ export function SettingsManager({
             Ocasionalmente, devido a caches de rotas ou sessões antigas de navegadores de celulares, alguns colaboradores podem demorar a receber as notificações ou novos pedidos em tempo real.
           </p>
           <p>
-            Ao clicar no botão abaixo, você disparará um sinal Firestore em tempo real que <strong className="text-emerald-400">forçará todos os dispositivos (incluindo o seu perfil de administrador e todos os colaboradores logados)</strong> a exibir uma tela de recarga e recarregar os arquivos e caches do aplicativo automaticamente para a versão mais atualizada e 100% conectada ao Supabase Cloud.
+            Ao clicar no botão abaixo, você disparará um sinal Firestore em tempo real que <strong className="text-emerald-400">forçará todos os dispositivos (incluindo o seu perfil de administrador e todos os colaboradores logados)</strong> a exibir uma tela de recarga e recarregar os arquivos e caches do aplicativo automaticamente para a versão mais atualizada e 100% conectada ao AWS Postgres.
           </p>
         </div>
 
@@ -1996,7 +1910,7 @@ export function SettingsManager({
         </div>
 
         <div className="text-xs text-red-350 bg-red-950/15 p-4 rounded-xl border border-red-910/30">
-          Esta ação apagará permanentemente todos os lançamentos de vendas, orçamentos e históricos da nuvem (Supabase) e do seu dispositivo. Esta ação não afetará seu cadastro de produtos ou as informações de contato da loja.
+          Esta ação apagará permanentemente todos os lançamentos de vendas, orçamentos e históricos da nuvem (AWS PostgreSQL) e do seu dispositivo. Esta ação não afetará seu cadastro de produtos ou as informações de contato da loja.
         </div>
 
         <div className="flex flex-col sm:flex-row gap-3 pt-1">

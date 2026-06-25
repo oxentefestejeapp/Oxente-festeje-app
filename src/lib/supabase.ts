@@ -14,12 +14,7 @@ export const getSupabaseConfig = () => {
 };
 
 export const getActiveDatabaseProvider = (): 'supabase' | 'aws' => {
-  if (typeof window === 'undefined') return 'aws';
-  const localProvider = localStorage.getItem('db_provider');
-  if (localProvider === 'aws' || localProvider === 'supabase') {
-    return localProvider;
-  }
-  return (import.meta.env.VITE_DATABASE_PROVIDER === 'aws' || !getSupabaseConfig().isConfigured) ? 'aws' : 'supabase';
+  return 'aws';
 };
 
 // Establish Socket.io connection for real-time push synchronization when in AWS mode

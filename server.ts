@@ -62,19 +62,20 @@ function updateEnvFile(updates: Record<string, string>) {
 }
 
 // Database Provider Configuration (reassignable for dynamic switching)
-let dbProvider = process.env.VITE_DATABASE_PROVIDER || 'supabase';
+let dbProvider = 'aws';
 
 // Initialize PostgreSQL Connection Pool if configured for AWS
 let pool: pg.Pool | null = null;
 
 function initializePostgresPool() {
-  if (dbProvider === 'aws') {
+  const host = process.env.PG_HOST || process.env.PGHOST;
+  if (dbProvider === 'aws' && host && host.trim() !== '') {
     const pgConfig = {
-      host: process.env.PG_HOST || process.env.PGHOST,
+      host: host.trim(),
       port: parseInt(process.env.PG_PORT || process.env.PGPORT || '5432', 10),
-      user: process.env.PG_USER || process.env.PGUSER,
-      password: process.env.PG_PASSWORD || process.env.PGPASSWORD,
-      database: process.env.PG_DATABASE || process.env.PGDATABASE,
+      user: (process.env.PG_USER || process.env.PGUSER || '').trim(),
+      password: process.env.PG_PASSWORD || process.env.PGPASSWORD || '',
+      database: (process.env.PG_DATABASE || process.env.PGDATABASE || '').trim(),
       ssl: process.env.PG_SSL === 'false' ? false : { rejectUnauthorized: false }
     };
 
@@ -94,7 +95,7 @@ function initializePostgresPool() {
       console.error('❌ [AWS Postgres] Falha na criação/verificação de tabelas no banco de dados:', err);
     });
   } else {
-    console.log('📡 [Supabase] Executando em modo de comunicação direta com o Supabase.');
+    console.log('📡 [AWS Postgres] Executando em modo não configurado (aguardando credenciais na página de configurações).');
     if (pool) {
       pool.end().catch(err => console.error('Erro ao encerrar pool:', err));
       pool = null;
