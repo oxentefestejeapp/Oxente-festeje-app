@@ -440,18 +440,6 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     // 2. Text Search filtering
     const term = salesSearchTerm.toLowerCase().trim();
     if (!term) {
-      // Se não houver pesquisa textual, omitir pedidos que já foram Entregues há mais de 15 dias
-      if (sale.statusProducao === 'Entregue') {
-        try {
-          const saleDate = new Date(sale.data);
-          const now = new Date();
-          const diffTime = Math.abs(now.getTime() - saleDate.getTime());
-          const diffDays = diffTime / (1000 * 60 * 60 * 24);
-          if (diffDays > 15) return false;
-        } catch {
-          // fail safe
-        }
-      }
       return true;
     }
     
@@ -462,6 +450,27 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     
     return matchName || matchProduct || matchOrderNum || matchPhone;
   });
+
+  // Filter out delivered sales that are older than 15 days from the list, unless there is an active search term
+  const displayedSales = useMemo(() => {
+    const term = salesSearchTerm.toLowerCase().trim();
+    return filteredSales.filter(sale => {
+      if (!term) {
+        if (sale.statusProducao === 'Entregue') {
+          try {
+            const saleDate = new Date(sale.data);
+            const now = new Date();
+            const diffTime = Math.abs(now.getTime() - saleDate.getTime());
+            const diffDays = diffTime / (1000 * 60 * 60 * 24);
+            if (diffDays > 15) return false;
+          } catch {
+            // fail safe
+          }
+        }
+      }
+      return true;
+    });
+  }, [filteredSales, salesSearchTerm]);
 
   // Filter and Sort products that are available in stock (simplified to alphabetical order)
   const availableProducts = useMemo(() => {
@@ -2795,7 +2804,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
             <div className="p-6 text-center text-zinc-500 text-sm">
               Nenhuma venda registrada ainda no sistema.
             </div>
-          ) : filteredSales.length === 0 ? (
+          ) : displayedSales.length === 0 ? (
             <div className="p-8 text-center bg-black/25 rounded-xl border border-dashed border-zinc-850">
               <p className="text-zinc-450 text-sm font-medium">Nenhum resultado encontrado</p>
               <p className="text-xs text-zinc-600 mt-1">
@@ -2808,8 +2817,8 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               onScroll={(e) => {
                 const target = e.currentTarget;
                 if (target.scrollHeight - target.scrollTop <= target.clientHeight + 60) {
-                  if (visibleSalesCount < filteredSales.length) {
-                    setVisibleSalesCount(prev => Math.min(prev + 10, filteredSales.length));
+                  if (visibleSalesCount < displayedSales.length) {
+                    setVisibleSalesCount(prev => Math.min(prev + 10, displayedSales.length));
                   }
                 }
               }}
@@ -2826,7 +2835,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/40">
-                    {[...filteredSales]
+                    {[...displayedSales]
                       .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
                       .slice(0, visibleSalesCount)
                       .map((sale) => {
@@ -3021,9 +3030,9 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 </table>
               </div>
 
-              {filteredSales.length > visibleSalesCount && (
+              {displayedSales.length > visibleSalesCount && (
                 <div className="py-3 text-center text-[10px] text-zinc-500 font-bold border-t border-zinc-800/45 bg-zinc-950/20 select-none">
-                  Role para ver mais ({visibleSalesCount} de {filteredSales.length} vendas exibidas)
+                  Role para ver mais ({visibleSalesCount} de {displayedSales.length} vendas exibidas)
                 </div>
               )}
             </div>
