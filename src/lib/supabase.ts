@@ -870,6 +870,25 @@ const realDbSupabase = {
     }
   },
 
+  async triggerAllUsersReload(newTrigger: number): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('oxente_store_info').upsert({
+        key: 'app_version_trigger',
+        nome: String(newTrigger),
+        updated_at: new Date().toISOString()
+      });
+      if (error) {
+        lastSupabaseError = error;
+        console.error('Erro ao acionar recarregamento no Supabase:', error.message);
+        return false;
+      }
+      return true;
+    } catch (e: any) {
+      console.error('Falha geral ao acionar recarregamento no Supabase:', e);
+      return false;
+    }
+  },
+
   async fetchStoreInfo(): Promise<StoreInfo | null> {
     try {
       const { data, error } = await supabase.from('oxente_store_info').select('*').eq('key', 'default').single();
@@ -932,6 +951,25 @@ const realDbSupabase = {
         return cached ? JSON.parse(cached) : [];
       }
       console.warn('Erro geral de conexão com Supabase ao buscar usuários:', e);
+      return null;
+    }
+  },
+
+  async getUser(id: string): Promise<any | null> {
+    if (!isUsersTableSupported) {
+      const list = await this.fetchUsers();
+      return list ? list.find((u: any) => u.id === id) || null : null;
+    }
+    try {
+      const { data, error } = await supabase.from('oxente_users').select('*').eq('id', id).maybeSingle();
+      if (error) {
+        lastSupabaseError = error;
+        console.warn('Erro ao carregar usuário do Supabase:', error.message);
+        return null;
+      }
+      return data;
+    } catch (e) {
+      console.warn('Erro geral ao carregar usuário do Supabase:', e);
       return null;
     }
   },
@@ -1271,6 +1309,11 @@ const sandboxDbSupabase = {
     return true;
   },
 
+  triggerAllUsersReload: async (newTrigger: number): Promise<boolean> => {
+    localStorage.setItem('oxente_last_reload_trigger', String(newTrigger));
+    return true;
+  },
+
   fetchStoreInfo: async (): Promise<StoreInfo | null> => {
     const cached = localStorage.getItem('oxente_store_info');
     if (cached) {
@@ -1292,6 +1335,11 @@ const sandboxDbSupabase = {
   fetchUsers: async (): Promise<any[]> => {
     const cached = localStorage.getItem('oxente_custom_users_local');
     return cached ? JSON.parse(cached) : [];
+  },
+
+  getUser: async (id: string): Promise<any | null> => {
+    const list = await sandboxDbSupabase.fetchUsers();
+    return list.find((u: any) => u.id === id) || null;
   },
 
   saveUser: async (user: any): Promise<boolean> => {
@@ -1549,6 +1597,23 @@ const awsDbClient = {
     }
   },
 
+  triggerAllUsersReload: async (newTrigger: number): Promise<boolean> => {
+    try {
+      const res = await fetch('/api/db/store-info', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          key: 'app_version_trigger',
+          nome: String(newTrigger)
+        })
+      });
+      return res.ok;
+    } catch (e) {
+      console.error('Erro ao acionar recarregamento no AWS Postgres:', e);
+      return false;
+    }
+  },
+
   fetchStoreInfo: async (): Promise<StoreInfo | null> => {
     try {
       const res = await fetch('/api/db/store-info');
@@ -1576,6 +1641,16 @@ const awsDbClient = {
     } catch (e) {
       console.error('Erro ao buscar usuários no AWS Postgres:', e);
       return [];
+    }
+  },
+
+  getUser: async (id: string): Promise<any | null> => {
+    try {
+      const list = await awsDbClient.fetchUsers();
+      return list ? list.find((u: any) => u.id === id) || null : null;
+    } catch (e) {
+      console.error('Erro ao obter usuário no AWS Postgres:', e);
+      return null;
     }
   },
 

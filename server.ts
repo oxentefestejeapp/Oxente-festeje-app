@@ -462,10 +462,11 @@ app.get('/api/db/store-info', async (req, res) => {
 // Save Store Info
 app.post('/api/db/store-info', async (req, res) => {
   const store = req.body;
+  const key = store.key || 'default';
   try {
     const query = `
       INSERT INTO oxente_store_info (key, nome, instagram, telefone, endereco, whatsapp_template, updated_at)
-      VALUES ('default', $1, $2, $3, $4, $5, NOW())
+      VALUES ($1, $2, $3, $4, $5, $6, NOW())
       ON CONFLICT (key) DO UPDATE SET
         nome = EXCLUDED.nome,
         instagram = EXCLUDED.instagram,
@@ -475,7 +476,14 @@ app.post('/api/db/store-info', async (req, res) => {
         updated_at = NOW()
       RETURNING *;
     `;
-    const values = [store.nome, store.instagram, store.telefone, store.endereco, store.whatsappTemplate || store.whatsapp_template];
+    const values = [
+      key,
+      store.nome,
+      store.instagram || null,
+      store.telefone || null,
+      store.endereco || null,
+      store.whatsappTemplate || store.whatsapp_template || null
+    ];
     const result = await executeQuery(query, values);
     const saved = result.rows[0];
     broadcastChange('store_changes', { eventType: 'UPDATE', new: saved });

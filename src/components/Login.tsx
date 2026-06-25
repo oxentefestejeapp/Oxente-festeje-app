@@ -99,11 +99,11 @@ export function Login({ onLoginSuccess }: LoginProps) {
     try {
       let userProfile: any = null;
 
-      // 1. Search in live Supabase database if configured and supported
+      // 1. Search in live database if configured and supported
       if (isUsersTableSupported) {
         try {
-          const { data: dbUser, error: dbErr } = await supabase.from('oxente_users').select('*').eq('id', usernameId).maybeSingle();
-          if (dbUser && !dbErr) {
+          const dbUser = await dbSupabase.getUser(usernameId);
+          if (dbUser) {
             // Keep preset password check or any custom password if stored
             const presetMatch = INITIAL_USERS.find(u => u.id === dbUser.id);
             userProfile = {

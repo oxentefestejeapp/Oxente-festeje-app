@@ -309,12 +309,12 @@ export default function App() {
           const userObj = JSON.parse(savedUserStr);
           const userIdNormal = userObj.id || userObj.uid || '';
           if (userIdNormal) {
-            // First load user details directly from Supabase
+            // First load user details directly from database
             const loadProfile = async () => {
               try {
                 if (isUsersTableSupported) {
-                  const { data, error } = await supabase.from('oxente_users').select('*').eq('id', userIdNormal).maybeSingle();
-                  if (data && !error) {
+                  const data = await dbSupabase.getUser(userIdNormal);
+                  if (data) {
                     const enhancedUser = {
                       ...userObj,
                       id: data.id,
@@ -2056,14 +2056,10 @@ export default function App() {
   const handleForceAllUsersUpdate = async (): Promise<void> => {
     try {
       const newTrigger = Date.now();
-      // Store in Supabase oxente_store_info table under key 'app_version_trigger'
-      const { error } = await supabase.from('oxente_store_info').upsert({
-        key: 'app_version_trigger',
-        nome: String(newTrigger),
-        updated_at: new Date().toISOString()
-      });
+      // Store in database oxente_store_info table under key 'app_version_trigger'
+      const success = await dbSupabase.triggerAllUsersReload(newTrigger);
       
-      if (error) throw error;
+      if (!success) throw new Error('Erro ao salvar trigger de atualização no banco de dados.');
       
       // Clear locally
       localStorage.setItem('oxente_last_reload_trigger', String(newTrigger));
