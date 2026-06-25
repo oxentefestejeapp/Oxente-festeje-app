@@ -1211,6 +1211,10 @@ const realDbSupabase = {
       }
       return true;
     }
+  },
+
+  async checkDatabaseChanges(): Promise<{ success: boolean; products?: { count: number; lastUpdated: string | null }; sales?: { count: number; lastUpdated: string | null } } | null> {
+    return null;
   }
 };
 
@@ -1391,6 +1395,10 @@ const sandboxDbSupabase = {
       }
     }
     return true;
+  },
+
+  checkDatabaseChanges: async (): Promise<{ success: boolean; products?: { count: number; lastUpdated: string | null }; sales?: { count: number; lastUpdated: string | null } } | null> => {
+    return null;
   }
 };
 
@@ -1699,6 +1707,22 @@ const awsDbClient = {
     } catch (e) {
       console.error('Erro ao enviar batimento cardíaco no AWS Postgres:', e);
       return false;
+    }
+  },
+
+  checkDatabaseChanges: async (): Promise<{ success: boolean; products?: { count: number; lastUpdated: string | null }; sales?: { count: number; lastUpdated: string | null } } | null> => {
+    try {
+      const res = await fetch('/api/db/sync-check');
+      if (!res.ok) throw new Error('Falha ao verificar status de sincronização');
+      const data = await res.json();
+      return {
+        success: true,
+        products: data.products,
+        sales: data.sales
+      };
+    } catch (e) {
+      console.error('Erro ao verificar alterações no AWS Postgres:', e);
+      return { success: false };
     }
   }
 };

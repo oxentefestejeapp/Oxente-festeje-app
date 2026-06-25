@@ -84,6 +84,91 @@ export const getWeeklyNonBudgetOrdersCount = (salesList: Sale[]): number => {
   }).length;
 };
 
+// Custom Hook to sync local state with AWS Postgres periodically
+function useDatabaseSync(
+  databaseProvider: string,
+  products: Product[],
+  setProducts: React.Dispatch<React.SetStateAction<Product[]>>,
+  sales: Sale[],
+  setSales: React.Dispatch<React.SetStateAction<Sale[]>>
+) {
+  const lastStateRef = useRef<{
+    productsCount: number;
+    productsLastUpdated: string | null;
+    salesCount: number;
+    salesLastUpdated: string | null;
+  } | null>(null);
+
+  useEffect(() => {
+    if (databaseProvider !== 'aws') return;
+
+    let active = true;
+
+    const checkSync = async () => {
+      try {
+        const result = await dbSupabase.checkDatabaseChanges();
+        if (!active || !result || !result.success) return;
+
+        const { products: remoteProds, sales: remoteSales } = result;
+        if (!remoteProds || !remoteSales) return;
+
+        // If we don't have a baseline state yet, set it and return
+        if (!lastStateRef.current) {
+          lastStateRef.current = {
+            productsCount: remoteProds.count,
+            productsLastUpdated: remoteProds.lastUpdated,
+            salesCount: remoteSales.count,
+            salesLastUpdated: remoteSales.lastUpdated
+          };
+          console.log('🔄 [useDatabaseSync] Linha de base inicializada:', lastStateRef.current);
+          return;
+        }
+
+        const prev = lastStateRef.current;
+        const productsChanged = remoteProds.count !== prev.productsCount || remoteProds.lastUpdated !== prev.productsLastUpdated;
+        const salesChanged = remoteSales.count !== prev.salesCount || remoteSales.lastUpdated !== prev.salesLastUpdated;
+
+        if (productsChanged) {
+          console.log(`🔄 [useDatabaseSync] Alteração em Produtos detectada (Qtd: ${prev.productsCount} -> ${remoteProds.count}). Sincronizando...`);
+          const freshProducts = await dbSupabase.fetchProducts();
+          if (active && freshProducts) {
+            setProducts(freshProducts);
+            localStorage.setItem('oxente_products', JSON.stringify(freshProducts));
+          }
+        }
+
+        if (salesChanged) {
+          console.log(`🔄 [useDatabaseSync] Alteração em Vendas detectada (Qtd: ${prev.salesCount} -> ${remoteSales.count}). Sincronizando...`);
+          const freshSales = await dbSupabase.fetchSales();
+          if (active && freshSales) {
+            setSales(freshSales);
+            localStorage.setItem('oxente_sales', JSON.stringify(freshSales));
+          }
+        }
+
+        // Update the baseline state
+        lastStateRef.current = {
+          productsCount: remoteProds.count,
+          productsLastUpdated: remoteProds.lastUpdated,
+          salesCount: remoteSales.count,
+          salesLastUpdated: remoteSales.lastUpdated
+        };
+      } catch (err) {
+        console.error('❌ [useDatabaseSync] Erro na verificação periódica do AWS Postgres:', err);
+      }
+    };
+
+    // Run immediately and then every 5 seconds
+    checkSync();
+    const interval = setInterval(checkSync, 5000);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [databaseProvider, setProducts, setSales]);
+}
+
 export default function App() {
   // 1. Custom Secure Credentials Auth State
   const [firebaseUser, setFirebaseUser] = useState<any | null>(null);
@@ -113,6 +198,15 @@ export default function App() {
     }
   })());
   const [sales, setSales] = useState<Sale[]>([]);
+
+  // Periodically check for database changes and sync state on AWS Postgres
+  useDatabaseSync(
+    import.meta.env.VITE_DATABASE_PROVIDER || 'supabase',
+    products,
+    setProducts,
+    sales,
+    setSales
+  );
 
   const productsRef = useRef<Product[]>([]);
   const salesRef = useRef<Sale[]>([]);

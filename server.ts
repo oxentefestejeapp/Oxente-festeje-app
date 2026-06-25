@@ -205,6 +205,31 @@ app.get('/api/db/status', async (req, res) => {
   }
 });
 
+// Sync Check API for AWS
+app.get('/api/db/sync-check', async (req, res) => {
+  if (dbProvider !== 'aws') {
+    return res.json({ provider: 'supabase' });
+  }
+  try {
+    const productsRes = await executeQuery('SELECT COUNT(*)::integer as count, COALESCE(MAX(updated_at), NOW()) as last_updated FROM oxente_products');
+    const salesRes = await executeQuery('SELECT COUNT(*)::integer as count, COALESCE(MAX(updated_at), NOW()) as last_updated FROM oxente_sales');
+    
+    res.json({
+      provider: 'aws',
+      products: {
+        count: productsRes.rows[0]?.count || 0,
+        lastUpdated: productsRes.rows[0]?.last_updated || null
+      },
+      sales: {
+        count: salesRes.rows[0]?.count || 0,
+        lastUpdated: salesRes.rows[0]?.last_updated || null
+      }
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Get Products
 app.get('/api/db/products', async (req, res) => {
   try {
