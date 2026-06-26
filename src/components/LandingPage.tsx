@@ -171,68 +171,334 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
     // Play happy instruments audio feedback using web audio synthesizers
     try {
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const now = audioCtx.currentTime;
       
       if (character === 'sanfona') {
-        // High-pitched rapid double harmonized chord notes for accordion
-        const osc1 = audioCtx.createOscillator();
-        const gain1 = audioCtx.createGain();
-        osc1.type = 'triangle';
-        osc1.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
-        osc1.connect(gain1);
-        gain1.connect(audioCtx.destination);
-        gain1.gain.setValueAtTime(0.06, audioCtx.currentTime);
-        gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+        // High-quality Accordion: Rich multi-reed chorused tones with a bellows-squeeze volume curve
+        const playSqueeze = (startTime: number, duration: number, vol: number) => {
+          // Accordion reed frequencies for a happy major chord
+          const freqs = [261.63, 329.63, 392.00, 523.25]; // C4, E4, G4, C5 (C Major Chord)
+          freqs.forEach((f, idx) => {
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+            
+            // Mixing triangle & sawtooth shapes gives that distinct dry "accordion reed" rasp
+            osc.type = idx % 2 === 0 ? 'triangle' : 'sawtooth';
+            // Chorusing effect via subtle pitch detuning
+            osc.frequency.setValueAtTime(f + (idx % 2 === 0 ? 1.8 : -1.8), startTime);
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(750, startTime);
+            filter.frequency.exponentialRampToValueAtTime(1300, startTime + duration * 0.35);
+            filter.frequency.exponentialRampToValueAtTime(550, startTime + duration);
+            
+            osc.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            // Envelope: Simulate pressure swell when bellows are compressed/expanded
+            gainNode.gain.setValueAtTime(0, startTime);
+            gainNode.gain.linearRampToValueAtTime(vol * 0.07, startTime + duration * 0.25);
+            gainNode.gain.linearRampToValueAtTime(vol * 0.07, startTime + duration * 0.65);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+            
+            osc.start(startTime);
+            osc.stop(startTime + duration + 0.05);
+          });
+        };
 
-        const osc2 = audioCtx.createOscillator();
-        const gain2 = audioCtx.createGain();
-        osc2.type = 'triangle';
-        osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
-        osc2.connect(gain2);
-        gain2.connect(audioCtx.destination);
-        gain2.gain.setValueAtTime(0.06, audioCtx.currentTime);
-        gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+        // Play two rapid energetic accordion bellows presses: "wheeze-wheeze!"
+        playSqueeze(now, 0.28, 1.0);
+        playSqueeze(now + 0.32, 0.42, 0.85);
 
-        osc1.start();
-        osc2.start();
-        osc1.stop(audioCtx.currentTime + 0.36);
-        osc2.stop(audioCtx.currentTime + 0.36);
       } else if (character === 'zabumba') {
-        // Low drum thud for Zabumba
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.frequency.setValueAtTime(110, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(35, audioCtx.currentTime + 0.18);
-        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.18);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.19);
+        // High-quality physical Zabumba: Deep pitch-sliding leather skin boom, mid-wood body resonance, and mallet strike click
+        const bufferSize = audioCtx.sampleRate * 0.8;
+        const noiseBuffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const noiseData = noiseBuffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          noiseData[i] = Math.random() * 2 - 1;
+        }
+
+        const playBassThump = (time: number, vol: number) => {
+          // 1. Ultra-deep sub bass boom (sine wave slide)
+          const oscSub = audioCtx.createOscillator();
+          const gainSub = audioCtx.createGain();
+          oscSub.type = 'sine';
+          oscSub.frequency.setValueAtTime(95, time);
+          oscSub.frequency.exponentialRampToValueAtTime(45, time + 0.12);
+          oscSub.frequency.linearRampToValueAtTime(38, time + 0.5);
+
+          // 2. Punchy body drum resonance (triangle wave slide)
+          const oscBody = audioCtx.createOscillator();
+          const gainBody = audioCtx.createGain();
+          oscBody.type = 'triangle';
+          oscBody.frequency.setValueAtTime(160, time);
+          oscBody.frequency.exponentialRampToValueAtTime(65, time + 0.1);
+          oscBody.frequency.linearRampToValueAtTime(48, time + 0.3);
+
+          // 3. Thick leather skin impact (lowpass filtered white noise burst)
+          const noiseNode = audioCtx.createBufferSource();
+          noiseNode.buffer = noiseBuffer;
+          const noiseGain = audioCtx.createGain();
+          const noiseFilter = audioCtx.createBiquadFilter();
+          
+          noiseFilter.type = 'lowpass';
+          noiseFilter.frequency.setValueAtTime(120, time);
+
+          oscSub.connect(gainSub);
+          gainSub.connect(audioCtx.destination);
+
+          oscBody.connect(gainBody);
+          gainBody.connect(audioCtx.destination);
+
+          noiseNode.connect(noiseFilter);
+          noiseFilter.connect(noiseGain);
+          noiseGain.connect(audioCtx.destination);
+
+          // Volume Envelopes - generous levels for a powerful boom
+          gainSub.gain.setValueAtTime(0, time);
+          gainSub.gain.linearRampToValueAtTime(vol * 1.85, time + 0.015);
+          gainSub.gain.exponentialRampToValueAtTime(0.001, time + 0.75); // longer decay for sustained boom!
+
+          gainBody.gain.setValueAtTime(0, time);
+          gainBody.gain.linearRampToValueAtTime(vol * 0.75, time + 0.01);
+          gainBody.gain.exponentialRampToValueAtTime(0.001, time + 0.45);
+
+          noiseGain.gain.setValueAtTime(0, time);
+          noiseGain.gain.linearRampToValueAtTime(vol * 0.85, time + 0.003);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.12);
+
+          oscSub.start(time);
+          oscBody.start(time);
+          noiseNode.start(time);
+
+          oscSub.stop(time + 0.7);
+          oscBody.stop(time + 0.4);
+          noiseNode.stop(time + 0.1);
+        };
+        
+        const playStickTap = (time: number, vol: number) => {
+          // Tight, dry "bacalhau" wooden stick stroke / leather rim slap
+          const noiseNode = audioCtx.createBufferSource();
+          noiseNode.buffer = noiseBuffer;
+          const noiseGain = audioCtx.createGain();
+          const noiseFilter = audioCtx.createBiquadFilter();
+          
+          noiseFilter.type = 'bandpass';
+          noiseFilter.frequency.setValueAtTime(1600, time);
+          noiseFilter.Q.setValueAtTime(4.5, time);
+
+          const oscTap = audioCtx.createOscillator();
+          const gainTap = audioCtx.createGain();
+          oscTap.type = 'triangle';
+          oscTap.frequency.setValueAtTime(950, time);
+          oscTap.frequency.exponentialRampToValueAtTime(400, time + 0.04);
+
+          noiseNode.connect(noiseFilter);
+          noiseFilter.connect(noiseGain);
+          noiseGain.connect(audioCtx.destination);
+
+          oscTap.connect(gainTap);
+          gainTap.connect(audioCtx.destination);
+
+          noiseGain.gain.setValueAtTime(0, time);
+          noiseGain.gain.linearRampToValueAtTime(vol * 0.12, time + 0.002);
+          noiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.055);
+
+          gainTap.gain.setValueAtTime(0, time);
+          gainTap.gain.linearRampToValueAtTime(vol * 0.08, time + 0.001);
+          gainTap.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
+
+          noiseNode.start(time);
+          oscTap.start(time);
+
+          noiseNode.stop(time + 0.07);
+          oscTap.stop(time + 0.05);
+        };
+
+        // Two strong traditional drum beats: "BOOOM! BOOOM!"
+        playBassThump(now, 1.8);            // First massive BOOOM
+        playStickTap(now + 0.18, 0.95);     // Soft stick tap
+        playBassThump(now + 0.38, 1.75);    // Second massive BOOOM
+        playStickTap(now + 0.58, 1.0);      // Soft stick tap
+
       } else if (character === 'triangulo') {
-        // High pitched metallic ping for Triângulo
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1800, audioCtx.currentTime); // Very high ping
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.42);
+        // High-quality metallic Triângulo: Shimmering inharmonic additive synthesis with striker impact clicking
+        const playTriangleDing = (time: number, duration: number, isMuted: boolean, vol: number) => {
+          // Complex metallic steel rod modal frequencies
+          const frequencies = [2420, 2980, 3540, 4110, 5300];
+          
+          const hpFilter = audioCtx.createBiquadFilter();
+          hpFilter.type = 'highpass';
+          hpFilter.frequency.setValueAtTime(2000, time);
+          
+          const bpFilter = audioCtx.createBiquadFilter();
+          bpFilter.type = 'peaking';
+          bpFilter.frequency.setValueAtTime(3200, time);
+          bpFilter.Q.setValueAtTime(1.5, time);
+          bpFilter.gain.setValueAtTime(3, time);
+
+          hpFilter.connect(bpFilter);
+          bpFilter.connect(audioCtx.destination);
+
+          // Steel striker hit click (extremely short bandpassed noise burst)
+          const strikeNoise = audioCtx.createBufferSource();
+          const strikeNoiseGain = audioCtx.createGain();
+          const strikeNoiseFilter = audioCtx.createBiquadFilter();
+
+          const sampleRate = audioCtx.sampleRate;
+          const noiseBuf = audioCtx.createBuffer(1, sampleRate * 0.1, sampleRate);
+          const noiseD = noiseBuf.getChannelData(0);
+          for (let i = 0; i < noiseBuf.length; i++) {
+            noiseD[i] = Math.random() * 2 - 1;
+          }
+          strikeNoise.buffer = noiseBuf;
+
+          strikeNoiseFilter.type = 'bandpass';
+          strikeNoiseFilter.frequency.setValueAtTime(4500, time);
+          strikeNoiseFilter.Q.setValueAtTime(3.0, time);
+
+          strikeNoise.connect(strikeNoiseFilter);
+          strikeNoiseFilter.connect(strikeNoiseGain);
+          strikeNoiseGain.connect(bpFilter);
+
+          strikeNoiseGain.gain.setValueAtTime(0, time);
+          strikeNoiseGain.gain.linearRampToValueAtTime(vol * 0.16, time + 0.001);
+          strikeNoiseGain.gain.exponentialRampToValueAtTime(0.001, time + 0.012);
+
+          // Oscillators for steel body resonance
+          frequencies.forEach((freq, idx) => {
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            osc.type = idx === 0 ? 'sine' : (idx % 2 === 0 ? 'sine' : 'triangle');
+            
+            // Add slight random detune to create beautiful shimmering metallic beat frequencies
+            osc.frequency.setValueAtTime(freq + (Math.random() * 8 - 4), time);
+            
+            osc.connect(gainNode);
+            gainNode.connect(hpFilter);
+            
+            const overtoneVol = idx === 0 ? 1.0 : (1.0 / (idx + 1)) * 0.6;
+            
+            gainNode.gain.setValueAtTime(0, time);
+            gainNode.gain.linearRampToValueAtTime(vol * 0.055 * overtoneVol, time + 0.003);
+            
+            if (isMuted) {
+              gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.045);
+            } else {
+              gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
+            }
+            
+            osc.start(time);
+            osc.stop(time + (isMuted ? 0.06 : duration + 0.05));
+          });
+
+          strikeNoise.start(time);
+          strikeNoise.stop(time + 0.03);
+        };
+
+        // Traditional high-energy brazilian "Ding-chi-chi, Ding-chi-chi" triangle cell!
+        playTriangleDing(now, 0.75, false, 1.0);        // Ringing Open (Ting!)
+        playTriangleDing(now + 0.14, 0.05, true, 0.7);  // Muted slap (chi)
+        playTriangleDing(now + 0.24, 0.05, true, 0.8);  // Muted slap (chi)
+        
+        playTriangleDing(now + 0.35, 0.65, false, 0.95); // Ringing Open (Ting!)
+        playTriangleDing(now + 0.49, 0.05, true, 0.7);  // Muted slap (chi)
+        playTriangleDing(now + 0.59, 0.05, true, 0.8);  // Muted slap (chi)
+        
+        playTriangleDing(now + 0.70, 0.85, false, 1.05); // Resonant ending strike (Ting!)
+
       } else {
-        // Cheerful rapid rising slide for the dancing couple
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(330, audioCtx.currentTime); // E4
-        osc.frequency.exponentialRampToValueAtTime(660, audioCtx.currentTime + 0.3); // up to E5
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
-        osc.start();
-        osc.stop(audioCtx.currentTime + 0.32);
+        // High-quality Casal Dançarino: A gorgeous, short syncopated 1.8-second upbeat Forró rhythmic melody!
+        const playBassBeat = (time: number, freq: number, vol: number) => {
+          const osc = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          osc.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          osc.frequency.setValueAtTime(freq, time);
+          osc.frequency.exponentialRampToValueAtTime(freq * 0.45, time + 0.16);
+          gainNode.gain.setValueAtTime(0, time);
+          gainNode.gain.linearRampToValueAtTime(vol * 0.16, time + 0.01);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, time + 0.16);
+          osc.start(time);
+          osc.stop(time + 0.17);
+        };
+
+        const playTriangleBeat = (time: number, isMuted: boolean, vol: number) => {
+          const osc = audioCtx.createOscillator();
+          const gainNode = audioCtx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(2450, time);
+          osc.connect(gainNode);
+          gainNode.connect(audioCtx.destination);
+          gainNode.gain.setValueAtTime(vol * 0.035, time);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, time + (isMuted ? 0.05 : 0.25));
+          osc.start(time);
+          osc.stop(time + (isMuted ? 0.06 : 0.27));
+        };
+
+        const playChordBeat = (time: number, notes: number[], duration: number, vol: number) => {
+          notes.forEach((f) => {
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            const filter = audioCtx.createBiquadFilter();
+            
+            osc.type = 'triangle';
+            osc.frequency.setValueAtTime(f, time);
+            
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(850, time);
+            
+            osc.connect(filter);
+            filter.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            gainNode.gain.setValueAtTime(0, time);
+            gainNode.gain.linearRampToValueAtTime(vol * 0.032, time + 0.04);
+            gainNode.gain.linearRampToValueAtTime(vol * 0.032, time + duration * 0.7);
+            gainNode.gain.exponentialRampToValueAtTime(0.001, time + duration);
+            
+            osc.start(time);
+            osc.stop(time + duration + 0.04);
+          });
+        };
+
+        const C_maj = [261.63, 329.63, 392.00, 523.25];
+        const G_maj = [246.94, 293.66, 392.00, 493.88];
+        const F_maj = [261.63, 349.23, 440.00, 523.25];
+
+        // Beat 1 (t=0s): C major forró bounce
+        playBassBeat(now, 110, 1.0);
+        playTriangleBeat(now, false, 0.8);
+        playChordBeat(now, C_maj, 0.28, 1.0);
+
+        // Beat 1.5 (t=0.25s): Triangle tap
+        playTriangleBeat(now + 0.25, true, 0.6);
+
+        // Beat 2 (t=0.5s): G major transition
+        playBassBeat(now + 0.5, 98, 0.85);
+        playTriangleBeat(now + 0.5, false, 0.8);
+        playChordBeat(now + 0.5, G_maj, 0.28, 0.9);
+
+        // Beat 2.5 (t=0.75s): Triangle tap
+        playTriangleBeat(now + 0.75, true, 0.6);
+
+        // Beat 3 (t=1.0s): F major accent
+        playBassBeat(now + 1.0, 110, 1.0);
+        playTriangleBeat(now + 1.0, false, 0.8);
+        playChordBeat(now + 1.0, F_maj, 0.24, 0.95);
+
+        // Beat 3.5 (t=1.25s): Quick G major slide back
+        playTriangleBeat(now + 1.25, true, 0.6);
+        playChordBeat(now + 1.25, G_maj, 0.18, 0.8);
+
+        // Beat 4 (t=1.5s): Final resolved accented C major beat!
+        playBassBeat(now + 1.5, 110, 1.15);
+        playTriangleBeat(now + 1.5, false, 1.0);
+        playChordBeat(now + 1.5, C_maj, 0.42, 1.05);
       }
     } catch (e) {
       console.log('Audio contextual note failed:', e);
@@ -241,7 +507,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (accessPassword === '69app69') {
+    if (accessPassword === '69pagina69') {
       setPasswordError(false);
       setShowAccessModal(false);
       localStorage.setItem('oxente_landing_bypassed', 'true');
@@ -1140,7 +1406,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           )}
         </AnimatePresence>
 
-        {/* MODAL 2: Locked app entry dialog with (69app69) password */}
+        {/* MODAL 2: Locked app entry dialog with (69pagina69) password */}
         <AnimatePresence>
           {showAccessModal && (
             <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
