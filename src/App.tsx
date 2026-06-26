@@ -89,8 +89,22 @@ export default function App() {
   // 1. Custom Secure Credentials Auth State
   const [firebaseUser, setFirebaseUser] = useState<any | null>(null);
   const [userStatus, setUserStatus] = useState<'loading' | 'unauthenticated' | 'pending' | 'approved' | 'rejected'>('loading');
+  
+  // App mode detection to bypass landing page
+  const [isAppMode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const hasAppParam = params.has('app') || params.has('pwa') || params.has('platform') || params.get('source') === 'app';
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone;
+    
+    if (hasAppParam || isStandalone) {
+      localStorage.setItem('oxente_is_app_mode', 'true');
+      return true;
+    }
+    return localStorage.getItem('oxente_is_app_mode') === 'true';
+  });
+
   const [isLandingBypassed, setIsLandingBypassed] = useState(() => {
-    return localStorage.getItem('oxente_landing_bypassed') === 'true';
+    return localStorage.getItem('oxente_landing_bypassed') === 'true' || localStorage.getItem('oxente_is_app_mode') === 'true';
   });
 
   const isAdmin = firebaseUser?.email === 'oxentefesteje@gmail.com' || firebaseUser?.email === 'abraaoapp@oxente.com' || firebaseUser?.id === 'abraaoapp' || firebaseUser?.role === 'admin';
@@ -2094,10 +2108,13 @@ export default function App() {
     );
   }
 
-  if (!isLandingBypassed && userStatus !== 'approved') {
+  if (!isLandingBypassed && userStatus !== 'approved' && !isAppMode) {
     return (
       <LandingPage 
-        onUnlockSystem={() => setIsLandingBypassed(true)}
+        onUnlockSystem={() => {
+          localStorage.setItem('oxente_landing_bypassed', 'true');
+          setIsLandingBypassed(true);
+        }}
         savedPhone={storeInfo?.telefone}
         savedAddress={storeInfo?.endereco}
       />

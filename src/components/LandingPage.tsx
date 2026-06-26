@@ -33,10 +33,10 @@ const RECOMMENDATIONS = [
   {
     id: 1,
     name: "Mariana Costa",
-    role: "Mãe do Leo (6 anos)",
+    role: "Noiva & Organizadora",
     rating: 5,
-    comment: "A melhor loja de João Pessoa disparado! O atendimento é sensacional e a variedade de balões e decorações é impressionante.",
-    tag: "Decoração Impecável"
+    comment: "A melhor loja de João Pessoa disparado! O atendimento é sensacional e a variedade de brindes e lembranças personalizadas é impressionante.",
+    tag: "Brindes Impecáveis"
   },
   {
     id: 2,
@@ -51,7 +51,7 @@ const RECOMMENDATIONS = [
     name: "Carla Souza",
     role: "Noiva",
     rating: 5,
-    comment: "Ganhei um cupom de desconto incrível logo no meu primeiro orçamento! O preço é ótimo e a qualidade das peças é maravilhosa.",
+    comment: "Ganhei um cupom de desconto incrível logo no meu primeiro orçamento! O preço é ótimo e a qualidade das canecas e copos personalizados é maravilhosa.",
     tag: "Melhores Descontos"
   },
   {
@@ -59,7 +59,7 @@ const RECOMMENDATIONS = [
     name: "Felipe Guedes",
     role: "Cliente Recorrente",
     rating: 5,
-    comment: "Atendimento pelo WhatsApp super rápido, me ajudaram a escolher a combinação perfeita de cores. Estão de parabéns pelo capricho!",
+    comment: "Atendimento pelo WhatsApp super rápido, me ajudaram a escolher a combinação perfeita de cores para os brindes corporativos. Estão de parabéns pelo capricho!",
     tag: "Super Atenciosos"
   },
   {
@@ -67,23 +67,20 @@ const RECOMMENDATIONS = [
     name: "Amanda Lins",
     role: "Aniversariante do Mês",
     rating: 5,
-    comment: "Tudo lindo! Comprei os balões personalizados e todos os convidados elogiaram a decoração. É o verdadeiro brilho de qualquer comemoração!",
-    tag: "Balões Perfeitos"
+    comment: "Tudo lindo! Comprei as lembranças personalizadas e todos os convidados elogiaram a qualidade. É o verdadeiro brilho de qualquer comemoração!",
+    tag: "Lembranças Perfeitas"
+  },
+  {
+    id: 6,
+    name: "Juliana Mendes",
+    role: "Mãe Festeira",
+    rating: 5,
+    comment: "Fiz as lembranças do aniversário de 1 ano do meu filho e ficou impecável! Todo mundo no Instagram perguntou de onde eram. Atendimento nota 10!",
+    tag: "Festas Infantis"
   }
 ];
 
 export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: LandingPageProps) {
-  // Sound management
-  const [isMuted, setIsMuted] = useState(true);
-  
-  // Balloon list for the animation
-  const [balloons, setBalloons] = useState<Array<{ id: number; x: number; color: string; size: number; delay: number; speed: number; label: string; popped?: boolean }>>([]);
-
-  // Count of popped balloons
-  const [poppedCount, setPoppedCount] = useState<number>(() => {
-    return Number(localStorage.getItem('oxente_popped_count') || '0');
-  });
-  
   // Access state
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [accessPassword, setAccessPassword] = useState('');
@@ -96,53 +93,151 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
   const [trackingLoading, setTrackingLoading] = useState(false);
   const [trackingError, setTrackingError] = useState<string | null>(null);
 
-  // Trigger floating balloon generators on start
-  useEffect(() => {
-    const colors = [
-      'from-pink-400 via-pink-500 to-rose-600', // Metallic Pink
-      'from-[#fbbf24] via-[#d97706] to-[#78350f]', // Majestic Gold
-      'from-orange-400 via-orange-500 to-red-600', // Rich Coral/Orange
-      'from-purple-400 via-purple-500 to-indigo-700', // Imperial Purple
-      'from-teal-400 via-teal-500 to-emerald-700', // Shiny Emerald/Teal
-      'from-rose-400 via-pink-500 to-red-600' // Crimson Gloss
-    ];
-    const words = ['Festa', 'Balões', 'Alegria', 'Oxente', 'Amor', 'Brilho', 'Sucesso', 'Sorrisos'];
+  // Celebration fireworks state
+  interface FireworkParticle {
+    id: number;
+    angle: number;
+    distance: number;
+    size: number;
+  }
+  interface Firework {
+    id: number;
+    x: number; // percentage
+    y: number; // percentage
+    color: string;
+    particles: FireworkParticle[];
+    launchDelay: number;
+  }
 
-    // Generate initial balloons
-    const initialBalloons = Array.from({ length: 18 }).map((_, i) => {
-      const speed = Math.random() * 8 + 12; // Majestically slow, 12 to 20 seconds to cross screen
+  const [fireworks, setFireworks] = useState<Firework[]>([]);
+  const [showCelebration, setShowCelebration] = useState(true);
+
+  // Trigger celebration fireworks on page mount (load/refresh)
+  useEffect(() => {
+    const fireworkColors = [
+      '#f43f5e', // Rose/Pink
+      '#fbbf24', // Yellow/Gold
+      '#ea580c', // Orange
+      '#10b981', // Emerald
+      '#06b6d4', // Cyan
+      '#8b5cf6', // Purple
+      '#ec4899'  // Hot Pink
+    ];
+
+    const generatedFireworks: Firework[] = Array.from({ length: 12 }).map((_, i) => {
+      const particles: FireworkParticle[] = Array.from({ length: 20 }).map((_, pIdx) => {
+        const angle = (pIdx * 360) / 20 + (Math.random() * 15 - 7.5);
+        const distance = 80 + Math.random() * 80; // Larger radius of explosion
+        const size = Math.random() * 4.5 + 2.5; // Slightly larger sparkles
+        return { id: pIdx, angle, distance, size };
+      });
+
       return {
         id: i,
-        x: Math.random() * 90 + 5, // Percent from left
-        color: colors[i % colors.length],
-        size: Math.random() * 26 + 36, // Slightly larger, more realistic presence
-        // Negative delay starting from -speed to 0 means they start already floating at random heights!
-        delay: -Math.random() * speed, 
-        speed: speed,
-        label: words[i % words.length]
+        x: 15 + Math.random() * 70, // Spread across 15% to 85%
+        y: 15 + Math.random() * 45, // Explode in the upper 15% to 60% of the viewport
+        color: fireworkColors[i % fireworkColors.length],
+        particles,
+        launchDelay: i * 0.95, // Staggered launches spread over a longer period
       };
     });
-    setBalloons(initialBalloons);
+    setFireworks(generatedFireworks);
 
-    // Play a happy soft pop sound if unmuted
-    if (!isMuted) {
-      try {
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    // Completely disappear and clean up all fireworks after 14 seconds (extended by 3 seconds)
+    const timer = setTimeout(() => {
+      setShowCelebration(false);
+      setFireworks([]);
+    }, 14000);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Speech bubble state for custom interaction
+  const [speechBubble, setSpeechBubble] = useState<'sanfona' | 'zabumba' | 'triangulo' | 'casal' | null>(null);
+
+  // Auto-clear speech bubble after 4 seconds
+  useEffect(() => {
+    if (speechBubble) {
+      const timer = setTimeout(() => {
+        setSpeechBubble(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [speechBubble]);
+
+  const triggerSpeech = (character: 'sanfona' | 'zabumba' | 'triangulo' | 'casal') => {
+    setSpeechBubble(character);
+    
+    // Play happy instruments audio feedback using web audio synthesizers
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      
+      if (character === 'sanfona') {
+        // High-pitched rapid double harmonized chord notes for accordion
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = 'triangle';
+        osc1.frequency.setValueAtTime(523.25, audioCtx.currentTime); // C5
+        osc1.connect(gain1);
+        gain1.connect(audioCtx.destination);
+        gain1.gain.setValueAtTime(0.06, audioCtx.currentTime);
+        gain1.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(659.25, audioCtx.currentTime); // E5
+        osc2.connect(gain2);
+        gain2.connect(audioCtx.destination);
+        gain2.gain.setValueAtTime(0.06, audioCtx.currentTime);
+        gain2.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.35);
+
+        osc1.start();
+        osc2.start();
+        osc1.stop(audioCtx.currentTime + 0.36);
+        osc2.stop(audioCtx.currentTime + 0.36);
+      } else if (character === 'zabumba') {
+        // Low drum thud for Zabumba
         const osc = audioCtx.createOscillator();
         const gain = audioCtx.createGain();
         osc.connect(gain);
         gain.connect(audioCtx.destination);
-        osc.frequency.setValueAtTime(150, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(800, audioCtx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.15, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.15);
+        osc.frequency.setValueAtTime(110, audioCtx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(35, audioCtx.currentTime + 0.18);
+        gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.18);
         osc.start();
-        osc.stop(audioCtx.currentTime + 0.16);
-      } catch (err) {
-        console.log(err);
+        osc.stop(audioCtx.currentTime + 0.19);
+      } else if (character === 'triangulo') {
+        // High pitched metallic ping for Triângulo
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1800, audioCtx.currentTime); // Very high ping
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.4);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.42);
+      } else {
+        // Cheerful rapid rising slide for the dancing couple
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(330, audioCtx.currentTime); // E4
+        osc.frequency.exponentialRampToValueAtTime(660, audioCtx.currentTime + 0.3); // up to E5
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        gain.gain.setValueAtTime(0.08, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.3);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.32);
       }
+    } catch (e) {
+      console.log('Audio contextual note failed:', e);
     }
-  }, []);
+  };
 
   const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,106 +296,38 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
     }
   };
 
-  const handleBalloonClick = (id: number) => {
-    // Prevent double clicking on same balloon
-    setBalloons(prev => {
-      const b = prev.find(item => item.id === id);
-      if (!b || b.popped) return prev;
-      
-      // Realistic high-quality pop sound
-      try {
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        
-        const osc2 = audioCtx.createOscillator();
-        const gain2 = audioCtx.createGain();
-        osc2.connect(gain2);
-        gain2.connect(audioCtx.destination);
-        
-        osc.frequency.setValueAtTime(450, audioCtx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(100, audioCtx.currentTime + 0.1);
-        osc2.frequency.setValueAtTime(800, audioCtx.currentTime);
-        osc2.frequency.exponentialRampToValueAtTime(1400, audioCtx.currentTime + 0.08);
-        
-        gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.12);
-        gain2.gain.setValueAtTime(0.08, audioCtx.currentTime);
-        gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.08);
-        
-        osc.start();
-        osc2.start();
-        osc.stop(audioCtx.currentTime + 0.13);
-        osc2.stop(audioCtx.currentTime + 0.13);
-      } catch {}
-
-      // Increment popped balloon count
-      setPoppedCount(prevCount => {
-        const nextCount = prevCount + 1;
-        localStorage.setItem('oxente_popped_count', String(nextCount));
-        return nextCount;
-      });
-
-      return prev.map(item => item.id === id ? { ...item, popped: true } : item);
-    });
-
-    // Remove from active balloons array after animation finishes
-    setTimeout(() => {
-      setBalloons(prev => prev.filter(b => b.id !== id));
-    }, 250);
-  };
-
-  const handleSpawnShower = () => {
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.frequency.setValueAtTime(350, audioCtx.currentTime);
-      osc.frequency.exponentialRampToValueAtTime(950, audioCtx.currentTime + 0.25);
-      gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.25);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.26);
-    } catch {}
-
-    const colors = [
-      'from-pink-400 via-pink-500 to-rose-600',
-      'from-[#fbbf24] via-[#d97706] to-[#78350f]',
-      'from-orange-400 via-orange-500 to-red-600',
-      'from-purple-400 via-purple-500 to-indigo-700',
-      'from-teal-400 via-teal-500 to-emerald-700',
-      'from-rose-400 via-pink-500 to-red-600'
-    ];
-    const words = ['OXENTE!', 'EITA!', 'BALÃO!', 'POU!', 'FESTA!', 'BRILHO!', 'AMOR!', 'SORRISO!'];
-
-    // Spawn 8 fresh fast balloons starting already at bottom with random staggered entries
-    const shower = Array.from({ length: 8 }).map((_, i) => {
-      const speed = Math.random() * 4 + 7; // Fast rising (7 to 11s)
-      return {
-        id: Date.now() + i,
-        x: Math.random() * 90 + 5,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        size: Math.random() * 24 + 38,
-        delay: Math.random() * 0.8,
-        speed: speed,
-        label: words[i % words.length]
-      };
-    });
-
-    setBalloons(prev => [...prev, ...shower]);
-  };
-
   // Format phone for WhatsApp
   const cleanPhone = (savedPhone || '(83) 99876-5432').replace(/\D/g, '');
   const whatsAppLink = `https://wa.me/55${cleanPhone || '83998765432'}?text=Olá,%20gostaria%20de%20fazer%20um%20orçamento!`;
   const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(savedAddress || 'Rua Josina Lessa Feitosa 176 Mangabeira João Pessoa PB')}`;
 
   return (
-    <div className="relative min-h-screen bg-gradient-to-b from-brand-light via-[#FFFDF9] to-[#f4ebd4] font-sans antialiased overflow-x-hidden selection:bg-brand-pink/20 selection:text-brand-dark">
+    <div 
+      className="relative min-h-screen font-sans antialiased overflow-x-hidden selection:bg-brand-pink/20 selection:text-brand-dark"
+      style={{ backgroundColor: '#110801' }}
+    >
+      <style>{`
+        @keyframes light-sweep {
+          0% {
+            background-position: -200% 0;
+          }
+          50% {
+            background-position: 200% 0;
+          }
+          100% {
+            background-position: -200% 0;
+          }
+        }
+        .animate-sweep {
+          background: linear-gradient(to right, #ffe17d 0%, #f43f5e 30%, #ffffff 50%, #f43f5e 70%, #ffaa47 100%);
+          background-size: 200% auto;
+          -webkit-background-clip: text;
+          -webkit-text-fill-color: transparent;
+          background-clip: text;
+          text-fill-color: transparent;
+          animation: light-sweep 4.5s ease-in-out infinite;
+        }
+      `}</style>
       
       {/* Festive Celebration Party Background Image */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
@@ -308,118 +335,108 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           src="https://images.unsplash.com/photo-1506224477000-07aa8a76be89?q=80&w=1920&auto=format&fit=crop"
           alt="Cactos do Sertão Oxente Festeje"
           referrerPolicy="no-referrer"
-          className="w-full h-full object-cover opacity-30 filter brightness-95 contrast-110 saturate-110 scale-105"
+          className="w-full h-full object-cover opacity-20 filter brightness-75 contrast-110 saturate-110 scale-105"
         />
-        {/* Semi-transparent gold cream overlays to maintain supreme text contrast and brand theme */}
-        <div className="absolute inset-0 bg-gradient-to-b from-brand-light/75 via-[#FFFDF9]/85 to-[#f4ebd4]/90 mix-blend-multiply" />
-        <div className="absolute inset-0 bg-radial-at-t from-transparent via-transparent to-brand-dark/15" />
+        {/* Subtle vignette overlays to preserve the gold-to-brown gradient and keep text readable */}
+        <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/45" />
+        <div className="absolute inset-0 bg-radial-at-t from-transparent via-transparent to-black/50" />
       </div>
 
-      {/* Background Animated Rising Balloons Layer - Fixed so they rise across the visible page continuously */}
-      <div className="fixed inset-0 pointer-events-none z-10 overflow-hidden">
-        {balloons.map((b) => (
-          <motion.div
-            key={b.id}
-            onClick={() => handleBalloonClick(b.id)}
-            className="absolute bottom-[-150px] cursor-pointer pointer-events-auto select-none"
-            style={{ left: `${b.x}%` }}
-            initial={{ y: 0, x: 0 }}
-            animate={b.popped ? { y: -1200, scale: [1, 1.4, 0] } : { 
-              y: -1200, // Move past the top of the viewport
-              x: [0, 15, -15, 10, -10, 0]
-            }}
-            transition={{
-              y: {
-                duration: b.speed,
-                ease: "linear",
-                delay: b.delay,
-                repeat: b.popped ? 0 : Infinity
-              },
-              x: {
-                duration: 4.5,
-                ease: "easeInOut",
-                repeat: b.popped ? 0 : Infinity,
-                repeatType: "reverse"
-              },
-              scale: {
-                duration: 0.25,
-                ease: "easeOut"
-              }
-            }}
-          >
-            {b.popped ? (
-              <div 
-                className="relative flex items-center justify-center pointer-events-none"
-                style={{ width: `${b.size}px`, height: `${b.size * 1.35}px` }}
-              >
-                {/* Visual pop sparkles / confetti lines */}
-                <svg className="absolute inset-[-40px] w-[200%] h-[200%] overflow-visible" viewBox="0 0 100 100">
-                  <circle cx="50" cy="50" r="15" fill="none" stroke="#f43f5e" strokeWidth="4" className="animate-ping" />
-                  <path d="M 50 20 L 50 5 M 50 80 L 50 95 M 20 50 L 5 50 M 80 50 L 95 50 M 28 28 L 15 15 M 72 72 L 85 85 M 28 72 L 15 85 M 72 28 L 85 15" stroke="#fbbf24" strokeWidth="3" strokeLinecap="round" />
-                </svg>
-                <span className="absolute text-brand-pink font-black text-[10px] uppercase select-none tracking-widest drop-shadow-[0_2px_4px_rgba(0,0,0,0.4)] whitespace-nowrap bg-white/95 px-2 py-0.5 rounded-md border border-brand-pink/30 shadow-md">💥 POP!</span>
-              </div>
-            ) : (
-              /* Realistically shaped balloon with 3D gradient, elegant glossy shine and tapered egg form */
-              <div 
-                className={`relative bg-gradient-to-br ${b.color} shadow-lg shadow-brand-dark/15 hover:shadow-brand-dark/30 hover:scale-105 flex flex-col items-center justify-center border border-white/25 text-[10px] font-bold text-white tracking-tight uppercase px-2 transition-transform select-none`}
-                style={{ 
-                  width: `${b.size}px`, 
-                  height: `${b.size * 1.35}px`,
-                  borderRadius: '50% 50% 50% 50% / 40% 40% 60% 60%' // Egg shape taper at bottom
+      {/* Background Animated Celebration Fireworks Layer (One-time, on-load/on-refresh) */}
+      {showCelebration && (
+        <div className="fixed inset-0 pointer-events-none z-30 overflow-hidden">
+          {fireworks.map((f) => (
+            <div key={f.id} className="absolute inset-0">
+              {/* Rocket Rising Trail */}
+              <motion.div
+                className="absolute w-[2.5px] rounded-full"
+                style={{
+                  left: `${f.x}%`,
+                  bottom: 0,
+                  height: '45px',
+                  background: `linear-gradient(to top, transparent 10%, ${f.color} 80%, #ffffff 100%)`,
+                  boxShadow: `0 0 14px ${f.color}`,
+                }}
+                initial={{ y: '100vh', opacity: 1 }}
+                animate={{
+                  y: `-${100 - f.y}vh`,
+                  opacity: [1, 1, 0]
+                }}
+                transition={{
+                  duration: 1.0,
+                  ease: "easeOut",
+                  delay: f.launchDelay,
+                }}
+              />
+
+              {/* Explosion Sparkles */}
+              <div
+                className="absolute"
+                style={{
+                  left: `${f.x}%`,
+                  top: `${f.y}%`,
                 }}
               >
-                {/* Glossy top-left 3D highlight */}
-                <div className="absolute top-[8%] left-[12%] w-[25%] h-[18%] bg-white/45 rounded-full blur-[0.6px] rotate-[-25deg] pointer-events-none" />
-                
-                {/* Soft bottom-right counter reflection for 3D ambient bounce */}
-                <div className="absolute bottom-[14%] right-[15%] w-[15%] h-[15%] bg-white/10 rounded-full blur-[1px] pointer-events-none" />
-
-                <span className="opacity-95 drop-shadow-[0_1px_2px_rgba(0,0,0,0.5)] z-10 text-[9px] tracking-wider">{b.label}</span>
-                
-                {/* Balloon knot */}
-                <div 
-                  className="absolute bottom-[-6px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-b-[8px] border-b-current opacity-90"
-                  style={{ color: b.color.split(' ').pop()?.replace('to-[', '').replace(']', '') }}
+                {/* Center Expansion Glow */}
+                <motion.div
+                  className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full blur-md"
+                  style={{
+                    width: '85px',
+                    height: '85px',
+                    backgroundColor: f.color,
+                  }}
+                  initial={{ scale: 0, opacity: 0 }}
+                  animate={{
+                    scale: [0, 2.8, 0],
+                    opacity: [0, 0.45, 0]
+                  }}
+                  transition={{
+                    duration: 1.0,
+                    ease: "easeOut",
+                    delay: f.launchDelay + 1.0,
+                  }}
                 />
-                
-                {/* Balloon string */}
-                <svg className="absolute bottom-[-75px] left-1/2 -translate-x-1/2 w-4 h-18" stroke="rgba(74,46,22,0.2)" strokeWidth="1.2" fill="none">
-                  <path d="M 8 0 C 4 18, 12 36, 8 54 C 4 72, 12 90, 8 108" />
-                </svg>
+
+                {/* Particle Stars */}
+                {f.particles.map((p) => {
+                  const targetX = Math.cos(p.angle * Math.PI / 180) * p.distance;
+                  const targetY = Math.sin(p.angle * Math.PI / 180) * p.distance + 50; // gravity downward drift
+                  return (
+                    <motion.div
+                      key={p.id}
+                      className="absolute rounded-full -translate-x-1/2 -translate-y-1/2"
+                      style={{
+                        width: `${p.size}px`,
+                        height: `${p.size}px`,
+                        backgroundColor: p.id % 2 === 0 ? '#ffffff' : f.color,
+                        boxShadow: `0 0 10px ${f.color}, 0 0 4px #ffffff`,
+                      }}
+                      initial={{ x: 0, y: 0, opacity: 0, scale: 0 }}
+                      animate={{
+                        x: targetX,
+                        y: targetY,
+                        opacity: [0, 1, 1, 0.6, 0],
+                        scale: [0, 1.6, 1.3, 0.5, 0]
+                      }}
+                      transition={{
+                        duration: 2.0,
+                        ease: "easeOut",
+                        delay: f.launchDelay + 1.0,
+                      }}
+                    />
+                  );
+                })}
               </div>
-            )}
-          </motion.div>
-        ))}
-      </div>
-
-      {/* Fixed Interactive Balloon Popping Guide Button (Top-Right) */}
-      <div className="fixed top-4 right-4 z-50 flex flex-col items-end gap-1 pointer-events-auto select-none">
-        <motion.button
-          onClick={handleSpawnShower}
-          whileHover={{ scale: 1.08, rotate: [0, -2, 2, 0] }}
-          whileTap={{ scale: 0.95 }}
-          className="relative flex items-center gap-2 bg-gradient-to-r from-brand-pink via-[#fbbf24] to-[#d97706] text-brand-dark px-4 py-3 rounded-full shadow-lg shadow-brand-dark/25 border-2 border-white font-display font-black text-xs uppercase tracking-wider cursor-pointer group"
-        >
-          {/* Pulsating live dot */}
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-pink opacity-80"></span>
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-brand-pink"></span>
-          </span>
-          <span>💥 Estourar Balões! ({poppedCount}) 🎈</span>
-
-          {/* Floating helpful pop tooltip */}
-          <span className="absolute -bottom-9 right-2 bg-brand-dark/95 text-white text-[9px] font-bold py-1 px-2.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none tracking-wider shadow-md whitespace-nowrap">
-            Toque aqui para gerar chuva de balões! 🌦️
-          </span>
-        </motion.button>
-      </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ANIMATED NORTHEAST CANGAÇO BACKGROUND CHARACTERS (Inspired by reference family image) */}
       
       {/* 1. Sr. Mandacaru (Cute Cactus wearing traditional Lampião leather hat) */}
       <motion.div
-        className="fixed bottom-0 left-[1%] md:left-[3%] z-10 w-28 md:w-36 pointer-events-none select-none"
+        className="fixed bottom-0 left-[2%] md:left-[4%] z-10 w-24 md:w-32 pointer-events-none select-none"
         animate={{ y: [15, 0, 15], rotate: [-1, 2, -1] }}
         transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut" }}
       >
@@ -478,7 +495,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
 
       {/* 2. Dona Maria Flor (Cute Lady Cactus with red glasses, pink flower & leather hat) */}
       <motion.div
-        className="fixed bottom-0 right-[1%] md:right-[3%] z-10 w-28 md:w-36 pointer-events-none select-none"
+        className="fixed bottom-0 right-[2%] md:right-[4%] z-10 w-24 md:w-32 pointer-events-none select-none"
         animate={{ y: [18, 0, 18], rotate: [1, -2, 1] }}
         transition={{ repeat: Infinity, duration: 4.8, ease: "easeInOut" }}
       >
@@ -539,10 +556,24 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
 
       {/* 3. Seu Sanfoninha (Smiling Bouncing Accordion Character) */}
       <motion.div
-        className="fixed bottom-[18%] left-[0.5%] md:left-[2%] z-10 w-20 md:w-26 pointer-events-none select-none"
-        animate={{ x: [-5, 5, -5], scaleX: [0.94, 1.06, 0.94], rotate: [-3, 3, -3] }}
+        onClick={() => triggerSpeech('sanfona')}
+        className="fixed bottom-[3%] left-[13%] md:left-[15%] z-40 w-16 md:w-20 cursor-pointer pointer-events-auto select-none"
+        animate={{ x: [-3, 3, -3], scaleX: [0.95, 1.05, 0.95], rotate: [-2, 2, -2] }}
         transition={{ repeat: Infinity, duration: 3.2, ease: "easeInOut" }}
       >
+        <AnimatePresence>
+          {speechBubble === 'sanfona' && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 15 }}
+              className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
+            >
+              <span>🌵 Bem vindo a Oxente Festeje, bora comemorar! 🎉</span>
+              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
+            </motion.div>
+          )}
+        </AnimatePresence>
         <svg viewBox="0 0 100 120" className="w-full h-auto drop-shadow-md">
           {/* Left Keyboard block */}
           <rect x="15" y="40" width="12" height="60" rx="3" fill="#dc2626" stroke="#451a03" strokeWidth="1.5" />
@@ -584,12 +615,26 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         </svg>
       </motion.div>
 
-      {/* 4. Zabumbinha (Cute traditional bouncing drum character) */}
+      {/* 5. Zabumbinha (Cute traditional bouncing drum character) */}
       <motion.div
-        className="fixed bottom-[15%] right-[0.5%] md:right-[2%] z-10 w-18 md:w-24 pointer-events-none select-none"
+        onClick={() => triggerSpeech('zabumba')}
+        className="fixed bottom-[3%] right-[13%] md:right-[15%] z-40 w-14 md:w-18 cursor-pointer pointer-events-auto select-none"
         animate={{ y: [-6, 4, -6], rotate: [5, -5, 5] }}
         transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut" }}
       >
+        <AnimatePresence>
+          {speechBubble === 'zabumba' && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 15 }}
+              className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
+            >
+              <span>🎉 Bem vindo a Oxente Festeje, bora comemorar! 🌵</span>
+              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
+            </motion.div>
+          )}
+        </AnimatePresence>
         <svg viewBox="0 0 100 120" className="w-full h-auto drop-shadow-md">
           {/* Drum body cylinder */}
           <ellipse cx="50" cy="50" rx="35" ry="15" fill="#854d0e" stroke="#451a03" strokeWidth="2" />
@@ -626,15 +671,146 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       {/* Main Container */}
       <div className="relative max-w-4xl mx-auto px-6 pt-16 pb-32 z-20 flex flex-col items-center text-center">
         
-        {/* Decorative Brand Logo floating */}
-        <motion.div
-          initial={{ scale: 0, y: -20, rotate: -15 }}
-          animate={{ scale: 1, y: 0, rotate: 0 }}
-          transition={{ type: 'spring', damping: 12, stiffness: 100, delay: 0.1 }}
-          className="mb-4"
-        >
-          <BrandLogo size="lg" />
-        </motion.div>
+        {/* Decorative Brand Logo floating with Triângulinho and Casal Dançarino on its sides */}
+        <div className="relative flex items-center justify-center gap-6 sm:gap-8 md:gap-10 select-none mb-4 w-full max-w-xl mx-auto px-4">
+          
+          {/* 4. Triângulinho (Cute traditional triangle instrument character) - Left of the logo */}
+          <motion.div
+            onClick={(e) => {
+              e.stopPropagation();
+              triggerSpeech('triangulo');
+            }}
+            className="w-14 sm:w-16 md:w-20 cursor-pointer pointer-events-auto select-none relative shrink-0"
+            animate={{ y: [-5, 5, -5], rotate: [-6, 6, -6] }}
+            transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+          >
+            <AnimatePresence>
+              {speechBubble === 'triangulo' && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8, y: 15 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, y: 15 }}
+                  className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
+                >
+                  <span>🎉 Bem vindo a Oxente Festeje, bora comemorar! 🌵</span>
+                  <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <svg viewBox="0 0 100 120" className="w-full h-auto drop-shadow-md">
+              {/* Hanging loop line */}
+              <path d="M50,15 L50,30" stroke="#a16207" strokeWidth="2.5" strokeLinecap="round" />
+              
+              {/* Main Triangle metallic bar */}
+              <path d="M50,30 L15,95 L85,95 Z" fill="none" stroke="#facc15" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+              {/* Inner silver gleam */}
+              <path d="M50,32 L18,93 L82,93" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
+              
+              {/* Face background inside the triangle for high contrast with landpage background */}
+              <polygon points="50,38 25,90 75,90" fill="#fef08a" stroke="#ca8a04" strokeWidth="1.5" />
+
+              {/* Little Leather Hat on top of the Triangle */}
+              <path d="M38,26 C38,12 62,12 62,26 Z" fill="#854d0e" stroke="#451a03" strokeWidth="1.5" />
+              <path d="M30,25 C40,28 60,28 70,25 C74,22 74,29 70,28 C60,30 40,30 30,28 C26,29 26,22 30,25 Z" fill="#a16207" stroke="#451a03" strokeWidth="1.5" />
+
+              {/* Cute face in the center */}
+              <g transform="translate(0, 15)">
+                <circle cx="42" cy="62" r="3.5" fill="#1c1917" />
+                <circle cx="58" cy="62" r="3.5" fill="#1c1917" />
+                <circle cx="41" cy="60" r="1" fill="#ffffff" />
+                <circle cx="57" cy="60" r="1" fill="#ffffff" />
+                {/* Blushing cheeks */}
+                <circle cx="38" cy="66" r="3" fill="#f43f5e" opacity="0.6" />
+                <circle cx="62" cy="66" r="3" fill="#f43f5e" opacity="0.6" />
+                <path d="M47,68 Q50,72 53,68" fill="none" stroke="#1c1917" strokeWidth="2" strokeLinecap="round" />
+              </g>
+
+              {/* Triangle striker stick animating */}
+              <motion.line 
+                x1="12" y1="75" x2="38" y2="60" 
+                stroke="#94a3b8" strokeWidth="3" strokeLinecap="round" 
+                animate={{ rotate: [0, 20, -10, 0] }}
+                transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
+                style={{ originX: "38px", originY: "60px" }}
+              />
+            </svg>
+          </motion.div>
+
+          {/* Logo Icon in the middle */}
+          <motion.div
+            initial={{ scale: 0, y: -20, rotate: -15 }}
+            animate={{ scale: 1, y: 0, rotate: 0 }}
+            transition={{ type: 'spring', damping: 12, stiffness: 100, delay: 0.1 }}
+            className="shrink-0"
+          >
+            <BrandLogo size="lg" />
+          </motion.div>
+
+          {/* 6. Casal Dançando Forró (Cute traditional couple silhouettes dancing) - Right of the logo */}
+          <motion.div
+            onClick={(e) => {
+              e.stopPropagation();
+              triggerSpeech('casal');
+            }}
+            className="w-20 sm:w-26 md:w-30 cursor-pointer pointer-events-auto select-none relative shrink-0"
+            animate={{ y: [0, -6, 0], x: [-3, 3, -3], rotate: [-4, 4, -4] }}
+            transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
+          >
+            <AnimatePresence>
+              {speechBubble === 'casal' && (
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.8, y: 15 }}
+                  animate={{ opacity: 1, scale: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.8, y: 15 }}
+                  className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
+                >
+                  <span>🎉 Bem vindo a Oxente Festeje, bora comemorar! 🌵</span>
+                  <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
+                </motion.div>
+              )}
+            </AnimatePresence>
+            <svg viewBox="0 0 100 120" className="w-full h-auto drop-shadow-md">
+              {/* Left dancer (He) */}
+              <g transform="translate(15, 15)">
+                {/* Body */}
+                <path d="M25,50 L40,85 L15,85 Z" fill="#d97706" stroke="#451a03" strokeWidth="1.5" />
+                {/* Leather Hat */}
+                <path d="M15,35 C15,22 35,22 35,35 Z" fill="#854d0e" stroke="#451a03" strokeWidth="1.2" />
+                <ellipse cx="25" cy="35" rx="14" ry="4" fill="#a16207" stroke="#451a03" strokeWidth="1.2" />
+                {/* Cute Head */}
+                <circle cx="25" cy="45" r="8" fill="#fda4af" />
+                {/* Eyes */}
+                <circle cx="22" cy="44" r="1.2" fill="#1c1917" />
+                <circle cx="28" cy="44" r="1.2" fill="#1c1917" />
+                <path d="M23,48 Q25,51 27,48" fill="none" stroke="#1c1917" strokeWidth="1.2" strokeLinecap="round" />
+              </g>
+
+              {/* Right dancer (She) */}
+              <g transform="translate(35, 10)">
+                {/* Beautiful Forró dress */}
+                <path d="M25,55 L42,90 L8,90 Z" fill="#f43f5e" stroke="#451a03" strokeWidth="1.5" />
+                <circle cx="15" cy="85" r="2.5" fill="#facc15" />
+                <circle cx="25" cy="85" r="2.5" fill="#ffffff" />
+                <circle cx="35" cy="85" r="2.5" fill="#facc15" />
+                {/* Head */}
+                <circle cx="25" cy="45" r="8" fill="#fda4af" />
+                {/* Smile / wink face */}
+                <circle cx="22" cy="44" r="1.2" fill="#1c1917" />
+                <path d="M26,43 Q29,40 30,44" fill="none" stroke="#1c1917" strokeWidth="1.2" strokeLinecap="round" />
+                <path d="M22,48 Q25,51 28,48" fill="none" stroke="#1c1917" strokeWidth="1.2" strokeLinecap="round" />
+                {/* Hair Braids / Flowers */}
+                <circle cx="15" cy="45" r="4.5" fill="#ca8a04" />
+                <circle cx="35" cy="45" r="4.5" fill="#ca8a04" />
+                <path d="M15,45 L11,56" stroke="#ca8a04" strokeWidth="2.5" strokeLinecap="round" />
+                <path d="M35,45 L39,56" stroke="#ca8a04" strokeWidth="2.5" strokeLinecap="round" />
+              </g>
+
+              {/* Shared arms holding each other dancing */}
+              <path d="M36,65 Q50,55 58,62" fill="none" stroke="#451a03" strokeWidth="3.5" strokeLinecap="round" />
+              <path d="M22,68 Q40,80 50,65" fill="none" stroke="#451a03" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+          </motion.div>
+        </div>
 
         {/* Playful Floating Elements */}
         <motion.div 
@@ -655,11 +831,11 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           className="flex flex-col items-center mb-8"
         >
           {/* Main Title - Inspired by Instagram Visual Identity and Gold Theme */}
-          <h1 className="text-5xl md:text-7xl font-display font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-brand-dark via-brand-pink to-[#825908] uppercase drop-shadow-xs">
+          <h1 className="text-5xl md:text-7xl font-display font-black tracking-tight text-transparent bg-clip-text uppercase drop-shadow-md animate-sweep">
             Oxente Festeje
           </h1>
-          <p className="text-sm md:text-base text-brand-dark/85 font-medium mt-3.5 max-w-lg leading-relaxed font-sans">
-            A maior e mais amada loja de balões personalizados e decorações de João Pessoa! Transformamos momentos simples em comemorações inesquecíveis. 🎈✨
+          <p className="text-sm md:text-base text-amber-100/95 font-semibold mt-3.5 max-w-xl leading-relaxed font-sans">
+            A loja de brindes mais seguida e amada de João Pessoa com mais de 100mil seguidores no instagram! A única que você acompanha seu pedido em tempo real! Levamos o capricho, e a qualidade, para os seus momentos especiais. ✨🎁
           </p>
         </motion.div>
 
@@ -668,10 +844,10 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.3 }}
-          className="w-full max-w-lg bg-white/90 backdrop-blur-md rounded-3xl border border-brand-pink/30 p-8 shadow-[0_20px_50px_rgba(197,146,24,0.12)] flex flex-col gap-4 mb-16"
+          className="relative w-full max-w-lg bg-zinc-950/80 backdrop-blur-md rounded-3xl border border-amber-500/35 p-8 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-4 mb-16"
         >
-          <h2 className="text-lg font-display font-bold text-brand-dark flex items-center justify-center gap-2 mb-2">
-            <Sparkles className="h-5 w-5 text-brand-pink fill-brand-pink animate-pulse" />
+          <h2 className="text-lg font-display font-bold text-amber-100 flex items-center justify-center gap-2 mb-2">
+            <Sparkles className="h-5 w-5 text-amber-400 fill-amber-400 animate-pulse" />
             <span>O que você deseja fazer hoje?</span>
           </h2>
 
@@ -682,16 +858,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             rel="noopener noreferrer"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-4 bg-gradient-to-r from-brand-dark to-[#5c3d21] text-brand-light font-display font-bold p-4 rounded-2xl shadow-md shadow-brand-dark/15 hover:shadow-brand-dark/30 transition-all text-left group"
+            className="flex items-center gap-4 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-4 rounded-2xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
           >
             <div className="bg-white/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
-              <MapPin className="h-5 w-5 text-brand-light" />
+              <MapPin className="h-5 w-5 text-amber-50" />
             </div>
             <div className="flex-1">
               <span className="block text-sm">Como Chegar na Loja</span>
-              <span className="block text-xs font-normal text-brand-light/80 mt-0.5 font-sans">Clique para abrir no Google Maps</span>
+              <span className="block text-xs font-normal text-amber-200/80 mt-0.5 font-sans">Clique para abrir no Google Maps</span>
             </div>
-            <ArrowRight className="h-5 w-5 text-brand-light/75 group-hover:translate-x-1 transition-transform mr-1" />
+            <ArrowRight className="h-5 w-5 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1" />
           </motion.a>
 
           {/* BUTTON 2: Instagram Direct Link */}
@@ -701,16 +877,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             rel="noopener noreferrer"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-4 bg-gradient-to-r from-brand-pink via-[#e9d5a6] to-[#a3740e] text-brand-dark font-display font-black p-4 rounded-2xl shadow-md shadow-brand-pink/15 hover:shadow-brand-pink/35 transition-all text-left group"
+            className="flex items-center gap-4 bg-gradient-to-r from-[#e1306c] via-[#f77737] to-[#fcb045] text-white font-display font-black p-4 rounded-2xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
           >
-            <div className="bg-brand-dark/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
-              <Instagram className="h-5 w-5 text-brand-dark" />
+            <div className="bg-black/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
+              <Instagram className="h-5 w-5 text-white" />
             </div>
             <div className="flex-1">
               <span className="block text-sm">Siga-nos no Instagram</span>
-              <span className="block text-xs font-bold text-brand-dark/80 mt-0.5 font-sans">@oxentefesteje · Inspirações diárias</span>
+              <span className="block text-xs font-bold text-zinc-100/85 mt-0.5 font-sans">@oxentefesteje · Inspirações diárias</span>
             </div>
-            <ArrowRight className="h-5 w-5 text-brand-dark/75 group-hover:translate-x-1 transition-transform mr-1" />
+            <ArrowRight className="h-5 w-5 text-zinc-100/75 group-hover:translate-x-1 transition-transform mr-1" />
           </motion.a>
 
           {/* BUTTON 3: WhatsApp Chat Link */}
@@ -720,14 +896,14 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             rel="noopener noreferrer"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-4 bg-gradient-to-r from-[#15803d] to-[#14532d] text-white font-display font-bold p-4 rounded-2xl shadow-md shadow-green-700/10 hover:shadow-green-700/25 transition-all text-left group"
+            className="flex items-center gap-4 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-4 rounded-2xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
           >
             <div className="bg-white/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
               <MessageSquare className="h-5 w-5 text-white" />
             </div>
             <div className="flex-1">
               <span className="block text-sm">Fazer Orçamento no WhatsApp</span>
-              <span className="block text-xs font-normal text-green-100 mt-0.5 font-sans">Fale diretamente com nossa equipe</span>
+              <span className="block text-xs font-normal text-emerald-100/85 mt-0.5 font-sans">Fale diretamente com nossa equipe</span>
             </div>
             <ArrowRight className="h-5 w-5 text-white/75 group-hover:translate-x-1 transition-transform mr-1" />
           </motion.a>
@@ -737,16 +913,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             onClick={() => setShowTrackingModal(true)}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-4 bg-gradient-to-r from-[#c59f4d] to-[#a3740e] text-brand-light font-display font-bold p-4 rounded-2xl shadow-md shadow-brand-pink/10 hover:shadow-brand-pink/25 transition-all text-left group cursor-pointer"
+            className="flex items-center gap-4 bg-gradient-to-r from-amber-900 to-[#3e240a] border border-amber-500/20 text-amber-100 font-display font-bold p-4 rounded-2xl shadow-md shadow-black/30 hover:border-amber-500/40 transition-all text-left group cursor-pointer"
           >
             <div className="bg-white/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
-              <Search className="h-5 w-5 text-brand-light" />
+              <Search className="h-5 w-5 text-amber-100" />
             </div>
             <div className="flex-1">
               <span className="block text-sm">Acompanhar meu Pedido</span>
-              <span className="block text-xs font-normal text-brand-light/90 mt-0.5 font-sans">Consulte o andamento da sua entrega</span>
+              <span className="block text-xs font-normal text-amber-200/80 mt-0.5 font-sans">Consulte o andamento da sua entrega</span>
             </div>
-            <ArrowRight className="h-5 w-5 text-brand-light/75 group-hover:translate-x-1 transition-transform mr-1" />
+            <ArrowRight className="h-5 w-5 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1" />
           </motion.button>
         </motion.div>
 
@@ -759,11 +935,11 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           className="w-full flex flex-col items-center mt-6"
         >
           <div className="flex items-center gap-2 mb-2">
-            <Quote className="h-6 w-6 text-brand-pink fill-brand-pink/20" />
-            <h3 className="text-2xl font-display font-black text-brand-dark uppercase tracking-tight">Mural de Recomendações</h3>
+            <Quote className="h-6 w-6 text-amber-400 fill-amber-400/20" />
+            <h3 className="text-2xl font-display font-black text-amber-100 uppercase tracking-tight">Mural de Recomendações</h3>
           </div>
-          <p className="text-brand-dark/70 text-xs md:text-sm max-w-md mb-8 font-sans">
-            Veja o carinho de quem escolheu tornar seus eventos inesquecíveis com as nossas decorações!
+          <p className="text-amber-200/70 text-xs md:text-sm max-w-md mb-8 font-sans font-medium">
+            Veja o carinho de quem escolheu tornar seus eventos inesquecíveis com os nossos brindes e lembranças personalizadas!
           </p>
 
           {/* Grid Layout of post-it cards */}
@@ -772,27 +948,27 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               <motion.div
                 key={r.id}
                 whileHover={{ y: -6, rotate: idx % 2 === 0 ? 1 : -1 }}
-                className={`bg-white rounded-2xl p-6 border border-brand-pink/15 shadow-xs relative flex flex-col justify-between ${
+                className={`bg-stone-950/85 backdrop-blur-md rounded-2xl p-6 border border-amber-500/25 shadow-lg relative flex flex-col justify-between ${
                   idx % 3 === 0 ? 'border-l-4 border-l-brand-pink' :
-                  idx % 3 === 1 ? 'border-l-4 border-l-[#a3740e]' : 'border-l-4 border-l-brand-dark'
+                  idx % 3 === 1 ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-amber-700'
                 }`}
               >
                 <div>
                   <div className="flex gap-0.5 mb-2.5">
                     {Array.from({ length: r.rating }).map((_, i) => (
-                      <Star key={i} className="h-4 w-4 text-brand-pink fill-brand-pink" />
+                      <Star key={i} className="h-4 w-4 text-amber-400 fill-amber-400" />
                     ))}
                   </div>
-                  <p className="text-[#4a2e16] text-xs italic leading-relaxed mb-4">
+                  <p className="text-zinc-100 text-[13.5px] font-medium leading-relaxed mb-4">
                     "{r.comment}"
                   </p>
                 </div>
-                <div className="flex items-center justify-between mt-2 border-t border-brand-light pt-3">
+                <div className="flex items-center justify-between mt-2 border-t border-zinc-800/80 pt-3">
                   <div>
-                    <h4 className="text-xs font-display font-bold text-brand-dark">{r.name}</h4>
-                    <span className="text-[10px] text-brand-dark/50">{r.role}</span>
+                    <h4 className="text-xs font-display font-bold text-amber-200">{r.name}</h4>
+                    <span className="text-[10px] text-zinc-400 font-sans">{r.role}</span>
                   </div>
-                  <span className="text-[9px] font-black bg-brand-light text-brand-pink border border-brand-pink/25 uppercase px-2.5 py-1 rounded-full tracking-wider">
+                  <span className="text-[9px] font-black bg-amber-950/45 text-amber-400 border border-amber-500/20 uppercase px-2.5 py-1 rounded-full tracking-wider">
                     {r.tag}
                   </span>
                 </div>
@@ -806,29 +982,18 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           <span>© 2026 Oxente Festeje. João Pessoa - PB. Todos os direitos reservados.</span>
         </p>
 
-        {/* SECRET ACCESS BUTTON: discretely positioned at bottom right */}
-        <div className="fixed bottom-6 right-6 z-50">
-          <motion.div
-            initial={{ opacity: 0.15 }}
-            whileHover={{ opacity: 1, scale: 1.1 }}
-            className="relative group"
+        {/* SECRET ACCESS BUTTON: discretely positioned at absolute bottom right */}
+        <div className="fixed bottom-2 right-2 z-50">
+          <button
+            onClick={() => {
+              setAccessPassword('');
+              setPasswordError(false);
+              setShowAccessModal(true);
+            }}
+            className="text-zinc-700/35 hover:text-zinc-500/60 p-1.5 transition-all cursor-pointer"
           >
-            {/* Subtle button with key/lock icon */}
-            <button
-              onClick={() => {
-                setAccessPassword('');
-                setPasswordError(false);
-                setShowAccessModal(true);
-              }}
-              className="bg-zinc-800/40 hover:bg-brand-pink text-zinc-500 hover:text-black p-3 rounded-full backdrop-blur-sm border border-zinc-700/20 hover:border-brand-pink shadow-md transition-all cursor-pointer"
-              title="Acesso Administrativo"
-            >
-              <Lock className="h-4 w-4" />
-            </button>
-            <span className="absolute right-14 top-1/2 -translate-y-1/2 bg-zinc-900 text-white text-[10px] font-bold py-1 px-2.5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none tracking-wider">
-              Área Administrativa
-            </span>
-          </motion.div>
+            <Lock className="h-3.5 w-3.5" />
+          </button>
         </div>
 
         {/* MODAL 1: Order Tracking Lookup dialog */}
@@ -948,7 +1113,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                               ? 'O seu pedido já foi retirado ou entregue com sucesso! Obrigado por festejar com a gente! 🥳'
                               : trackedSale.statusProducao === 'Pronto para Retirada'
                               ? 'Excelente notícia! O seu pedido está finalizado e aguardando você vir buscá-lo na loja! 📍'
-                              : 'O seu pedido está sendo preparado com muito carinho por nossos designers de balões. Logo estará pronto! 🎈'}
+                              : 'O seu pedido está sendo preparado com muito carinho por nossa equipe de artesãos e designers. Logo estará pronto! 🎁'}
                           </p>
                         </div>
                       </div>
