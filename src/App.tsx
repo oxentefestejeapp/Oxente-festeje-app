@@ -56,6 +56,7 @@ import InstallAppTab from './components/InstallAppTab';
 import { SchedulingManager } from './components/SchedulingManager';
 import QrScannerTab from './components/QrScannerTab';
 import { OrderTrackingPage } from './components/OrderTrackingPage';
+import { LandingPage } from './components/LandingPage';
 
 import { Product, Sale, StoreInfo } from './types';
 import { defaultProducts, defaultSales, defaultStoreInfo } from './defaultData';
@@ -88,6 +89,9 @@ export default function App() {
   // 1. Custom Secure Credentials Auth State
   const [firebaseUser, setFirebaseUser] = useState<any | null>(null);
   const [userStatus, setUserStatus] = useState<'loading' | 'unauthenticated' | 'pending' | 'approved' | 'rejected'>('loading');
+  const [isLandingBypassed, setIsLandingBypassed] = useState(() => {
+    return localStorage.getItem('oxente_landing_bypassed') === 'true';
+  });
 
   const isAdmin = firebaseUser?.email === 'oxentefesteje@gmail.com' || firebaseUser?.email === 'abraaoapp@oxente.com' || firebaseUser?.id === 'abraaoapp' || firebaseUser?.role === 'admin';
 
@@ -2090,6 +2094,16 @@ export default function App() {
     );
   }
 
+  if (!isLandingBypassed && userStatus !== 'approved') {
+    return (
+      <LandingPage 
+        onUnlockSystem={() => setIsLandingBypassed(true)}
+        savedPhone={storeInfo?.telefone}
+        savedAddress={storeInfo?.endereco}
+      />
+    );
+  }
+
   if (userStatus === 'unauthenticated') {
     return <Login />;
   }
@@ -2529,6 +2543,7 @@ export default function App() {
             onClick={() => {
               localStorage.removeItem('oxente_local_bypass');
               localStorage.removeItem('oxente_custom_user');
+              localStorage.removeItem('oxente_landing_bypassed');
               setFirebaseUser(null);
               setUserStatus('unauthenticated');
               setActiveTab('vendas');
