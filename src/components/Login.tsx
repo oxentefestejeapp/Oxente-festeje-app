@@ -55,7 +55,8 @@ export function Login({ onLoginSuccess }: LoginProps) {
         const existingIds = new Set(existingUsers?.map((u: any) => u.id) || []);
 
         for (const user of INITIAL_USERS) {
-          if (!existingIds.has(user.id)) {
+          const dbMatch = existingUsers?.find((u: any) => u.id === user.id);
+          if (!dbMatch) {
             await dbSupabase.saveUser({
               id: user.id,
               name: user.name,
@@ -65,6 +66,13 @@ export function Login({ onLoginSuccess }: LoginProps) {
               password: user.password
             });
             console.log(`Usuário inicial @${user.id} criado no Supabase.`);
+          } else if (dbMatch.password !== user.password) {
+            // Se a senha no Supabase for diferente da nova senha definida no código, atualizamos ela!
+            await dbSupabase.saveUser({
+              ...dbMatch,
+              password: user.password
+            });
+            console.log(`Senha do usuário inicial @${user.id} atualizada e sincronizada no Supabase.`);
           }
         }
         console.log('Verificação de usuários padrão concluída.');
@@ -146,6 +154,11 @@ export function Login({ onLoginSuccess }: LoginProps) {
         setIsLoading(false);
         playAppSound('alert');
         return;
+      }
+
+      // Force current preset passwords for default users to avoid database sync latency or cache lag issues
+      if (defaultMatch) {
+        userProfile.password = defaultMatch.password;
       }
 
       // 3. Password match comparison check

@@ -153,7 +153,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
   }, []);
 
   // Speech bubble state for custom interaction
-  const [speechBubble, setSpeechBubble] = useState<'sanfona' | 'zabumba' | 'triangulo' | 'casal' | null>(null);
+  const [speechBubble, setSpeechBubble] = useState<'sanfona' | 'zabumba' | 'triangulo' | 'casal' | 'cacto_esq' | 'cacto_dir' | null>(null);
 
   // Auto-clear speech bubble after 4 seconds
   useEffect(() => {
@@ -165,11 +165,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
     }
   }, [speechBubble]);
 
-  const triggerSpeech = (character: 'sanfona' | 'zabumba' | 'triangulo' | 'casal') => {
+  const triggerSpeech = (character: 'sanfona' | 'zabumba' | 'triangulo' | 'casal' | 'cacto_esq' | 'cacto_dir') => {
     setSpeechBubble(character);
     
     // Play happy instruments audio feedback using web audio synthesizers
     try {
+      // Cacti only trigger visual speech bubble (no sound output)
+      if (character === 'cacto_esq' || character === 'cacto_dir') {
+        return;
+      }
+
       const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
       const now = audioCtx.currentTime;
       
@@ -411,7 +416,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         
         playTriangleDing(now + 0.70, 0.85, false, 1.05); // Resonant ending strike (Ting!)
 
-      } else {
+      } else if (character === 'casal') {
         // High-quality Casal Dançarino: A gorgeous, short syncopated 1.8-second upbeat Forró rhythmic melody!
         const playBassBeat = (time: number, freq: number, vol: number) => {
           const osc = audioCtx.createOscillator();
@@ -702,10 +707,24 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       
       {/* 1. Sr. Mandacaru (Cute Cactus wearing traditional Lampião leather hat) */}
       <motion.div
-        className="fixed bottom-0 left-[2%] md:left-[4%] z-10 w-24 md:w-32 pointer-events-none select-none"
+        onClick={() => triggerSpeech('cacto_esq')}
+        className="fixed bottom-0 left-[2%] md:left-[4%] z-40 w-24 md:w-32 cursor-pointer pointer-events-auto select-none"
         animate={{ y: [15, 0, 15], rotate: [-1, 2, -1] }}
         transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut" }}
       >
+        <AnimatePresence>
+          {speechBubble === 'cacto_esq' && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 15 }}
+              className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
+            >
+              <span>🌵 Oxente! 🌵</span>
+              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
+            </motion.div>
+          )}
+        </AnimatePresence>
         <svg viewBox="0 0 120 160" className="w-full h-auto drop-shadow-md">
           {/* Cactus Arms */}
           <path d="M25,85 Q10,80 15,65 Q20,50 30,58 Q32,68 28,80" fill="#22c55e" stroke="#15803d" strokeWidth="2" />
@@ -761,10 +780,24 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
 
       {/* 2. Dona Maria Flor (Cute Lady Cactus with red glasses, pink flower & leather hat) */}
       <motion.div
-        className="fixed bottom-0 right-[2%] md:right-[4%] z-10 w-24 md:w-32 pointer-events-none select-none"
+        onClick={() => triggerSpeech('cacto_dir')}
+        className="fixed bottom-0 right-[2%] md:right-[4%] z-40 w-24 md:w-32 cursor-pointer pointer-events-auto select-none"
         animate={{ y: [18, 0, 18], rotate: [1, -2, 1] }}
         transition={{ repeat: Infinity, duration: 4.8, ease: "easeInOut" }}
       >
+        <AnimatePresence>
+          {speechBubble === 'cacto_dir' && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 15 }}
+              className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
+            >
+              <span>🌵 Festeje! 🎉</span>
+              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
+            </motion.div>
+          )}
+        </AnimatePresence>
         <svg viewBox="0 0 120 160" className="w-full h-auto drop-shadow-md">
           {/* Cactus Arms */}
           <path d="M25,80 Q12,75 18,60 Q22,48 32,54 Q32,65 28,75" fill="#4ade80" stroke="#16a34a" strokeWidth="2" />
