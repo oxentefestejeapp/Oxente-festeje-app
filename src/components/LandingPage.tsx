@@ -856,7 +856,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       {/* 3. Seu Sanfoninha (Smiling Bouncing Accordion Character) */}
       <motion.div
         onClick={() => triggerSpeech('sanfona')}
-        className="fixed bottom-[3%] left-[13%] md:left-[15%] z-40 w-16 md:w-20 cursor-pointer pointer-events-auto select-none"
+        className="fixed bottom-[3%] left-[28%] md:left-[15%] z-40 w-16 md:w-20 cursor-pointer pointer-events-auto select-none"
         animate={{ x: [-3, 3, -3], scaleX: [0.95, 1.05, 0.95], rotate: [-2, 2, -2] }}
         transition={{ repeat: Infinity, duration: 3.2, ease: "easeInOut" }}
       >
@@ -917,7 +917,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       {/* 5. Zabumbinha (Cute traditional bouncing drum character) */}
       <motion.div
         onClick={() => triggerSpeech('zabumba')}
-        className="fixed bottom-[3%] right-[13%] md:right-[15%] z-40 w-14 md:w-18 cursor-pointer pointer-events-auto select-none"
+        className="fixed bottom-[3%] right-[28%] md:right-[15%] z-40 w-14 md:w-18 cursor-pointer pointer-events-auto select-none"
         animate={{ y: [-6, 4, -6], rotate: [5, -5, 5] }}
         transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut" }}
       >
