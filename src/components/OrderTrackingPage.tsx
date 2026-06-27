@@ -32,7 +32,7 @@ const DEFAULT_STORE_INFO: StoreInfo = {
 export function OrderTrackingPage() {
   const [trackingId, setTrackingId] = useState<string>(() => {
     const urlParams = new URLSearchParams(window.location.search);
-    return urlParams.get('acompanhar') || urlParams.get('pedido') || '';
+    return urlParams.get('venda') || urlParams.get('acompanhar') || urlParams.get('pedido') || '';
   });
   
   const [typedId, setTypedId] = useState('');
@@ -76,7 +76,7 @@ export function OrderTrackingPage() {
         if (saleByNum) {
           setSale(mapDbToSale(saleByNum));
           // Update URL query string silently so refreshing keeps the state
-          const newUrl = `${window.location.origin}${window.location.pathname}?acompanhar=${saleByNum.id}`;
+          const newUrl = `${window.location.origin}${window.location.pathname}?venda=${saleByNum.id}`;
           window.history.replaceState({ path: newUrl }, '', newUrl);
         } else {
           setErrorMsg('Pedido não encontrado. Verifique se o código ou o número do pedido está correto.');

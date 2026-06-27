@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MessageSquare, X, Send, Phone, Hash, User, ExternalLink, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sale, StoreInfo } from '../types';
+import { playAppSound } from '../lib/audio';
 
 interface WhatsAppNotifierProps {
   sale: Sale | null;
@@ -9,13 +10,15 @@ interface WhatsAppNotifierProps {
   onClose: () => void;
   onUpdateSale?: (updatedSale: Sale) => void;
   storeInfo?: StoreInfo;
+  isDelayedPickup?: boolean;
 }
 
-export function WhatsAppNotifier({ sale, isOpen, onClose, onUpdateSale, storeInfo }: WhatsAppNotifierProps) {
+export function WhatsAppNotifier({ sale, isOpen, onClose, onUpdateSale, storeInfo, isDelayedPickup }: WhatsAppNotifierProps) {
   const [phone, setPhone] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
   const [clientName, setClientName] = useState('');
   const [success, setSuccess] = useState(false);
+  const [messageType, setMessageType] = useState<'ready' | 'delayed'>('ready');
 
   // Sync state whenever sale opens
   useEffect(() => {
@@ -24,13 +27,35 @@ export function WhatsAppNotifier({ sale, isOpen, onClose, onUpdateSale, storeInf
       setOrderNumber(sale.numeroPedido || sale.id.substring(0, 5).toUpperCase());
       setClientName(sale.cliente || 'Consumidor');
       setSuccess(false);
+      setMessageType(isDelayedPickup ? 'delayed' : 'ready');
     }
-  }, [sale, isOpen]);
+  }, [sale, isOpen, isDelayedPickup]);
 
   if (!sale || !isOpen) return null;
 
   // Build message exactly from the user request
   const getRawMessageText = () => {
+    if (messageType === 'delayed') {
+      return `Olá, *${clientName.trim() || 'Consumidor'}*! Tudo bem? 🙋‍♀️
+
+Passando para te dar um lembrete amigável sobre o seu pedido *${orderNumber.trim() ? `(Pedido #${orderNumber.trim()})` : ''}*. 
+
+Ele já está pronto e aguardando você para retirada aqui na nossa loja! 🎈✨
+
+Como a sua data agendada de retirada já passou, pedimos que retire o quanto antes para evitarmos qualquer tipo de avaria ou danos de armazenamento no seu personalizado. Queremos que ele fique perfeito para a sua comemoração! 🎉
+
+📍 Segue o endereço abaixo:
+
+Rua Josina Lessa Feitosa 176
+Mangabeira 1
+
+*🚨Horário de atendimento e retirada de produtos🚨*
+Segunda a Sexta de 8:30h às 12h e das 13:00h às 17:00h
+Sábados de 8:30h às 12h
+
+Agradecemos a compreensão e aguardamos você! ❤️`;
+    }
+
     const defaultTemplate = `Olá, *{cliente}*!
 
 ®️ seu pedido está pronto para retirada{pedido}
@@ -133,8 +158,12 @@ Sábados de 8:30h às 12h
                 <MessageSquare className="h-4.5 w-4.5" />
               </div>
               <div>
-                <h3 className="font-semibold text-zinc-100 text-sm">Avisar Pronto por WhatsApp</h3>
-                <p className="text-[10px] text-zinc-500 mt-0.5">Integração comercial com WhatsApp Business</p>
+                <h3 className="font-semibold text-zinc-100 text-sm">
+                  {messageType === 'delayed' ? 'Aviso de Retirada em Atraso' : 'Avisar Pronto por WhatsApp'}
+                </h3>
+                <p className="text-[10px] text-zinc-500 mt-0.5">
+                  {messageType === 'delayed' ? 'Lembrete de armazenamento e avarias' : 'Integração comercial com WhatsApp Business'}
+                </p>
               </div>
             </div>
             <button
@@ -159,6 +188,38 @@ Sábados de 8:30h às 12h
               </div>
             ) : (
               <>
+                {/* Message Type Tabs */}
+                <div className="flex bg-black p-1 rounded-xl border border-zinc-850 gap-1 select-none">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playAppSound('click');
+                      setMessageType('ready');
+                    }}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      messageType === 'ready'
+                        ? 'bg-brand-pink text-black'
+                        : 'text-zinc-450 hover:text-zinc-200 hover:bg-zinc-900/50'
+                    }`}
+                  >
+                    📦 Pedido Pronto
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      playAppSound('click');
+                      setMessageType('delayed');
+                    }}
+                    className={`flex-1 py-1.5 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                      messageType === 'delayed'
+                        ? 'bg-amber-600 text-white font-extrabold shadow-md'
+                        : 'text-zinc-450 hover:text-zinc-200 hover:bg-zinc-900/50'
+                    }`}
+                  >
+                    ⚠️ Lembrete de Atraso
+                  </button>
+                </div>
+
                 {/* Visual Fields Wrapper */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Phone Input */}

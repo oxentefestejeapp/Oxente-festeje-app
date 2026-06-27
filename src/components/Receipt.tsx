@@ -30,7 +30,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
 
   useEffect(() => {
     if (!sale || sale.status === 'Orçamento') return;
-    const trackingUrl = `${window.location.origin}${window.location.pathname}?acompanhar=${sale.id}`;
+    const trackingUrl = `${window.location.origin}${window.location.pathname}?venda=${sale.id}`;
     QRCode.toDataURL(
       trackingUrl,
       {

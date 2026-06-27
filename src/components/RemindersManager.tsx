@@ -59,6 +59,7 @@ export function getLinkedSales(sale: Sale, allSales: Sale[]): Sale[] {
 
 export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = false }: RemindersManagerProps) {
   const [selectedSaleForWA, setSelectedSaleForWA] = useState<Sale | null>(null);
+  const [isDelayedReminderSelected, setIsDelayedReminderSelected] = useState<boolean>(false);
   const [selectedSaleForReceipt, setSelectedSaleForReceipt] = useState<Sale | null>(null);
   const [filterType, setFilterType] = useState<'todos' | 'pendentes' | 'concluidos' | 'esquecidos'>('todos');
   const [readyId, setReadyId] = useState<string | null>(null);
@@ -331,6 +332,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
 
   // Handle reminder click to trigger ready status update & WhatsApp notification
   const handleReminderAction = (sale: Sale) => {
+    setIsDelayedReminderSelected(false);
     const updatedSale: Sale = {
       ...sale,
       statusProducao: 'Pronto para Retirada'
@@ -901,6 +903,21 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                                   : 'Avisar Pronto & Contatar'}
                             </span>
                             <ArrowRight className="h-3 w-3 shrink-0 animate-bounce-horizontal" />
+                          </button>
+                        )}
+
+                        {isReadyForPickup && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              playAppSound('click');
+                              setIsDelayedReminderSelected(true);
+                              setSelectedSaleForWA(sale);
+                            }}
+                            className="flex-1 py-2.5 px-4 font-extrabold rounded-xl text-[11px] bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-955/20 transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                          >
+                            <MessageSquare className="h-4 w-4 shrink-0" />
+                            <span>Lembrar Retirada em Atraso</span>
                           </button>
                         )}
                         
@@ -1800,9 +1817,13 @@ Dê desconto para os seus amigos e ganhe até 15% de desconto total na sua próx
       <WhatsAppNotifier 
         sale={selectedSaleForWA}
         isOpen={selectedSaleForWA !== null}
-        onClose={() => setSelectedSaleForWA(null)}
+        onClose={() => {
+          setSelectedSaleForWA(null);
+          setIsDelayedReminderSelected(false);
+        }}
         onUpdateSale={onUpdateSale}
         storeInfo={storeInfo}
+        isDelayedPickup={isDelayedReminderSelected}
       />
 
       {/* Slide-over or Modal view for simulated thermal Receipt */}

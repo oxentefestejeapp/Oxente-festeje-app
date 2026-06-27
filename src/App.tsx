@@ -2158,7 +2158,7 @@ export default function App() {
 
   // Check if we have tracking parameter in URL to bypass authentication completely for public visitors
   const trackingParams = new URLSearchParams(window.location.search);
-  const isTracking = trackingParams.has('acompanhar') || trackingParams.has('pedido');
+  const isTracking = trackingParams.has('acompanhar') || trackingParams.has('pedido') || trackingParams.has('venda');
 
   if (isTracking) {
     return <OrderTrackingPage />;

@@ -200,7 +200,12 @@ Sábados de 8:30h às 12h
     let parsedText = text.trim();
 
     // Check if the QR code conforms to tracking URLs or standard "oxente:id"
-    if (parsedText.includes('acompanhar=')) {
+    if (parsedText.includes('venda=')) {
+      const parts = parsedText.split('venda=');
+      if (parts.length > 1) {
+        saleId = parts[1].split('&')[0];
+      }
+    } else if (parsedText.includes('acompanhar=')) {
       const parts = parsedText.split('acompanhar=');
       if (parts.length > 1) {
         saleId = parts[1].split('&')[0];
