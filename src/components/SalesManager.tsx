@@ -33,12 +33,23 @@ const paymentMethods: { value: PaymentMethod; label: string; icon: string }[] = 
 
 const CustomTooltip = ({ active, payload }: any) => {
   if (active && payload && payload.length) {
+    const faturamentoVal = payload[0].payload.value;
+    const lucroVal = payload[0].payload.profit !== undefined ? payload[0].payload.profit : 0;
     return (
-      <div className="bg-zinc-950 border border-zinc-800 p-2.5 rounded-lg shadow-xl text-xs font-sans">
-        <p className="text-zinc-400 font-medium mb-1">Dia {payload[0].payload.date}</p>
-        <p className="text-brand-pink font-bold text-sm">
-          R$ {payload[0].value.toFixed(2)}
-        </p>
+      <div className="bg-zinc-950 border border-zinc-800 p-2.5 rounded-lg shadow-xl text-xs font-sans space-y-1.5">
+        <p className="text-zinc-400 font-semibold mb-1">Dia {payload[0].payload.date}</p>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-zinc-500 font-medium">Faturamento:</span>
+          <span className="text-brand-pink font-bold">
+            R$ {faturamentoVal.toFixed(2)}
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-zinc-500 font-medium">Lucro Estimado:</span>
+          <span className="text-emerald-450 font-bold">
+            R$ {lucroVal.toFixed(2)}
+          </span>
+        </div>
       </div>
     );
   }
@@ -626,14 +637,14 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   // Calcule o faturamento diário para o período selecionado de dias
   const getDailyRevenueData = (days: number) => {
-    const dataMap: { [dateStr: string]: number } = {};
+    const dataMap: { [dateStr: string]: { value: number; profit: number } } = {};
     
     // Inicializar os últimos dias com 0 (em ordem cronológica)
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-      dataMap[dateStr] = 0;
+      dataMap[dateStr] = { value: 0, profit: 0 };
     }
     
     // Preencher as vendas reais
@@ -644,7 +655,25 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         if (!isNaN(saleDate.getTime())) {
           const dateStr = saleDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
           if (dataMap[dateStr] !== undefined) {
-             dataMap[dateStr] += sale.total;
+             dataMap[dateStr].value += sale.total;
+
+             // Calculate estimated cost and profit for this sale
+             let saleCost = 0;
+             if (sale.itens && sale.itens.length > 0) {
+               sale.itens.forEach(item => {
+                 const matchingProduct = products.find(p => p.id === item.produtoId);
+                 const costPrice = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62);
+                 // @ts-ignore
+                 const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
+                 saleCost += costPrice * q;
+               });
+             } else {
+               const matchingProduct = products.find(p => p.id === sale.produtoId);
+               const costPrice = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62);
+               saleCost += costPrice * sale.quantidade;
+             }
+             const saleProfit = Math.max(0, sale.total - saleCost);
+             dataMap[dateStr].profit += saleProfit;
           }
         }
       } catch (err) {
@@ -655,7 +684,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     // Mapear para o formato do Recharts
     return Object.keys(dataMap).map(date => ({
       date,
-      value: Number(dataMap[date].toFixed(2))
+      value: Number(dataMap[date].value.toFixed(2)),
+      profit: Number(dataMap[date].profit.toFixed(2))
     }));
   };
 
@@ -1341,13 +1371,54 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
     }
   };
 
+  // Get sales filtered ONLY by period/date (no search term and no 15-day-old limit)
+  const metricsSales = useMemo(() => {
+    return sales.filter((sale) => {
+      if (sale.status === 'Orçamento') return false;
+      
+      try {
+        const saleDate = new Date(sale.data);
+        const now = new Date();
+        
+        if (dateFilter === 'today') {
+          return saleDate.toDateString() === now.toDateString();
+        } else if (dateFilter === 'yesterday') {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          return saleDate.toDateString() === yesterday.toDateString();
+        } else if (dateFilter === '7days') {
+          const diffTime = Math.abs(now.getTime() - saleDate.getTime());
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          return diffDays <= 7;
+        } else if (dateFilter === 'this_month') {
+          return saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear();
+        } else if (dateFilter === 'custom') {
+          if (startDateStr) {
+            const start = new Date(startDateStr + 'T00:00:00');
+            if (saleDate < start) return false;
+          }
+          if (endDateStr) {
+            const end = new Date(endDateStr + 'T23:59:59');
+            if (saleDate > end) return false;
+          }
+          return true;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+      return true; // Default for 'all'
+    });
+  }, [sales, dateFilter, startDateStr, endDateStr]);
+
   const getTotalsAndProfit = useMemo(() => {
     let totalRevenue = 0;
     let totalEstimatedCost = 0;
+    let salesCount = 0;
 
-    filteredSales.forEach(sale => {
+    metricsSales.forEach(sale => {
       if (sale.status === 'Orçamento') return;
       totalRevenue += sale.total;
+      salesCount += 1;
       
       let saleCost = 0;
       if (sale.itens && sale.itens.length > 0) {
@@ -1373,9 +1444,10 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
       revenue: totalRevenue,
       cost: totalEstimatedCost,
       profit: totalNetProfit,
-      margin: marginPercent
+      margin: marginPercent,
+      salesCount: salesCount
     };
-  }, [filteredSales, products]);
+  }, [metricsSales, products]);
 
   const closedOrdersCount = useMemo(() => {
     if (!metricStartDate) return 0;
@@ -1439,13 +1511,26 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-end relative z-10">
             {/* Chart Area */}
             <div className="md:col-span-8 bg-black/40 border border-zinc-850/50 p-4 rounded-xl min-w-0">
-              <div className="flex items-center justify-between mb-4 px-2">
-                <span className="text-[10.5px] text-zinc-500 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
-                  <TrendingUp className="h-3.5 w-3.5 text-brand-pink" /> Fluxo Diário
-                </span>
-                <span className="text-xs text-zinc-400 font-bold font-mono">
-                  Total no período: <span className="text-brand-pink font-extrabold text-sm font-sans">R$ {chartData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                </span>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 px-2">
+                <div className="flex items-center gap-3">
+                  <span className="text-[10.5px] text-zinc-500 font-bold uppercase tracking-wider flex items-center gap-1.5 font-mono">
+                    <TrendingUp className="h-3.5 w-3.5 text-brand-pink" /> Fluxo Diário
+                  </span>
+                  <div className="flex items-center gap-2 text-[10px]">
+                    <span className="inline-block w-2 h-2 rounded-full bg-brand-pink"></span>
+                    <span className="text-zinc-450 font-semibold">Faturamento</span>
+                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-450 ml-1"></span>
+                    <span className="text-zinc-450 font-semibold">Lucro</span>
+                  </div>
+                </div>
+                <div className="flex flex-col items-end text-xs text-zinc-400 font-bold font-mono">
+                  <span>
+                    Faturamento total: <span className="text-brand-pink font-extrabold text-xs font-sans">R$ {chartData.reduce((acc, curr) => acc + curr.value, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </span>
+                  <span>
+                    Lucro total: <span className="text-emerald-450 font-extrabold text-xs font-sans">R$ {chartData.reduce((acc, curr) => acc + (curr.profit || 0), 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  </span>
+                </div>
               </div>
               <div className="relative h-56 w-full min-w-0">
                 <ResponsiveContainer width="100%" height={224} minWidth={0}>
@@ -1454,6 +1539,10 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                       <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#ec4899" stopOpacity={0.25} />
                         <stop offset="95%" stopColor="#ec4899" stopOpacity={0.0} />
+                      </linearGradient>
+                      <linearGradient id="colorProfit" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.25} />
+                        <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1f1f22" vertical={false} />
@@ -1475,7 +1564,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                       dx={-8}
                       fontFamily="JetBrains Mono"
                     />
-                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#ec4899', strokeWidth: 1, strokeDasharray: '3 3' }} />
+                    <Tooltip content={<CustomTooltip />} cursor={{ stroke: '#52525b', strokeWidth: 1, strokeDasharray: '3 3' }} />
                     <Area 
                       type="monotone" 
                       dataKey="value" 
@@ -1483,6 +1572,14 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                       strokeWidth={2.5}
                       fillOpacity={1} 
                       fill="url(#colorRevenue)" 
+                    />
+                    <Area 
+                      type="monotone" 
+                      dataKey="profit" 
+                      stroke="#10b981" 
+                      strokeWidth={2.5}
+                      fillOpacity={1} 
+                      fill="url(#colorProfit)" 
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -2778,10 +2875,14 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
 
               {/* Financial Performance Overview for main registered user only */}
               {isAdmin && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-zinc-950/30 p-3.5 border border-zinc-850/60 rounded-xl animate-fade-in select-none">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 bg-zinc-950/30 p-3.5 border border-zinc-850/60 rounded-xl animate-fade-in select-none text-left">
                   <div>
                     <span className="block text-[9px] text-zinc-500 uppercase font-black tracking-wider">Faturado Período</span>
                     <span className="text-sm font-bold text-zinc-200">R$ {getTotalsAndProfit.revenue.toFixed(2)}</span>
+                  </div>
+                  <div>
+                    <span className="block text-[9px] text-zinc-500 uppercase font-black tracking-wider">Quant. Vendas</span>
+                    <span className="text-sm font-bold text-blue-400">{getTotalsAndProfit.salesCount}</span>
                   </div>
                   <div>
                     <span className="block text-[9px] text-zinc-500 uppercase font-black tracking-wider">Custo Estimado</span>

@@ -162,6 +162,11 @@ export default function App() {
     localStorage.setItem('oxente_pending_products', JSON.stringify(updated));
   };
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(defaultStoreInfo);
+  const storeInfoRef = useRef<StoreInfo>(defaultStoreInfo);
+  useEffect(() => {
+    storeInfoRef.current = storeInfo;
+  }, [storeInfo]);
+
   const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'agendamento' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web' | 'instalar_app' | 'leitor_qr'>(() => {
     const saved = localStorage.getItem('oxente_active_tab');
     const allowedTabs = ['vendas', 'a_receber', 'entregas', 'agendamento', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'lembretes', 'pedidos_fechados', 'whatsapp_web', 'instalar_app', 'leitor_qr'];
@@ -223,6 +228,39 @@ export default function App() {
       window.removeEventListener('oxente_app_audio_mute_changed', handleMute);
     };
   }, []);
+
+  const handleAutoBackup = () => {
+    try {
+      const backupData = {
+        version: '1.0.0',
+        exportedAt: new Date().toISOString(),
+        database: {
+          products: productsRef.current,
+          sales: salesRef.current,
+          storeInfo: storeInfoRef.current
+        }
+      };
+
+      const dataStr = JSON.stringify(backupData, null, 2);
+      const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
+      const today = new Date().toISOString().split('T')[0];
+      const exportFileDefaultName = `backup_oxente_festeje_${today}.json`;
+
+      const linkElement = document.createElement('a');
+      linkElement.setAttribute('href', dataUri);
+      linkElement.setAttribute('download', exportFileDefaultName);
+      linkElement.click();
+
+      setShortFeedback({
+        title: 'Backup Automático Realizado! 💾✨',
+        message: 'O backup .json diário de segurança foi gerado e baixado automaticamente!',
+        type: 'backup_automatico'
+      });
+    } catch (error) {
+      console.error('Falha ao gerar backup automático diário:', error);
+    }
+  };
 
   // Redirect unallowed users who try to access the install tab
   useEffect(() => {
@@ -305,9 +343,17 @@ export default function App() {
       if (lastWelcome !== todayPrefix) {
         setShowCelebration('welcome');
         localStorage.setItem(storageKey, todayPrefix);
+        
+        // Trigger automatic daily JSON backup 5 seconds after entry (only for admins)
+        if (isAdmin) {
+          const timer = setTimeout(() => {
+            handleAutoBackup();
+          }, 5000);
+          return () => clearTimeout(timer);
+        }
       }
     }
-  }, [firebaseUser?.id, userStatus]);
+  }, [firebaseUser?.id, userStatus, isAdmin]);
 
   useEffect(() => {
     const checkLocalAuth = async () => {

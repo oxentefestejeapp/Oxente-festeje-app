@@ -11,14 +11,16 @@ import {
   Sparkles,
   ShoppingBag,
   FileCheck2,
-  Check
+  Check,
+  Database,
+  Save
 } from 'lucide-react';
 import { playAppSound } from '../lib/audio';
 
 export interface ShortFeedback {
   title: string;
   message: string;
-  type: 'status_agendado' | 'status_producao' | 'status_pronto' | 'status_entrega' | 'status_entregue' | 'art_finalizada' | 'pedido_criado' | 'produto_criado';
+  type: 'status_agendado' | 'status_producao' | 'status_pronto' | 'status_entrega' | 'status_entregue' | 'art_finalizada' | 'pedido_criado' | 'produto_criado' | 'backup_automatico';
 }
 
 interface ShortFeedbackToastProps {
@@ -126,6 +128,14 @@ export function ShortFeedbackToast({ feedback, onClose }: ShortFeedbackToastProp
           iconBg: 'bg-emerald-500/15 text-emerald-450',
           barColor: 'bg-emerald-505',
           icon: <Gift className="h-6 w-6 stroke-[2.2] animate-bounce" style={{ animationDuration: '3s' }} />
+        };
+      case 'backup_automatico':
+        return {
+          gradient: 'from-blue-500 via-indigo-500 to-blue-600',
+          border: 'border-blue-500/30 shadow-[0_0_25px_rgba(59,130,246,0.25)]',
+          iconBg: 'bg-blue-500/15 text-blue-400',
+          barColor: 'bg-blue-500',
+          icon: <Database className="h-6 w-6 stroke-[2.2] animate-pulse" />
         };
       default:
         return {
