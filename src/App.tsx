@@ -180,6 +180,14 @@ export default function App() {
   const [shortFeedback, setShortFeedback] = useState<ShortFeedback | null>(null);
   const [hasCheckedCritical, setHasCheckedCritical] = useState(false);
 
+  const isCurrentUserApprovedAndAllowed = React.useMemo(() => {
+    if (!firebaseUser) return false;
+    const allowedUserIds = ['abraaoapp', 'anaclara', 'juan', 'assis', 'ana_clara'];
+    const currentId = firebaseUser.id || '';
+    const normalizedId = currentId.trim().toLowerCase().replace(/\s+/g, '_');
+    return allowedUserIds.includes(normalizedId) && userStatus === 'approved';
+  }, [firebaseUser, userStatus]);
+
   useEffect(() => {
     if (products.length > 0 && !hasCheckedCritical) {
       const critical = products.filter(p => !p.estoqueInfinito && p.estoque <= 10);
@@ -326,6 +334,17 @@ export default function App() {
         try {
           const userObj = JSON.parse(savedUserStr);
           const userIdNormal = userObj.id || userObj.uid || '';
+          
+          const allowedUserIds = ['abraaoapp', 'anaclara', 'juan', 'assis', 'ana_clara'];
+          const normalizedId = userIdNormal ? userIdNormal.trim().toLowerCase().replace(/\s+/g, '_') : '';
+          
+          if (!userIdNormal || !allowedUserIds.includes(normalizedId)) {
+            localStorage.removeItem('oxente_custom_user');
+            setFirebaseUser(null);
+            setUserStatus('unauthenticated');
+            return;
+          }
+
           if (userIdNormal) {
             // First load user details directly from Supabase
             const loadProfile = async () => {
@@ -2195,7 +2214,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-black text-zinc-100 flex flex-col font-sans select-none antialiased">
+    <div className={`min-h-screen bg-black text-zinc-100 flex flex-col font-sans select-none antialiased ${!isCurrentUserApprovedAndAllowed ? 'pointer-events-none select-none opacity-20 cursor-not-allowed filter grayscale blur-[1.5px]' : ''}`}>
       {isForceUpdating && (
         <div className="fixed inset-0 bg-zinc-950/95 backdrop-blur-md z-[9999] flex flex-col items-center justify-center p-6 text-center animate-fade-in select-none">
           <div className="bg-zinc-900 border border-brand-pink/30 rounded-2xl p-8 max-w-md shadow-2xl flex flex-col items-center">

@@ -888,10 +888,20 @@ const realDbSupabase = {
   },
 
   async saveUser(user: any): Promise<boolean> {
+    const id = user.id || user.uid;
+    if (!id) return false;
+
+    // Reject unregistered users automatically
+    const normalizedId = id.trim().toLowerCase().replace(/\s+/g, '_');
+    const allowedUserIds = ['abraaoapp', 'anaclara', 'juan', 'assis', 'ana_clara'];
+    if (!allowedUserIds.includes(normalizedId)) {
+      console.warn(`Tentativa de cadastrar o usuário @${id} recusada automaticamente.`);
+      return false;
+    }
+
     // Synchronize locally first
     const cached = localStorage.getItem('oxente_custom_users_local');
     const list: any[] = cached ? JSON.parse(cached) : [];
-    const id = user.id || user.uid;
     if (id) {
       const index = list.findIndex(u => u.id === id);
       const userPayload = {
@@ -1246,9 +1256,19 @@ const sandboxDbSupabase = {
   },
 
   saveUser: async (user: any): Promise<boolean> => {
+    const id = user.id || user.uid;
+    if (!id) return false;
+
+    // Reject unregistered users automatically
+    const normalizedId = id.trim().toLowerCase().replace(/\s+/g, '_');
+    const allowedUserIds = ['abraaoapp', 'anaclara', 'juan', 'assis', 'ana_clara'];
+    if (!allowedUserIds.includes(normalizedId)) {
+      console.warn(`Tentativa de cadastrar o usuário @${id} recusada automaticamente.`);
+      return false;
+    }
+
     const cached = localStorage.getItem('oxente_custom_users_local');
     const list: any[] = cached ? JSON.parse(cached) : [];
-    const id = user.id || user.uid;
     const index = list.findIndex(u => u.id === id);
     if (index >= 0) {
       list[index] = { ...list[index], ...user, updatedAt: new Date().toISOString() };
