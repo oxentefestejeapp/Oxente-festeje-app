@@ -60,7 +60,7 @@ export function getLinkedSales(sale: Sale, allSales: Sale[]): Sale[] {
 export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = false }: RemindersManagerProps) {
   const [selectedSaleForWA, setSelectedSaleForWA] = useState<Sale | null>(null);
   const [selectedSaleForReceipt, setSelectedSaleForReceipt] = useState<Sale | null>(null);
-  const [filterType, setFilterType] = useState<'todos' | 'pendentes' | 'concluidos'>('todos');
+  const [filterType, setFilterType] = useState<'todos' | 'pendentes' | 'concluidos' | 'esquecidos'>('todos');
   const [readyId, setReadyId] = useState<string | null>(null);
   const [schedulingSaleId, setSchedulingSaleId] = useState<string | null>(null);
   
@@ -277,6 +277,18 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
   const todayStr = useMemo(() => getTodayString(), []);
   const tomorrowStr = useMemo(() => getTomorrowString(), []);
 
+  // Helper to safely calculate how many days late an order is
+  const getDaysLate = (dateStr: string) => {
+    try {
+      const d1 = new Date(todayStr + 'T12:00:00');
+      const d2 = new Date(dateStr + 'T12:00:00');
+      const diffTime = d1.getTime() - d2.getTime();
+      return Math.max(1, Math.round(diffTime / (1000 * 60 * 60 * 24)));
+    } catch {
+      return 1;
+    }
+  };
+
   // Filter sales that are scheduled for pickup today (excluding estimates)
   const todaySales = useMemo(() => {
     return sales.filter(s => s.dataRetirada === todayStr && s.status !== 'Orçamento');
@@ -287,8 +299,16 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
     return sales.filter(s => s.dataRetirada === tomorrowStr && s.status !== 'Orçamento');
   }, [sales, tomorrowStr]);
 
-  // Apply visual status filters on today's sales
+  // Filter forgotten/overdue sales (withdrawal date before today and not delivered)
+  const forgottenSales = useMemo(() => {
+    return sales.filter(s => s.dataRetirada && s.dataRetirada < todayStr && s.status !== 'Orçamento' && s.statusProducao !== 'Entregue');
+  }, [sales, todayStr]);
+
+  // Apply visual status filters on today's or forgotten sales
   const filteredSales = useMemo(() => {
+    if (filterType === 'esquecidos') {
+      return forgottenSales;
+    }
     return todaySales.filter(sale => {
       const isPending = sale.statusProducao !== 'Entregue';
       
@@ -300,7 +320,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
       }
       return true;
     });
-  }, [todaySales, filterType]);
+  }, [todaySales, forgottenSales, filterType]);
 
   // Counts for Today
   const pendingCount = useMemo(() => {
@@ -422,20 +442,58 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
           </div>
         </div>
 
-        {/* Dynamic counter widgets for today */}
-        <div className="flex gap-2">
-          <div className="bg-black/40 border border-zinc-850 px-3 py-2 rounded-xl text-center min-w-[70px]">
-            <span className="text-[9px] text-zinc-500 font-extrabold uppercase block select-none">Total</span>
-            <span className="text-sm font-black text-zinc-200">{todaySales.length}</span>
-          </div>
-          <div className="bg-amber-955/10 border border-amber-900/30 px-3 py-2 rounded-xl text-center min-w-[70px]">
-            <span className="text-[9px] text-amber-500 font-extrabold uppercase block select-none">Pendentes</span>
-            <span className="text-sm font-black text-amber-400">{pendingCount}</span>
-          </div>
-          <div className="bg-emerald-955/10 border border-emerald-900/20 px-3 py-2 rounded-xl text-center min-w-[70px]">
-            <span className="text-[9px] text-emerald-500 font-extrabold uppercase block select-none">Entregues</span>
-            <span className="text-sm font-black text-emerald-400">{completedCount}</span>
-          </div>
+        {/* Dynamic counter buttons */}
+        <div className="flex gap-2 flex-wrap sm:flex-nowrap">
+          <button
+            type="button"
+            onClick={() => {
+              playAppSound('click');
+              setFilterType('todos');
+            }}
+            className={`px-3 py-2 rounded-xl text-center min-w-[70px] transition-all cursor-pointer border ${
+              filterType === 'todos'
+                ? 'bg-brand-pink text-black border-brand-pink font-extrabold'
+                : 'bg-black/40 border-zinc-850 hover:bg-zinc-800/40 text-zinc-200'
+            }`}
+          >
+            <span className={`text-[9px] font-extrabold uppercase block select-none ${filterType === 'todos' ? 'text-black/70' : 'text-zinc-500'}`}>Total</span>
+            <span className="text-sm font-black">{todaySales.length}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              playAppSound('click');
+              setFilterType('pendentes');
+            }}
+            className={`px-3 py-2 rounded-xl text-center min-w-[70px] transition-all cursor-pointer border ${
+              filterType === 'pendentes'
+                ? 'bg-amber-500 text-black border-amber-500 font-extrabold'
+                : 'bg-amber-955/10 border-amber-900/30 hover:bg-amber-955/25 text-amber-400'
+            }`}
+          >
+            <span className={`text-[9px] font-extrabold uppercase block select-none ${filterType === 'pendentes' ? 'text-black/70' : 'text-amber-500'}`}>Pendentes</span>
+            <span className="text-sm font-black">{pendingCount}</span>
+          </button>
+          <button
+            type="button"
+            id="btn-encomendas-esquecidas"
+            onClick={() => {
+              playAppSound('click');
+              setFilterType('esquecidos');
+            }}
+            className={`px-3 py-2 rounded-xl text-center min-w-[70px] transition-all cursor-pointer border relative overflow-hidden ${
+              filterType === 'esquecidos'
+                ? 'bg-rose-600 text-white border-rose-500 font-extrabold shadow-md shadow-rose-950/50'
+                : 'bg-red-955/15 border-red-900/30 hover:bg-red-955/35 text-red-400'
+            } ${forgottenSales.length > 0 ? 'animate-pulse' : ''}`}
+            title="Mostrar Encomendas Esquecidas (Agendadas para datas passadas e não entregues)"
+          >
+            {forgottenSales.length > 0 && (
+              <span className="absolute top-0 right-0 h-1.5 w-1.5 bg-red-400 rounded-full animate-ping" />
+            )}
+            <span className={`text-[9px] font-extrabold uppercase block select-none ${filterType === 'esquecidos' ? 'text-white/80' : 'text-red-500'}`}>Esquecidas</span>
+            <span className="text-sm font-black">{forgottenSales.length}</span>
+          </button>
         </div>
       </div>
 
@@ -445,8 +503,16 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
         {/* Left main section - Today's Reminders */}
         <div className="lg:col-span-2 space-y-5">
           <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
-            <h3 className="text-sm font-bold text-brand-pink tracking-wide flex items-center gap-2 select-none">
-              <span>🔔</span> LEMBRETES DE HOJE
+            <h3 className="text-sm font-bold text-brand-pink tracking-wide flex items-center gap-2 select-none uppercase">
+              {filterType === 'esquecidos' ? (
+                <>
+                  <span>⚠️</span> Encomendas Esquecidas / Atrasadas
+                </>
+              ) : (
+                <>
+                  <span>🔔</span> LEMBRETES DE HOJE
+                </>
+              )}
             </h3>
             <span className="text-[9.5px] text-zinc-500 font-mono tracking-wider">
               {filteredSales.length} {filteredSales.length === 1 ? 'registro' : 'registros'} encontrado(s)
@@ -455,17 +521,31 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
 
           {/* Guidelines info banner */}
           <div className="bg-zinc-950 border border-zinc-900 p-4 rounded-xl flex items-start gap-3 text-xs leading-relaxed text-zinc-400 no-print">
-            <span className="text-lg mt-0.5 shrink-0 select-none">💡</span>
+            <span className="text-lg mt-0.5 shrink-0 select-none">
+              {filterType === 'esquecidos' ? '⚠️' : '💡'}
+            </span>
             <div className="space-y-1">
-              <h4 className="font-bold text-zinc-200">Como funcionam os Lembretes do Dia?</h4>
+              <h4 className="font-bold text-zinc-200">
+                {filterType === 'esquecidos' 
+                  ? 'Como funcionam as Encomendas Esquecidas?' 
+                  : 'Como funcionam os Lembretes do Dia?'}
+              </h4>
               <p>
-                Rastreie os pedidos com retirada agendada para hoje. Clique em <strong className="text-brand-pink font-semibold">"Avisar Pronto &amp; Contatar"</strong> para marcar a encomenda como <strong className="text-purple-400">Pronto para Retirada</strong> e preparar a mensagem detalhada do WhatsApp no formato oficial de contato do salão.
+                {filterType === 'esquecidos' ? (
+                  <>
+                    Estes são os pedidos com retirada agendada para <strong>datas anteriores a hoje</strong> que ainda não constam como entregues. Clique em <strong className="text-rose-450 font-semibold">"Avisar Pronto &amp; Contatar"</strong> para preparar a mensagem de aviso no WhatsApp, cobrando novamente a retirada.
+                  </>
+                ) : (
+                  <>
+                    Rastreie os pedidos com retirada agendada para hoje. Clique em <strong className="text-brand-pink font-semibold">"Avisar Pronto &amp; Contatar"</strong> para marcar a encomenda como <strong className="text-purple-400">Pronto para Retirada</strong> e preparar a mensagem detalhada do WhatsApp no formato oficial de contato do salão.
+                  </>
+                )}
               </p>
             </div>
           </div>
 
           {/* Filters Row */}
-          <div className="flex gap-1 bg-zinc-900/50 p-1 border border-zinc-850 rounded-xl max-w-sm">
+          <div className="flex gap-1 bg-zinc-900/50 p-1 border border-zinc-850 rounded-xl max-w-md flex-wrap sm:flex-nowrap">
             <button 
               onClick={() => setFilterType('todos')}
               className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent ${
@@ -480,7 +560,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
               onClick={() => setFilterType('pendentes')}
               className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent ${
                 filterType === 'pendentes' 
-                  ? 'bg-amber-950/20 text-amber-400 border-amber-900/25' 
+                  ? 'bg-amber-955/20 text-amber-400 border-amber-900/25' 
                   : 'text-zinc-450 hover:text-zinc-200'
               }`}
             >
@@ -490,11 +570,21 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
               onClick={() => setFilterType('concluidos')}
               className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent ${
                 filterType === 'concluidos' 
-                  ? 'bg-emerald-950/20 text-emerald-400 border-emerald-900/15' 
+                  ? 'bg-emerald-955/20 text-emerald-400 border-emerald-900/15' 
                   : 'text-zinc-450 hover:text-zinc-200'
               }`}
             >
               Entregues ({completedCount})
+            </button>
+            <button 
+              onClick={() => setFilterType('esquecidos')}
+              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent ${
+                filterType === 'esquecidos' 
+                  ? 'bg-rose-955/25 text-rose-400 border-rose-900/35 shadow-xs' 
+                  : 'text-zinc-450 hover:text-rose-450/75'
+              }`}
+            >
+              Esquecidas ({forgottenSales.length})
             </button>
           </div>
 
@@ -564,6 +654,20 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                       <span className="text-[10px] bg-zinc-950 border border-zinc-850 text-zinc-400 font-mono font-bold px-2 py-0.5 rounded-md">
                         Pedido #{sale.numeroPedido || sale.id.substring(0, 5).toUpperCase()}
                       </span>
+
+                      {sale.dataRetirada && sale.dataRetirada < todayStr && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playAppSound('click');
+                            setFilterType('esquecidos');
+                          }}
+                          className="cursor-pointer text-[9px] font-black uppercase tracking-widest bg-rose-500/20 hover:bg-rose-500/35 text-rose-400 hover:text-rose-250 border border-rose-500/30 hover:border-rose-400/50 px-1.5 py-0.5 rounded animate-pulse transition-all select-none"
+                          title="Clique para filtrar apenas encomendas esquecidas"
+                        >
+                          ⚠️ ESQUECIDO / ATRASADO ({getDaysLate(sale.dataRetirada)} {getDaysLate(sale.dataRetirada) === 1 ? 'dia' : 'dias'})
+                        </button>
+                      )}
                       
                       <button
                         type="button"
@@ -685,6 +789,12 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                         <p className="text-xs text-zinc-400 font-mono mt-0.5 flex items-center gap-1">
                           <Phone className="h-3 w-3 text-zinc-500 shrink-0" />
                           <span>{sale.telefoneCliente}</span>
+                        </p>
+                      )}
+                      {sale.dataRetirada && sale.dataRetirada !== todayStr && (
+                        <p className="text-[11px] text-rose-400 font-bold mt-1.5 flex items-center gap-1.5 bg-rose-950/10 border border-rose-900/15 px-2.5 py-1 rounded-lg">
+                          <Calendar className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                          <span>Retirada agendada para: {formatLocalDate(sale.dataRetirada)} ({getDaysLate(sale.dataRetirada)} {getDaysLate(sale.dataRetirada) === 1 ? 'dia' : 'dias'} de atraso)</span>
                         </p>
                       )}
                     </div>
@@ -950,8 +1060,16 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                   <Bell className="h-4.5 w-4.5" />
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-zinc-300">Sem lembretes filtrados para hoje</h4>
-                  <p className="text-[10.5px] text-zinc-500 mt-0.5">Altere os botões de filtro acima ou confira os demais dias.</p>
+                  <h4 className="text-xs font-bold text-zinc-300">
+                    {filterType === 'esquecidos' 
+                      ? 'Nenhuma encomenda esquecida encontrada' 
+                      : 'Sem lembretes filtrados para hoje'}
+                  </h4>
+                  <p className="text-[10.5px] text-zinc-500 mt-0.5">
+                    {filterType === 'esquecidos'
+                      ? 'Todos os pedidos de datas passadas foram devidamente entregues ou faturados!'
+                      : 'Altere os botões de filtro acima ou confira os demais dias.'}
+                  </p>
                 </div>
               </div>
             )}

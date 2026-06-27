@@ -30,6 +30,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
   const [deliverySearchTerm, setDeliverySearchTerm] = useState('');
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [productionStatusFilter, setProductionStatusFilter] = useState<'All' | 'Agendado' | 'Em Produção' | 'Pronto para Retirada'>('All');
+  const [filterForgottenOnly, setFilterForgottenOnly] = useState(false);
 
   const actualSales = useMemo(() => {
     return sales.filter(s => s.status !== 'Orçamento');
@@ -151,6 +152,11 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
     // Filtro por status de produção quando selecionado nas métricas
     if (productionStatusFilter !== 'All') {
       list = list.filter(s => (s.statusProducao || 'Agendado') === productionStatusFilter);
+    }
+    
+    // Filtro por encomendas esquecidas
+    if (filterForgottenOnly) {
+      list = list.filter(s => isForgottenSale(s));
     }
     
     if (!term) {
@@ -336,7 +342,22 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
         </div>
 
         {forgottenCount > 0 && (
-          <div className="bg-red-950/20 border border-red-800/50 p-4 rounded-xl flex items-center justify-between shadow-xs">
+          <button
+            type="button"
+            onClick={() => {
+              playAppSound('click');
+              setCategory('Pendentes');
+              setProductionStatusFilter('All');
+              setFilterForgottenOnly(prev => !prev);
+              setSelectedSaleId(null);
+            }}
+            className={`w-full p-4 rounded-xl flex items-center justify-between shadow-xs transition-all duration-200 border select-none text-left cursor-pointer active:scale-98 ${
+              filterForgottenOnly
+                ? 'bg-red-950/30 border-red-500/60 shadow-[0_0_12px_rgba(239,68,68,0.25)] ring-1 ring-red-500/30'
+                : 'bg-red-950/20 border-red-800/50 hover:bg-red-950/30 hover:border-red-750/70'
+            }`}
+            title="Clique para filtrar e listar apenas as encomendas esquecidas"
+          >
             <div className="flex items-center gap-2.5">
               <span className="text-xl">⚠️</span>
               <div>
@@ -344,25 +365,33 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                 <p className="text-[10px] text-zinc-400 mt-0.5">Detectamos {forgottenCount} {forgottenCount === 1 ? 'pedido pendente há mais' : 'pedidos pendentes há mais'} de 5 dias da data de retirada.</p>
               </div>
             </div>
-            <span className="text-[9.5px] font-black uppercase text-red-400 bg-red-900/15 border border-red-800/30 px-2 py-1 rounded-md animate-pulse">
-              Prioridade
+            <span className={`text-[9.5px] font-black uppercase px-2 py-1 rounded-md transition-all ${
+              filterForgottenOnly
+                ? 'bg-red-500 text-black font-extrabold'
+                : 'text-red-400 bg-red-900/15 border border-red-800/30 animate-pulse'
+            }`}>
+              {filterForgottenOnly ? 'Filtrando 🔒' : 'Prioridade'}
             </span>
-          </div>
+          </button>
         )}
 
         {/* Active Production Filter Alert */}
-        {productionStatusFilter !== 'All' && (
+        {(productionStatusFilter !== 'All' || filterForgottenOnly) && (
           <div className="flex items-center justify-between bg-zinc-950/40 border border-zinc-850 rounded-xl px-4 py-2.5 text-xs no-print animate-fade-in">
             <span className="text-zinc-400 flex items-center gap-1.5">
               <span>🔍</span> 
               <span>Filtrando por:</span>
               <strong className="text-zinc-100 font-black uppercase text-[10.5px]">
-                {productionStatusFilter === 'Agendado' ? '📅 Agendado' : 
+                {filterForgottenOnly ? '⚠️ Encomendas Esquecidas' : 
+                 productionStatusFilter === 'Agendado' ? '📅 Agendado' : 
                  productionStatusFilter === 'Em Produção' ? '🔨 Em Produção' : '✨ Pronto para Retirada'}
               </strong>
             </span>
             <button
-              onClick={() => setProductionStatusFilter('All')}
+              onClick={() => {
+                setProductionStatusFilter('All');
+                setFilterForgottenOnly(false);
+              }}
               className="text-[10px] text-brand-pink hover:text-brand-pink/80 font-black uppercase tracking-widest cursor-pointer select-none"
             >
               Limpar Filtro [x]
