@@ -38,7 +38,7 @@ export function WhatsAppNotifier({ sale, isOpen, onClose, onUpdateSale, storeInf
     if (messageType === 'delayed') {
       return `Olá, *${clientName.trim() || 'Consumidor'}*! Tudo bem? 🙋‍♀️
 
-Passando para te dar um lembrete amigável sobre o seu pedido *${orderNumber.trim() ? `(Pedido #${orderNumber.trim()})` : ''}*. 
+Passando para te dar um lembrete sobre o seu pedido *${orderNumber.trim() ? `(Pedido #${orderNumber.trim()})` : ''}*. 
 
 Ele já está pronto e aguardando você para retirada aqui na nossa loja! 🎈✨
 
