@@ -10,13 +10,16 @@ declare global {
 }
 
 const DEFAULT_ADS_ID = 'AW-18143769748';
+const DEFAULT_CONVERSION_LABEL = 'mVeBCMzTwKgcEJTpz8tD';
 
 /**
  * Initializes the Google Tag (gtag.js) for Google Ads dynamically.
- * Reads the VITE_GOOGLE_ADS_ID from the environment variables or falls back to AW-18143769748.
+ * Reads the VITE_GOOGLE_ADS_ID and VITE_GOOGLE_ADS_CONVERSION_LABEL from the environment variables or falls back to defaults.
  */
 export function initGoogleAds() {
   const adsId = import.meta.env.VITE_GOOGLE_ADS_ID || DEFAULT_ADS_ID;
+  const conversionLabel = import.meta.env.VITE_GOOGLE_ADS_CONVERSION_LABEL || DEFAULT_CONVERSION_LABEL;
+  
   if (!adsId) {
     console.warn(
       "[Google Ads] Google Ads ID (VITE_GOOGLE_ADS_ID) não configurado no arquivo .env. O rastreamento funcionará em modo simulação."
@@ -49,10 +52,17 @@ export function initGoogleAds() {
       window.gtag = gtag;
       gtag('js', new Date());
       gtag('config', '${adsId}', { 'page_path': window.location.pathname });
+      
+      // Dispara a conversão de Visualização de Página (Page View) para verificar e ativar a ação no Google Ads
+      gtag('event', 'conversion', {
+        'send_to': '${adsId}/${conversionLabel}',
+        'value': 1.0,
+        'currency': 'BRL'
+      });
     `;
     document.head.appendChild(script2);
 
-    console.log(`[Google Ads] Inicializado com sucesso para a página pública. ID: ${adsId}`);
+    console.log(`[Google Ads] Inicializado para o ID: ${adsId}. Conversão de Visualização de Página disparada com o rótulo: ${conversionLabel}`);
   } catch (error) {
     console.error("[Google Ads] Erro ao carregar os scripts do Google Tag:", error);
   }
