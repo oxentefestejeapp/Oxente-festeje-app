@@ -447,68 +447,146 @@ export const InstagramFeed: React.FC = () => {
         <div className="absolute right-0 top-0 bottom-0 w-12 sm:w-24 bg-gradient-to-l from-[#0c0a09] to-transparent z-10 pointer-events-none" />
 
         {/* Rolling Track */}
-        <div className="flex gap-4 sm:gap-6 w-max">
-          {duplicatedPosts.map((post, idx) => (
-            <motion.a
-              key={`${post.id}-${idx}`}
-              href={post.link}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="relative w-64 sm:w-72 h-80 sm:h-96 rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-lg block group"
-              whileHover={{ scale: 1.02, y: -4 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              onDragStart={(e) => e.preventDefault()}
-              onClick={(e) => {
-                if (draggedDistanceRef.current > 15) {
-                  e.preventDefault();
-                }
-              }}
-            >
-              {/* Image background */}
-              <OptimizedImage
-                src={post.imageUrl}
-                alt={post.caption}
-                width={360}
-                quality={70}
-                referrerPolicy="no-referrer"
-                className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
-              />
+        <div className="flex gap-0 w-max">
+          {/* Primeira metade */}
+          <div className="flex gap-4 sm:gap-6 shrink-0 pr-4 sm:pr-6">
+            {activePosts.map((post, idx) => (
+              <motion.a
+                key={`${post.id}-1-${idx}`}
+                href={post.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative w-64 sm:w-72 h-80 sm:h-96 rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-lg block group"
+                whileHover={{ scale: 1.02, y: -4 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                onDragStart={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  if (draggedDistanceRef.current > 15) {
+                    e.preventDefault();
+                  }
+                }}
+              >
+                {/* Image background */}
+                <OptimizedImage
+                  src={post.imageUrl}
+                  alt={post.caption}
+                  width={360}
+                  quality={70}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
 
-              {/* Instagram tag badge */}
-              <span className="absolute top-3 left-3 bg-black/70 backdrop-blur-md text-[10px] text-amber-200 font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border border-amber-500/20 z-10">
-                {post.tag}
-              </span>
+                {/* Instagram tag badge */}
+                <span className="absolute top-3 left-3 bg-black/70 backdrop-blur-md text-[10px] text-amber-200 font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border border-amber-500/20 z-10">
+                  {post.tag}
+                </span>
 
-              {/* Dark overlay & info displayed on hover */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 z-20">
-                {/* Real-time Interaction Stats bar */}
-                <div className="flex items-center gap-4 text-white text-xs font-mono font-bold mb-2">
-                  <span className="flex items-center gap-1 text-rose-400">
-                    <Heart className="h-4 w-4 fill-rose-500 text-rose-500" /> {post.likes}
-                  </span>
-                  <span className="flex items-center gap-1 text-sky-400">
-                    <MessageCircle className="h-4 w-4 fill-sky-400/20 text-sky-400" /> {post.comments}
-                  </span>
+                {/* Dark overlay & info displayed on hover */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 z-20">
+                  {/* Real-time Interaction Stats bar */}
+                  <div className="flex items-center gap-4 text-white text-xs font-mono font-bold mb-2">
+                    <span className="flex items-center gap-1 text-rose-400">
+                      <Heart className="h-4 w-4 fill-rose-500 text-rose-500" /> {post.likes}
+                    </span>
+                    <span className="flex items-center gap-1 text-sky-400">
+                      <MessageCircle className="h-4 w-4 fill-sky-400/20 text-sky-400" /> {post.comments}
+                    </span>
+                  </div>
+
+                  {/* Subtitle / Caption */}
+                  <p className="text-stone-200 text-xs leading-relaxed font-sans font-medium line-clamp-3 mb-3">
+                    {post.caption}
+                  </p>
+
+                  {/* Direct link footer action */}
+                  <div className="flex items-center justify-between text-[10px] text-amber-400 font-bold uppercase tracking-wider border-t border-white/10 pt-2.5">
+                    <span className="flex items-center gap-1">
+                      Ver no Instagram <ExternalLink className="h-3 w-3" />
+                    </span>
+                    <span className="text-stone-400 lowercase">@oxentefesteje</span>
+                  </div>
                 </div>
 
-                {/* Subtitle / Caption */}
-                <p className="text-stone-200 text-xs leading-relaxed font-sans font-medium line-clamp-3 mb-3">
-                  {post.caption}
-                </p>
+                {/* Static subtle overlay for high image readability */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none group-hover:opacity-0 transition-opacity duration-300" />
+              </motion.a>
+            ))}
 
-                {/* Direct link footer action */}
-                <div className="flex items-center justify-between text-[10px] text-amber-400 font-bold uppercase tracking-wider border-t border-white/10 pt-2.5">
-                  <span className="flex items-center gap-1">
-                    Ver no Instagram <ExternalLink className="h-3 w-3" />
-                  </span>
-                  <span className="text-stone-400 lowercase">@oxentefesteje</span>
+            {/* Espaço a mais entre o final e o início do looping com branding elegante e sutil */}
+            <div className="w-16 sm:w-28 shrink-0 flex items-center justify-center text-amber-400/20 font-mono text-[10px] select-none pointer-events-none uppercase tracking-widest border border-dashed border-amber-500/10 rounded-2xl h-80 sm:h-96">
+              ✦ oxente festeje ✦
+            </div>
+          </div>
+
+          {/* Segunda metade (Sempre idêntica para o looping infinito sem sobressalto) */}
+          <div className="flex gap-4 sm:gap-6 shrink-0 pr-4 sm:pr-6">
+            {activePosts.map((post, idx) => (
+              <motion.a
+                key={`${post.id}-2-${idx}`}
+                href={post.link}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="relative w-64 sm:w-72 h-80 sm:h-96 rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-lg block group"
+                whileHover={{ scale: 1.02, y: -4 }}
+                transition={{ duration: 0.3, ease: "easeOut" }}
+                onDragStart={(e) => e.preventDefault()}
+                onClick={(e) => {
+                  if (draggedDistanceRef.current > 15) {
+                    e.preventDefault();
+                  }
+                }}
+              >
+                {/* Image background */}
+                <OptimizedImage
+                  src={post.imageUrl}
+                  alt={post.caption}
+                  width={360}
+                  quality={70}
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                />
+
+                {/* Instagram tag badge */}
+                <span className="absolute top-3 left-3 bg-black/70 backdrop-blur-md text-[10px] text-amber-200 font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border border-amber-500/20 z-10">
+                  {post.tag}
+                </span>
+
+                {/* Dark overlay & info displayed on hover */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 z-20">
+                  {/* Real-time Interaction Stats bar */}
+                  <div className="flex items-center gap-4 text-white text-xs font-mono font-bold mb-2">
+                    <span className="flex items-center gap-1 text-rose-400">
+                      <Heart className="h-4 w-4 fill-rose-500 text-rose-500" /> {post.likes}
+                    </span>
+                    <span className="flex items-center gap-1 text-sky-400">
+                      <MessageCircle className="h-4 w-4 fill-sky-400/20 text-sky-400" /> {post.comments}
+                    </span>
+                  </div>
+
+                  {/* Subtitle / Caption */}
+                  <p className="text-stone-200 text-xs leading-relaxed font-sans font-medium line-clamp-3 mb-3">
+                    {post.caption}
+                  </p>
+
+                  {/* Direct link footer action */}
+                  <div className="flex items-center justify-between text-[10px] text-amber-400 font-bold uppercase tracking-wider border-t border-white/10 pt-2.5">
+                    <span className="flex items-center gap-1">
+                      Ver no Instagram <ExternalLink className="h-3 w-3" />
+                    </span>
+                    <span className="text-stone-400 lowercase">@oxentefesteje</span>
+                  </div>
                 </div>
-              </div>
 
-              {/* Static subtle overlay for high image readability */}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none group-hover:opacity-0 transition-opacity duration-300" />
-            </motion.a>
-          ))}
+                {/* Static subtle overlay for high image readability */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none group-hover:opacity-0 transition-opacity duration-300" />
+              </motion.a>
+            ))}
+
+            {/* Espaço a mais entre o final e o início do looping com branding elegante e sutil */}
+            <div className="w-16 sm:w-28 shrink-0 flex items-center justify-center text-amber-400/20 font-mono text-[10px] select-none pointer-events-none uppercase tracking-widest border border-dashed border-amber-500/10 rounded-2xl h-80 sm:h-96">
+              ✦ oxente festeje ✦
+            </div>
+          </div>
         </div>
       </div>
 
