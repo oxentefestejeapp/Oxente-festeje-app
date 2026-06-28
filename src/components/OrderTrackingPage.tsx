@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
+import { initGoogleAds } from '../lib/analytics';
 import { 
   Check, 
   Loader2, 
@@ -109,6 +110,10 @@ export function OrderTrackingPage() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    initGoogleAds();
+  }, []);
 
   useEffect(() => {
     if (trackingId) {

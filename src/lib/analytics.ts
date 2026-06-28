@@ -5,15 +5,18 @@ declare global {
   interface Window {
     dataLayer: any[];
     gtag?: (...args: any[]) => void;
+    [key: string]: any;
   }
 }
 
+const DEFAULT_ADS_ID = 'AW-18143769748';
+
 /**
  * Initializes the Google Tag (gtag.js) for Google Ads dynamically.
- * Reads the VITE_GOOGLE_ADS_ID from the environment variables (e.g., AW-11516248981).
+ * Reads the VITE_GOOGLE_ADS_ID from the environment variables or falls back to AW-18143769748.
  */
 export function initGoogleAds() {
-  const adsId = import.meta.env.VITE_GOOGLE_ADS_ID || 'AW-18143769748';
+  const adsId = import.meta.env.VITE_GOOGLE_ADS_ID || DEFAULT_ADS_ID;
   if (!adsId) {
     console.warn(
       "[Google Ads] Google Ads ID (VITE_GOOGLE_ADS_ID) não configurado no arquivo .env. O rastreamento funcionará em modo simulação."
@@ -21,8 +24,11 @@ export function initGoogleAds() {
     return;
   }
 
+  // If explicitly disabled in this session, re-enable it for the landing page
+  delete window[`ga-disable-${adsId}`];
+
   // Prevent duplicate initialization
-  if (window.gtag || document.getElementById('google-ads-script')) {
+  if (document.getElementById('google-ads-script')) {
     return;
   }
 
@@ -46,9 +52,37 @@ export function initGoogleAds() {
     `;
     document.head.appendChild(script2);
 
-    console.log(`[Google Ads] Inicializado com sucesso para o ID: ${adsId}`);
+    console.log(`[Google Ads] Inicializado com sucesso para a página pública. ID: ${adsId}`);
   } catch (error) {
     console.error("[Google Ads] Erro ao carregar os scripts do Google Tag:", error);
+  }
+}
+
+/**
+ * Completely disables Google Ads and removes Google Tag elements and functions from the window.
+ * This ensures the tracking code is completely disabled and inactive on internal management pages.
+ */
+export function disableGoogleAds() {
+  const adsId = import.meta.env.VITE_GOOGLE_ADS_ID || DEFAULT_ADS_ID;
+  
+  // Instruct Google Tag scripts to block all data sending (standard Google API)
+  window[`ga-disable-${adsId}`] = true;
+
+  // Remove the script elements from the DOM
+  const script1 = document.getElementById('google-ads-script');
+  const script2 = document.getElementById('google-ads-init');
+  
+  if (script1) script1.remove();
+  if (script2) script2.remove();
+
+  // Clear global variables and data layers
+  try {
+    delete window.gtag;
+    window.dataLayer = [];
+    console.log("[Google Ads] Rastreamento desativado com sucesso para proteger áreas administrativas.");
+  } catch (e) {
+    // Fallback if delete fails
+    window.gtag = undefined;
   }
 }
 
@@ -61,7 +95,13 @@ export function initGoogleAds() {
  * @param value Optional conversion value (defaults to 1.0)
  */
 export function trackGoogleAdsEvent(action: string, label: string, value: number = 1.0) {
-  const adsId = import.meta.env.VITE_GOOGLE_ADS_ID || 'AW-18143769748';
+  const adsId = import.meta.env.VITE_GOOGLE_ADS_ID || DEFAULT_ADS_ID;
+
+  // Do not track if disabled
+  if (window[`ga-disable-${adsId}`]) {
+    console.log(`[Google Ads] Ignorando evento "${action}" pois o rastreamento está desativado.`);
+    return;
+  }
 
   if (window.gtag) {
     // 1. Custom event tracking
@@ -71,9 +111,7 @@ export function trackGoogleAdsEvent(action: string, label: string, value: number
       'value': value
     });
 
-    // 2. Google Ads conversion trigger if conversion labels are configured
-    // Usually formatted as AW-CONVERSION_ID/CONVERSION_LABEL
-    // Users can customize this dynamically or configure their Google Ads account.
+    // 2. Google Ads conversion trigger
     window.gtag('event', 'conversion', {
       'send_to': `${adsId}/${action}`,
       'value': value,

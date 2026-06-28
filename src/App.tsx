@@ -57,6 +57,7 @@ import { SchedulingManager } from './components/SchedulingManager';
 import QrScannerTab from './components/QrScannerTab';
 import { OrderTrackingPage } from './components/OrderTrackingPage';
 import { LandingPage } from './components/LandingPage';
+import { disableGoogleAds } from './lib/analytics';
 
 import { Product, Sale, StoreInfo } from './types';
 import { defaultProducts, defaultSales, defaultStoreInfo } from './defaultData';
@@ -113,6 +114,19 @@ export default function App() {
   useEffect(() => {
     isAdminRef.current = isAdmin;
   }, [isAdmin]);
+
+  // Google Ads Tracking Privacy Safeguard:
+  // Automatically block and clean up Google Tag from administrative screens
+  useEffect(() => {
+    const trackingParams = new URLSearchParams(window.location.search);
+    const isTrackingPage = trackingParams.has('acompanhar') || trackingParams.has('pedido') || trackingParams.has('venda');
+    const isPublicLandingPage = !isLandingBypassed && userStatus !== 'approved' && !isAppMode;
+    
+    const isPublicMode = isTrackingPage || isPublicLandingPage;
+    if (!isPublicMode) {
+      disableGoogleAds();
+    }
+  }, [isLandingBypassed, userStatus, isAppMode]);
 
   const isAnaClara = firebaseUser?.id === 'ana_clara' || 
                      firebaseUser?.email === 'anaclara@oxente.com' || 
