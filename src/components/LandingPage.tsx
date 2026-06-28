@@ -1198,7 +1198,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                       }}
                     >
                       {/* Leather Hat (Chapéu de Couro / Cangaço) precisely aligned over "O" to look like it is wearing it */}
-                      <span className="absolute -top-[0.49em] -left-[0.40em] w-[1.48em] h-[0.88em] pointer-events-none z-20 block select-none">
+                      <span className="absolute -top-[0.49em] md:-top-[0.43em] -left-[0.40em] w-[1.48em] h-[0.88em] pointer-events-none z-20 block select-none">
                         <svg viewBox="0 0 100 60" className="w-full h-full drop-shadow-[0_4px_6px_rgba(0,0,0,0.7)] transform -rotate-[5deg]">
                           {/* Hat crown (leather dome) */}
                           <path d="M 22 36 C 22 10, 78 10, 78 36 Z" fill="#78350f" stroke="#451a03" strokeWidth="2.5" />
