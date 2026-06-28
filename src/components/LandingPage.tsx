@@ -1486,11 +1486,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 <div className="flex items-center justify-between mt-2 border-t border-zinc-800/80 pt-3">
                   <div>
                     <h4 className="text-xs font-display font-bold text-amber-200">{r.name}</h4>
-                    <span className="text-[10px] text-zinc-400 font-sans">{r.role}</span>
                   </div>
-                  <span className="text-[9px] font-black bg-amber-950/45 text-amber-400 border border-amber-500/20 uppercase px-2.5 py-1 rounded-full tracking-wider">
-                    {r.tag}
-                  </span>
                 </div>
               </motion.div>
             ))}
