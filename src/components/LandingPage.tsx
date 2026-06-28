@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { initGoogleAds, trackGoogleAdsEvent } from '../lib/analytics';
+
 import { 
   MapPin, 
   Instagram, 
@@ -81,6 +83,11 @@ const RECOMMENDATIONS = [
 ];
 
 export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: LandingPageProps) {
+  // Initialize Google Ads Pixel/Tag on mount
+  useEffect(() => {
+    initGoogleAds();
+  }, []);
+
   // Access state
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [accessPassword, setAccessPassword] = useState('');
@@ -1157,6 +1164,9 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             rel="noopener noreferrer"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              trackGoogleAdsEvent('click_como_chegar', 'Como Chegar na Loja (Google Maps)');
+            }}
             className="flex items-center gap-4 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-4 rounded-2xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
           >
             <div className="bg-white/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
@@ -1176,6 +1186,9 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             rel="noopener noreferrer"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              trackGoogleAdsEvent('click_instagram', 'Siga-nos no Instagram');
+            }}
             className="flex items-center gap-4 bg-gradient-to-r from-[#e1306c] via-[#f77737] to-[#fcb045] text-white font-display font-black p-4 rounded-2xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
           >
             <div className="bg-black/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
@@ -1195,6 +1208,9 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             rel="noopener noreferrer"
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
+            onClick={() => {
+              trackGoogleAdsEvent('click_whatsapp_orcamento', 'Fazer Orçamento no WhatsApp');
+            }}
             className="flex items-center gap-4 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-4 rounded-2xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
           >
             <div className="bg-white/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
