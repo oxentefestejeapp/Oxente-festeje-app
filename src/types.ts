@@ -115,6 +115,17 @@ export interface StoreInfo {
   whatsappTemplate?: string;
 }
 
+export interface InstagramPost {
+  id: string | number;
+  imageUrl: string;
+  likes: string;
+  comments: number;
+  caption: string;
+  tag: string;
+  link: string;
+  createdAt?: string;
+}
+
 export function getProductUnitPrice(product: Product, quantity: number): number {
   if (!product.faixasPreco || product.faixasPreco.length === 0) {
     return product.preco;

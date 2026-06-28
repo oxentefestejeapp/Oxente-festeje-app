@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
-import { Product, Sale, StoreInfo, ProductColor } from '../types';
+import { Product, Sale, StoreInfo, ProductColor, InstagramPost } from '../types';
 
 export interface SupabaseErrorDetail {
   message: string;
@@ -843,6 +843,108 @@ const realDbSupabase = {
     }
   },
 
+  async fetchInstagramPosts(): Promise<InstagramPost[] | null> {
+    try {
+      const { data, error } = await supabase
+        .from('oxente_instagram_posts')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        lastSupabaseError = error;
+        console.warn('Erro ao carregar posts do Instagram do Supabase:', error.message);
+        return null;
+      }
+      lastSupabaseError = null;
+      return data.map((item: any) => ({
+        id: item.id,
+        imageUrl: item.image_url,
+        likes: item.likes || '0',
+        comments: Number(item.comments) || 0,
+        caption: item.caption || '',
+        tag: item.tag || '',
+        link: item.link || '',
+        createdAt: item.created_at
+      }));
+    } catch (e) {
+      console.warn('Erro de conexão ao carregar posts do Instagram do Supabase:', e);
+      return null;
+    }
+  },
+
+  async saveInstagramPost(post: Omit<InstagramPost, 'id' | 'createdAt'> & { id?: string | number }): Promise<boolean> {
+    try {
+      const payload: any = {
+        image_url: post.imageUrl,
+        likes: post.likes,
+        comments: post.comments,
+        caption: post.caption,
+        tag: post.tag,
+        link: post.link,
+        created_at: new Date().toISOString()
+      };
+
+      if (post.id && typeof post.id === 'string' && !post.id.startsWith('local-')) {
+        payload.id = post.id;
+      }
+
+      const { error } = await supabase.from('oxente_instagram_posts').upsert(payload);
+      if (error) {
+        lastSupabaseError = error;
+        console.error('Erro ao salvar post do Instagram no Supabase:', error.message);
+        return false;
+      }
+      lastSupabaseError = null;
+      return true;
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
+      console.error('Falha ao salvar post do Instagram no Supabase:', e);
+      return false;
+    }
+  },
+
+  async deleteInstagramPost(id: string | number): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('oxente_instagram_posts')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        lastSupabaseError = error;
+        console.error('Erro ao deletar post do Instagram no Supabase:', error.message);
+        return false;
+      }
+      lastSupabaseError = null;
+      return true;
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
+      console.error('Falha ao deletar post do Instagram no Supabase:', e);
+      return false;
+    }
+  },
+
+  async clearInstagramPosts(): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('oxente_instagram_posts')
+        .delete()
+        .neq('id', '00000000-0000-0000-0000-000000000000'); // delete all
+
+      if (error) {
+        lastSupabaseError = error;
+        console.error('Erro ao limpar posts do Instagram no Supabase:', error.message);
+        return false;
+      }
+      lastSupabaseError = null;
+      return true;
+    } catch (e: any) {
+      lastSupabaseError = { message: e.message || String(e) };
+      console.error('Falha ao limpar posts do Instagram no Supabase:', e);
+      return false;
+    }
+  },
+
   async fetchUsers(): Promise<any[] | null> {
     if (!isUsersTableSupported) {
       const cached = localStorage.getItem('oxente_custom_users_local');
@@ -1248,6 +1350,45 @@ const sandboxDbSupabase = {
       endereco: 'Rua Josina Lessa feitosa 176',
       whatsappTemplate: 'Olá {cliente}, seu pedido {numero} está {status}!'
     };
+  },
+
+  fetchInstagramPosts: async (): Promise<InstagramPost[] | null> => {
+    const cached = localStorage.getItem('oxente_instagram_posts');
+    return cached ? JSON.parse(cached) : [];
+  },
+
+  saveInstagramPost: async (post: Omit<InstagramPost, 'id' | 'createdAt'> & { id?: string | number }): Promise<boolean> => {
+    const cached = localStorage.getItem('oxente_instagram_posts');
+    const list: InstagramPost[] = cached ? JSON.parse(cached) : [];
+    const id = post.id || `local-${Date.now()}`;
+    const index = list.findIndex(p => p.id === id);
+    const newPost: InstagramPost = {
+      ...post,
+      id,
+      createdAt: new Date().toISOString()
+    };
+    if (index >= 0) {
+      list[index] = newPost;
+    } else {
+      list.unshift(newPost);
+    }
+    localStorage.setItem('oxente_instagram_posts', JSON.stringify(list));
+    return true;
+  },
+
+  deleteInstagramPost: async (id: string | number): Promise<boolean> => {
+    const cached = localStorage.getItem('oxente_instagram_posts');
+    if (cached) {
+      const list: InstagramPost[] = JSON.parse(cached);
+      const filtered = list.filter(p => p.id !== id);
+      localStorage.setItem('oxente_instagram_posts', JSON.stringify(filtered));
+    }
+    return true;
+  },
+
+  clearInstagramPosts: async (): Promise<boolean> => {
+    localStorage.removeItem('oxente_instagram_posts');
+    return true;
   },
 
   fetchUsers: async (): Promise<any[]> => {

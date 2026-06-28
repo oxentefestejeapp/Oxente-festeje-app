@@ -632,7 +632,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       {/* Festive Celebration Party Background Image */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         <img
-          src="https://images.unsplash.com/photo-1506224477000-07aa8a76be89?q=80&w=1920&auto=format&fit=crop"
+          src="https://images.unsplash.com/photo-1506224477000-07aa8a76be89?auto=format&fit=crop&w=1000&q=55&fm=webp"
           alt="Cactos do Sertão Oxente Festeje"
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover opacity-20 filter brightness-75 contrast-110 saturate-110 scale-105"
@@ -1132,7 +1132,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               } else if (currentSrc.includes('/input_file_1.png')) {
                 e.currentTarget.src = '/capa.png';
               } else {
-                e.currentTarget.src = "https://images.unsplash.com/photo-1506224477000-07aa8a76be89?q=80&w=1220&auto=format&fit=crop";
+                e.currentTarget.src = "https://images.unsplash.com/photo-1506224477000-07aa8a76be89?auto=format&fit=crop&w=1200&q=65&fm=webp";
               }
             }}
             alt="Oxente Festeje Banner" 

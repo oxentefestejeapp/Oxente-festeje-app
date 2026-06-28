@@ -39,12 +39,56 @@
         }
       },
       "required": ["id", "name", "email", "status", "role", "createdAt", "updatedAt"]
+    },
+    "InstagramPost": {
+      "title": "Instagram Post",
+      "description": "Custom Instagram post item uploaded via the password-protected panel",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The unique post identifier"
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Base64 compressed image content"
+        },
+        "likes": {
+          "type": "string",
+          "description": "Number of likes to display (e.g., 1.2k)"
+        },
+        "comments": {
+          "type": "number",
+          "description": "Number of comments to display"
+        },
+        "caption": {
+          "type": "string",
+          "description": "The post's caption"
+        },
+        "tag": {
+          "type": "string",
+          "description": "Badge tag (e.g. Copos Long Drink)"
+        },
+        "link": {
+          "type": "string",
+          "description": "Direct Instagram link"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Creation timestamp as an ISO-8601 string"
+        }
+      },
+      "required": ["id", "imageUrl", "likes", "comments", "caption", "tag", "link", "createdAt"]
     }
   },
   "firestore": {
     "users/{userId}": {
       "schema": "User",
       "description": "Collection of registered users and their approval statuses"
+    },
+    "oxente_instagram_posts/{postId}": {
+      "schema": "InstagramPost",
+      "description": "Collection of compressed Instagram posts for the dynamic landing page feed"
     }
   }
 }
