@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { supabase, mapDbToSale } from '../lib/supabase';
 import { Sale } from '../types';
+import { MagneticButton } from './MagneticButton';
 
 
 interface LandingPageProps {
@@ -171,6 +172,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
 
   // Speech bubble state for custom interaction
   const [speechBubble, setSpeechBubble] = useState<'sanfona' | 'zabumba' | 'triangulo' | 'casal' | 'cacto_esq' | 'cacto_dir' | null>(null);
+
+  // Scroll listener for premium parallax sky backgrounds
+  const [scrollY, setScrollY] = useState(0);
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrollY(window.scrollY);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   // Auto-clear speech bubble after 4 seconds
   useEffect(() => {
@@ -625,6 +636,64 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           referrerPolicy="no-referrer"
           className="w-full h-full object-cover opacity-20 filter brightness-75 contrast-110 saturate-110 scale-105"
         />
+        {/* PREMIUM ANIMATION 1: Floating Ambient Orbs for rich layout depth */}
+        <motion.div 
+          animate={{
+            x: [0, 80, -40, 0],
+            y: [0, -60, 40, 0],
+            scale: [1, 1.25, 0.85, 1],
+          }}
+          transition={{
+            duration: 25,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className="absolute top-[20%] left-[10%] w-[250px] sm:w-[400px] h-[250px] sm:h-[400px] rounded-full bg-amber-500/15 filter blur-[80px] sm:blur-[120px] pointer-events-none z-0"
+        />
+        <motion.div 
+          animate={{
+            x: [0, -70, 50, 0],
+            y: [0, 80, -50, 0],
+            scale: [1, 0.9, 1.15, 1],
+          }}
+          transition={{
+            duration: 22,
+            repeat: Infinity,
+            ease: "easeInOut"
+          }}
+          className="absolute bottom-[30%] right-[10%] w-[300px] sm:w-[450px] h-[300px] sm:h-[450px] rounded-full bg-rose-500/10 filter blur-[90px] sm:blur-[130px] pointer-events-none z-0"
+        />
+
+        {/* PARALLAX SKY ELEMENTS (Moon and Clouds) */}
+        {/* Full Moon (Lua do Sertão) */}
+        <div 
+          style={{ transform: `translateY(${scrollY * 0.28}px)` }}
+          className="absolute top-[120px] right-[8%] w-24 h-24 rounded-full bg-gradient-to-br from-amber-100 via-amber-300 to-amber-500 shadow-[0_0_60px_rgba(245,158,11,0.3)] opacity-75 z-10 pointer-events-none transition-transform duration-75 ease-out"
+        >
+          {/* Lunar details */}
+          <div className="absolute top-[25%] left-[25%] w-4 h-4 rounded-full bg-amber-600/10" />
+          <div className="absolute top-[55%] left-[45%] w-6 h-6 rounded-full bg-amber-600/10" />
+          <div className="absolute top-[40%] left-[65%] w-3 h-3 rounded-full bg-amber-600/10" />
+        </div>
+
+        {/* Fluffy Cloud 1 (Left Side) */}
+        <div 
+          style={{ transform: `translate(${scrollY * 0.14}px, ${scrollY * 0.08}px)` }}
+          className="absolute top-[160px] left-[5%] w-32 h-8 rounded-full bg-white/5 filter blur-xs opacity-35 border border-white/5 z-10 pointer-events-none transition-transform duration-75 ease-out"
+        >
+          <div className="absolute -top-[12px] left-[18px] w-12 h-12 rounded-full bg-white/5" />
+          <div className="absolute -top-[20px] left-[45px] w-14 h-14 rounded-full bg-white/5" />
+        </div>
+
+        {/* Fluffy Cloud 2 (Right Side) */}
+        <div 
+          style={{ transform: `translate(${-scrollY * 0.12}px, ${scrollY * 0.05}px)` }}
+          className="absolute top-[280px] right-[4%] w-40 h-10 rounded-full bg-white/5 filter blur-xs opacity-30 border border-white/5 z-10 pointer-events-none transition-transform duration-75 ease-out"
+        >
+          <div className="absolute -top-[16px] left-[25px] w-14 h-14 rounded-full bg-white/5" />
+          <div className="absolute -top-[24px] left-[60px] w-16 h-16 rounded-full bg-white/5" />
+        </div>
+
         {/* Subtle vignette overlays to preserve the gold-to-brown gradient and keep text readable */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/45" />
         <div className="absolute inset-0 bg-radial-at-t from-transparent via-transparent to-black/50" />
@@ -1105,7 +1174,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 }
               }
             }}
-            className="flex flex-row flex-wrap items-center justify-center gap-x-3 gap-y-2 text-3xl sm:text-4xl md:text-5xl font-display font-black tracking-wider text-[#ffeeaa] uppercase select-none pb-5"
+            className="relative flex flex-row flex-wrap items-center justify-center gap-x-3 gap-y-2 text-3xl sm:text-4xl md:text-5xl font-display font-black tracking-wider text-[#ffeeaa] uppercase select-none pb-5"
           >
             {/* OXENTE with letter animation & Leather Hat on "O" */}
             <span className="inline-flex gap-0.5 sm:gap-1">
@@ -1128,8 +1197,8 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                         textShadow: "0 1px 0 #f59e0b, 0 2px 0 #d97706, 0 3px 0 #b45309, 0 4px 0 #92400e, 0 5px 0 #78350f, 0 6px 0 #451a03, 0 7px 0 #1c0a01, 0 8px 12px rgba(0,0,0,0.9), 0 12px 24px rgba(69,26,3,0.6)" 
                       }}
                     >
-                      {/* Leather Hat (Chapéu de Couro / Cangaço) precisely aligned over "O" */}
-                      <span className="absolute -top-[0.8em] -left-[0.22em] w-[1.48em] h-[0.88em] pointer-events-none z-20 block select-none">
+                      {/* Leather Hat (Chapéu de Couro / Cangaço) precisely aligned over "O" to look like it is wearing it */}
+                      <span className="absolute -top-[0.49em] -left-[0.40em] w-[1.48em] h-[0.88em] pointer-events-none z-20 block select-none">
                         <svg viewBox="0 0 100 60" className="w-full h-full drop-shadow-[0_4px_6px_rgba(0,0,0,0.7)] transform -rotate-[5deg]">
                           {/* Hat crown (leather dome) */}
                           <path d="M 22 36 C 22 10, 78 10, 78 36 Z" fill="#78350f" stroke="#451a03" strokeWidth="2.5" />
@@ -1211,20 +1280,34 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           {/* 3 Pillars layout - Beautifully styled cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left pt-2 border-t border-amber-500/10">
             {/* Pillar 1 */}
-            <div className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 hover:border-amber-500/25 transition-all">
+            <motion.div 
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-30px" }}
+              transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
+              whileHover={{ scale: 1.03, borderColor: "rgba(245, 158, 11, 0.35)", boxShadow: "0 10px 20px rgba(0,0,0,0.3)" }}
+              className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 transition-all cursor-default relative z-10"
+            >
               <div className="flex items-center gap-2 text-amber-400 font-display font-bold">
                 <div className="p-1.5 rounded-lg bg-amber-500/10">
                   <Users className="h-4 w-4" />
                 </div>
-                <span className="text-xs uppercase tracking-wider font-mono">+100 mil seguidores</span>
+                <span className="text-xs uppercase tracking-wider font-mono">+ De 100mil seguidores</span>
               </div>
               <p className="text-xs text-stone-300 leading-relaxed font-sans">
                 A comunidade mais apaixonada do Instagram que escolhe e recomenda nossos brindes diariamente.
               </p>
-            </div>
+            </motion.div>
 
             {/* Pillar 2 */}
-            <div className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 hover:border-amber-500/25 transition-all">
+            <motion.div 
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-30px" }}
+              transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              whileHover={{ scale: 1.03, borderColor: "rgba(16, 185, 129, 0.35)", boxShadow: "0 10px 20px rgba(0,0,0,0.3)" }}
+              className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 transition-all cursor-default relative z-10"
+            >
               <div className="flex items-center gap-2 text-emerald-400 font-display font-bold">
                 <div className="p-1.5 rounded-lg bg-emerald-500/10">
                   <Clock className="h-4 w-4" />
@@ -1232,12 +1315,19 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 <span className="text-xs uppercase tracking-wider font-mono">Tempo Real</span>
               </div>
               <p className="text-xs text-stone-300 leading-relaxed font-sans">
-                A única loja de brindes onde você monitora a produção e a entrega do seu pedido a cada minuto!
+                A única loja de brindes onde você acompanha seu pedido por link em tempo real, desde a produção até ele ficar pronto!
               </p>
-            </div>
+            </motion.div>
 
             {/* Pillar 3 */}
-            <div className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 hover:border-amber-500/25 transition-all">
+            <motion.div 
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-30px" }}
+              transition={{ duration: 0.6, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              whileHover={{ scale: 1.03, borderColor: "rgba(239, 68, 68, 0.35)", boxShadow: "0 10px 20px rgba(0,0,0,0.3)" }}
+              className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 transition-all cursor-default relative z-10"
+            >
               <div className="flex items-center gap-2 text-rose-400 font-display font-bold">
                 <div className="p-1.5 rounded-lg bg-rose-500/10">
                   <Gift className="h-4 w-4" />
@@ -1247,7 +1337,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               <p className="text-xs text-stone-300 leading-relaxed font-sans">
                 Descontos especiais e ofertas imperdíveis para garantir que a sua festa caiba no orçamento com muita alegria!
               </p>
-            </div>
+            </motion.div>
           </div>
         </motion.div>
 
@@ -1264,87 +1354,87 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           </h2>
 
           {/* BUTTON 1: Google Maps Direct Link */}
-          <motion.a
+          <MagneticButton
             href={mapsLink}
             target="_blank"
             rel="noopener noreferrer"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            delay={0.15}
+            glowColor="rgba(217, 119, 6, 0.3)"
             onClick={() => {
               trackGoogleAdsEvent('click_como_chegar', 'Como Chegar na Loja (Google Maps)');
             }}
-            className="flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
+            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
           >
-            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0">
+            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
               <MapPin className="h-5 w-5 md:h-7 md:w-7 text-amber-50" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 relative z-10">
               <span className="block text-sm md:text-lg">Como Chegar na Loja</span>
               <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Clique para abrir no Google Maps</span>
             </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1" />
-          </motion.a>
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+          </MagneticButton>
 
           {/* BUTTON 2: Instagram Direct Link */}
-          <motion.a
+          <MagneticButton
             href="https://www.instagram.com/oxentefesteje/"
             target="_blank"
             rel="noopener noreferrer"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            delay={0.25}
+            glowColor="rgba(225, 48, 108, 0.3)"
             onClick={() => {
               trackGoogleAdsEvent('click_instagram', 'Siga-nos no Instagram');
             }}
-            className="flex items-center gap-4 md:gap-6 bg-gradient-to-r from-[#e1306c] via-[#f77737] to-[#fcb045] text-white font-display font-black p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
+            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-[#e1306c] via-[#f77737] to-[#fcb045] text-white font-display font-black p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
           >
-            <div className="bg-black/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0">
+            <div className="bg-black/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
               <Instagram className="h-5 w-5 md:h-7 md:w-7 text-white" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 relative z-10">
               <span className="block text-sm md:text-lg">Siga-nos no Instagram</span>
               <span className="block text-xs md:text-sm font-bold text-zinc-100/85 mt-0.5 font-sans">@oxentefesteje · Inspirações diárias</span>
             </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-zinc-100/75 group-hover:translate-x-1 transition-transform mr-1" />
-          </motion.a>
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-zinc-100/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+          </MagneticButton>
 
           {/* BUTTON 3: WhatsApp Chat Link */}
-          <motion.a
+          <MagneticButton
             href={whatsAppLink}
             target="_blank"
             rel="noopener noreferrer"
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
+            delay={0.35}
+            glowColor="rgba(16, 185, 129, 0.3)"
             onClick={() => {
               trackGoogleAdsEvent('click_whatsapp_orcamento', 'Fazer Orçamento no WhatsApp');
             }}
-            className="flex items-center gap-4 md:gap-6 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
+            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
           >
-            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0">
+            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
               <MessageSquare className="h-5 w-5 md:h-7 md:w-7 text-white" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 relative z-10">
               <span className="block text-sm md:text-lg">Fazer Orçamento no WhatsApp</span>
               <span className="block text-xs md:text-sm font-normal text-emerald-100/85 mt-0.5 font-sans">Fale diretamente com nossa equipe</span>
             </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-white/75 group-hover:translate-x-1 transition-transform mr-1" />
-          </motion.a>
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-white/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+          </MagneticButton>
 
           {/* BUTTON 4: Order Real-time Tracking Panel */}
-          <motion.button
+          <MagneticButton
             onClick={() => setShowTrackingModal(true)}
-            whileHover={{ scale: 1.02 }}
-            whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-900 to-[#3e240a] border border-amber-500/20 text-amber-100 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-md shadow-black/30 hover:border-amber-500/40 transition-all text-left group cursor-pointer"
+            delay={0.45}
+            glowColor="rgba(245, 158, 11, 0.2)"
+            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-900 to-[#3e240a] border border-amber-500/20 text-amber-100 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:border-amber-500/40 transition-all text-left group cursor-pointer overflow-hidden w-full"
           >
-            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0">
+            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
               <Search className="h-5 w-5 md:h-7 md:w-7 text-amber-100" />
             </div>
-            <div className="flex-1">
+            <div className="flex-1 relative z-10">
               <span className="block text-sm md:text-lg">Acompanhar meu Pedido</span>
               <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Consulte o andamento da sua entrega</span>
             </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1" />
-          </motion.button>
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+          </MagneticButton>
         </motion.div>
 
         {/* Mural de Recomendações (Love Wall) Section */}
@@ -1368,8 +1458,17 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             {RECOMMENDATIONS.map((r, idx) => (
               <motion.div
                 key={r.id}
-                whileHover={{ y: -6, rotate: idx % 2 === 0 ? 1 : -1 }}
-                className={`bg-stone-950/85 backdrop-blur-md rounded-2xl p-6 border border-amber-500/25 shadow-lg relative flex flex-col justify-between ${
+                initial={{ opacity: 0, y: 35, scale: 0.96 }}
+                whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                viewport={{ once: true, margin: "-30px" }}
+                transition={{ duration: 0.5, delay: idx * 0.08, ease: "easeOut" }}
+                whileHover={{ 
+                  y: -8, 
+                  rotate: idx % 2 === 0 ? 1.5 : -1.5,
+                  boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+                  borderColor: "rgba(197, 146, 24, 0.4)"
+                }}
+                className={`bg-stone-950/85 backdrop-blur-md rounded-2xl p-6 border border-amber-500/25 shadow-lg relative flex flex-col justify-between transition-all duration-300 ${
                   idx % 3 === 0 ? 'border-l-4 border-l-brand-pink' :
                   idx % 3 === 1 ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-amber-700'
                 }`}
@@ -1377,7 +1476,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 <div>
                   <div className="flex gap-0.5 mb-2.5">
                     {Array.from({ length: r.rating }).map((_, i) => (
-                      <Star key={i} className="h-4 w-4 text-amber-400 fill-amber-400" />
+                      <Star key={i} className="h-4 w-4 text-amber-400 fill-amber-400 animate-pulse" style={{ animationDelay: `${i * 0.15}s` }} />
                     ))}
                   </div>
                   <p className="text-zinc-100 text-[13.5px] font-medium leading-relaxed mb-4">
@@ -1399,25 +1498,33 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         </motion.div>
 
         {/* Footer info and secret entry */}
-        <p className="text-[11px] text-zinc-400 font-medium mt-16 flex items-center gap-1.5 justify-center">
+        <p className="text-[11px] text-zinc-400 font-medium mt-16 flex items-center gap-1.5 justify-center relative z-30">
           <span>© 2026 Oxente Festeje. João Pessoa - PB. Todos os direitos reservados.</span>
-        </p>
-
-        {/* SECRET ACCESS BUTTON: discretely positioned at absolute bottom right with z-[100] so it is clickable in front of the cactus */}
-        <div className="fixed bottom-2 right-2 z-[100]">
           <button
             onClick={() => {
               setAccessPassword('');
               setPasswordError(false);
               setShowAccessModal(true);
             }}
-            className="text-zinc-700/35 hover:text-zinc-500/70 p-3 bg-transparent rounded-full hover:bg-black/10 transition-all cursor-pointer flex items-center justify-center relative z-[100]"
-            style={{ pointerEvents: 'auto' }}
-            title="Acesso Secreto"
+            className="text-zinc-700/25 hover:text-zinc-500/60 p-1 transition-all cursor-pointer inline-flex items-center relative"
+            title="Acesso Secreto (Backup)"
           >
-            <Lock className="h-4 w-4" />
+            {/* Pulsing breathing indicator ring */}
+            <motion.div
+              animate={{
+                scale: [1, 1.4, 1],
+                opacity: [0.5, 0.9, 0.5],
+              }}
+              transition={{
+                duration: 3,
+                repeat: Infinity,
+                ease: "easeInOut"
+              }}
+              className="absolute -inset-0.5 rounded-full bg-amber-500/15 blur-xs pointer-events-none"
+            />
+            <Lock className="h-3 w-3 relative z-10" />
           </button>
-        </div>
+        </p>
 
         {/* MODAL 1: Order Tracking Lookup dialog */}
         <AnimatePresence>
@@ -1632,6 +1739,8 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             </div>
           )}
         </AnimatePresence>
+
+
 
       </div>
     </div>
