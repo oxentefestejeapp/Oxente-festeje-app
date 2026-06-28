@@ -58,6 +58,8 @@ export const MagneticButton: React.FC<MagneticButtonProps> = ({
       onMouseMove={handleMouseMove}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={handleMouseLeave}
+      onTouchStart={() => setIsHovered(true)}
+      onTouchEnd={() => setIsHovered(false)}
       className="relative w-full overflow-visible"
     >
       <Component
@@ -79,7 +81,7 @@ export const MagneticButton: React.FC<MagneticButtonProps> = ({
           boxShadow: isHovered ? `0 20px 40px ${glowColor}` : '0 4px 10px rgba(0, 0, 0, 0.3)',
         }}
         whileTap={{ scale: 0.98 }}
-        className={className}
+        className={`${className} relative overflow-hidden`}
         style={{
           transformStyle: "preserve-3d",
           perspective: 1000
@@ -93,6 +95,15 @@ export const MagneticButton: React.FC<MagneticButtonProps> = ({
           }}
         />
 
+        {/* Sliding Color Changing Backplate (grows from left to right) */}
+        <motion.div
+          initial={{ scaleX: 0 }}
+          animate={{ scaleX: isHovered ? 1 : 0 }}
+          transition={{ duration: 0.35, ease: [0.16, 1, 0.3, 1] }}
+          style={{ originX: 0 }}
+          className="absolute inset-0 bg-white/10 mix-blend-overlay pointer-events-none z-0"
+        />
+
         {/* Shimmer / Golden shine sweep effect inside the button */}
         {isHovered && (
           <motion.div
@@ -104,11 +115,23 @@ export const MagneticButton: React.FC<MagneticButtonProps> = ({
               repeatDelay: 0.5,
               ease: "easeInOut" 
             }}
-            className="absolute top-0 bottom-0 w-28 bg-gradient-to-r from-transparent via-white/30 to-transparent -skew-x-20 pointer-events-none z-20"
+            className="absolute top-0 bottom-0 w-28 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-20 pointer-events-none z-20"
           />
         )}
+
+        {/* Bottom Loading Progress / Completion bar */}
+        <div className="absolute bottom-0 left-0 right-0 h-[4px] bg-black/20 w-full overflow-hidden pointer-events-none z-30">
+          <motion.div
+            initial={{ width: "0%" }}
+            animate={{ width: isHovered ? "100%" : "0%" }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
+            className="h-full bg-gradient-to-r from-amber-400 via-yellow-200 to-white shadow-[0_0_8px_#f59e0b]"
+          />
+        </div>
         
-        {children}
+        <div className="relative z-10 w-full h-full flex items-center">
+          {children}
+        </div>
       </Component>
     </div>
   );
