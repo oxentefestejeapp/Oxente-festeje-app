@@ -442,10 +442,6 @@ export const InstagramFeed: React.FC = () => {
           }
         `}</style>
 
-        {/* Soft fading overlays on edges for cinema-like depth */}
-        <div className="absolute left-0 top-0 bottom-0 w-12 sm:w-24 bg-gradient-to-r from-[#0c0a09] to-transparent z-10 pointer-events-none" />
-        <div className="absolute right-0 top-0 bottom-0 w-12 sm:w-24 bg-gradient-to-l from-[#0c0a09] to-transparent z-10 pointer-events-none" />
-
         {/* Rolling Track */}
         <div className="flex gap-0 w-max">
           {/* Primeira metade */}
@@ -511,11 +507,6 @@ export const InstagramFeed: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none group-hover:opacity-0 transition-opacity duration-300" />
               </motion.a>
             ))}
-
-            {/* Espaço a mais entre o final e o início do looping com branding elegante e sutil */}
-            <div className="w-16 sm:w-28 shrink-0 flex items-center justify-center text-amber-400/20 font-mono text-[10px] select-none pointer-events-none uppercase tracking-widest border border-dashed border-amber-500/10 rounded-2xl h-80 sm:h-96">
-              ✦ oxente festeje ✦
-            </div>
           </div>
 
           {/* Segunda metade (Sempre idêntica para o looping infinito sem sobressalto) */}
@@ -581,11 +572,6 @@ export const InstagramFeed: React.FC = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none group-hover:opacity-0 transition-opacity duration-300" />
               </motion.a>
             ))}
-
-            {/* Espaço a mais entre o final e o início do looping com branding elegante e sutil */}
-            <div className="w-16 sm:w-28 shrink-0 flex items-center justify-center text-amber-400/20 font-mono text-[10px] select-none pointer-events-none uppercase tracking-widest border border-dashed border-amber-500/10 rounded-2xl h-80 sm:h-96">
-              ✦ oxente festeje ✦
-            </div>
           </div>
         </div>
       </div>
