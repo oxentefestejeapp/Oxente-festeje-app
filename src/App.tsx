@@ -105,7 +105,7 @@ export default function App() {
   });
 
   const [isLandingBypassed, setIsLandingBypassed] = useState(() => {
-    return localStorage.getItem('oxente_landing_bypassed') === 'true' || localStorage.getItem('oxente_is_app_mode') === 'true';
+    return localStorage.getItem('oxente_landing_bypassed') === 'true';
   });
 
   const isAdmin = firebaseUser?.email === 'oxentefesteje@gmail.com' || firebaseUser?.email === 'abraaoapp@oxente.com' || firebaseUser?.id === 'abraaoapp' || firebaseUser?.role === 'admin';
@@ -121,12 +121,12 @@ export default function App() {
   useEffect(() => {
     const trackingParams = new URLSearchParams(window.location.search);
     const isTrackingPage = trackingParams.has('acompanhar') || trackingParams.has('pedido') || trackingParams.has('venda');
-    const isMainLandingPage = !isLandingBypassed && userStatus !== 'approved' && !isAppMode && !isTrackingPage;
+    const isMainLandingPage = !isLandingBypassed && userStatus !== 'approved' && !isTrackingPage;
     
     if (!isMainLandingPage) {
       disableGoogleAds();
     }
-  }, [isLandingBypassed, userStatus, isAppMode]);
+  }, [isLandingBypassed, userStatus]);
 
   const isAnaClara = firebaseUser?.id === 'ana_clara' || 
                      firebaseUser?.email === 'anaclara@oxente.com' || 
@@ -2187,7 +2187,7 @@ export default function App() {
     );
   }
 
-  if (!isLandingBypassed && userStatus !== 'approved' && !isAppMode) {
+  if (!isLandingBypassed && userStatus !== 'approved') {
     return (
       <LandingPage 
         onUnlockSystem={() => {

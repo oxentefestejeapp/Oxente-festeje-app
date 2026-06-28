@@ -21,7 +21,8 @@ import {
   Heart,
   Award,
   Users,
-  Clock
+  Clock,
+  Gift
 } from 'lucide-react';
 import { supabase, mapDbToSale } from '../lib/supabase';
 import { Sale } from '../types';
@@ -134,6 +135,8 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       '#ec4899'  // Hot Pink
     ];
 
+    const isDesktop = typeof window !== 'undefined' && window.innerWidth >= 768;
+
     const generatedFireworks: Firework[] = Array.from({ length: 12 }).map((_, i) => {
       const particles: FireworkParticle[] = Array.from({ length: 20 }).map((_, pIdx) => {
         const angle = (pIdx * 360) / 20 + (Math.random() * 15 - 7.5);
@@ -142,10 +145,14 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         return { id: pIdx, angle, distance, size };
       });
 
+      const yVal = isDesktop 
+        ? 6 + Math.random() * 28  // Explode higher on desktop (upper 6% to 34%)
+        : 15 + Math.random() * 45; // Explode on mobile (upper 15% to 60%)
+
       return {
         id: i,
         x: 15 + Math.random() * 70, // Spread across 15% to 85%
-        y: 15 + Math.random() * 45, // Explode in the upper 15% to 60% of the viewport
+        y: yVal,
         color: fireworkColors[i % fireworkColors.length],
         particles,
         launchDelay: i * 0.95, // Staggered launches spread over a longer period
@@ -1209,7 +1216,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 <div className="p-1.5 rounded-lg bg-amber-500/10">
                   <Users className="h-4 w-4" />
                 </div>
-                <span className="text-xs uppercase tracking-wider font-mono">+100k Corações</span>
+                <span className="text-xs uppercase tracking-wider font-mono">+100 mil seguidores</span>
               </div>
               <p className="text-xs text-stone-300 leading-relaxed font-sans">
                 A comunidade mais apaixonada do Instagram que escolhe e recomenda nossos brindes diariamente.
@@ -1233,12 +1240,12 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             <div className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 hover:border-amber-500/25 transition-all">
               <div className="flex items-center gap-2 text-rose-400 font-display font-bold">
                 <div className="p-1.5 rounded-lg bg-rose-500/10">
-                  <Award className="h-4 w-4" />
+                  <Gift className="h-4 w-4" />
                 </div>
-                <span className="text-xs uppercase tracking-wider font-monoArte">Capricho & Arte</span>
+                <span className="text-xs uppercase tracking-wider font-mono">Cupons & Promoções</span>
               </div>
               <p className="text-xs text-stone-300 leading-relaxed font-sans">
-                Design exclusivo, materiais selecionados e um acabamento impecável que surpreende seus convidados.
+                Descontos especiais e ofertas imperdíveis para garantir que a sua festa caiba no orçamento com muita alegria!
               </p>
             </div>
           </div>
@@ -1249,10 +1256,10 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.3 }}
-          className="relative w-full max-w-lg bg-zinc-950/80 backdrop-blur-md rounded-3xl border border-amber-500/35 p-8 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-4 mb-16"
+          className="relative w-full max-w-lg md:max-w-3xl bg-zinc-950/80 backdrop-blur-md rounded-3xl border border-amber-500/35 p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-4 md:gap-6 mb-16"
         >
-          <h2 className="text-lg font-display font-bold text-amber-100 flex items-center justify-center gap-2 mb-2">
-            <Sparkles className="h-5 w-5 text-amber-400 fill-amber-400 animate-pulse" />
+          <h2 className="text-lg md:text-2xl font-display font-bold text-amber-100 flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-4">
+            <Sparkles className="h-5 w-5 md:h-7 md:w-7 text-amber-400 fill-amber-400 animate-pulse" />
             <span>O que você deseja fazer hoje?</span>
           </h2>
 
@@ -1266,16 +1273,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             onClick={() => {
               trackGoogleAdsEvent('click_como_chegar', 'Como Chegar na Loja (Google Maps)');
             }}
-            className="flex items-center gap-4 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-4 rounded-2xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
+            className="flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
           >
-            <div className="bg-white/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
-              <MapPin className="h-5 w-5 text-amber-50" />
+            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0">
+              <MapPin className="h-5 w-5 md:h-7 md:w-7 text-amber-50" />
             </div>
             <div className="flex-1">
-              <span className="block text-sm">Como Chegar na Loja</span>
-              <span className="block text-xs font-normal text-amber-200/80 mt-0.5 font-sans">Clique para abrir no Google Maps</span>
+              <span className="block text-sm md:text-lg">Como Chegar na Loja</span>
+              <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Clique para abrir no Google Maps</span>
             </div>
-            <ArrowRight className="h-5 w-5 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1" />
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1" />
           </motion.a>
 
           {/* BUTTON 2: Instagram Direct Link */}
@@ -1288,16 +1295,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             onClick={() => {
               trackGoogleAdsEvent('click_instagram', 'Siga-nos no Instagram');
             }}
-            className="flex items-center gap-4 bg-gradient-to-r from-[#e1306c] via-[#f77737] to-[#fcb045] text-white font-display font-black p-4 rounded-2xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
+            className="flex items-center gap-4 md:gap-6 bg-gradient-to-r from-[#e1306c] via-[#f77737] to-[#fcb045] text-white font-display font-black p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
           >
-            <div className="bg-black/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
-              <Instagram className="h-5 w-5 text-white" />
+            <div className="bg-black/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0">
+              <Instagram className="h-5 w-5 md:h-7 md:w-7 text-white" />
             </div>
             <div className="flex-1">
-              <span className="block text-sm">Siga-nos no Instagram</span>
-              <span className="block text-xs font-bold text-zinc-100/85 mt-0.5 font-sans">@oxentefesteje · Inspirações diárias</span>
+              <span className="block text-sm md:text-lg">Siga-nos no Instagram</span>
+              <span className="block text-xs md:text-sm font-bold text-zinc-100/85 mt-0.5 font-sans">@oxentefesteje · Inspirações diárias</span>
             </div>
-            <ArrowRight className="h-5 w-5 text-zinc-100/75 group-hover:translate-x-1 transition-transform mr-1" />
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-zinc-100/75 group-hover:translate-x-1 transition-transform mr-1" />
           </motion.a>
 
           {/* BUTTON 3: WhatsApp Chat Link */}
@@ -1310,16 +1317,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             onClick={() => {
               trackGoogleAdsEvent('click_whatsapp_orcamento', 'Fazer Orçamento no WhatsApp');
             }}
-            className="flex items-center gap-4 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-4 rounded-2xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
+            className="flex items-center gap-4 md:gap-6 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-md shadow-black/30 hover:brightness-110 transition-all text-left group"
           >
-            <div className="bg-white/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
-              <MessageSquare className="h-5 w-5 text-white" />
+            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0">
+              <MessageSquare className="h-5 w-5 md:h-7 md:w-7 text-white" />
             </div>
             <div className="flex-1">
-              <span className="block text-sm">Fazer Orçamento no WhatsApp</span>
-              <span className="block text-xs font-normal text-emerald-100/85 mt-0.5 font-sans">Fale diretamente com nossa equipe</span>
+              <span className="block text-sm md:text-lg">Fazer Orçamento no WhatsApp</span>
+              <span className="block text-xs md:text-sm font-normal text-emerald-100/85 mt-0.5 font-sans">Fale diretamente com nossa equipe</span>
             </div>
-            <ArrowRight className="h-5 w-5 text-white/75 group-hover:translate-x-1 transition-transform mr-1" />
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-white/75 group-hover:translate-x-1 transition-transform mr-1" />
           </motion.a>
 
           {/* BUTTON 4: Order Real-time Tracking Panel */}
@@ -1327,16 +1334,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             onClick={() => setShowTrackingModal(true)}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            className="flex items-center gap-4 bg-gradient-to-r from-amber-900 to-[#3e240a] border border-amber-500/20 text-amber-100 font-display font-bold p-4 rounded-2xl shadow-md shadow-black/30 hover:border-amber-500/40 transition-all text-left group cursor-pointer"
+            className="flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-900 to-[#3e240a] border border-amber-500/20 text-amber-100 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl shadow-md shadow-black/30 hover:border-amber-500/40 transition-all text-left group cursor-pointer"
           >
-            <div className="bg-white/10 p-2.5 rounded-xl group-hover:scale-110 transition-transform">
-              <Search className="h-5 w-5 text-amber-100" />
+            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0">
+              <Search className="h-5 w-5 md:h-7 md:w-7 text-amber-100" />
             </div>
             <div className="flex-1">
-              <span className="block text-sm">Acompanhar meu Pedido</span>
-              <span className="block text-xs font-normal text-amber-200/80 mt-0.5 font-sans">Consulte o andamento da sua entrega</span>
+              <span className="block text-sm md:text-lg">Acompanhar meu Pedido</span>
+              <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Consulte o andamento da sua entrega</span>
             </div>
-            <ArrowRight className="h-5 w-5 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1" />
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1" />
           </motion.button>
         </motion.div>
 
