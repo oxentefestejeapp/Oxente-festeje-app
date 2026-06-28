@@ -82,8 +82,11 @@ export const InstagramFeed: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isPaused, setIsPaused] = useState(false);
-  
-  // Feed posts state
+  const [isDown, setIsDown] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeftState, setScrollLeftState] = useState(0);
+
+  // Feed posts state (declared first to be safe in dependency arrays)
   const [posts, setPosts] = useState<InstagramPost[]>(() => {
     // Immediate sync-load from localStorage to avoid flicker
     if (typeof window !== 'undefined') {
@@ -94,6 +97,113 @@ export const InstagramFeed: React.FC = () => {
     }
     return INSTAGRAM_POSTS;
   });
+  
+  const scrollXRef = useRef(0);
+  const draggedDistanceRef = useRef(0);
+
+  // Auto-scroll loop using requestAnimationFrame
+  useEffect(() => {
+    const slider = containerRef.current;
+    if (!slider) return;
+
+    let animationFrameId: number;
+    const speed = 0.8; // Safe, ultra-smooth scrolling speed
+
+    // Align ref with current scroll position
+    scrollXRef.current = slider.scrollLeft;
+
+    const scroll = () => {
+      if (!isPaused && !isDown) {
+        scrollXRef.current += speed;
+        
+        const halfWidth = slider.scrollWidth / 2;
+        if (halfWidth > 0) {
+          if (scrollXRef.current >= halfWidth) {
+            scrollXRef.current -= halfWidth;
+          } else if (scrollXRef.current <= 0) {
+            scrollXRef.current += halfWidth;
+          }
+        }
+        
+        slider.scrollLeft = Math.round(scrollXRef.current);
+      }
+      animationFrameId = requestAnimationFrame(scroll);
+    };
+
+    animationFrameId = requestAnimationFrame(scroll);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [isPaused, isDown, posts]);
+
+  // Handle manual drag scroll events for desktop
+  const handleMouseDown = (e: React.MouseEvent) => {
+    const slider = containerRef.current;
+    if (!slider) return;
+    setIsDown(true);
+    setIsPaused(true);
+    setStartX(e.pageX - slider.offsetLeft);
+    setScrollLeftState(slider.scrollLeft);
+    scrollXRef.current = slider.scrollLeft;
+    draggedDistanceRef.current = 0;
+  };
+
+  const handleMouseLeave = () => {
+    setIsDown(false);
+    setIsPaused(false);
+    const slider = containerRef.current;
+    if (slider) {
+      scrollXRef.current = slider.scrollLeft;
+    }
+  };
+
+  const handleMouseUp = () => {
+    setIsDown(false);
+    setIsPaused(false);
+    const slider = containerRef.current;
+    if (slider) {
+      scrollXRef.current = slider.scrollLeft;
+    }
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDown) return;
+    e.preventDefault();
+    const slider = containerRef.current;
+    if (!slider) return;
+    const x = e.pageX - slider.offsetLeft;
+    const walk = (x - startX) * 1.5; // Drag sensitivity
+    draggedDistanceRef.current = Math.abs(walk);
+    slider.scrollLeft = scrollLeftState - walk;
+    scrollXRef.current = slider.scrollLeft;
+  };
+
+  // Infinite wrapping logic
+  const handleScroll = () => {
+    const slider = containerRef.current;
+    if (!slider) return;
+    
+    const halfWidth = slider.scrollWidth / 2;
+    if (halfWidth > 0) {
+      if (slider.scrollLeft >= halfWidth) {
+        const diff = halfWidth;
+        slider.scrollLeft -= diff;
+        scrollXRef.current = slider.scrollLeft;
+        if (isDown) {
+          setScrollLeftState(prev => prev - diff);
+        }
+      } else if (slider.scrollLeft <= 0) {
+        const diff = halfWidth;
+        slider.scrollLeft += diff;
+        scrollXRef.current = slider.scrollLeft;
+        if (isDown) {
+          setScrollLeftState(prev => prev + diff);
+        }
+      } else {
+        scrollXRef.current = slider.scrollLeft;
+      }
+    }
+  };
+  
+  // Feed posts state moved to the top of the component to prevent block-scoped variable hoisting issues
   
   const [loading, setLoading] = useState(true);
   
@@ -307,29 +417,37 @@ export const InstagramFeed: React.FC = () => {
 
       {/* Infinite Rolling Slider Outer Container */}
       <div 
-        className="relative w-full overflow-hidden py-4 cursor-grab active:cursor-grabbing select-none"
+        className="relative w-full overflow-x-auto py-4 cursor-grab active:cursor-grabbing select-none no-scrollbar"
         onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={() => setIsPaused(false)}
+        onMouseLeave={handleMouseLeave}
+        onMouseDown={handleMouseDown}
+        onMouseUp={handleMouseUp}
+        onMouseMove={handleMouseMove}
         onTouchStart={() => setIsPaused(true)}
-        onTouchEnd={() => setIsPaused(false)}
+        onTouchEnd={() => {
+          setIsPaused(false);
+          setIsDown(false);
+        }}
+        onScroll={handleScroll}
         ref={containerRef}
+        style={{
+          scrollbarWidth: 'none',
+          msOverflowStyle: 'none',
+        }}
       >
+        {/* Inject CSS rule dynamically to fully hide webkit scrollbars */}
+        <style>{`
+          .no-scrollbar::-webkit-scrollbar {
+            display: none !important;
+          }
+        `}</style>
+
         {/* Soft fading overlays on edges for cinema-like depth */}
         <div className="absolute left-0 top-0 bottom-0 w-12 sm:w-24 bg-gradient-to-r from-[#0c0a09] to-transparent z-10 pointer-events-none" />
         <div className="absolute right-0 top-0 bottom-0 w-12 sm:w-24 bg-gradient-to-l from-[#0c0a09] to-transparent z-10 pointer-events-none" />
 
         {/* Rolling Track */}
-        <motion.div
-          animate={isPaused ? {} : {
-            x: ["0%", "-50%"]
-          }}
-          transition={{
-            ease: "linear",
-            duration: 25,
-            repeat: Infinity
-          }}
-          className="flex gap-4 sm:gap-6 w-max"
-        >
+        <div className="flex gap-4 sm:gap-6 w-max">
           {duplicatedPosts.map((post, idx) => (
             <motion.a
               key={`${post.id}-${idx}`}
@@ -339,6 +457,12 @@ export const InstagramFeed: React.FC = () => {
               className="relative w-64 sm:w-72 h-80 sm:h-96 rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-lg block group"
               whileHover={{ scale: 1.02, y: -4 }}
               transition={{ duration: 0.3, ease: "easeOut" }}
+              onDragStart={(e) => e.preventDefault()}
+              onClick={(e) => {
+                if (draggedDistanceRef.current > 15) {
+                  e.preventDefault();
+                }
+              }}
             >
               {/* Image background */}
               <OptimizedImage
@@ -385,7 +509,7 @@ export const InstagramFeed: React.FC = () => {
               <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none group-hover:opacity-0 transition-opacity duration-300" />
             </motion.a>
           ))}
-        </motion.div>
+        </div>
       </div>
 
       {/* Interactive Action Button to visit profile directly + Invisible Password Trigger */}
