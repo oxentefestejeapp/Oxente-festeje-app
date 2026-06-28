@@ -14,15 +14,18 @@ import {
   VolumeX, 
   ArrowRight,
   Sparkles,
-  PartyPopper,
   Quote,
   Loader2,
   Calendar,
-  AlertCircle
+  AlertCircle,
+  Heart,
+  Award,
+  Users,
+  Clock
 } from 'lucide-react';
 import { supabase, mapDbToSale } from '../lib/supabase';
 import { Sale } from '../types';
-import { BrandLogo } from './BrandLogo';
+
 
 interface LandingPageProps {
   onUnlockSystem: () => void;
@@ -921,6 +924,68 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         </svg>
       </motion.div>
 
+      {/* 4. Triângulinho (Cute traditional triangle instrument character) - Placed next to Seu Sanfoninha */}
+      <motion.div
+        onClick={(e) => {
+          e.stopPropagation();
+          triggerSpeech('triangulo');
+        }}
+        className="fixed bottom-[3%] left-[42%] md:left-[21%] z-40 w-14 md:w-18 cursor-pointer pointer-events-auto select-none"
+        animate={{ y: [-5, 5, -5], rotate: [-6, 6, -6] }}
+        transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
+      >
+        <AnimatePresence>
+          {speechBubble === 'triangulo' && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.8, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.8, y: 15 }}
+              className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
+            >
+              <span>🎉 Triângulinho no compasso do forró! 🌵</span>
+              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
+            </motion.div>
+          )}
+        </AnimatePresence>
+        <svg viewBox="0 0 100 120" className="w-full h-auto drop-shadow-md">
+          {/* Hanging loop line */}
+          <path d="M50,15 L50,30" stroke="#a16207" strokeWidth="2.5" strokeLinecap="round" />
+          
+          {/* Main Triangle metallic bar */}
+          <path d="M50,30 L15,95 L85,95 Z" fill="none" stroke="#facc15" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
+          {/* Inner silver gleam */}
+          <path d="M50,32 L18,93 L82,93" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
+          
+          {/* Face background inside the triangle for high contrast with landpage background */}
+          <polygon points="50,38 25,90 75,90" fill="#fef08a" stroke="#ca8a04" strokeWidth="1.5" />
+
+          {/* Little Leather Hat on top of the Triangle */}
+          <path d="M38,26 C38,12 62,12 62,26 Z" fill="#854d0e" stroke="#451a03" strokeWidth="1.5" />
+          <path d="M30,25 C40,28 60,28 70,25 C74,22 74,29 70,28 C60,30 40,30 30,28 C26,29 26,22 30,25 Z" fill="#a16207" stroke="#451a03" strokeWidth="1.5" />
+
+          {/* Cute face in the center */}
+          <g transform="translate(0, 15)">
+            <circle cx="42" cy="62" r="3.5" fill="#1c1917" />
+            <circle cx="58" cy="62" r="3.5" fill="#1c1917" />
+            <circle cx="41" cy="60" r="1" fill="#ffffff" />
+            <circle cx="57" cy="60" r="1" fill="#ffffff" />
+            {/* Blushing cheeks */}
+            <circle cx="38" cy="66" r="3" fill="#f43f5e" opacity="0.6" />
+            <circle cx="62" cy="66" r="3" fill="#f43f5e" opacity="0.6" />
+            <path d="M47,68 Q50,72 53,68" fill="none" stroke="#1c1917" strokeWidth="2" strokeLinecap="round" />
+          </g>
+
+          {/* Triangle striker stick animating */}
+          <motion.line 
+            x1="12" y1="75" x2="38" y2="60" 
+            stroke="#94a3b8" strokeWidth="3" strokeLinecap="round" 
+            animate={{ rotate: [0, 20, -10, 0] }}
+            transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
+            style={{ originX: "38px", originY: "60px" }}
+          />
+        </svg>
+      </motion.div>
+
       {/* 5. Zabumbinha (Cute traditional bouncing drum character) */}
       <motion.div
         onClick={() => triggerSpeech('zabumba')}
@@ -974,175 +1039,209 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         </svg>
       </motion.div>
 
-      {/* Main Container */}
-      <div className="relative max-w-4xl mx-auto px-6 pt-16 pb-32 z-20 flex flex-col items-center text-center">
+      {/* Full-width Profile Header */}
+      <div id="whatsapp-profile-header" className="relative w-full overflow-hidden z-20">
         
-        {/* Decorative Brand Logo floating with Triângulinho and Casal Dançarino on its sides */}
-        <div className="relative flex items-center justify-center gap-6 sm:gap-8 md:gap-10 select-none mb-4 w-full max-w-xl mx-auto px-4">
-          
-          {/* 4. Triângulinho (Cute traditional triangle instrument character) - Left of the logo */}
-          <motion.div
-            onClick={(e) => {
-              e.stopPropagation();
-              triggerSpeech('triangulo');
+        {/* Cover Banner (Festa Junina / Bonfire background) */}
+        <div className="relative h-56 sm:h-64 md:h-80 lg:h-[400px] w-full overflow-hidden">
+          <img 
+            src="/banner.png" 
+            onError={(e) => {
+              const currentSrc = e.currentTarget.src;
+              if (currentSrc.includes('/banner.png')) {
+                e.currentTarget.src = '/banner.jpg';
+              } else if (currentSrc.includes('/banner.jpg')) {
+                e.currentTarget.src = '/input_file_1.png';
+              } else if (currentSrc.includes('/input_file_1.png')) {
+                e.currentTarget.src = '/capa.png';
+              } else {
+                e.currentTarget.src = "https://images.unsplash.com/photo-1506224477000-07aa8a76be89?q=80&w=1220&auto=format&fit=crop";
+              }
             }}
-            className="w-14 sm:w-16 md:w-20 cursor-pointer pointer-events-auto select-none relative shrink-0"
-            animate={{ y: [-5, 5, -5], rotate: [-6, 6, -6] }}
-            transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
-          >
-            <AnimatePresence>
-              {speechBubble === 'triangulo' && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8, y: 15 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.8, y: 15 }}
-                  className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
-                >
-                  <span>🎉 Bem vindo a Oxente Festeje, bora comemorar! 🌵</span>
-                  <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <svg viewBox="0 0 100 120" className="w-full h-auto drop-shadow-md">
-              {/* Hanging loop line */}
-              <path d="M50,15 L50,30" stroke="#a16207" strokeWidth="2.5" strokeLinecap="round" />
-              
-              {/* Main Triangle metallic bar */}
-              <path d="M50,30 L15,95 L85,95 Z" fill="none" stroke="#facc15" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
-              {/* Inner silver gleam */}
-              <path d="M50,32 L18,93 L82,93" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
-              
-              {/* Face background inside the triangle for high contrast with landpage background */}
-              <polygon points="50,38 25,90 75,90" fill="#fef08a" stroke="#ca8a04" strokeWidth="1.5" />
-
-              {/* Little Leather Hat on top of the Triangle */}
-              <path d="M38,26 C38,12 62,12 62,26 Z" fill="#854d0e" stroke="#451a03" strokeWidth="1.5" />
-              <path d="M30,25 C40,28 60,28 70,25 C74,22 74,29 70,28 C60,30 40,30 30,28 C26,29 26,22 30,25 Z" fill="#a16207" stroke="#451a03" strokeWidth="1.5" />
-
-              {/* Cute face in the center */}
-              <g transform="translate(0, 15)">
-                <circle cx="42" cy="62" r="3.5" fill="#1c1917" />
-                <circle cx="58" cy="62" r="3.5" fill="#1c1917" />
-                <circle cx="41" cy="60" r="1" fill="#ffffff" />
-                <circle cx="57" cy="60" r="1" fill="#ffffff" />
-                {/* Blushing cheeks */}
-                <circle cx="38" cy="66" r="3" fill="#f43f5e" opacity="0.6" />
-                <circle cx="62" cy="66" r="3" fill="#f43f5e" opacity="0.6" />
-                <path d="M47,68 Q50,72 53,68" fill="none" stroke="#1c1917" strokeWidth="2" strokeLinecap="round" />
-              </g>
-
-              {/* Triangle striker stick animating */}
-              <motion.line 
-                x1="12" y1="75" x2="38" y2="60" 
-                stroke="#94a3b8" strokeWidth="3" strokeLinecap="round" 
-                animate={{ rotate: [0, 20, -10, 0] }}
-                transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
-                style={{ originX: "38px", originY: "60px" }}
-              />
-            </svg>
-          </motion.div>
-
-          {/* Logo Icon in the middle */}
-          <motion.div
-            initial={{ scale: 0, y: -20, rotate: -15 }}
-            animate={{ scale: 1, y: 0, rotate: 0 }}
-            transition={{ type: 'spring', damping: 12, stiffness: 100, delay: 0.1 }}
-            className="shrink-0"
-          >
-            <BrandLogo size="lg" />
-          </motion.div>
-
-          {/* 6. Casal Dançando Forró (Cute traditional couple silhouettes dancing) - Right of the logo */}
-          <motion.div
-            onClick={(e) => {
-              e.stopPropagation();
-              triggerSpeech('casal');
-            }}
-            className="w-20 sm:w-26 md:w-30 cursor-pointer pointer-events-auto select-none relative shrink-0"
-            animate={{ y: [0, -6, 0], x: [-3, 3, -3], rotate: [-4, 4, -4] }}
-            transition={{ repeat: Infinity, duration: 2.2, ease: "easeInOut" }}
-          >
-            <AnimatePresence>
-              {speechBubble === 'casal' && (
-                <motion.div
-                  initial={{ opacity: 0, scale: 0.8, y: 15 }}
-                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                  exit={{ opacity: 0, scale: 0.8, y: 15 }}
-                  className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
-                >
-                  <span>🎉 Bem vindo a Oxente Festeje, bora comemorar! 🌵</span>
-                  <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
-                </motion.div>
-              )}
-            </AnimatePresence>
-            <svg viewBox="0 0 100 120" className="w-full h-auto drop-shadow-md">
-              {/* Left dancer (He) */}
-              <g transform="translate(15, 15)">
-                {/* Body */}
-                <path d="M25,50 L40,85 L15,85 Z" fill="#d97706" stroke="#451a03" strokeWidth="1.5" />
-                {/* Leather Hat */}
-                <path d="M15,35 C15,22 35,22 35,35 Z" fill="#854d0e" stroke="#451a03" strokeWidth="1.2" />
-                <ellipse cx="25" cy="35" rx="14" ry="4" fill="#a16207" stroke="#451a03" strokeWidth="1.2" />
-                {/* Cute Head */}
-                <circle cx="25" cy="45" r="8" fill="#fda4af" />
-                {/* Eyes */}
-                <circle cx="22" cy="44" r="1.2" fill="#1c1917" />
-                <circle cx="28" cy="44" r="1.2" fill="#1c1917" />
-                <path d="M23,48 Q25,51 27,48" fill="none" stroke="#1c1917" strokeWidth="1.2" strokeLinecap="round" />
-              </g>
-
-              {/* Right dancer (She) */}
-              <g transform="translate(35, 10)">
-                {/* Beautiful Forró dress */}
-                <path d="M25,55 L42,90 L8,90 Z" fill="#f43f5e" stroke="#451a03" strokeWidth="1.5" />
-                <circle cx="15" cy="85" r="2.5" fill="#facc15" />
-                <circle cx="25" cy="85" r="2.5" fill="#ffffff" />
-                <circle cx="35" cy="85" r="2.5" fill="#facc15" />
-                {/* Head */}
-                <circle cx="25" cy="45" r="8" fill="#fda4af" />
-                {/* Smile / wink face */}
-                <circle cx="22" cy="44" r="1.2" fill="#1c1917" />
-                <path d="M26,43 Q29,40 30,44" fill="none" stroke="#1c1917" strokeWidth="1.2" strokeLinecap="round" />
-                <path d="M22,48 Q25,51 28,48" fill="none" stroke="#1c1917" strokeWidth="1.2" strokeLinecap="round" />
-                {/* Hair Braids / Flowers */}
-                <circle cx="15" cy="45" r="4.5" fill="#ca8a04" />
-                <circle cx="35" cy="45" r="4.5" fill="#ca8a04" />
-                <path d="M15,45 L11,56" stroke="#ca8a04" strokeWidth="2.5" strokeLinecap="round" />
-                <path d="M35,45 L39,56" stroke="#ca8a04" strokeWidth="2.5" strokeLinecap="round" />
-              </g>
-
-              {/* Shared arms holding each other dancing */}
-              <path d="M36,65 Q50,55 58,62" fill="none" stroke="#451a03" strokeWidth="3.5" strokeLinecap="round" />
-              <path d="M22,68 Q40,80 50,65" fill="none" stroke="#451a03" strokeWidth="3" strokeLinecap="round" />
-            </svg>
-          </motion.div>
+            alt="Oxente Festeje Banner" 
+            className="w-full h-full object-cover object-center"
+          />
         </div>
 
-        {/* Playful Floating Elements */}
-        <motion.div 
-          initial={{ scale: 0, rotate: -45 }}
-          animate={{ scale: 1, rotate: 0 }}
-          transition={{ type: 'spring', damping: 10, delay: 0.2 }}
-          className="bg-brand-pink/15 text-brand-pink border border-brand-pink/30 font-display font-black text-xs px-4 py-1.5 rounded-full uppercase tracking-widest shadow-xs flex items-center gap-1.5 mb-6"
-        >
-          <PartyPopper className="h-4 w-4 text-brand-pink animate-bounce" />
-          <span>Arretada de Linda</span>
-        </motion.div>
+      </div>
 
-        {/* Visual Brand Header */}
+      {/* Main Container */}
+      <div className="relative max-w-4xl mx-auto px-6 pt-10 pb-32 z-20 flex flex-col items-center text-center">
+        
+        {/* Profile "About" / Bio Card - Highly Enhanced & Creative */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 25 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.25 }}
-          className="flex flex-col items-center mb-8"
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="relative w-full max-w-3xl mx-auto bg-[#1a0f07]/90 backdrop-blur-md rounded-3xl border border-amber-500/20 p-6 md:p-8 shadow-[0_15px_35px_rgba(0,0,0,0.6)] text-center mb-12 overflow-hidden"
         >
-          {/* Main Title - Inspired by Instagram Visual Identity and Gold Theme */}
-          <h1 className="text-5xl md:text-7xl font-display font-black tracking-tight text-transparent bg-clip-text uppercase drop-shadow-md animate-sweep">
-            Oxente Festeje
-          </h1>
-          <p className="text-sm md:text-base text-amber-100/95 font-semibold mt-3.5 max-w-xl leading-relaxed font-sans">
-            A loja de brindes mais seguida e amada de João Pessoa com mais de 100mil seguidores no instagram! A única que você acompanha seu pedido em tempo real! Levamos o capricho, e a qualidade, para os seus momentos especiais. ✨🎁
+          {/* Subtle Festive Background Lights/Stars Inside the Card */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(251,191,36,0.08),transparent_50%)] pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_bottom_left,rgba(244,63,94,0.05),transparent_40%)] pointer-events-none" />
+          
+          {/* Top Decorative Banner-styled Badge */}
+          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-semibold uppercase tracking-widest font-mono mb-6">
+            <Sparkles className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
+            <span>Nossa Essência & História</span>
+            <Sparkles className="h-3.5 w-3.5 text-amber-400 animate-pulse" />
+          </div>
+
+          {/* Centered Brand Title with 3D animation & Cangaceiro Leather Hat on "O" */}
+          <motion.div
+            initial="initial"
+            animate="animate"
+            variants={{
+              initial: {},
+              animate: {
+                transition: {
+                  staggerChildren: 0.05
+                }
+              }
+            }}
+            className="flex flex-row flex-wrap items-center justify-center gap-x-3 gap-y-2 text-3xl sm:text-4xl md:text-5xl font-display font-black tracking-wider text-[#ffeeaa] uppercase select-none pb-5"
+          >
+            {/* OXENTE with letter animation & Leather Hat on "O" */}
+            <span className="inline-flex gap-0.5 sm:gap-1">
+              {"Oxente".split("").map((char, index) => {
+                if (index === 0) {
+                  return (
+                    <motion.span
+                      key={index}
+                      variants={{
+                        initial: { y: 0, scale: 1, rotate: 0 },
+                        animate: {
+                          y: [0, -12, 1, -2, 0],
+                          scale: [1, 1.15, 0.96, 1.02, 1],
+                          rotate: [0, -8, 4, -2, 0],
+                          transition: { duration: 1.2, ease: "easeOut" }
+                        }
+                      }}
+                      className="relative inline-block"
+                      style={{ 
+                        textShadow: "0 1px 0 #f59e0b, 0 2px 0 #d97706, 0 3px 0 #b45309, 0 4px 0 #92400e, 0 5px 0 #78350f, 0 6px 0 #451a03, 0 7px 0 #1c0a01, 0 8px 12px rgba(0,0,0,0.9), 0 12px 24px rgba(69,26,3,0.6)" 
+                      }}
+                    >
+                      {/* Leather Hat (Chapéu de Couro / Cangaço) precisely aligned over "O" */}
+                      <span className="absolute -top-[0.8em] -left-[0.22em] w-[1.48em] h-[0.88em] pointer-events-none z-20 block select-none">
+                        <svg viewBox="0 0 100 60" className="w-full h-full drop-shadow-[0_4px_6px_rgba(0,0,0,0.7)] transform -rotate-[5deg]">
+                          {/* Hat crown (leather dome) */}
+                          <path d="M 22 36 C 22 10, 78 10, 78 36 Z" fill="#78350f" stroke="#451a03" strokeWidth="2.5" />
+                          {/* Embroidery inside crown */}
+                          <path d="M 33 36 C 33 16, 67 16, 67 36" fill="none" stroke="#fef3c7" strokeWidth="1.5" strokeDasharray="3,3" />
+                          {/* Central Star emblem (cangaceiro style) */}
+                          <path d="M 50 17 L 52.5 22 L 58 23.5 L 53.5 26.5 L 55 32 L 50 29 L 45 32 L 46.5 26.5 L 42 23.5 L 47.5 22 Z" fill="#f59e0b" stroke="#b45309" strokeWidth="0.5" />
+                          {/* Left/Right decorative leather straps on crown */}
+                          <path d="M 27 36 L 31 22" fill="none" stroke="#d97706" strokeWidth="1.5" />
+                          <path d="M 73 36 L 69 22" fill="none" stroke="#d97706" strokeWidth="1.5" />
+                          {/* Wide brim (curved upward at edges) */}
+                          <path d="M 5 36 Q 50 24 95 36 C 90 47, 10 47, 5 36 Z" fill="#b45309" stroke="#451a03" strokeWidth="2.5" />
+                          {/* Stitching on the brim */}
+                          <path d="M 12 37 Q 50 28 88 37" fill="none" stroke="#fef3c7" strokeWidth="1.5" strokeDasharray="4,3" />
+                          {/* Hanging leather chin straps (tassels) */}
+                          <path d="M 45 39 Q 47 52 49 57" fill="none" stroke="#78350f" strokeWidth="2" strokeLinecap="round" />
+                          <path d="M 55 39 Q 53 52 51 57" fill="none" stroke="#78350f" strokeWidth="2" strokeLinecap="round" />
+                        </svg>
+                      </span>
+                      {char}
+                    </motion.span>
+                  );
+                }
+                return (
+                  <motion.span
+                    key={index}
+                    variants={{
+                      initial: { y: 0, scale: 1, rotate: 0 },
+                      animate: {
+                        y: [0, -12, 1, -2, 0],
+                        scale: [1, 1.15, 0.96, 1.02, 1],
+                        rotate: [0, -8, 4, -2, 0],
+                        transition: { duration: 1.2, ease: "easeOut" }
+                      }
+                    }}
+                    className="inline-block"
+                    style={{ 
+                      textShadow: "0 1px 0 #f59e0b, 0 2px 0 #d97706, 0 3px 0 #b45309, 0 4px 0 #92400e, 0 5px 0 #78350f, 0 6px 0 #451a03, 0 7px 0 #1c0a01, 0 8px 12px rgba(0,0,0,0.9), 0 12px 24px rgba(69,26,3,0.6)" 
+                    }}
+                  >
+                    {char}
+                  </motion.span>
+                );
+              })}
+            </span>
+
+            {/* FESTEJE with letter animation */}
+            <span className="inline-flex gap-0.5 sm:gap-1">
+              {"Festeje".split("").map((char, index) => {
+                return (
+                  <motion.span
+                    key={index}
+                    variants={{
+                      initial: { y: 0, scale: 1, rotate: 0 },
+                      animate: {
+                        y: [0, -12, 1, -2, 0],
+                        scale: [1, 1.15, 0.96, 1.02, 1],
+                        rotate: [0, -8, 4, -2, 0],
+                        transition: { duration: 1.2, ease: "easeOut" }
+                      }
+                    }}
+                    className="inline-block"
+                    style={{ 
+                      textShadow: "0 1px 0 #f59e0b, 0 2px 0 #d97706, 0 3px 0 #b45309, 0 4px 0 #92400e, 0 5px 0 #78350f, 0 6px 0 #451a03, 0 7px 0 #1c0a01, 0 8px 12px rgba(0,0,0,0.9), 0 12px 24px rgba(69,26,3,0.6)" 
+                    }}
+                  >
+                    {char}
+                  </motion.span>
+                );
+              })}
+            </span>
+          </motion.div>
+
+          {/* Interactive storytelling description */}
+          <p className="text-sm md:text-base text-stone-200 leading-relaxed font-sans max-w-2xl mx-auto mb-8">
+            Nascemos com um propósito único: levar o capricho, a magia e o calor do nosso Nordeste para os seus momentos mais especiais. Hoje, somos <strong className="text-amber-400 font-bold">a loja de brindes mais querida e seguida de João Pessoa</strong>, onde cada detalhe é feito com amor e você acompanha tudo passo a passo! 🌵✨
           </p>
+
+          {/* 3 Pillars layout - Beautifully styled cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left pt-2 border-t border-amber-500/10">
+            {/* Pillar 1 */}
+            <div className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 hover:border-amber-500/25 transition-all">
+              <div className="flex items-center gap-2 text-amber-400 font-display font-bold">
+                <div className="p-1.5 rounded-lg bg-amber-500/10">
+                  <Users className="h-4 w-4" />
+                </div>
+                <span className="text-xs uppercase tracking-wider font-mono">+100k Corações</span>
+              </div>
+              <p className="text-xs text-stone-300 leading-relaxed font-sans">
+                A comunidade mais apaixonada do Instagram que escolhe e recomenda nossos brindes diariamente.
+              </p>
+            </div>
+
+            {/* Pillar 2 */}
+            <div className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 hover:border-amber-500/25 transition-all">
+              <div className="flex items-center gap-2 text-emerald-400 font-display font-bold">
+                <div className="p-1.5 rounded-lg bg-emerald-500/10">
+                  <Clock className="h-4 w-4" />
+                </div>
+                <span className="text-xs uppercase tracking-wider font-mono">Tempo Real</span>
+              </div>
+              <p className="text-xs text-stone-300 leading-relaxed font-sans">
+                A única loja de brindes onde você monitora a produção e a entrega do seu pedido a cada minuto!
+              </p>
+            </div>
+
+            {/* Pillar 3 */}
+            <div className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 hover:border-amber-500/25 transition-all">
+              <div className="flex items-center gap-2 text-rose-400 font-display font-bold">
+                <div className="p-1.5 rounded-lg bg-rose-500/10">
+                  <Award className="h-4 w-4" />
+                </div>
+                <span className="text-xs uppercase tracking-wider font-monoArte">Capricho & Arte</span>
+              </div>
+              <p className="text-xs text-stone-300 leading-relaxed font-sans">
+                Design exclusivo, materiais selecionados e um acabamento impecável que surpreende seus convidados.
+              </p>
+            </div>
+          </div>
         </motion.div>
 
         {/* Central Dashboard Card with custom CTA Buttons */}
