@@ -1495,6 +1495,23 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               </motion.div>
             ))}
           </div>
+
+          {/* Feedback notice badge */}
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95 }}
+            whileInView={{ opacity: 1, scale: 1 }}
+            viewport={{ once: true }}
+            transition={{ delay: 0.2 }}
+            className="mt-8 px-4 py-2 bg-emerald-950/30 border border-emerald-500/15 rounded-full flex items-center justify-center gap-2 shadow-inner"
+          >
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+            </span>
+            <span className="text-[11px] font-sans font-semibold uppercase tracking-wider text-emerald-400">
+              Mural feito baseado nos comentários de feedback no Whatsapp
+            </span>
+          </motion.div>
         </motion.div>
 
         {/* Footer info and secret entry */}
