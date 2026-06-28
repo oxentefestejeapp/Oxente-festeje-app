@@ -27,6 +27,7 @@ import {
 import { supabase, mapDbToSale } from '../lib/supabase';
 import { Sale } from '../types';
 import { MagneticButton } from './MagneticButton';
+import { InstagramFeed } from './InstagramFeed';
 
 
 interface LandingPageProps {
@@ -1436,6 +1437,9 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
           </MagneticButton>
         </motion.div>
+
+        {/* Instagram Feed Section */}
+        <InstagramFeed />
 
         {/* Mural de Recomendações (Love Wall) Section */}
         <motion.div
