@@ -116,14 +116,14 @@ export default function App() {
   }, [isAdmin]);
 
   // Google Ads Tracking Privacy Safeguard:
-  // Automatically block and clean up Google Tag from administrative screens
+  // Automatically block and clean up Google Tag from any screen that is NOT the main Landing Page.
+  // This satisfies Google Ads rules requiring the tag to be strictly active only on the main marketing page.
   useEffect(() => {
     const trackingParams = new URLSearchParams(window.location.search);
     const isTrackingPage = trackingParams.has('acompanhar') || trackingParams.has('pedido') || trackingParams.has('venda');
-    const isPublicLandingPage = !isLandingBypassed && userStatus !== 'approved' && !isAppMode;
+    const isMainLandingPage = !isLandingBypassed && userStatus !== 'approved' && !isAppMode && !isTrackingPage;
     
-    const isPublicMode = isTrackingPage || isPublicLandingPage;
-    if (!isPublicMode) {
+    if (!isMainLandingPage) {
       disableGoogleAds();
     }
   }, [isLandingBypassed, userStatus, isAppMode]);
