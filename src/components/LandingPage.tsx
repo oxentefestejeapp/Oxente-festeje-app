@@ -146,8 +146,8 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       });
 
       const yVal = isDesktop 
-        ? 6 + Math.random() * 28  // Explode higher on desktop (upper 6% to 34%)
-        : 15 + Math.random() * 45; // Explode on mobile (upper 15% to 60%)
+        ? 3 + Math.random() * 20  // Explode higher on desktop (upper 3% to 23%)
+        : 6 + Math.random() * 28; // Explode higher on mobile (upper 6% to 34%)
 
       return {
         id: i,
@@ -1403,17 +1403,19 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           <span>© 2026 Oxente Festeje. João Pessoa - PB. Todos os direitos reservados.</span>
         </p>
 
-        {/* SECRET ACCESS BUTTON: discretely positioned at absolute bottom right */}
-        <div className="fixed bottom-2 right-2 z-50">
+        {/* SECRET ACCESS BUTTON: discretely positioned at absolute bottom right with z-[100] so it is clickable in front of the cactus */}
+        <div className="fixed bottom-2 right-2 z-[100]">
           <button
             onClick={() => {
               setAccessPassword('');
               setPasswordError(false);
               setShowAccessModal(true);
             }}
-            className="text-zinc-700/35 hover:text-zinc-500/60 p-1.5 transition-all cursor-pointer"
+            className="text-zinc-700/35 hover:text-zinc-500/70 p-3 bg-transparent rounded-full hover:bg-black/10 transition-all cursor-pointer flex items-center justify-center relative z-[100]"
+            style={{ pointerEvents: 'auto' }}
+            title="Acesso Secreto"
           >
-            <Lock className="h-3.5 w-3.5" />
+            <Lock className="h-4 w-4" />
           </button>
         </div>
 
