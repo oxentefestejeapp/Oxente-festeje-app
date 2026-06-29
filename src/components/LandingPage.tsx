@@ -1557,21 +1557,21 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         {/* MODAL 1: Order Tracking Lookup dialog */}
         <AnimatePresence>
           {showTrackingModal && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-lg bg-white rounded-3xl overflow-hidden shadow-2xl border border-amber-100"
+                className="w-full max-w-lg bg-stone-900 rounded-3xl overflow-hidden shadow-2xl border border-amber-500/35"
               >
                 {/* Header card banner */}
-                <div className="bg-gradient-to-r from-amber-400 to-orange-500 p-6 text-left relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full translate-x-12 -translate-y-12 pointer-events-none" />
-                  <h3 className="text-xl font-extrabold text-zinc-900 flex items-center gap-2">
-                    <Search className="h-5 w-5" />
+                <div className="bg-gradient-to-r from-amber-500/10 via-amber-600/15 to-orange-500/10 p-6 text-left relative overflow-hidden border-b border-amber-500/20">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full translate-x-12 -translate-y-12 pointer-events-none" />
+                  <h3 className="text-xl font-display font-black text-amber-100 flex items-center gap-2">
+                    <Search className="h-5 w-5 text-amber-400" />
                     <span>Rastrear Seu Pedido</span>
                   </h3>
-                  <p className="text-zinc-850 text-xs mt-1">
+                  <p className="text-stone-400 text-xs mt-1">
                     Digite o número do pedido para ver seu status em tempo real.
                   </p>
                 </div>
@@ -1585,14 +1585,14 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                         placeholder="Ex: 5087 ou Código UUID..."
                         value={typedOrderId}
                         onChange={(e) => setTypedOrderId(e.target.value)}
-                        className="w-full bg-zinc-50 border border-zinc-200 focus:border-amber-400 rounded-xl px-4 py-3 text-sm text-zinc-850 font-bold focus:outline-none"
+                        className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500/50 rounded-xl px-4 py-3 text-sm text-amber-100 font-bold focus:outline-none placeholder:text-stone-600"
                         required
                       />
                     </div>
                     <button
                       type="submit"
                       disabled={trackingLoading}
-                      className="bg-zinc-900 hover:bg-zinc-800 text-white font-bold px-5 py-3 rounded-xl text-sm transition-all flex items-center gap-1.5 cursor-pointer"
+                      className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-display font-black text-xs uppercase tracking-widest px-5 py-3 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-black/25"
                     >
                       {trackingLoading ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -1607,7 +1607,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                     <motion.div
                       initial={{ opacity: 0, y: -5 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-red-50 text-red-600 rounded-xl p-4 text-xs font-semibold flex items-start gap-2 border border-red-100 mb-4"
+                      className="bg-red-950/45 text-red-400 rounded-xl p-4 text-xs font-semibold flex items-start gap-2 border border-red-900/30 mb-4"
                     >
                       <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
                       <span>{trackingError}</span>
@@ -1619,16 +1619,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                     <motion.div
                       initial={{ opacity: 0, scale: 0.98 }}
                       animate={{ opacity: 1, scale: 1 }}
-                      className="bg-gradient-to-b from-amber-50/50 to-orange-50/20 rounded-2xl p-5 border border-amber-200/40"
+                      className="bg-gradient-to-b from-stone-950/80 to-stone-950/40 rounded-2xl p-5 border border-amber-500/10 shadow-inner"
                     >
-                      <div className="flex items-center justify-between border-b border-zinc-100 pb-3 mb-4">
+                      <div className="flex items-center justify-between border-b border-stone-800 pb-3 mb-4">
                         <div>
-                          <span className="block text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Cliente</span>
-                          <span className="block text-sm font-black text-zinc-800">{trackedSale.cliente}</span>
+                          <span className="block text-[10px] text-stone-500 font-bold uppercase tracking-wider">Cliente</span>
+                          <span className="block text-sm font-black text-amber-100">{trackedSale.cliente}</span>
                         </div>
                         <div className="text-right">
-                          <span className="block text-[10px] text-zinc-400 font-bold uppercase tracking-wider">Nº Pedido</span>
-                          <span className="block text-sm font-black text-zinc-900 bg-amber-400/20 px-2.5 py-0.5 rounded-lg">
+                          <span className="block text-[10px] text-stone-500 font-bold uppercase tracking-wider">Nº Pedido</span>
+                          <span className="block text-xs font-black text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2.5 py-0.5 rounded-lg">
                             #{trackedSale.numeroPedido || 'N/A'}
                           </span>
                         </div>
@@ -1637,36 +1637,36 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                       {/* Info lines */}
                       <div className="space-y-3">
                         <div className="flex justify-between items-center text-xs">
-                          <span className="text-zinc-500 font-medium">Produto / Descrição:</span>
-                          <span className="font-bold text-zinc-800 truncate max-w-[200px]" title={trackedSale.produtoNome}>
+                          <span className="text-stone-400 font-medium">Produto / Descrição:</span>
+                          <span className="font-bold text-stone-200 truncate max-w-[200px]" title={trackedSale.produtoNome}>
                             {trackedSale.produtoNome}
                           </span>
                         </div>
                         <div className="flex justify-between items-center text-xs">
-                          <span className="text-zinc-500 font-medium">Data do Pedido:</span>
-                          <span className="font-bold text-zinc-700 flex items-center gap-1">
-                            <Calendar className="h-3.5 w-3.5 text-zinc-400" />
+                          <span className="text-stone-400 font-medium">Data do Pedido:</span>
+                          <span className="font-bold text-stone-300 flex items-center gap-1">
+                            <Calendar className="h-3.5 w-3.5 text-stone-500" />
                             {trackedSale.data ? new Date(trackedSale.data).toLocaleDateString('pt-BR') : '-'}
                           </span>
                         </div>
                         
                         {/* Interactive Status Indicator bar */}
-                        <div className="mt-4 pt-3 border-t border-zinc-100">
-                          <span className="block text-[10px] text-zinc-400 font-bold uppercase tracking-wider mb-2">Status da Produção</span>
+                        <div className="mt-4 pt-3 border-t border-stone-800">
+                          <span className="block text-[10px] text-stone-500 font-bold uppercase tracking-wider mb-2">Status da Produção</span>
                           
                           <div className="flex items-center gap-2">
-                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider ${
+                            <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border ${
                               trackedSale.statusProducao === 'Entregue' 
-                                ? 'bg-emerald-100 text-emerald-800' 
+                                ? 'bg-emerald-950/45 text-emerald-400 border-emerald-900/30' 
                                 : trackedSale.statusProducao === 'Pronto para Retirada'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-blue-100 text-blue-800'
+                                ? 'bg-amber-950/45 text-amber-400 border-amber-900/30'
+                                : 'bg-blue-950/45 text-blue-400 border-blue-900/30'
                             }`}>
                               <Check className="h-3.5 w-3.5" />
                               {trackedSale.statusProducao || 'Pendente'}
                             </span>
                           </div>
-                          <p className="text-[11px] text-zinc-500 mt-2 leading-relaxed">
+                          <p className="text-[11px] text-stone-400 mt-2 leading-relaxed">
                             {trackedSale.statusProducao === 'Entregue' 
                               ? 'O seu pedido já foi retirado ou entregue com sucesso! Obrigado por festejar com a gente! 🥳'
                               : trackedSale.statusProducao === 'Pronto para Retirada'
@@ -1680,7 +1680,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 </div>
 
                 {/* Modal footer back actions */}
-                <div className="bg-zinc-50 px-6 py-4 flex justify-end border-t border-zinc-100">
+                <div className="bg-stone-950/50 px-6 py-4 flex justify-end border-t border-stone-800/80">
                   <button
                     onClick={() => {
                       setShowTrackingModal(false);
@@ -1688,7 +1688,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                       setTypedOrderId('');
                       setTrackingError(null);
                     }}
-                    className="text-zinc-650 hover:text-zinc-900 font-bold text-sm px-4 py-2 hover:bg-zinc-100 rounded-xl transition-all cursor-pointer"
+                    className="text-stone-400 hover:text-amber-300 font-bold text-sm px-4 py-2 hover:bg-stone-900 rounded-xl transition-all cursor-pointer"
                   >
                     Fechar
                   </button>
@@ -1701,33 +1701,33 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         {/* MODAL 2: Locked app entry dialog with (69pagina69) password */}
         <AnimatePresence>
           {showAccessModal && (
-            <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl border border-zinc-100"
+                className="w-full max-w-sm bg-stone-900 rounded-3xl overflow-hidden shadow-2xl border border-amber-500/35"
               >
-                <div className="bg-gradient-to-r from-zinc-800 to-zinc-950 p-6 text-left relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full translate-x-12 -translate-y-12 pointer-events-none" />
-                  <h3 className="text-lg font-black text-white flex items-center gap-2">
-                    <Lock className="h-5 w-5 text-brand-pink" />
+                <div className="bg-gradient-to-r from-amber-500/10 via-amber-600/15 to-orange-500/10 p-6 text-left relative overflow-hidden border-b border-amber-500/20">
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full translate-x-12 -translate-y-12 pointer-events-none" />
+                  <h3 className="text-lg font-display font-black text-amber-100 flex items-center gap-2">
+                    <Lock className="h-5 w-5 text-amber-400" />
                     <span>Área Administrativa</span>
                   </h3>
-                  <p className="text-zinc-400 text-xs mt-1 leading-relaxed">
+                  <p className="text-stone-400 text-xs mt-1 leading-relaxed">
                     Acesso restrito para colaboradores. Digite a senha para entrar no sistema de gerenciamento.
                   </p>
                 </div>
 
                 <form onSubmit={handlePasswordSubmit} className="p-6 text-left">
                   <div className="mb-4">
-                    <label className="block text-xs font-black text-zinc-500 uppercase tracking-wider mb-2">Senha do App</label>
+                    <label className="block text-xs font-mono uppercase text-stone-500 mb-2">Senha do App</label>
                     <input
                       type="password"
                       placeholder="••••••••"
                       value={accessPassword}
                       onChange={(e) => setAccessPassword(e.target.value)}
-                      className="w-full bg-zinc-50 border border-zinc-200 focus:border-brand-pink rounded-xl px-4 py-3 text-sm font-bold text-zinc-850 tracking-widest focus:outline-none"
+                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500/50 rounded-xl px-4 py-3 text-sm font-bold text-amber-100 tracking-widest placeholder:text-stone-600 focus:outline-none"
                       required
                       autoFocus
                     />
@@ -1737,27 +1737,27 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                     <motion.div
                       initial={{ opacity: 0, y: -5 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="bg-red-50 text-red-600 rounded-xl p-3 text-xs font-bold border border-red-100 flex items-center gap-1.5 mb-4"
+                      className="bg-red-950/45 text-red-400 rounded-xl p-3 text-xs font-bold border border-red-900/30 flex items-center gap-1.5 mb-4"
                     >
                       <AlertCircle className="h-4 w-4 shrink-0" />
                       <span>Senha incorreta! Tente novamente.</span>
                     </motion.div>
                   )}
 
-                  <div className="flex gap-2 justify-end pt-2 border-t border-zinc-50 mt-4">
+                  <div className="flex gap-2 justify-end pt-2 border-t border-stone-800/80 mt-4">
                     <button
                       type="button"
                       onClick={() => {
                         setShowAccessModal(false);
                         setPasswordError(false);
                       }}
-                      className="text-zinc-650 hover:text-zinc-900 font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer"
+                      className="text-stone-400 hover:text-amber-300 font-bold text-xs px-4 py-2.5 rounded-xl transition-all cursor-pointer hover:bg-stone-950"
                     >
                       Cancelar
                     </button>
                     <button
                       type="submit"
-                      className="bg-brand-pink hover:bg-brand-pink/95 text-zinc-900 font-extrabold text-xs px-5 py-2.5 rounded-xl shadow-md transition-all cursor-pointer"
+                      className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-stone-950 font-display font-black text-xs uppercase tracking-widest px-5 py-2.5 rounded-xl shadow-lg transition-all cursor-pointer"
                     >
                       Acessar App
                     </button>

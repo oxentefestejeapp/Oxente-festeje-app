@@ -686,7 +686,7 @@ export const InstagramFeed: React.FC = () => {
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
-            className="mt-12 bg-stone-900/50 border border-amber-500/10 rounded-3xl p-6 relative overflow-hidden"
+            className="mt-12 bg-gradient-to-b from-stone-900 to-stone-950 border border-amber-500/35 rounded-3xl p-6 relative overflow-hidden shadow-[0_10px_30px_rgba(0,0,0,0.5)]"
             id="panel-mural-admin"
           >
             {/* Header / Title */}
@@ -777,7 +777,7 @@ export const InstagramFeed: React.FC = () => {
                       placeholder="Ex: Copos Long Drink"
                       value={tag}
                       onChange={(e) => setTag(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500/30 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none"
+                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none transition-colors"
                     />
                   </div>
                   <div>
@@ -787,7 +787,7 @@ export const InstagramFeed: React.FC = () => {
                       placeholder="URL do Instagram"
                       value={link}
                       onChange={(e) => setLink(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500/30 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none"
+                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none transition-colors"
                     />
                   </div>
                 </div>
@@ -800,7 +800,7 @@ export const InstagramFeed: React.FC = () => {
                       placeholder="Ex: 1.5k"
                       value={likes}
                       onChange={(e) => setLikes(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500/30 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none"
+                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none transition-colors"
                     />
                   </div>
                   <div>
@@ -810,7 +810,7 @@ export const InstagramFeed: React.FC = () => {
                       placeholder="Ex: 45"
                       value={comments}
                       onChange={(e) => setComments(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500/30 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none"
+                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none transition-colors"
                     />
                   </div>
                 </div>
@@ -822,7 +822,7 @@ export const InstagramFeed: React.FC = () => {
                     rows={2}
                     value={caption}
                     onChange={(e) => setCaption(e.target.value)}
-                    className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500/30 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none resize-none"
+                    className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none resize-none transition-colors"
                   />
                 </div>
 
