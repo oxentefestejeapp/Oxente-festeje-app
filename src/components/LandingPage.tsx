@@ -173,6 +173,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
 
   // Speech bubble state for custom interaction
   const [speechBubble, setSpeechBubble] = useState<'sanfona' | 'zabumba' | 'triangulo' | 'casal' | 'cacto_esq' | 'cacto_dir' | null>(null);
+  const [triangleSpeechText, setTriangleSpeechText] = useState("toque em mim pra fazer música!");
 
   // Scroll listener for premium parallax sky backgrounds
   const [scrollY, setScrollY] = useState(0);
@@ -193,6 +194,15 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       return () => clearTimeout(timer);
     }
   }, [speechBubble]);
+
+  // Auto trigger triangle speech bubble after 35 seconds of page load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setTriangleSpeechText("toque em mim pra fazer música!");
+      triggerSpeech('triangulo');
+    }, 35000);
+    return () => clearTimeout(timer);
+  }, []);
 
   const triggerSpeech = (character: 'sanfona' | 'zabumba' | 'triangulo' | 'casal' | 'cacto_esq' | 'cacto_dir') => {
     setSpeechBubble(character);
@@ -943,7 +953,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       {/* 3. Seu Sanfoninha (Smiling Bouncing Accordion Character) */}
       <motion.div
         onClick={() => triggerSpeech('sanfona')}
-        className="fixed bottom-[3%] left-[28%] md:left-[15%] z-40 w-16 md:w-20 cursor-pointer pointer-events-auto select-none"
+        className="fixed bottom-[3%] left-[28%] md:left-[31%] z-40 w-16 md:w-20 cursor-pointer pointer-events-auto select-none"
         animate={{ x: [-3, 3, -3], scaleX: [0.95, 1.05, 0.95], rotate: [-2, 2, -2] }}
         transition={{ repeat: Infinity, duration: 3.2, ease: "easeInOut" }}
       >
@@ -955,7 +965,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               exit={{ opacity: 0, scale: 0.8, y: 15 }}
               className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
             >
-              <span>🌵 Bem vindo a Oxente Festeje, bora comemorar! 🎉</span>
+              <span>🌵 uai, bora fazer seu pedido! 🌵</span>
               <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
             </motion.div>
           )}
@@ -1005,9 +1015,10 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       <motion.div
         onClick={(e) => {
           e.stopPropagation();
+          setTriangleSpeechText("olha o triângulo do forró! ✨️");
           triggerSpeech('triangulo');
         }}
-        className="fixed bottom-[3%] left-[42%] md:left-[21%] z-40 w-14 md:w-18 cursor-pointer pointer-events-auto select-none"
+        className="fixed bottom-[3%] left-[48%] md:left-[50%] -translate-x-1/2 z-40 w-14 md:w-18 cursor-pointer pointer-events-auto select-none"
         animate={{ y: [-5, 5, -5], rotate: [-6, 6, -6] }}
         transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
       >
@@ -1019,7 +1030,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               exit={{ opacity: 0, scale: 0.8, y: 15 }}
               className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
             >
-              <span>🎉 Triângulinho no compasso do forró! 🌵</span>
+              <span>📐 {triangleSpeechText} 🎵</span>
               <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
             </motion.div>
           )}
@@ -1066,7 +1077,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       {/* 5. Zabumbinha (Cute traditional bouncing drum character) */}
       <motion.div
         onClick={() => triggerSpeech('zabumba')}
-        className="fixed bottom-[3%] right-[28%] md:right-[15%] z-40 w-14 md:w-18 cursor-pointer pointer-events-auto select-none"
+        className="fixed bottom-[3%] right-[28%] md:right-[31%] z-40 w-14 md:w-18 cursor-pointer pointer-events-auto select-none"
         animate={{ y: [-6, 4, -6], rotate: [5, -5, 5] }}
         transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut" }}
       >
@@ -1275,7 +1286,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
 
           {/* Interactive storytelling description */}
           <p className="text-sm md:text-base text-stone-200 leading-relaxed font-sans max-w-2xl mx-auto mb-8">
-            Nascemos com um propósito único: levar o capricho, a magia e o calor do nosso Nordeste para os seus momentos mais especiais. Hoje, somos <strong className="text-amber-400 font-bold">a loja de brindes mais querida e seguida de João Pessoa</strong>, onde cada detalhe é feito com amor e você acompanha tudo passo a passo! 🌵✨
+            Personalizando a sua festa há mais de 11 anos. Hoje, somos <strong className="text-amber-400 font-bold">a loja de brindes mais seguida e querida de João Pessoa</strong>, onde cada detalhe é feito com carinho e você acompanha tudo passo a passo! 🌵✨
           </p>
 
           {/* 3 Pillars layout - Beautifully styled cards */}
@@ -1326,14 +1337,14 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-30px" }}
               transition={{ duration: 0.6, delay: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              whileHover={{ scale: 1.03, borderColor: "rgba(239, 68, 68, 0.35)", boxShadow: "0 10px 20px rgba(0,0,0,0.3)" }}
-              className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 transition-all cursor-default relative z-10"
+              whileHover={{ scale: 1.03, borderColor: "rgba(239, 68, 68, 0.5)", boxShadow: "0 10px 20px rgba(239, 68, 68, 0.25)" }}
+              className="bg-zinc-950/50 p-4 rounded-2xl border border-red-500/25 flex flex-col gap-2 transition-all cursor-default relative z-10"
             >
-              <div className="flex items-center gap-2 text-rose-400 font-display font-bold">
-                <div className="p-1.5 rounded-lg bg-rose-500/10">
-                  <Gift className="h-4 w-4" />
+              <div className="flex items-center gap-2 text-red-500 font-display font-bold animate-pulse-subtle">
+                <div className="p-1.5 rounded-lg bg-red-500/15 border border-red-500/20">
+                  <Gift className="h-4 w-4 text-red-500" />
                 </div>
-                <span className="text-xs uppercase tracking-wider font-mono">Cupons & Promoções</span>
+                <span className="text-xs uppercase tracking-wider font-mono font-extrabold text-red-500 drop-shadow-[0_0_8px_rgba(239,68,68,0.4)]">Cupons & Promoções</span>
               </div>
               <p className="text-xs text-stone-300 leading-relaxed font-sans">
                 Descontos especiais e ofertas imperdíveis para garantir que a sua festa caiba no orçamento com muita alegria!
@@ -1347,7 +1358,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.3 }}
-          className="relative w-full max-w-lg md:max-w-3xl bg-zinc-950/80 backdrop-blur-md rounded-3xl border border-amber-500/35 p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-4 md:gap-6 mb-16"
+          className="relative w-full max-w-lg md:max-w-3xl bg-zinc-950/80 backdrop-blur-md rounded-3xl border border-amber-500/35 p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-4 md:gap-6 mb-12"
         >
           <h2 className="text-lg md:text-2xl font-display font-bold text-amber-100 flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-4">
             <Sparkles className="h-5 w-5 md:h-7 md:w-7 text-amber-400 fill-amber-400 animate-pulse" />
@@ -1447,7 +1458,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="w-full flex flex-col items-center mt-6"
+          className="w-full flex flex-col items-center mt-0"
         >
           <div className="flex items-center gap-2 mb-2">
             <Quote className="h-6 w-6 text-amber-400 fill-amber-400/20" />

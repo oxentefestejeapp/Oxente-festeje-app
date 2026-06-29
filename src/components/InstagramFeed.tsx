@@ -396,7 +396,7 @@ export const InstagramFeed: React.FC = () => {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
       transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-      className="w-full mt-20 mb-14 px-4 overflow-hidden relative z-20"
+      className="w-full mt-0 mb-12 px-4 overflow-hidden relative z-20"
       id="instagram-feed-section"
     >
       {/* Feed Header */}
@@ -469,7 +469,7 @@ export const InstagramFeed: React.FC = () => {
                   width={360}
                   quality={70}
                   referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  className="w-full h-full object-cover transition-transform duration-500 md:group-hover:scale-105"
                 />
 
                 {/* Instagram tag badge */}
@@ -478,7 +478,7 @@ export const InstagramFeed: React.FC = () => {
                 </span>
 
                 {/* Dark overlay & info displayed on hover */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 z-20">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 z-20">
                   {/* Real-time Interaction Stats bar */}
                   <div className="flex items-center gap-4 text-white text-xs font-mono font-bold mb-2">
                     <span className="flex items-center gap-1 text-rose-400">
@@ -504,7 +504,7 @@ export const InstagramFeed: React.FC = () => {
                 </div>
 
                 {/* Static subtle overlay for high image readability */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none group-hover:opacity-0 transition-opacity duration-300" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none md:group-hover:opacity-0 transition-opacity duration-300" />
               </motion.a>
             ))}
           </div>
@@ -534,7 +534,7 @@ export const InstagramFeed: React.FC = () => {
                   width={360}
                   quality={70}
                   referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                  className="w-full h-full object-cover transition-transform duration-500 md:group-hover:scale-105"
                 />
 
                 {/* Instagram tag badge */}
@@ -543,7 +543,7 @@ export const InstagramFeed: React.FC = () => {
                 </span>
 
                 {/* Dark overlay & info displayed on hover */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 z-20">
+                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 z-20">
                   {/* Real-time Interaction Stats bar */}
                   <div className="flex items-center gap-4 text-white text-xs font-mono font-bold mb-2">
                     <span className="flex items-center gap-1 text-rose-400">
@@ -569,7 +569,7 @@ export const InstagramFeed: React.FC = () => {
                 </div>
 
                 {/* Static subtle overlay for high image readability */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none group-hover:opacity-0 transition-opacity duration-300" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none md:group-hover:opacity-0 transition-opacity duration-300" />
               </motion.a>
             ))}
           </div>
@@ -577,44 +577,48 @@ export const InstagramFeed: React.FC = () => {
       </div>
 
       {/* Interactive Action Button to visit profile directly + Invisible Password Trigger */}
-      <div className="flex justify-center items-center gap-4 mt-6">
-        <motion.a
-          href="https://www.instagram.com/oxentefesteje/"
-          target="_blank"
-          rel="noopener noreferrer"
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.98 }}
-          className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-600 via-rose-600 to-amber-600 hover:from-pink-500 hover:to-amber-500 text-white font-display font-black text-xs uppercase tracking-wider px-6 py-3 rounded-full shadow-lg shadow-black/30 transition-all cursor-pointer border border-white/10"
-          id="btn-acessar-instagram"
-        >
-          <Instagram className="h-4 w-4" />
-          Acessar Perfil Completo
-        </motion.a>
+      <div className="relative flex justify-center items-center mt-6 w-full px-12">
+        <div className="relative">
+          <motion.a
+            href="https://www.instagram.com/oxentefesteje/"
+            target="_blank"
+            rel="noopener noreferrer"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.98 }}
+            className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-600 via-rose-600 to-amber-600 hover:from-pink-500 hover:to-amber-500 text-white font-display font-black text-xs uppercase tracking-wider px-6 py-3 rounded-full shadow-lg shadow-black/30 transition-all cursor-pointer border border-white/10"
+            id="btn-acessar-instagram"
+          >
+            <Instagram className="h-4 w-4" />
+            Acessar Perfil Completo
+          </motion.a>
 
-        {/* 
-          BOTÃO INVISÍVEL:
-          Conforme solicitado, posicionado bem ao lado do botão principal do Instagram.
-          Fica transparente (opacity-0) e só se revela discretamente ao passar o mouse ou focar,
-          desbloqueando o gerenciamento de fotos com a senha "69fotos69".
-        */}
-        <button
-          onClick={() => {
-            if (isAdminMode) {
-              setIsAdminMode(false);
-            } else {
-              setShowPasswordModal(true);
-            }
-          }}
-          className={`h-9 px-3 rounded-full border border-stone-800 flex items-center justify-center transition-all duration-300 cursor-pointer ${
-            isAdminMode 
-              ? 'bg-amber-950/40 text-amber-400 border-amber-500/30' 
-              : 'opacity-0 hover:opacity-40 bg-stone-900/40 text-stone-500 hover:text-stone-300'
-          }`}
-          title="Configuração do Mural"
-          id="btn-mural-config-invisivel"
-        >
-          {isAdminMode ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5 text-stone-600" />}
-        </button>
+          {/* 
+            BOTÃO INVISÍVEL:
+            Posicionado de forma absoluta à direita do botão principal do Instagram.
+            Dessa forma, o botão do Instagram fica PERFEITAMENTE centralizado na tela,
+            e o botão invisível fica exatamente ao lado dele, sem empurrar ou quebrar o layout.
+          */}
+          <div className="absolute left-full top-1/2 -translate-y-1/2 pl-3">
+            <button
+              onClick={() => {
+                if (isAdminMode) {
+                  setIsAdminMode(false);
+                } else {
+                  setShowPasswordModal(true);
+                }
+              }}
+              className={`h-9 w-9 rounded-full border border-stone-800 flex items-center justify-center transition-all duration-300 cursor-pointer ${
+                isAdminMode 
+                  ? 'bg-amber-950/40 text-amber-400 border-amber-500/30' 
+                  : 'opacity-0 hover:opacity-40 bg-stone-900/40 text-stone-500 hover:text-stone-300'
+              }`}
+              title="Configuração do Mural"
+              id="btn-mural-config-invisivel"
+            >
+              {isAdminMode ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5 text-stone-600" />}
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Password Modal Popup */}
