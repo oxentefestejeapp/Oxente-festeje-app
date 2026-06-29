@@ -28,6 +28,7 @@ import { supabase, mapDbToSale } from '../lib/supabase';
 import { Sale } from '../types';
 import { MagneticButton } from './MagneticButton';
 import { InstagramFeed } from './InstagramFeed';
+import { OptimizedImage } from '../utils/imageOptimizer';
 
 
 interface LandingPageProps {
@@ -641,10 +642,12 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       
       {/* Festive Celebration Party Background Image */}
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        <img
-          src="https://images.unsplash.com/photo-1506224477000-07aa8a76be89?auto=format&fit=crop&w=1000&q=55&fm=webp"
+        <OptimizedImage
+          src="https://images.unsplash.com/photo-1506224477000-07aa8a76be89"
+          width={1000}
+          quality={55}
+          isAboveFold={true}
           alt="Cactos do Sertão Oxente Festeje"
-          referrerPolicy="no-referrer"
           className="w-full h-full object-cover opacity-20 filter brightness-75 contrast-110 saturate-110 scale-105"
         />
         {/* PREMIUM ANIMATION 1: Floating Ambient Orbs for rich layout depth */}
@@ -1132,8 +1135,13 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         
         {/* Cover Banner (Festa Junina / Bonfire background) */}
         <div className="relative h-56 sm:h-64 md:h-80 lg:h-[400px] w-full overflow-hidden">
-          <img 
+          <OptimizedImage 
             src="/banner.png" 
+            fallbackSrc="https://images.unsplash.com/photo-1506224477000-07aa8a76be89"
+            width={1200}
+            quality={65}
+            alt="Oxente Festeje Banner" 
+            className="w-full h-full object-cover object-center"
             onError={(e) => {
               const currentSrc = e.currentTarget.src;
               if (currentSrc.includes('/banner.png')) {
@@ -1146,8 +1154,6 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 e.currentTarget.src = "https://images.unsplash.com/photo-1506224477000-07aa8a76be89?auto=format&fit=crop&w=1200&q=65&fm=webp";
               }
             }}
-            alt="Oxente Festeje Banner" 
-            className="w-full h-full object-cover object-center"
           />
         </div>
 

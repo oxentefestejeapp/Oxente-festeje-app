@@ -1418,6 +1418,32 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
     }).length;
   }, [sales, metricStartDate]);
 
+  const monthlyRevenue = useMemo(() => {
+    const now = new Date();
+    return sales
+      .filter(sale => {
+        if (sale.status === 'Orçamento') return false;
+        try {
+          const saleDate = new Date(sale.data);
+          return saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear();
+        } catch {
+          return false;
+        }
+      })
+      .reduce((sum, sale) => sum + sale.total, 0);
+  }, [sales]);
+
+  const waitingPickupCount = useMemo(() => {
+    return sales.filter(sale => sale.statusProducao === 'Pronto para Retirada' && sale.status !== 'Orçamento').length;
+  }, [sales]);
+
+  const criticalStockCount = useMemo(() => {
+    return products.filter(product => {
+      const qty = product.estoque ?? 0;
+      return qty < 10;
+    }).length;
+  }, [products]);
+
   const isBudget = editingSale !== null && editingSale.status === 'Orçamento' && !editConvertToOrder;
 
   return (
@@ -1429,6 +1455,54 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
           {/* Subtle glowing shadow behind */}
           <div className="absolute top-0 right-0 w-80 h-80 bg-brand-pink/5 rounded-full filter blur-[80px] pointer-events-none" />
           
+          {/* Bento Grid de Indicadores Rápidos (KPIs) com Glassmorphism */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 relative z-10">
+            {/* Card 1: Faturamento do Mês */}
+            <div className="relative overflow-hidden bg-zinc-950/40 backdrop-blur-md border border-zinc-800/60 rounded-2xl p-4.5 shadow-lg group hover:border-brand-pink/30 transition-all duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-brand-pink/5 rounded-full filter blur-xl pointer-events-none group-hover:bg-brand-pink/10 transition-colors" />
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider block font-mono">Faturamento do Mês</span>
+                <span className="text-sm p-1.5 bg-brand-pink/10 rounded-xl text-brand-pink">💰</span>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl font-black text-white font-sans tracking-tight">
+                  R$ {monthlyRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </span>
+              </div>
+              <span className="text-[9px] text-zinc-500 font-bold block mt-1.5">vendas aprovadas no mês corrente</span>
+            </div>
+
+            {/* Card 2: Aguardando Retirada */}
+            <div className="relative overflow-hidden bg-zinc-950/40 backdrop-blur-md border border-zinc-800/60 rounded-2xl p-4.5 shadow-lg group hover:border-amber-500/30 transition-all duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/5 rounded-full filter blur-xl pointer-events-none group-hover:bg-amber-500/10 transition-colors" />
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider block font-mono">Aguardando Retirada</span>
+                <span className="text-sm p-1.5 bg-amber-500/10 rounded-xl text-amber-500">📦</span>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl font-black text-amber-400 font-sans tracking-tight">
+                  {waitingPickupCount} {waitingPickupCount === 1 ? 'Pacote' : 'Pacotes'}
+                </span>
+              </div>
+              <span className="text-[9px] text-zinc-500 font-bold block mt-1.5">prontos aguardando cliente retirar</span>
+            </div>
+
+            {/* Card 3: Estoques Críticos */}
+            <div className="relative overflow-hidden bg-zinc-950/40 backdrop-blur-md border border-zinc-800/60 rounded-2xl p-4.5 shadow-lg group hover:border-red-500/30 transition-all duration-300">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-red-500/5 rounded-full filter blur-xl pointer-events-none group-hover:bg-red-500/10 transition-colors" />
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] text-zinc-400 uppercase font-bold tracking-wider block font-mono">Estoques Críticos</span>
+                <span className="text-sm p-1.5 bg-red-500/10 rounded-xl text-red-500">🚨</span>
+              </div>
+              <div className="flex items-baseline gap-1.5">
+                <span className="text-xl font-black text-red-400 font-sans tracking-tight">
+                  {criticalStockCount} {criticalStockCount === 1 ? 'Produto' : 'Produtos'}
+                </span>
+              </div>
+              <span className="text-[9px] text-zinc-500 font-bold block mt-1.5">estoque menor que 10 ou negativo</span>
+            </div>
+          </div>
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 relative z-10">
             <div className="flex items-center gap-3">
               <div className="p-2.5 bg-brand-pink/10 border border-brand-pink/20 rounded-xl text-brand-pink shadow-inner shadow-brand-pink/5">
@@ -2798,14 +2872,15 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               </div>
 
               {/* Date Filters Row */}
-              <div className="flex flex-wrap gap-1.5 items-center bg-black/15 p-1.5 border border-zinc-850/80 rounded-xl">
+              <div className="flex flex-wrap gap-2 items-center bg-black/30 p-2 border border-zinc-850/85 rounded-xl">
+                <span className="text-[9px] font-black uppercase text-zinc-500 font-mono pl-1.5 select-none mr-1.5">Período:</span>
                 <button
                   type="button"
                   onClick={() => setDateFilter('all')}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                     dateFilter === 'all' 
-                      ? 'bg-brand-pink text-black' 
-                      : 'text-zinc-400 hover:text-zinc-100'
+                      ? 'bg-brand-pink text-black shadow-md shadow-brand-pink/15 font-extrabold' 
+                      : 'text-zinc-400 hover:text-zinc-150 hover:bg-zinc-900/50'
                   }`}
                 >
                   Tudo
@@ -2813,10 +2888,10 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 <button
                   type="button"
                   onClick={() => setDateFilter('today')}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                     dateFilter === 'today' 
-                      ? 'bg-brand-pink text-black' 
-                      : 'text-zinc-400 hover:text-zinc-100'
+                      ? 'bg-brand-pink text-black shadow-md shadow-brand-pink/15 font-extrabold' 
+                      : 'text-zinc-400 hover:text-zinc-150 hover:bg-zinc-900/50'
                   }`}
                 >
                   Hoje
@@ -2824,10 +2899,10 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 <button
                   type="button"
                   onClick={() => setDateFilter('yesterday')}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                     dateFilter === 'yesterday' 
-                      ? 'bg-brand-pink text-black' 
-                      : 'text-zinc-400 hover:text-zinc-100'
+                      ? 'bg-brand-pink text-black shadow-md shadow-brand-pink/15 font-extrabold' 
+                      : 'text-zinc-400 hover:text-zinc-150 hover:bg-zinc-900/50'
                   }`}
                 >
                   Ontem
@@ -2835,21 +2910,21 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 <button
                   type="button"
                   onClick={() => setDateFilter('7days')}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                     dateFilter === '7days' 
-                      ? 'bg-brand-pink text-black' 
-                      : 'text-zinc-400 hover:text-zinc-100'
+                      ? 'bg-brand-pink text-black shadow-md shadow-brand-pink/15 font-extrabold' 
+                      : 'text-zinc-400 hover:text-zinc-150 hover:bg-zinc-900/50'
                   }`}
                 >
-                  7 Dias
+                  Esta Semana
                 </button>
                 <button
                   type="button"
                   onClick={() => setDateFilter('this_month')}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                     dateFilter === 'this_month' 
-                      ? 'bg-brand-pink text-black' 
-                      : 'text-zinc-400 hover:text-zinc-100'
+                      ? 'bg-brand-pink text-black shadow-md shadow-brand-pink/15 font-extrabold' 
+                      : 'text-zinc-400 hover:text-zinc-150 hover:bg-zinc-900/50'
                   }`}
                 >
                   Este Mês
@@ -2857,12 +2932,13 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 <button
                   type="button"
                   onClick={() => setDateFilter('custom')}
-                  className={`px-3 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
+                  className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
                     dateFilter === 'custom' 
-                      ? 'bg-brand-pink text-black' 
-                      : 'text-zinc-400 hover:text-zinc-100'
+                      ? 'bg-brand-pink text-black shadow-md shadow-brand-pink/15 font-extrabold' 
+                      : 'text-zinc-400 hover:text-zinc-150 hover:bg-zinc-900/50'
                   }`}
                 >
+                  <Calendar className="h-3 w-3 shrink-0" />
                   Personalizado
                 </button>
 

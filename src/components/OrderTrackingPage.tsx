@@ -138,70 +138,71 @@ export function OrderTrackingPage() {
   const getTimelineSteps = () => {
     if (!sale) return [];
 
-    // Step 1: Confirmed
+    // Step 1: Pedido Lançado
     const step1Date = sale.data 
       ? new Date(sale.data).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
       : 'Processado';
 
-    // Step 2: Designer Assignment / Art Approval
-    let s2Title = 'Aguardando Arte';
-    let s2Desc = 'O pedido está na fila de artes de nossos designers.';
+    // Step 2: Arte em Produção
+    let s2Title = 'Arte em Produção';
+    let s2Desc = 'Aguardando início do design da arte pela equipe.';
     let s2Status: 'pending' | 'active' | 'done' = 'pending';
 
     if (sale.statusArte === 'Arte Finalizada') {
       s2Title = 'Arte Aprovada & Finalizada! ✨';
-      s2Desc = `Arte de alta qualidade desenhada e confirmada por nossa equipe.`;
+      s2Desc = 'Sua arte foi totalmente desenhada, aprovada e finalizada com sucesso.';
       s2Status = 'done';
     } else if (sale.puxadoPor) {
-      s2Title = 'Arte em Elaboração pelo Designer 🎨';
-      s2Desc = `O designer ${sale.puxadoPor} está desenhando seu projeto com todo carinho.`;
+      s2Title = 'Arte em Elaboração 🎨';
+      s2Desc = `O designer ${sale.puxadoPor} está desenhando seu projeto com todo capricho.`;
       s2Status = 'active';
+    } else {
+      s2Status = 'active'; // Se o pedido foi lançado, a arte está em fila/início de produção
     }
 
-    // Step 3: Production & Logistics
-    let s3Title = 'Aguardando Produção';
-    let s3Desc = 'Sua arte entrará em nossa impressora e guilhotina física logo mais.';
+    // Step 3: Pronto para Retirada
+    let s3Title = 'Aguardando Produção Física';
+    let s3Desc = 'Seu pedido entrará na linha de produção física assim que a arte for aprovada.';
     let s3Status: 'pending' | 'active' | 'done' = 'pending';
 
     const prod = sale.statusProducao || 'Agendado';
-    if (prod === 'Entregue') {
-      s3Title = 'Pedido Entregue! 📦🎉';
-      s3Desc = 'Seu pedido foi retirado ou entregue com sucesso! Obrigado pela preferência.';
-      s3Status = 'done';
-    } else if (prod === 'Pronto para Retirada') {
-      s3Title = 'Pronto para Retirada! 🎁';
-      s3Desc = 'Seu pedido físico está na loja limpinho e pronto pra embalar sua festa!';
-      s3Status = 'done';
-    } else if (prod === 'Agendado para Entrega') {
-      s3Title = 'Pronto & Agendado para Entrega 🚚';
-      s3Desc = 'Preparado em nossa frota e agendado para rota logística.';
+    if (['Pronto para Retirada', 'Agendado para Entrega', 'Entregue'].includes(prod)) {
+      s3Title = prod === 'Agendado para Entrega' ? 'Pedido Pronto & Agendado para Entrega! 🚚' : 'Pronto para Retirada! 🎁';
+      s3Desc = prod === 'Agendado para Entrega' 
+        ? 'Seu pedido foi finalizado fisicamente e está em rota logística ou agendado para entrega.'
+        : 'Seu pedido físico já está limpinho na loja e pronto esperando por você!';
       s3Status = 'done';
     } else if (prod === 'Em Produção') {
       s3Title = 'Em Produção Física! ⚙️';
-      s3Desc = 'Imprimindo, recortando ou montando seus mimos e personalizados!';
+      s3Desc = 'Imprimindo, recortando ou montando seus personalizados.';
       s3Status = 'active';
+    } else if (sale.statusArte === 'Arte Finalizada') {
+      s3Status = 'active'; // Se a arte já está pronta, a próxima etapa (produção) está ativa
+      s3Desc = 'Sua arte está finalizada e agendada para entrar em produção física.';
     }
 
-    // Is preceding step done?
-    if (s2Status === 'done' && s3Status === 'pending') {
-      s3Status = 'active'; // ready for physical step if art is completed
-    }
+    // Step 4: Pedido Entregue
+    let s4Title = 'Aguardando Entrega / Retirada';
+    let s4Desc = 'Aguardando a conclusão da produção para que o pacote possa ser retirado.';
+    let s4Status: 'pending' | 'active' | 'done' = 'pending';
 
-    // Step 4: Finance check
-    const falta = sale.valorFaltante !== undefined ? sale.valorFaltante : (sale.total - (sale.valorPago ?? 0));
-    const isPaid = falta <= 0;
-    
-    let s4Title = isPaid ? 'Acerto Financeiro Quitado 💳' : 'Aguardando Acerto Provisório';
-    let s4Desc = isPaid 
-      ? `Sua fatura de R$ ${sale.total.toFixed(2)} está 100% quitada no sistema.`
-      : `Restam R$ ${falta.toFixed(2)} para quitação completa (Total R$ ${sale.total.toFixed(2)}).`;
-    let s4Status: 'pending' | 'active' | 'done' = isPaid ? 'done' : 'active';
+    if (prod === 'Entregue') {
+      s4Title = 'Pedido Entregue! 📦🎉';
+      s4Desc = 'Seu pedido foi entregue ou retirado na loja com sucesso. Obrigado pela preferência!';
+      s4Status = 'done';
+    } else if (['Pronto para Retirada', 'Agendado para Entrega'].includes(prod)) {
+      s4Title = 'Pronto para Entrega / Retirada 🚚';
+      s4Desc = prod === 'Agendado para Entrega' 
+        ? 'Pedido pronto aguardando a rota logística chegar ao seu destino.'
+        : 'Pedido pronto na loja física esperando o seu momento de retirada!';
+      s4Status = 'active';
+    }
 
     return [
-      { id: 1, title: '🛒 Pedido Registrado', desc: `Registrado no sistema em ${step1Date}.`, status: 'done' as const },
-      { id: 2, title: titleCase(s2Title), desc: s2Desc, status: s2Status },
-      { id: 3, title: titleCase(s3Title), desc: s3Desc, status: s3Status },
-      { id: 4, title: s4Title, desc: s4Desc, status: s4Status, flexColor: isPaid ? 'border-emerald-500' : 'border-amber-500' }
+      { id: 1, title: '🛒 Pedido Lançado', desc: `Registrado no sistema em ${step1Date}.`, status: 'done' as const },
+      { id: 2, title: s2Title, desc: s2Desc, status: s2Status },
+      { id: 3, title: s3Title, desc: s3Desc, status: s3Status },
+      { id: 4, title: s4Title, desc: s4Desc, status: s4Status }
     ];
   };
 
@@ -342,43 +343,58 @@ export function OrderTrackingPage() {
             </div>
 
             {/* CARD 2: JORNADA TEMPORAL DO PEDIDO (Vertical Interactive Timeline) */}
-            <div className="bg-zinc-900 border border-zinc-805 rounded-3xl p-5.5 shadow-lg space-y-4">
+            <div className="bg-zinc-900 border border-zinc-805 rounded-3xl p-6 shadow-lg space-y-4">
               <div className="flex items-center gap-1.5 select-none">
-                <Sparkles className="h-4 w-4 text-brand-pink" />
+                <Sparkles className="h-4.5 w-4.5 text-brand-pink" />
                 <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-300 font-display">Acompanhe as Etapas</h4>
               </div>
 
-              <div className="relative pl-5 ml-1.5 border-l-2 border-zinc-950 space-y-6 pt-1.5 pb-1.5">
-                {getTimelineSteps().map((step) => {
+              <div className="relative pl-6 ml-1.5 space-y-7 py-1">
+                {/* Linha do tempo dinâmica em degradê */}
+                <div className="absolute left-[-1px] top-0 bottom-0 w-0.5 bg-gradient-to-b from-brand-pink via-purple-500 to-zinc-800 pointer-events-none" />
+                
+                {getTimelineSteps().map((step, index) => {
                   const isDone = step.status === 'done';
                   const isActive = step.status === 'active';
                   
                   return (
-                    <div key={step.id} className="relative">
+                    <motion.div 
+                      key={step.id} 
+                      initial={{ opacity: 0, y: 15 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.35, delay: index * 0.1 }}
+                      className="relative"
+                    >
                       {/* Outer timeline indicator dot */}
-                      <div className={`absolute -left-[25.5px] top-0.5 w-[13px] h-[13px] rounded-full border-2 border-zinc-900 flex items-center justify-center transition-all ${
+                      <div className={`absolute -left-[32px] top-0.5 w-[15px] h-[15px] rounded-full border-2 border-zinc-900 flex items-center justify-center transition-all ${
                         isDone 
-                          ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]' 
+                          ? 'bg-gradient-to-tr from-brand-pink to-purple-600 shadow-[0_0_10px_rgba(236,72,153,0.5)]' 
                           : isActive 
-                            ? 'bg-brand-pink animate-pulse shadow-[0_0_8px_rgba(236,72,153,0.4)]' 
-                            : 'bg-zinc-800'
+                            ? 'bg-gradient-to-tr from-brand-pink to-purple-600 animate-pulse shadow-[0_0_12px_rgba(236,72,153,0.7)] scale-110' 
+                            : 'bg-zinc-850 border-zinc-800'
                       }`}>
-                        {isDone && <Check className="h-2 w-2 text-black stroke-[4px]" />}
+                        {isDone && <Check className="h-2.5 w-2.5 text-white stroke-[4px]" />}
+                        {isActive && (
+                          <span className="absolute w-2 h-2 rounded-full bg-white animate-ping" />
+                        )}
                       </div>
 
-                      <div className="space-y-0.5 select-text">
-                        <h5 className={`text-[11px] font-bold font-sans flex items-center gap-1.5 ${
-                          isDone ? 'text-zinc-150' : isActive ? 'text-brand-pink' : 'text-zinc-550'
+                      <div className="space-y-0.5 select-text pl-1.5">
+                        <h5 className={`text-[11.5px] font-bold font-sans flex items-center gap-1.5 ${
+                          isDone ? 'text-zinc-150' : isActive ? 'text-brand-pink font-extrabold' : 'text-zinc-550'
                         }`}>
                           {step.title}
+                          {isActive && (
+                            <span className="inline-flex h-2 w-2 rounded-full bg-brand-pink animate-pulse" />
+                          )}
                         </h5>
-                        <p className={`text-[9.5px] leading-normal ${
-                          isDone ? 'text-zinc-400' : isActive ? 'text-zinc-300' : 'text-zinc-600'
+                        <p className={`text-[9.5px] leading-relaxed font-medium ${
+                          isDone ? 'text-zinc-300' : isActive ? 'text-zinc-200' : 'text-zinc-650'
                         }`}>
                           {step.desc}
                         </p>
                       </div>
-                    </div>
+                    </motion.div>
                   );
                 })}
               </div>
