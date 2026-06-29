@@ -285,10 +285,12 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
       if (sale.status === 'Orçamento') return false;
       if (sale.removerDoDesign && !showRemovedFromDesign) return false;
 
+      const term = searchTerm.toLowerCase();
       const isMatch = 
-        sale.cliente.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (sale.numeroPedido && sale.numeroPedido.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        sale.produtoNome.toLowerCase().includes(searchTerm.toLowerCase());
+        sale.cliente.toLowerCase().includes(term) ||
+        (sale.numeroPedido && sale.numeroPedido.toLowerCase().includes(term)) ||
+        sale.produtoNome.toLowerCase().includes(term) ||
+        (sale.itens && sale.itens.some(item => item.produtoNome.toLowerCase().includes(term)));
       return isMatch;
     });
   }, [sales, searchTerm, showRemovedFromDesign]);

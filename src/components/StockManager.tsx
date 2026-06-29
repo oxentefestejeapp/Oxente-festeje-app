@@ -447,7 +447,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
       totalStockCostValue += p.estoque * c;
       totalStockRetailValue += p.estoque * p.preco;
 
-      if (p.estoque === 0) {
+      if (p.estoque <= 0) {
         outOfStockCount++;
       } else if (p.estoque < 10) {
         lowStockCount++;
@@ -588,7 +588,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                   {products
                     .filter(p => !p.estoqueInfinito && p.estoque < 10)
                     .map(p => {
-                      const isZero = p.estoque === 0;
+                      const isZero = p.estoque <= 0;
                       return (
                         <button
                           key={p.id}
@@ -769,7 +769,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {filteredProducts.map((p) => {
             const isDeleting = productToDelete === p.id;
-            const isOutOfStock = !p.estoqueInfinito && p.estoque === 0;
+            const isOutOfStock = !p.estoqueInfinito && p.estoque <= 0;
             const isLowStock = !p.estoqueInfinito && p.estoque > 0 && p.estoque < 10;
             const hasDraft = editedStocks[p.id] !== undefined;
             const draftVal = hasDraft ? editedStocks[p.id] : p.estoque;
@@ -802,8 +802,8 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                         ♾️ Estoque Infinito
                       </span>
                     ) : isOutOfStock ? (
-                      <span className="bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-wider animate-pulse flex items-center gap-1 shrink-0 w-full justify-center">
-                        🚨 ESGOTADO / FALTA NO ESTOQUE
+                      <span className={`bg-red-500/15 border border-red-500/30 text-red-400 text-[10px] font-black px-3 py-1.5 rounded-lg uppercase tracking-wider ${p.estoque < 0 ? '' : 'animate-pulse'} flex items-center gap-1 shrink-0 w-full justify-center`}>
+                        {p.estoque < 0 ? `🚨 ESTOQUE CRÍTICO (NEGATIVO: ${p.estoque})` : '🚨 ESGOTADO / FALTA NO ESTOQUE'}
                       </span>
                     ) : isLowStock ? (
                       <span className="bg-amber-500/10 border border-amber-500/30 text-amber-500 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
@@ -974,9 +974,9 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                         ) : (
                           <div className="flex items-center justify-between py-2 px-4 bg-zinc-950 border border-zinc-850 rounded-xl">
                             <span className="text-sm font-bold text-zinc-100 font-mono">
-                              {p.estoque} {p.estoque === 1 ? 'unidade' : 'unidades'}
+                              {p.estoque} {p.estoque === 1 || p.estoque === -1 ? 'unidade' : 'unidades'}
                             </span>
-                            <span className={`h-2.5 w-2.5 rounded-full ${p.estoque === 0 ? 'bg-red-500' : p.estoque < 10 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
+                            <span className={`h-2.5 w-2.5 rounded-full ${p.estoque <= 0 ? 'bg-red-500' : p.estoque < 10 ? 'bg-amber-500' : 'bg-emerald-500'}`} />
                           </div>
                         )}
                       </div>

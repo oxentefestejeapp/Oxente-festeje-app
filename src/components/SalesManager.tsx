@@ -116,6 +116,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [customValInput, setCustomValInput] = useState('');
 
   // Referral / Cupom states
+  const [showReferralSection, setShowReferralSection] = useState(false);
+  const [showLinkedOrderSection, setShowLinkedOrderSection] = useState(false);
   const [referralCodeInput, setReferralCodeInput] = useState('');
   const [isReferralApplied, setIsReferralApplied] = useState(false);
   const [appliedCouponPercentage, setAppliedCouponPercentage] = useState<number>(5);
@@ -458,8 +460,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     const matchProduct = sale.produtoNome.toLowerCase().includes(term);
     const matchOrderNum = sale.numeroPedido ? sale.numeroPedido.toLowerCase().includes(term) : false;
     const matchPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '').includes(term.replace(/\D/g, '')) : false;
+    const matchItens = sale.itens ? sale.itens.some(item => item.produtoNome.toLowerCase().includes(term)) : false;
     
-    return matchName || matchProduct || matchOrderNum || matchPhone;
+    return matchName || matchProduct || matchOrderNum || matchPhone || matchItens;
   });
 
   // Filter out delivered sales that are older than 15 days from the list, unless there is an active search term
@@ -485,13 +488,13 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   // Filter and Sort products that are available in stock (simplified to alphabetical order)
   const availableProducts = useMemo(() => {
-    let list = products.filter(p => !p.adicional && (p.estoque > 0 || p.estoqueInfinito));
+    let list = products.filter(p => !p.adicional);
     return [...list].sort((a, b) => a.nome.localeCompare(b.nome));
   }, [products]);
 
   // Filter and Sort addon products that are available in stock
   const availableAddons = useMemo(() => {
-    let list = products.filter(p => p.adicional && (p.estoque > 0 || p.estoqueInfinito));
+    let list = products.filter(p => p.adicional);
     return [...list].sort((a, b) => a.nome.localeCompare(b.nome));
   }, [products]);
 
@@ -736,47 +739,12 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return;
     }
 
-    // Stock checks considering color variations
-    if (registroTipo !== 'Orçamento' && !prod.estoqueInfinito) {
-      if (prod.cores && prod.cores.length > 0) {
-        const matchingColor = prod.cores.find(c => c.nome === selectedColor);
-        const colorStock = matchingColor ? matchingColor.estoque : 0;
-        const alreadyInCartColorQty = cart
-          .filter(item => item.product.id === prod.id && item.corSelecionada === selectedColor)
-          .reduce((sum, item) => sum + item.quantity, 0);
-
-        if ((qtyNum + alreadyInCartColorQty) > colorStock) {
-          setFormError(`Quantidade indisponível para a cor "${selectedColor}"! Estoque atual dessa cor: ${colorStock} un. (Já possui ${alreadyInCartColorQty} no carrinho).`);
-          return;
-        }
-      } else {
-        const alreadyInCartQty = cart
-          .filter(item => item.product.id === prod.id)
-          .reduce((sum, item) => sum + item.quantity, 0);
-
-        if ((qtyNum + alreadyInCartQty) > prod.estoque) {
-          setFormError(`Quantidade indisponível no estoque! Estoque atual de "${prod.nome}": ${prod.estoque} un. (Já possui ${alreadyInCartQty} no carrinho).`);
-          return;
-        }
-      }
-    }
-
     setFormError('');
 
     // Prepara os addons selecionados atualmente
     const currentAddons = selectedAddonIds
       .map(id => products.find(p => p.id === id))
       .filter((p): p is Product => !!p);
-
-    // Valida estoque dos adicionais
-    if (registroTipo !== 'Orçamento') {
-      for (const addon of currentAddons) {
-        if (!addon.estoqueInfinito && qtyNum > addon.estoque) {
-          setFormError(`Quantidade do adicional "${addon.nome}" indisponível! Estoque atual: ${addon.estoque} un.`);
-          return;
-        }
-      }
-    }
 
     const unitPrice = getProductUnitPrice(prod, qtyNum);
     const addonsUnitPrice = currentAddons.reduce((sum, addon) => sum + getProductUnitPrice(addon, qtyNum), 0);
@@ -880,19 +848,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         setFormError('A quantidade da venda precisa ser de no mínimo 1 item.');
         return;
       }
-      if (registroTipo !== 'Orçamento' && !selectedProduct.estoqueInfinito && qtyNum > selectedProduct.estoque) {
-        setFormError(`Quantidade indisponível no estoque! Estoque atual de "${selectedProduct.nome}": ${selectedProduct.estoque} un.`);
-        return;
-      }
-
       const addonItems: SaleItem[] = [];
       for (const addonId of selectedAddonIds) {
         const addon = products.find(p => p.id === addonId);
         if (addon) {
-          if (registroTipo !== 'Orçamento' && !addon.estoqueInfinito && qtyNum > addon.estoque) {
-            setFormError(`Quantidade de adicional indisponível! Estoque do adicional "${addon.nome}": ${addon.estoque} un. (Necessário: ${qtyNum})`);
-            return;
-          }
           const addonPrice = getProductUnitPrice(addon, qtyNum);
           addonItems.push({
             id: `item-${addon.id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -1840,8 +1799,8 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   >
                     <option value="" className="text-zinc-500">-- Selecione a cor --</option>
                     {selectedProduct.cores.map(c => (
-                      <option key={c.nome} value={c.nome} className="bg-zinc-900 text-zinc-100" disabled={registroTipo !== 'Orçamento' && c.estoque <= 0}>
-                        {c.nome} (Estoque: {c.estoque} un.) {registroTipo !== 'Orçamento' && c.estoque <= 0 ? '-- ESGOTADO' : ''}
+                      <option key={c.nome} value={c.nome} className="bg-zinc-900 text-zinc-100">
+                        {c.nome} (Estoque: {c.estoque} un.) {c.estoque < 0 ? '⚠️ ESTOQUE CRÍTICO' : c.estoque === 0 ? '⚠️ SEM ESTOQUE' : ''}
                       </option>
                     ))}
                   </select>
@@ -1909,9 +1868,16 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                                 <span className="text-xs font-semibold truncate text-zinc-250">
                                   {addon.nome}
                                 </span>
-                                <span className="text-[10px] font-mono text-emerald-400 font-bold">
-                                  + R$ {addon.preco.toFixed(2)} /un
-                                </span>
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="text-[10px] font-mono text-emerald-400 font-bold">
+                                    + R$ {addon.preco.toFixed(2)} /un
+                                  </span>
+                                  {!addon.estoqueInfinito && addon.estoque <= 0 && (
+                                    <span className="text-[8px] leading-none bg-red-500/10 border border-red-500/30 text-red-400 font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                      {addon.estoque < 0 ? 'Crítico' : 'Sem Estoque'}
+                                    </span>
+                                  )}
+                                </div>
                               </div>
                             </label>
                           );
@@ -2581,101 +2547,147 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
 
             {/* Cupom de Indicação / Referral Club */}
             <div className="bg-purple-950/10 border border-purple-900/30 p-4 rounded-xl space-y-2">
-              <span className="block text-xs font-bold text-purple-400 uppercase select-none flex items-center gap-1.5 font-sans">
-                🎁 Programa de Indicação (Referral Club)
-              </span>
-              <p className="text-[10px] text-zinc-400 leading-normal font-sans">
-                Insira o código de indicação do amigo indicador para obter <strong className="text-emerald-400 font-semibold">5% de desconto imediato</strong> nesta nova compra e acumular <strong className="text-emerald-400 font-semibold">+5% de desconto</strong> para ele quando você fechar esta compra!
-              </p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="Ex: ANA30012"
-                  value={referralCodeInput}
-                  onChange={(e) => {
-                    const val = e.target.value.toUpperCase();
-                    setReferralCodeInput(val);
-                    if (val === '') {
-                      setIsReferralApplied(false);
-                      setReferralMatchSuccess(null);
-                      setReferralMatchError(null);
-                    }
-                  }}
-                  className="flex-1 px-3 py-1.5 bg-black border border-purple-900/40 rounded-lg text-xs font-bold text-purple-300 font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-zinc-700 uppercase"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleValidateReferralCode(referralCodeInput)}
-                  className="px-3 bg-purple-750 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
-                >
-                  Validar
-                </button>
-              </div>
-              
-              {referralMatchSuccess && (
-                <div className="text-[10px] text-emerald-450 font-bold bg-emerald-950/25 border border-emerald-900/30 p-2 rounded-lg animate-fade-in flex items-center gap-1 font-sans">
-                  <span>✅</span> {referralMatchSuccess}
-                </div>
-              )}
-              {referralMatchError && (
-                <div className="text-[10px] text-red-400 font-bold bg-red-950/25 border border-red-900/30 p-2 rounded-lg animate-fade-in flex items-center gap-1 font-sans">
-                  <span>❌</span> {referralMatchError}
+              <button
+                type="button"
+                onClick={() => setShowReferralSection(prev => !prev)}
+                className="w-full flex items-center justify-between text-left focus:outline-none select-none group"
+              >
+                <span className="block text-xs font-bold text-purple-400 uppercase select-none flex items-center gap-1.5 font-sans">
+                  🎁 Programa de Indicação (Referral Club)
+                  {isReferralApplied && (
+                    <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[9px] font-extrabold animate-pulse">
+                      Ativo (5% OFF)
+                    </span>
+                  )}
+                </span>
+                <span className="text-[10.5px] font-bold text-purple-400 group-hover:text-purple-300 transition-colors flex items-center gap-1 bg-purple-950/40 hover:bg-purple-900/40 px-2 py-1 rounded-lg">
+                  {showReferralSection ? (
+                    <>Ocultar <span className="font-mono text-[9px]">▲</span></>
+                  ) : (
+                    <>Inserir código <span className="font-mono text-[9px]">▼</span></>
+                  )}
+                </span>
+              </button>
+
+              {showReferralSection && (
+                <div className="pt-2 border-t border-purple-900/20 mt-1 animate-fade-in space-y-2">
+                  <p className="text-[10px] text-zinc-400 leading-normal font-sans">
+                    Insira o código de indicação do amigo indicador para obter <strong className="text-emerald-400 font-semibold">5% de desconto imediato</strong> nesta nova compra e acumular <strong className="text-emerald-400 font-semibold">+5% de desconto</strong> para ele quando você fechar esta compra!
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Ex: ANA30012"
+                      value={referralCodeInput}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setReferralCodeInput(val);
+                        if (val === '') {
+                          setIsReferralApplied(false);
+                          setReferralMatchSuccess(null);
+                          setReferralMatchError(null);
+                        }
+                      }}
+                      className="flex-1 px-3 py-1.5 bg-black border border-purple-900/40 rounded-lg text-xs font-bold text-purple-300 font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-purple-500 placeholder-zinc-700 uppercase"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleValidateReferralCode(referralCodeInput)}
+                      className="px-3 bg-purple-750 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      Validar
+                    </button>
+                  </div>
+                  
+                  {referralMatchSuccess && (
+                    <div className="text-[10px] text-emerald-450 font-bold bg-emerald-950/25 border border-emerald-900/30 p-2 rounded-lg animate-fade-in flex items-center gap-1 font-sans">
+                      <span>✅</span> {referralMatchSuccess}
+                    </div>
+                  )}
+                  {referralMatchError && (
+                    <div className="text-[10px] text-red-400 font-bold bg-red-950/25 border border-red-900/30 p-2 rounded-lg animate-fade-in flex items-center gap-1 font-sans">
+                      <span>❌</span> {referralMatchError}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
 
             {/* Linked Order/Pedido Conjunto para Nova Venda */}
             <div className="bg-sky-950/20 border border-sky-900/40 p-4 rounded-xl space-y-2">
-              <span className="block text-xs font-bold text-sky-400 uppercase select-none flex items-center gap-1.5 font-sans">
-                🔗 Vínculo de Pedido Conjunto (Retirada Casada)
-              </span>
-              <p className="text-[10px] text-zinc-400 leading-normal font-sans">
-                Se este pedido deve ser retirado junto com outro pedido do mesmo cliente, informe o número do outro pedido. Os avisos de lembrete ficarão bloqueados até que ambos estejam prontos!
-              </p>
-              <div>
-                <input
-                  type="text"
-                  placeholder="Ex: 30125"
-                  value={pedidoVinculoNumero}
-                  onChange={(e) => setPedidoVinculoNumero(e.target.value)}
-                  className="w-full px-3 py-1.5 bg-black border border-sky-900/40 rounded-lg text-xs font-bold text-sky-300 font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-sky-500 placeholder-zinc-700 uppercase"
-                />
-                
-                {/* Sibling orders helper */}
-                {cliente.trim().length >= 3 && (() => {
-                  const clientNamePrefix = cliente.trim().split(' ')[0].toLowerCase();
-                  const siblingActiveSales = sales.filter(s => 
-                    s.numeroPedido && 
-                    s.cliente && 
-                    s.cliente.trim().toLowerCase().includes(clientNamePrefix) && 
-                    s.statusProducao !== 'Entregue'
-                  );
-                  
-                  if (siblingActiveSales.length > 0) {
-                    return (
-                      <div className="mt-2 space-y-1">
-                        <span className="block text-[9px] text-sky-400 font-bold uppercase select-none">
-                          Sugestões de pedidos do mesmo cliente para vincular:
-                        </span>
-                        <div className="flex flex-wrap gap-1.5">
-                          {siblingActiveSales.map(sib => (
-                            <button
-                              key={sib.id}
-                              type="button"
-                              onClick={() => setPedidoVinculoNumero(sib.numeroPedido || '')}
-                              className="px-2 py-1 bg-sky-950/40 hover:bg-sky-900/50 text-sky-300 border border-sky-900/40 hover:border-sky-500 rounded text-[9px] font-mono transition-colors flex items-center gap-1 cursor-pointer"
-                            >
-                              <span>#{sib.numeroPedido}</span>
-                              <span className="opacity-60">({sib.produtoNome})</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-              </div>
+              <button
+                type="button"
+                onClick={() => setShowLinkedOrderSection(prev => !prev)}
+                className="w-full flex items-center justify-between text-left focus:outline-none select-none group"
+              >
+                <span className="block text-xs font-bold text-sky-400 uppercase select-none flex items-center gap-1.5 font-sans">
+                  🔗 Vínculo de Pedido Conjunto (Retirada Casada)
+                  {pedidoVinculoNumero && (
+                    <span className="bg-sky-500/20 text-sky-300 px-2 py-0.5 rounded-full text-[9px] font-extrabold">
+                      #{pedidoVinculoNumero}
+                    </span>
+                  )}
+                </span>
+                <span className="text-[10.5px] font-bold text-sky-400 group-hover:text-sky-300 transition-colors flex items-center gap-1 bg-sky-950/40 hover:bg-sky-900/40 px-2 py-1 rounded-lg">
+                  {showLinkedOrderSection ? (
+                    <>Ocultar <span className="font-mono text-[9px]">▲</span></>
+                  ) : (
+                    <>Vincular pedido <span className="font-mono text-[9px]">▼</span></>
+                  )}
+                </span>
+              </button>
+
+              {showLinkedOrderSection && (
+                <div className="pt-2 border-t border-sky-900/20 mt-1 animate-fade-in space-y-2">
+                  <p className="text-[10px] text-zinc-400 leading-normal font-sans">
+                    Se este pedido deve ser retirado junto com outro pedido do mesmo cliente, informe o número do outro pedido. Os avisos de lembrete ficarão bloqueados até que ambos estejam prontos!
+                  </p>
+                  <div>
+                    <input
+                      type="text"
+                      placeholder="Ex: 30125"
+                      value={pedidoVinculoNumero}
+                      onChange={(e) => setPedidoVinculoNumero(e.target.value)}
+                      className="w-full px-3 py-1.5 bg-black border border-sky-900/40 rounded-lg text-xs font-bold text-sky-300 font-mono tracking-wider focus:outline-none focus:ring-1 focus:ring-sky-500 placeholder-zinc-700 uppercase"
+                    />
+                    
+                    {/* Sibling orders helper */}
+                    {cliente.trim().length >= 3 && (() => {
+                      const clientNamePrefix = cliente.trim().split(' ')[0].toLowerCase();
+                      const siblingActiveSales = sales.filter(s => 
+                        s.numeroPedido && 
+                        s.cliente && 
+                        s.cliente.trim().toLowerCase().includes(clientNamePrefix) && 
+                        s.statusProducao !== 'Entregue'
+                      );
+                      
+                      if (siblingActiveSales.length > 0) {
+                        return (
+                          <div className="mt-2 space-y-1">
+                            <span className="block text-[9px] text-sky-400 font-bold uppercase select-none">
+                              Sugestões de pedidos do mesmo cliente para vincular:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {siblingActiveSales.map(sib => (
+                                <button
+                                  key={sib.id}
+                                  type="button"
+                                  onClick={() => setPedidoVinculoNumero(sib.numeroPedido || '')}
+                                  className="px-2 py-1 bg-sky-950/40 hover:bg-sky-900/50 text-sky-300 border border-sky-900/40 hover:border-sky-500 rounded text-[9px] font-mono transition-colors flex items-center gap-1 cursor-pointer"
+                                >
+                                  <span>#{sib.numeroPedido}</span>
+                                  <span className="opacity-60">({sib.produtoNome})</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Total Indicator Panel */}

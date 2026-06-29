@@ -1591,7 +1591,7 @@ export default function App() {
               if (c.nome === soldItem.corSelecionada) {
                 return {
                   ...c,
-                  estoque: Math.max(0, c.estoque - soldItem.quantidade)
+                  estoque: c.estoque - soldItem.quantidade
                 };
               }
               return c;
@@ -1599,7 +1599,7 @@ export default function App() {
           }
         }
 
-        let newEstoque = Math.max(0, p.estoque - totalSoldQty);
+        let newEstoque = p.estoque - totalSoldQty;
         if (updatedCores && updatedCores.length > 0) {
           newEstoque = updatedCores.reduce((sum, c) => sum + c.estoque, 0);
         }
@@ -1883,7 +1883,7 @@ export default function App() {
               const colorDiff = newColorQty - oldColorQty;
               return {
                 ...c,
-                estoque: Math.max(0, c.estoque - colorDiff)
+                estoque: c.estoque - colorDiff
               };
             });
           }
@@ -1892,7 +1892,7 @@ export default function App() {
           const newQty = newQtyMap[p.id] || 0;
           const diff = newQty - oldQty; // se diff > 0, vendeu mais (diminuir estoque); se diff < 0, retirou itens (devolver estoque)
           
-          let newEstoque = Math.max(0, p.estoque - diff);
+          let newEstoque = p.estoque - diff;
           if (updatedCores && updatedCores.length > 0) {
             newEstoque = updatedCores.reduce((sum, c) => sum + c.estoque, 0);
           }

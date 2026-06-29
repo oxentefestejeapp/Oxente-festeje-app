@@ -16,7 +16,8 @@ import {
   ShoppingCart,
   QrCode,
   ShieldCheck,
-  Smartphone
+  Smartphone,
+  Clock
 } from 'lucide-react';
 import { supabase, mapDbToSale } from '../lib/supabase';
 import { Sale, StoreInfo } from '../types';
@@ -451,7 +452,7 @@ export function OrderTrackingPage() {
             <div className="bg-zinc-900 border border-zinc-805 rounded-3xl p-5 shadow-lg space-y-3 select-none">
               <span className="text-[10px] font-black uppercase text-zinc-500 tracking-wider block">Central de Contato da Loja</span>
               
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 <div className="flex items-start gap-2.5 text-xs text-zinc-450 leading-tight">
                   <MapPin className="h-4 w-4 text-brand-pink shrink-0" />
                   <span className="font-sans font-semibold">{storeInfo.endereco}</span>
@@ -466,6 +467,16 @@ export function OrderTrackingPage() {
                   >
                     @oxentefesteje
                   </a>
+                </div>
+                <div className="flex items-start gap-1.5 text-[11px] text-zinc-450 border-t border-zinc-850/60 pt-2.5 mt-1.5 flex-col w-full">
+                  <div className="flex items-center gap-1.5 font-bold text-zinc-400 uppercase text-[9px] tracking-wider">
+                    <Clock className="h-3.5 w-3.5 text-brand-pink shrink-0" />
+                    <span>Horário de Funcionamento</span>
+                  </div>
+                  <div className="pl-5 space-y-0.5 text-zinc-500 font-medium">
+                    <p className="font-sans text-xs"><strong className="text-zinc-400">Seg a Sex:</strong> 08:30 às 12:00 e 13:00 às 17:00</p>
+                    <p className="font-sans text-xs"><strong className="text-zinc-400">Sábado:</strong> 08:30 às 12:00</p>
+                  </div>
                 </div>
               </div>
 

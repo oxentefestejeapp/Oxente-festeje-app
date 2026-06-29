@@ -200,7 +200,8 @@ export function ReceivablesManager({ sales, storeInfo, onUpdateSale, onNavigateT
       const matchOrderNum = sale.numeroPedido ? sale.numeroPedido.toLowerCase().includes(term) : false;
       const matchPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '').includes(term.replace(/\D/g, '')) : false;
       const matchProduct = sale.produtoNome.toLowerCase().includes(term);
-      return matchName || matchOrderNum || matchPhone || matchProduct;
+      const matchItens = sale.itens ? sale.itens.some(item => item.produtoNome.toLowerCase().includes(term)) : false;
+      return matchName || matchOrderNum || matchPhone || matchProduct || matchItens;
     });
   }, [prioritizedPendingSales, searchTerm, agingFilter, todayStr]);
 

@@ -412,6 +412,7 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
       const customer = sale.cliente.toLowerCase();
       const orderNum = sale.numeroPedido ? sale.numeroPedido.toLowerCase() : '';
       const product = sale.produtoNome.toLowerCase();
+      const matchItens = sale.itens ? sale.itens.some(item => item.produtoNome.toLowerCase().includes(term)) : false;
 
       return (
         creatorEmail.includes(term) ||
@@ -420,7 +421,8 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
         assignEmail.includes(term) ||
         customer.includes(term) ||
         orderNum.includes(term) ||
-        product.includes(term)
+        product.includes(term) ||
+        matchItens
       );
     });
   }, [sales, searchTerm, dateFilter, startDateStr, endDateStr, selectedUserFilter, specialFilter]);

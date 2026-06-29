@@ -47,7 +47,9 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
       const matchName = s.cliente.toLowerCase().includes(text);
       const matchOrderNum = s.numeroPedido ? s.numeroPedido.toLowerCase().includes(text) : false;
       const matchPhone = s.telefoneCliente ? s.telefoneCliente.replace(/\D/g, '').includes(text.replace(/\D/g, '')) : false;
-      const matchesSearch = !text || matchName || matchOrderNum || matchPhone;
+      const matchProduct = s.produtoNome.toLowerCase().includes(text);
+      const matchItens = s.itens ? s.itens.some(item => item.produtoNome.toLowerCase().includes(text)) : false;
+      const matchesSearch = !text || matchName || matchOrderNum || matchPhone || matchProduct || matchItens;
 
       // Payment
       const owed = s.valorFaltante !== undefined ? s.valorFaltante : Math.max(0, s.total - (s.valorPago ?? s.total));
