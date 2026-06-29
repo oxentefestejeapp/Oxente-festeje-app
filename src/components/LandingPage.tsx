@@ -1291,32 +1291,12 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
 
           {/* 3 Pillars layout - Beautifully styled cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left pt-2 border-t border-amber-500/10">
-            {/* Pillar 1 */}
+            {/* Pillar 1 - Tempo Real */}
             <motion.div 
               initial={{ opacity: 0, y: 25 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-30px" }}
               transition={{ duration: 0.6, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
-              whileHover={{ scale: 1.03, borderColor: "rgba(245, 158, 11, 0.35)", boxShadow: "0 10px 20px rgba(0,0,0,0.3)" }}
-              className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 transition-all cursor-default relative z-10"
-            >
-              <div className="flex items-center gap-2 text-amber-400 font-display font-bold">
-                <div className="p-1.5 rounded-lg bg-amber-500/10">
-                  <Users className="h-4 w-4" />
-                </div>
-                <span className="text-xs uppercase tracking-wider font-mono">+ De 100mil seguidores</span>
-              </div>
-              <p className="text-xs text-stone-300 leading-relaxed font-sans">
-                A comunidade mais apaixonada do Instagram que escolhe e recomenda nossos brindes diariamente.
-              </p>
-            </motion.div>
-
-            {/* Pillar 2 */}
-            <motion.div 
-              initial={{ opacity: 0, y: 25 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={{ once: true, margin: "-30px" }}
-              transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
               whileHover={{ scale: 1.03, borderColor: "rgba(16, 185, 129, 0.35)", boxShadow: "0 10px 20px rgba(0,0,0,0.3)" }}
               className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 transition-all cursor-default relative z-10"
             >
@@ -1331,7 +1311,27 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               </p>
             </motion.div>
 
-            {/* Pillar 3 */}
+            {/* Pillar 2 - + De 100mil seguidores */}
+            <motion.div 
+              initial={{ opacity: 0, y: 25 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-30px" }}
+              transition={{ duration: 0.6, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+              whileHover={{ scale: 1.03, borderColor: "rgba(245, 158, 11, 0.35)", boxShadow: "0 10px 20px rgba(0,0,0,0.3)" }}
+              className="bg-zinc-950/50 p-4 rounded-2xl border border-amber-500/10 flex flex-col gap-2 transition-all cursor-default relative z-10"
+            >
+              <div className="flex items-center gap-2 text-amber-400 font-display font-bold">
+                <div className="p-1.5 rounded-lg bg-amber-500/10">
+                  <Users className="h-4 w-4" />
+                </div>
+                <span className="text-xs uppercase tracking-wider font-mono">+ De 100mil seguidores</span>
+              </div>
+              <p className="text-xs text-stone-300 leading-relaxed font-sans">
+                A comunidade mais apaixonada do Instagram que escolhe e recomenda nossos brindes diariamente.
+              </p>
+            </motion.div>
+
+            {/* Pillar 3 - Cupons & Promoções */}
             <motion.div 
               initial={{ opacity: 0, y: 25 }}
               whileInView={{ opacity: 1, y: 0 }}
