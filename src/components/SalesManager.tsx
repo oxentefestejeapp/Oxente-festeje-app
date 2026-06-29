@@ -2988,7 +2988,12 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                             )}
                           </td>
                           <td className="py-3 max-w-[140px] truncate text-zinc-200">
-                            <div>{sale.produtoNome}</div>
+                            <div className="font-semibold truncate" title={sale.produtoNome}>{sale.produtoNome}</div>
+                            {sale.itens && sale.itens.length > 0 && (
+                              <div className="text-[10px] text-zinc-500 truncate mt-0.5" title={sale.itens.map(it => `${it.quantidade}x ${it.produtoNome}`).join(', ')}>
+                                {sale.itens.map(it => `${it.quantidade}x ${it.produtoNome}`).join(', ')}
+                              </div>
+                            )}
                             {sale.status === 'Orçamento' ? (
                               <span className="inline-flex items-center gap-1 text-[9px] font-bold px-1.5 py-0.5 rounded-md mt-1 border border-amber-950/40 bg-amber-955/20 text-amber-400">
                                 📄 Orçamento
