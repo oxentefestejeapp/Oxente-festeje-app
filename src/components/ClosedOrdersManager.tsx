@@ -224,6 +224,24 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
     }
   };
 
+  // Helper: check if an order has been in "Arte em Produção" for more than 96 hours
+  const checkArteDelay = (sale: Sale) => {
+    if (sale.statusArte === 'Arte Finalizada') return { isDelayed: false, hours: 0 };
+    if (!sale.puxadoEm) return { isDelayed: false, hours: 0 };
+    try {
+      const start = new Date(sale.puxadoEm).getTime();
+      const now = Date.now();
+      const diffMs = now - start;
+      const diffHours = diffMs / (1000 * 60 * 60);
+      return {
+        isDelayed: diffHours >= 96,
+        hours: Math.floor(diffHours)
+      };
+    } catch {
+      return { isDelayed: false, hours: 0 };
+    }
+  };
+
   // User simple display label from email
   const getUserFriendlyName = (email: string) => {
     if (!email) return 'Sistema';
@@ -784,10 +802,10 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
       </div>
 
       {/* 3. Three Columns Kanban Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
         
         {/* COLUMN 1: Aguardando Arte (Orders without designer assigned) */}
-        <div className="space-y-3">
+        <div className="xl:col-span-4 space-y-3.5 bg-zinc-950/20 p-4 border border-zinc-900/60 rounded-2xl">
           <div className="flex justify-between items-center bg-zinc-950 px-3 py-2.5 rounded-xl border border-zinc-850">
             <span className="text-[11px] font-extrabold uppercase tracking-wider text-zinc-400 flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-zinc-500 animate-pulse"></span>
@@ -895,19 +913,49 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
           </div>
         </div>
 
-        {/* COLUMN 2: Designer 1 Workspace */}
-        <div className="space-y-3">
-          <div className="flex justify-between items-center bg-brand-pink/5 px-3 py-2.5 rounded-xl border border-brand-pink/20">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-brand-pink flex items-center gap-1.5">
-              <Paintbrush className="h-3.5 w-3.5 text-brand-pink" />
-              Designer 1 ({totalD1})
-            </span>
-            <span className="text-[9.5px] font-mono text-zinc-550 font-bold">
-              {finishedD1}/{totalD1} Concluídas
-            </span>
+        {/* WORKSTATIONS CONTAINER: Groups and clearly separates the two designers */}
+        <div className="xl:col-span-8 bg-zinc-950/40 border border-zinc-800/80 p-5 rounded-3xl relative shadow-2xl space-y-4">
+          <div className="absolute -top-3 left-6 px-3 py-1 bg-zinc-950 border border-zinc-800 rounded-full text-[9px] font-black uppercase tracking-widest text-brand-pink flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-brand-pink animate-ping"></span>
+            Estações de Trabalho Separadas
           </div>
 
-          <div className="space-y-3.5 max-h-[550px] overflow-y-auto pr-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 items-start md:divide-x divide-zinc-900/80">
+            
+            {/* COLUMN 2: Designer 1 Workspace */}
+            <div className="space-y-4">
+              {/* MINI PAINEL PREMIUM DESIGNER 1 */}
+              <div className="bg-gradient-to-br from-zinc-950 to-zinc-900/60 border border-brand-pink/20 p-4 rounded-2xl space-y-3.5 shadow-md relative overflow-hidden group hover:border-brand-pink/35 transition-all">
+                <div className="absolute top-0 right-0 w-24 h-24 bg-brand-pink/5 rounded-full filter blur-xl pointer-events-none" />
+                <div className="flex items-center justify-between relative z-10">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-9 h-9 rounded-xl bg-brand-pink/10 text-brand-pink border border-brand-pink/20 flex items-center justify-center font-black text-xs font-mono shadow-inner">
+                      D1
+                    </div>
+                    <div>
+                      <h3 className="text-[11px] font-black text-zinc-100 uppercase tracking-wider">Mesa de Trabalho D1</h3>
+                      <span className="text-[9.5px] text-zinc-400 font-bold block">Designer 1 ({totalD1} pedidos)</span>
+                    </div>
+                  </div>
+                  <span className="text-[10px] bg-brand-pink/10 text-brand-pink border border-brand-pink/20 px-2 py-0.5 rounded-md font-bold font-mono">
+                    {finishedD1}/{totalD1} Prontas
+                  </span>
+                </div>
+                <div className="space-y-1.5 pt-1">
+                  <div className="flex justify-between items-center text-[9px] font-bold text-zinc-400">
+                    <span>Aproveitamento Geral:</span>
+                    <span>{totalD1 > 0 ? Math.round((finishedD1 / totalD1) * 100) : 0}%</span>
+                  </div>
+                  <div className="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden border border-zinc-800">
+                    <div 
+                      className="h-full bg-brand-pink rounded-full transition-all duration-500"
+                      style={{ width: `${totalD1 > 0 ? (finishedD1 / totalD1) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-3.5 max-h-[580px] overflow-y-auto pr-1">
             {designer1Orders.length === 0 ? (
               <div className="p-8 text-center bg-zinc-900/20 border border-dashed border-zinc-850 rounded-xl text-zinc-500 text-[10.5px]">
                 Nenhum pedido com o Designer 1.
@@ -915,6 +963,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
             ) : (
               designer1Orders.map((sale) => {
                 const isFinished = sale.statusArte === 'Arte Finalizada';
+                const delayInfo = checkArteDelay(sale);
                 return (
                   <div 
                     key={sale.id}
@@ -922,7 +971,9 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                     className={`border rounded-xl p-4 space-y-3 transition-all cursor-pointer relative group ${
                       isFinished 
                         ? 'bg-emerald-950/10 border-emerald-500/20 hover:border-emerald-500/40' 
-                        : 'bg-zinc-950 border-zinc-850 hover:border-brand-pink/40'
+                        : delayInfo.isDelayed
+                          ? 'bg-red-950/10 border-red-500/35 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
+                          : 'bg-zinc-950 border-zinc-850 hover:border-brand-pink/40'
                     }`}
                   >
                     <div className="flex justify-between items-center">
@@ -934,9 +985,20 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                           <CheckCircle2 className="h-2.5 w-2.5" /> Arte Finalizada
                         </span>
                       ) : (
-                        <span className="text-[9px] font-bold text-amber-500 uppercase flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-sm animate-pulse">
-                          🎨 Em Produção
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {delayInfo.isDelayed && (
+                            <span 
+                              title={`Este pedido está há ${delayInfo.hours} horas em produção!`}
+                              className="text-[8.5px] font-black text-red-400 bg-red-500/10 border border-red-500/30 px-1.5 py-0.5 rounded-sm flex items-center gap-1 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                            >
+                              <AlertTriangle className="h-2.5 w-2.5 text-red-500 animate-bounce" />
+                              {delayInfo.hours}h ATRASADO
+                            </span>
+                          )}
+                          <span className="text-[9px] font-bold text-amber-500 uppercase flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-sm animate-pulse">
+                            🎨 Em Produção
+                          </span>
+                        </div>
                       )}
                     </div>
 
@@ -1072,18 +1134,39 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
         </div>
 
         {/* COLUMN 3: Designer 2 Workspace */}
-        <div className="space-y-3">
-          <div className="flex justify-between items-center bg-cyan-950/10 px-3 py-2.5 rounded-xl border border-cyan-900/30">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-cyan-400 flex items-center gap-1.5">
-              <Palette className="h-3.5 w-3.5 text-cyan-400" />
-              Designer 2 ({totalD2})
-            </span>
-            <span className="text-[9.5px] font-mono text-cyan-600 font-bold">
-              {finishedD2}/{totalD2} Concluídas
-            </span>
+        <div className="space-y-4 pt-4 md:pt-0 md:pl-6">
+          {/* MINI PAINEL PREMIUM DESIGNER 2 */}
+          <div className="bg-gradient-to-br from-zinc-950 to-zinc-900/60 border border-cyan-500/20 p-4 rounded-2xl space-y-3.5 shadow-md relative overflow-hidden group hover:border-cyan-500/35 transition-all">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-500/5 rounded-full filter blur-xl pointer-events-none" />
+            <div className="flex items-center justify-between relative z-10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 flex items-center justify-center font-black text-xs font-mono shadow-inner">
+                  D2
+                </div>
+                <div>
+                  <h3 className="text-[11px] font-black text-zinc-100 uppercase tracking-wider">Mesa de Trabalho D2</h3>
+                  <span className="text-[9.5px] text-zinc-400 font-bold block">Designer 2 ({totalD2} pedidos)</span>
+                </div>
+              </div>
+              <span className="text-[10px] bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 px-2 py-0.5 rounded-md font-bold font-mono">
+                {finishedD2}/{totalD2} Prontas
+              </span>
+            </div>
+            <div className="space-y-1.5 pt-1">
+              <div className="flex justify-between items-center text-[9px] font-bold text-zinc-400">
+                <span>Aproveitamento Geral:</span>
+                <span>{totalD2 > 0 ? Math.round((finishedD2 / totalD2) * 100) : 0}%</span>
+              </div>
+              <div className="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden border border-zinc-800">
+                <div 
+                  className="h-full bg-cyan-400 rounded-full transition-all duration-500"
+                  style={{ width: `${totalD2 > 0 ? (finishedD2 / totalD2) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
           </div>
 
-          <div className="space-y-3.5 max-h-[550px] overflow-y-auto pr-1">
+          <div className="space-y-3.5 max-h-[580px] overflow-y-auto pr-1">
             {designer2Orders.length === 0 ? (
               <div className="p-8 text-center bg-zinc-900/20 border border-dashed border-zinc-850 rounded-xl text-zinc-500 text-[10.5px]">
                 Nenhum pedido com o Designer 2.
@@ -1091,6 +1174,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
             ) : (
               designer2Orders.map((sale) => {
                 const isFinished = sale.statusArte === 'Arte Finalizada';
+                const delayInfo = checkArteDelay(sale);
                 return (
                   <div 
                     key={sale.id}
@@ -1098,7 +1182,9 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                     className={`border rounded-xl p-4 space-y-3 transition-all cursor-pointer relative group ${
                       isFinished 
                         ? 'bg-emerald-950/10 border-emerald-500/20 hover:border-emerald-500/40' 
-                        : 'bg-zinc-950 border-zinc-850 hover:border-cyan-400/40'
+                        : delayInfo.isDelayed
+                          ? 'bg-red-950/10 border-red-500/35 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
+                          : 'bg-zinc-950 border-zinc-850 hover:border-cyan-400/40'
                     }`}
                   >
                     <div className="flex justify-between items-center">
@@ -1110,9 +1196,20 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                           <CheckCircle2 className="h-2.5 w-2.5" /> Arte Finalizada
                         </span>
                       ) : (
-                        <span className="text-[9px] font-bold text-amber-500 uppercase flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-sm animate-pulse">
-                          🎨 Em Produção
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          {delayInfo.isDelayed && (
+                            <span 
+                              title={`Este pedido está há ${delayInfo.hours} horas em produção!`}
+                              className="text-[8.5px] font-black text-red-400 bg-red-500/10 border border-red-500/30 px-1.5 py-0.5 rounded-sm flex items-center gap-1 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                            >
+                              <AlertTriangle className="h-2.5 w-2.5 text-red-500 animate-bounce" />
+                              {delayInfo.hours}h ATRASADO
+                            </span>
+                          )}
+                          <span className="text-[9px] font-bold text-amber-500 uppercase flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-sm animate-pulse">
+                            🎨 Em Produção
+                          </span>
+                        </div>
                       )}
                     </div>
 
@@ -1244,6 +1341,9 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                 );
               })
             )}
+          </div>
+        </div>
+
           </div>
         </div>
 
