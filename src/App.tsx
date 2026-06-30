@@ -135,6 +135,7 @@ export default function App() {
 
   // 2. Core Persistent State
   const [products, setProducts] = useState<Product[]>([]);
+  const [showOnlyCriticalInStock, setShowOnlyCriticalInStock] = useState(false);
   const pendingStockUpdates = useRef<Record<string, number>>({});
   const pendingProducts = useRef<Record<string, Product>>((() => {
     try {
@@ -209,7 +210,7 @@ export default function App() {
 
   useEffect(() => {
     if (products.length > 0 && !hasCheckedCritical) {
-      const critical = products.filter(p => !p.estoqueInfinito && p.estoque <= 10);
+      const critical = products.filter(p => p && !p.adicional && !p.estoqueInfinito && p.estoque < 10);
       if (critical.length > 0) {
         critical.sort((a, b) => a.estoque - b.estoque);
         
@@ -295,6 +296,9 @@ export default function App() {
   const changeTab = (tab: typeof activeTab) => {
     setActiveTab(tab);
     playAppSound('click');
+    if (tab !== 'estoque') {
+      setShowOnlyCriticalInStock(false);
+    }
   };
 
   const getTodayString = () => {
@@ -339,8 +343,8 @@ export default function App() {
 
   // Hook to calculate out-of-stock and critical stock products on the central page
   const criticalStockBannerData = React.useMemo(() => {
-    const outOfStock = products.filter(p => p && !p.estoqueInfinito && p.estoque === 0);
-    const lowStock = products.filter(p => p && !p.estoqueInfinito && p.estoque > 0 && p.estoque < 3); // critical threshold (< 3)
+    const outOfStock = products.filter(p => p && !p.adicional && !p.estoqueInfinito && p.estoque === 0);
+    const lowStock = products.filter(p => p && !p.adicional && !p.estoqueInfinito && p.estoque > 0 && p.estoque < 3); // critical threshold (< 3)
     return {
       outOfStock,
       lowStock,
@@ -834,8 +838,8 @@ export default function App() {
           const updated = current.map(p => p.id === prod.id ? finalProd : p);
           localStorage.setItem('oxente_products', JSON.stringify(updated));
 
-          // Real-time synchronization check for critical stock (<= 10) for ALL users
-          if (oldProd && !prod.estoqueInfinito && prod.estoque <= 10 && prod.estoque < oldStock) {
+          // Real-time synchronization check for critical stock (< 10) for ALL users
+          if (oldProd && !prod.adicional && !prod.estoqueInfinito && prod.estoque < 10 && prod.estoque < oldStock) {
             setTimeout(() => {
               setCriticalStockProduct(prod);
               setShowCelebration('critical_stock');
@@ -1437,8 +1441,8 @@ export default function App() {
     });
     saveProducts(updated);
 
-    // Trigger critical stock of 10 or lower if stock decreased
-    if (oldProduct && !oldProduct.estoqueInfinito && !isInfinite && newStock <= 10 && newStock < oldStock) {
+    // Trigger critical stock of less than 10 if stock decreased
+    if (oldProduct && !oldProduct.adicional && !oldProduct.estoqueInfinito && !isInfinite && newStock < 10 && newStock < oldStock) {
       setCriticalStockProduct(itemToSync);
       setShowCelebration('critical_stock');
     }
@@ -1623,11 +1627,11 @@ export default function App() {
 
       saveProducts(updatedProducts);
 
-      // Trigger critical stock of 10 or lower if stock decreased
+      // Trigger critical stock of less than 10 if stock decreased
       productsToSync.forEach((p) => {
         const oldProd = currentProducts.find((old) => old.id === p.id);
         const oldStock = oldProd ? oldProd.estoque : 999;
-        if (p.estoque <= 10 && p.estoque < oldStock) {
+        if (!p.adicional && !p.estoqueInfinito && p.estoque < 10 && p.estoque < oldStock) {
           setCriticalStockProduct(p);
           setShowCelebration('critical_stock');
         }
@@ -1916,11 +1920,11 @@ export default function App() {
 
         saveProducts(updatedProducts);
 
-        // Trigger critical stock of 10 or lower if stock decreased
+        // Trigger critical stock of less than 10 if stock decreased
         productsToSync.forEach((p) => {
           const oldProd = currentProducts.find((old) => old.id === p.id);
           const oldStock = oldProd ? oldProd.estoque : 999;
-          if (p.estoque <= 10 && p.estoque < oldStock) {
+          if (!p.adicional && !p.estoqueInfinito && p.estoque < 10 && p.estoque < oldStock) {
             setCriticalStockProduct(p);
             setShowCelebration('critical_stock');
           }
@@ -2326,14 +2330,20 @@ export default function App() {
 
         {/* Dynamic Stock Level Alert Banner - Visible on Central Page */}
         {criticalStockBannerData.totalAlerts > 0 && (
-          <div className="no-print mb-6 bg-amber-950/10 border border-amber-900/25 rounded-2xl p-4 sm:p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-sm animate-fade-in max-w-5xl mx-auto w-full transition-all hover:border-amber-950">
+          <div 
+            onClick={() => {
+              setShowOnlyCriticalInStock(true);
+              changeTab('estoque');
+            }}
+            className="no-print mb-6 bg-amber-950/10 hover:bg-amber-950/20 border border-amber-900/25 hover:border-amber-500/45 rounded-2xl p-4 sm:p-5 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 shadow-sm animate-fade-in max-w-5xl mx-auto w-full transition-all cursor-pointer group"
+          >
             <div className="flex flex-col sm:flex-row items-start gap-4.5 w-full min-w-0">
-              <div className={`p-3 rounded-xl flex items-center justify-center shrink-0 border ${
+              <div className={`p-3 rounded-xl flex items-center justify-center shrink-0 border transition-all ${
                 criticalStockBannerData.outOfStock.length > 0 
-                  ? 'bg-red-500/10 border-red-500/20 text-red-400 animate-pulse' 
-                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400'
+                  ? 'bg-red-500/10 border-red-500/20 text-red-400 group-hover:scale-105 group-hover:border-red-500/40' 
+                  : 'bg-amber-500/10 border-amber-500/20 text-amber-400 group-hover:scale-105 group-hover:border-amber-500/40'
               }`}>
-                <AlertTriangle className="h-5.5 w-5.5" />
+                <AlertTriangle className="h-5.5 w-5.5 animate-bounce" />
               </div>
               <div className="min-w-0 flex-1">
                 <span className="text-[10px] font-black uppercase tracking-widest text-amber-450 block">⚠️ ALERTA DE ESTOQUE CRÍTICO</span>
@@ -2346,7 +2356,11 @@ export default function App() {
                   {criticalStockBannerData.outOfStock.map(p => (
                     <button 
                       key={p.id} 
-                      onClick={() => changeTab('estoque')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowOnlyCriticalInStock(true);
+                        changeTab('estoque');
+                      }}
                       className="inline-flex items-center gap-1.5 text-[10.5px] font-black bg-red-950/35 hover:bg-red-950/60 text-red-400 border border-red-900/30 hover:border-red-800/50 px-2.5 py-1.5 rounded-lg shrink-0 transition-all font-sans cursor-pointer uppercase tracking-wider"
                       title="Produto esgotado! Clique para gerenciar."
                     >
@@ -2357,7 +2371,11 @@ export default function App() {
                   {criticalStockBannerData.lowStock.map(p => (
                     <button 
                       key={p.id} 
-                      onClick={() => changeTab('estoque')}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowOnlyCriticalInStock(true);
+                        changeTab('estoque');
+                      }}
                       className="inline-flex items-center gap-1.5 text-[10.5px] font-black bg-amber-950/30 hover:bg-amber-950/55 text-amber-400 border border-amber-900/20 hover:border-amber-800/40 px-2.5 py-1.5 rounded-lg shrink-0 transition-all font-sans cursor-pointer uppercase tracking-wider"
                       title="Estoque muito baixo! Clique para gerenciar."
                     >
@@ -2370,11 +2388,15 @@ export default function App() {
             </div>
             
             <button
-              onClick={() => changeTab('estoque')}
-              className="w-full lg:w-auto shrink-0 px-5 py-3 bg-amber-900/15 hover:bg-brand-pink text-amber-400 hover:text-black font-black border border-amber-900/25 hover:border-brand-pink rounded-xl text-xs transition-all active:scale-97 cursor-pointer flex items-center justify-center gap-1.5 shadow-sm font-sans uppercase tracking-widest"
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowOnlyCriticalInStock(true);
+                changeTab('estoque');
+              }}
+              className="w-full lg:w-auto shrink-0 px-5 py-3 bg-amber-900/15 group-hover:bg-brand-pink text-amber-400 group-hover:text-black font-black border border-amber-900/25 group-hover:border-brand-pink rounded-xl text-xs transition-all active:scale-97 cursor-pointer flex items-center justify-center gap-1.5 shadow-sm font-sans uppercase tracking-widest"
             >
               <span>Conferir Estoque</span>
-              <ArrowRight className="h-3.5 w-3.5" />
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-1" />
             </button>
           </div>
         )}
@@ -2686,6 +2708,8 @@ export default function App() {
                 onUpdateProduct={handleUpdateProduct}
                 onAddProduct={handleAddProduct}
                 isAdmin={isAdmin}
+                initialShowOnlyCritical={showOnlyCriticalInStock}
+                onClearCriticalFilter={() => setShowOnlyCriticalInStock(false)}
               />
             )}
 

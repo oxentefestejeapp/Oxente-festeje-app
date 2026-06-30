@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useRef, DragEvent, ChangeEvent } from 'react';
+import React, { useState, useMemo, useRef, DragEvent, ChangeEvent, useEffect } from 'react';
 import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box, Check, X, Pencil, Upload, Loader2, Sparkles, AlertCircle, Layers, Undo2, History, Palette } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Product, PricingTier, ProductColor } from '../types';
@@ -61,10 +61,26 @@ interface StockManagerProps {
   onUpdateProduct?: (updatedProduct: Product) => Promise<boolean>;
   onAddProduct?: (newProduct: Product) => Promise<boolean>;
   isAdmin?: boolean;
+  initialShowOnlyCritical?: boolean;
+  onClearCriticalFilter?: () => void;
 }
 
-export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdateProduct, onAddProduct, isAdmin = false }: StockManagerProps) {
+export function StockManager({ 
+  products, 
+  onUpdateStock, 
+  onDeleteProduct, 
+  onUpdateProduct, 
+  onAddProduct, 
+  isAdmin = false,
+  initialShowOnlyCritical = false,
+  onClearCriticalFilter
+}: StockManagerProps) {
   const [searchTerm, setSearchTerm] = useState('');
+  const [showOnlyCritical, setShowOnlyCritical] = useState(initialShowOnlyCritical);
+
+  useEffect(() => {
+    setShowOnlyCritical(initialShowOnlyCritical);
+  }, [initialShowOnlyCritical]);
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteError, setDeleteError] = useState(false);
@@ -443,7 +459,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
     let lowStockCount = 0;
 
     products.forEach(p => {
-      if (p.estoqueInfinito) return;
+      if (p.estoqueInfinito || p.adicional) return;
       totalStockVolume += p.estoque;
       const c = p.precoCusto !== undefined ? p.precoCusto : (p.preco * 0.6);
       totalStockCostValue += p.estoque * c;
@@ -479,9 +495,14 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
     };
   }, [products]);
 
-  const filteredProducts = products.filter(product =>
-    product.nome.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredProducts = products.filter(product => {
+    const matchesSearch = product.nome.toLowerCase().includes(searchTerm.toLowerCase());
+    if (showOnlyCritical) {
+      const isCritical = !product.adicional && !product.estoqueInfinito && product.estoque < 10;
+      return matchesSearch && isCritical;
+    }
+    return matchesSearch;
+  });
 
   const handleStockChange = (id: string, currentStock: number, value: string) => {
     const parsed = parseInt(value, 10);
@@ -588,7 +609,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                 <div className="mt-3.5 space-y-1.5 max-h-[120px] overflow-y-auto pr-1">
                   <p className="text-[9px] text-zinc-500 uppercase tracking-widest font-extrabold mb-1">Localizar no Estoque:</p>
                   {products
-                    .filter(p => !p.estoqueInfinito && p.estoque < 10)
+                    .filter(p => !p.adicional && !p.estoqueInfinito && p.estoque < 10)
                     .map(p => {
                       const isZero = p.estoque <= 0;
                       return (
@@ -737,18 +758,41 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
 
       {/* Search and Filters Bar */}
       <div className="flex flex-col sm:flex-row gap-3 items-center justify-between bg-zinc-900 rounded-xl border border-zinc-800 p-4 shadow-md">
-        <div className="relative w-full sm:max-w-md">
-          <span className="absolute left-3.5 top-3 text-zinc-500">
-            <Search className="h-4 w-4" />
-          </span>
-          <input
-            type="text"
-            placeholder="Pesquisar por nome de brinde ou brinco..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            autoComplete="off"
-            className="w-full pl-10 pr-4 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-sm"
-          />
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
+          <div className="relative w-full sm:max-w-md">
+            <span className="absolute left-3.5 top-3 text-zinc-500">
+              <Search className="h-4 w-4" />
+            </span>
+            <input
+              type="text"
+              placeholder="Pesquisar por nome de brinde ou brinco..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              autoComplete="off"
+              className="w-full pl-10 pr-4 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-sm"
+            />
+          </div>
+
+          <button
+            onClick={() => {
+              const newValue = !showOnlyCritical;
+              setShowOnlyCritical(newValue);
+              if (!newValue && onClearCriticalFilter) {
+                onClearCriticalFilter();
+              }
+            }}
+            className={`px-3 py-2 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none active:scale-97 ${
+              showOnlyCritical
+                ? 'bg-amber-950/40 border-amber-500/50 text-amber-400 font-extrabold shadow-sm'
+                : 'bg-black border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900'
+            }`}
+          >
+            <AlertTriangle className="h-3.5 w-3.5" />
+            <span>Apenas Estoque Crítico</span>
+            {showOnlyCritical && (
+              <span className="h-2 w-2 rounded-full bg-amber-500 animate-pulse ml-1" />
+            )}
+          </button>
         </div>
         <div className="text-xs font-semibold text-zinc-400 shrink-0">
           Mostrando {filteredProducts.length} de {products.length} itens cadastrados
@@ -1039,7 +1083,14 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                           </button>
                         </div>
                       ) : (
-                        <div className="bg-red-950/20 border border-red-900/40 rounded-xl p-3 space-y-2.5 animate-fade-in">
+                        <form 
+                          onSubmit={(e) => e.preventDefault()}
+                          className="bg-red-950/20 border border-red-900/40 rounded-xl p-3 space-y-2.5 animate-fade-in"
+                        >
+                          {/* Fake inputs to trick the browser and prevent autofill from matching the main search input */}
+                          <input type="text" name="username" style={{ display: 'none' }} autoComplete="username" />
+                          <input type="password" name="password" style={{ display: 'none' }} autoComplete="new-password" />
+
                           <div className="flex items-start gap-1.5 text-red-300 text-[11px] leading-snug">
                             <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
                             <span>Tem certeza que deseja remover este produto? Isso excluirá seus registros de estoque.</span>
@@ -1063,6 +1114,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                           </div>
                           <div className="flex items-center gap-2">
                             <button
+                              type="button"
                               onClick={() => {
                                 if (deletePassword === '69apagar69') {
                                   handleAddToDeletedHistory(p);
@@ -1079,6 +1131,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                               Confirmar
                             </button>
                             <button
+                              type="button"
                               onClick={() => {
                                 setProductToDelete(null);
                                 setDeletePassword('');
@@ -1089,7 +1142,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                               Cancelar
                             </button>
                           </div>
-                        </div>
+                        </form>
                       )}
                     </>
                   )}

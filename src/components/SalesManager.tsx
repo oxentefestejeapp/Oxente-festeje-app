@@ -1439,6 +1439,8 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
 
   const criticalStockCount = useMemo(() => {
     return products.filter(product => {
+      if (!product) return false;
+      if (product.adicional || product.estoqueInfinito) return false;
       const qty = product.estoque ?? 0;
       return qty < 10;
     }).length;
