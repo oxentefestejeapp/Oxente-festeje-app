@@ -23,7 +23,10 @@ import {
   Plus,
   ShoppingBag,
   MessageSquare,
-  Smartphone
+  Smartphone,
+  Trophy,
+  Filter,
+  EyeOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sale, StoreInfo, Product, SaleItem } from '../types';
@@ -70,6 +73,8 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   // Prompt state to show "remover da lista" options
   const [saleToRemovePrompt, setSaleToRemovePrompt] = useState<Sale | null>(null);
   const [showRemovedFromDesign, setShowRemovedFromDesign] = useState(false);
+  const [hideFinishedInColumns, setHideFinishedInColumns] = useState(false);
+  const [filterUrgentOnly, setFilterUrgentOnly] = useState(false);
 
   const paymentMethods: { value: 'Pix' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito'; label: string; icon: string }[] = [
     { value: 'Pix', label: 'Pix', icon: '⚡' },
@@ -353,74 +358,333 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
     }
   };
 
+  const getRetiradaBadgeStyle = (dataRetirada?: string) => {
+    if (!dataRetirada) return 'text-zinc-500 bg-zinc-950/60 border-zinc-850';
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const pickupDate = new Date(dataRetirada + 'T12:00:00');
+      pickupDate.setHours(0, 0, 0, 0);
+      const diffTime = pickupDate.getTime() - today.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      
+      if (diffDays < 0) {
+        return 'text-red-400 bg-red-500/10 border-red-500/20';
+      } else if (diffDays === 0) {
+        return 'text-red-400 bg-red-500/20 border-red-500/40 font-black animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.15)]';
+      } else if (diffDays === 1) {
+        return 'text-orange-400 bg-orange-500/10 border-orange-500/25 font-extrabold';
+      } else if (diffDays === 2) {
+        return 'text-amber-400 bg-amber-500/10 border-amber-500/25 font-bold';
+      } else {
+        return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20 font-medium';
+      }
+    } catch {
+      return 'text-zinc-400 bg-zinc-900 border-zinc-800';
+    }
+  };
+
+  const getRetiradaBadgeText = (dataRetirada?: string, turnoEntrega?: 'Manhã' | 'Tarde') => {
+    if (!dataRetirada) return '';
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const pickupDate = new Date(dataRetirada + 'T12:00:00');
+      pickupDate.setHours(0, 0, 0, 0);
+      const diffTime = pickupDate.getTime() - today.getTime();
+      const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+      const dateFormatted = new Date(dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR');
+      const turnoText = turnoEntrega ? ` (${turnoEntrega})` : '';
+
+      if (diffDays < 0) {
+        return `🚨 Atrasado há ${Math.abs(diffDays)}d - ${dateFormatted}${turnoText}`;
+      } else if (diffDays === 0) {
+        return `🔥 RETIRADA HOJE! - ${dateFormatted}${turnoText}`;
+      } else if (diffDays === 1) {
+        return `⚡ Retirada Amanhã! - ${dateFormatted}${turnoText}`;
+      } else if (diffDays === 2) {
+        return `📅 Retirada em 2 dias - ${dateFormatted}${turnoText}`;
+      } else {
+        return `📅 Retirada: ${dateFormatted}${turnoText}`;
+      }
+    } catch {
+      return `📅 Retirada: ${dataRetirada}`;
+    }
+  };
+
   const unassignedOrders = useMemo(() => {
-    const list = filteredSales.filter(s => !s.designerId);
+    let list = filteredSales.filter(s => !s.designerId);
+    if (filterUrgentOnly) {
+      list = list.filter(s => isUrgent(s));
+    }
     return [...list].sort((a, b) => {
       if (!a.dataRetirada && !b.dataRetirada) return 0;
       if (!a.dataRetirada) return 1;
       if (!b.dataRetirada) return -1;
       return a.dataRetirada.localeCompare(b.dataRetirada);
     });
-  }, [filteredSales]);
+  }, [filteredSales, filterUrgentOnly]);
 
-  const designer1Orders = useMemo(() => {
+  const rawDesigner1Orders = useMemo(() => {
     return filteredSales.filter(s => s.designerId === 'designer1');
   }, [filteredSales]);
 
-  const designer2Orders = useMemo(() => {
+  const rawDesigner2Orders = useMemo(() => {
     return filteredSales.filter(s => s.designerId === 'designer2');
   }, [filteredSales]);
 
+  const designer1Orders = useMemo(() => {
+    let list = rawDesigner1Orders;
+    if (hideFinishedInColumns) {
+      list = list.filter(s => s.statusArte !== 'Arte Finalizada');
+    }
+    if (filterUrgentOnly) {
+      list = list.filter(s => isUrgent(s));
+    }
+    return list;
+  }, [rawDesigner1Orders, hideFinishedInColumns, filterUrgentOnly]);
+
+  const designer2Orders = useMemo(() => {
+    let list = rawDesigner2Orders;
+    if (hideFinishedInColumns) {
+      list = list.filter(s => s.statusArte !== 'Arte Finalizada');
+    }
+    if (filterUrgentOnly) {
+      list = list.filter(s => isUrgent(s));
+    }
+    return list;
+  }, [rawDesigner2Orders, hideFinishedInColumns, filterUrgentOnly]);
+
   // Metrics calculations
-  const totalUnassigned = unassignedOrders.length;
-  const totalD1 = designer1Orders.length;
-  const finishedD1 = designer1Orders.filter(s => s.statusArte === 'Arte Finalizada').length;
-  const totalD2 = designer2Orders.length;
-  const finishedD2 = designer2Orders.filter(s => s.statusArte === 'Arte Finalizada').length;
+  const totalUnassigned = useMemo(() => filteredSales.filter(s => !s.designerId).length, [filteredSales]);
+  const totalD1 = rawDesigner1Orders.length;
+  const finishedD1 = rawDesigner1Orders.filter(s => s.statusArte === 'Arte Finalizada').length;
+  const totalD2 = rawDesigner2Orders.length;
+  const finishedD2 = rawDesigner2Orders.filter(s => s.statusArte === 'Arte Finalizada').length;
+
+  const activeD1 = totalD1 - finishedD1;
+  const activeD2 = totalD2 - finishedD2;
+
+  const monthlyFinishedD1 = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    return sales.filter(s => {
+      if (s.status === 'Orçamento') return false;
+      if (s.designerId !== 'designer1') return false;
+      if (s.statusArte !== 'Arte Finalizada') return false;
+      const dateStr = s.arteFinalizadaEm || s.data;
+      if (!dateStr) return false;
+      try {
+        const d = new Date(dateStr);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      } catch {
+        return false;
+      }
+    }).length;
+  }, [sales]);
+
+  const monthlyFinishedD2 = useMemo(() => {
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    return sales.filter(s => {
+      if (s.status === 'Orçamento') return false;
+      if (s.designerId !== 'designer2') return false;
+      if (s.statusArte !== 'Arte Finalizada') return false;
+      const dateStr = s.arteFinalizadaEm || s.data;
+      if (!dateStr) return false;
+      try {
+        const d = new Date(dateStr);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      } catch {
+        return false;
+      }
+    }).length;
+  }, [sales]);
 
   return (
     <div className="space-y-6">
       
       {/* 1. Dashboard Metrics Summary Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         
-        {/* Waiting card */}
-        <div className="bg-zinc-950 border border-zinc-800 p-4.5 rounded-2xl shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">Aguardando Arte</span>
-            <span className="text-2xl font-extrabold text-zinc-100 font-mono">{totalUnassigned}</span>
-            <p className="text-[10px] text-zinc-500">Pedidos aguardando design</p>
+        {/* Waiting card - Spans 1 column */}
+        <div className="bg-zinc-950 border border-zinc-800 p-4.5 rounded-2xl shadow-sm flex items-center justify-between relative overflow-hidden group hover:border-zinc-700/60 transition-all duration-300">
+          <div className="absolute top-0 right-0 w-16 h-16 bg-zinc-800/5 rounded-full filter blur-lg pointer-events-none" />
+          <div className="space-y-1 relative z-10">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block font-mono">Fila de Triagem</span>
+            <span className="text-3xl font-black text-zinc-100 font-mono tracking-tight">{totalUnassigned}</span>
+            <p className="text-[10px] text-zinc-500 font-medium">Aguardando designer puxar a arte</p>
           </div>
-          <div className="p-3 bg-zinc-900 border border-zinc-800 text-zinc-400 rounded-xl">
-            <Clock className="h-5 w-5" />
-          </div>
-        </div>
-
-        {/* Designer 1 card */}
-        <div className="bg-zinc-950 border border-zinc-800 p-4.5 rounded-2xl shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-brand-pink block">Designer 1</span>
-            <span className="text-2xl font-extrabold text-zinc-100 font-mono">
-              {finishedD1} <span className="text-sm font-semibold text-zinc-500">/ {totalD1}</span>
-            </span>
-            <p className="text-[10px] text-zinc-500">{totalD1 - finishedD1} artes pendentes para finalizar</p>
-          </div>
-          <div className="p-3 bg-brand-pink/10 border border-brand-pink/20 text-brand-pink rounded-xl">
-            <Paintbrush className="h-5 w-5" />
+          <div className="p-3 bg-zinc-900 border border-zinc-800 text-zinc-400 rounded-xl relative z-10 shadow-inner">
+            <Clock className="h-5 w-5 animate-pulse text-brand-pink" />
           </div>
         </div>
 
-        {/* Designer 2 card */}
-        <div className="bg-zinc-950 border border-zinc-800 p-4.5 rounded-2xl shadow-sm flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-cyan-455 block">Designer 2</span>
-            <span className="text-2xl font-extrabold text-zinc-100 font-mono">
-              {finishedD2} <span className="text-sm font-semibold text-zinc-500">/ {totalD2}</span>
-            </span>
-            <p className="text-[10px] text-zinc-500">{totalD2 - finishedD2} artes pendentes para finalizar</p>
+        {/* 🏆 Mini Leaderboard de Produtividade dos Designers - Spans 2 columns */}
+        <div className="lg:col-span-2 bg-zinc-950/40 backdrop-blur-md border border-zinc-800/80 p-4.5 rounded-2xl shadow-lg relative overflow-hidden group hover:border-brand-pink/20 transition-all duration-300">
+          {/* subtle glowing background */}
+          <div className="absolute top-0 right-0 w-32 h-32 bg-brand-pink/5 rounded-full filter blur-[32px] pointer-events-none group-hover:bg-brand-pink/10 transition-colors" />
+          
+          <div className="flex items-center justify-between mb-4 relative z-10">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 bg-brand-pink/10 rounded-xl text-brand-pink flex items-center justify-center">
+                <Trophy className="h-4 w-4 text-amber-400" />
+              </span>
+              <div>
+                <span className="text-[10px] text-zinc-300 uppercase font-black tracking-wider block font-mono">Leaderboard de Produtividade</span>
+                <p className="text-[10px] text-zinc-500 font-bold">Desempenho mensal e balanceamento de carga</p>
+              </div>
+            </div>
+            {/* Dynamic Advice/Status Badge */}
+            <div className="hidden sm:block">
+              {activeD1 - activeD2 >= 3 ? (
+                <span className="text-[9px] bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2 py-1 rounded-lg font-bold font-mono">
+                  ⚠️ Direcione novas artes ao Designer 2
+                </span>
+              ) : activeD2 - activeD1 >= 3 ? (
+                <span className="text-[9px] bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2 py-1 rounded-lg font-bold font-mono">
+                  ⚠️ Direcione novas artes ao Designer 1
+                </span>
+              ) : (
+                <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 px-2 py-1 rounded-lg font-bold font-mono">
+                  ✨ Fila de Trabalho Equilibrada
+                </span>
+              )}
+            </div>
           </div>
-          <div className="p-3 bg-cyan-950/20 border border-cyan-900/30 text-cyan-400 rounded-xl">
-            <Palette className="h-5 w-5" />
+
+          {/* Designer Side-by-Side Comparison */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 relative z-10">
+            
+            {/* Designer 1 Panel */}
+            <div className="bg-zinc-950/60 border border-zinc-850 p-3 rounded-xl flex flex-col justify-between hover:border-brand-pink/30 transition-all duration-200">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6.5 h-6.5 rounded-lg bg-brand-pink/10 text-brand-pink flex items-center justify-center font-black text-xs font-mono shadow-inner border border-brand-pink/20">
+                    D1
+                  </div>
+                  <div>
+                    <span className="text-xs font-extrabold text-zinc-100 block">Designer 1</span>
+                    <span className="text-[9px] text-zinc-400 block font-semibold">Criação &amp; Personalizados</span>
+                  </div>
+                </div>
+                
+                {/* Winner Badge */}
+                {monthlyFinishedD1 > monthlyFinishedD2 && monthlyFinishedD1 > 0 && (
+                  <span className="text-[9px] bg-amber-400/10 border border-amber-400/30 text-amber-400 px-1.5 py-0.5 rounded-md font-black flex items-center gap-0.5 animate-bounce font-mono">
+                    👑 LÍDER
+                  </span>
+                )}
+              </div>
+
+              {/* Progress and Stats */}
+              <div className="space-y-1.5 mt-2">
+                {/* Fila Ativa */}
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-zinc-500 font-bold">Fila Ativa (Pendentes):</span>
+                  <span className={`font-black font-mono ${activeD1 > 4 ? 'text-red-400' : activeD1 > 2 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                    {activeD1} {activeD1 === 1 ? 'arte' : 'artes'}
+                  </span>
+                </div>
+                {/* Progress bar for active workload */}
+                <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-500 ${activeD1 > 4 ? 'bg-red-500' : activeD1 > 2 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${Math.min(100, (activeD1 / 8) * 100)}%` }}
+                  />
+                </div>
+
+                {/* Monthly Deliveries */}
+                <div className="flex justify-between items-center text-[10px] pt-1">
+                  <span className="text-zinc-500 font-bold">Entregas no Mês:</span>
+                  <span className="text-zinc-100 font-extrabold font-mono">
+                    {monthlyFinishedD1} concluintes
+                  </span>
+                </div>
+                {/* Completion general */}
+                <div className="flex justify-between items-center text-[9px] pt-1 border-t border-zinc-900">
+                  <span className="text-zinc-500">Workspace Geral:</span>
+                  <span className="text-zinc-400 font-bold font-mono">
+                    {finishedD1} finalizadas / {totalD1} total
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Designer 2 Panel */}
+            <div className="bg-zinc-950/60 border border-zinc-850 p-3 rounded-xl flex flex-col justify-between hover:border-cyan-500/30 transition-all duration-200">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-6.5 h-6.5 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center font-black text-xs font-mono shadow-inner border border-cyan-500/20">
+                    D2
+                  </div>
+                  <div>
+                    <span className="text-xs font-extrabold text-zinc-100 block">Designer 2</span>
+                    <span className="text-[9px] text-zinc-400 block font-semibold">Criação &amp; Personalizados</span>
+                  </div>
+                </div>
+                
+                {/* Winner Badge */}
+                {monthlyFinishedD2 > monthlyFinishedD1 && monthlyFinishedD2 > 0 && (
+                  <span className="text-[9px] bg-amber-400/10 border border-amber-400/30 text-amber-400 px-1.5 py-0.5 rounded-md font-black flex items-center gap-0.5 animate-bounce font-mono">
+                    👑 LÍDER
+                  </span>
+                )}
+              </div>
+
+              {/* Progress and Stats */}
+              <div className="space-y-1.5 mt-2">
+                {/* Fila Ativa */}
+                <div className="flex justify-between items-center text-[10px]">
+                  <span className="text-zinc-500 font-bold">Fila Ativa (Pendentes):</span>
+                  <span className={`font-black font-mono ${activeD2 > 4 ? 'text-red-400' : activeD2 > 2 ? 'text-amber-400' : 'text-emerald-400'}`}>
+                    {activeD2} {activeD2 === 1 ? 'arte' : 'artes'}
+                  </span>
+                </div>
+                {/* Progress bar for active workload */}
+                <div className="w-full bg-zinc-900 h-1 rounded-full overflow-hidden">
+                  <div 
+                    className={`h-full rounded-full transition-all duration-500 ${activeD2 > 4 ? 'bg-red-500' : activeD2 > 2 ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                    style={{ width: `${Math.min(100, (activeD2 / 8) * 100)}%` }}
+                  />
+                </div>
+
+                {/* Monthly Deliveries */}
+                <div className="flex justify-between items-center text-[10px] pt-1">
+                  <span className="text-zinc-500 font-bold">Entregas no Mês:</span>
+                  <span className="text-zinc-100 font-extrabold font-mono">
+                    {monthlyFinishedD2} concluintes
+                  </span>
+                </div>
+                {/* Completion general */}
+                <div className="flex justify-between items-center text-[9px] pt-1 border-t border-zinc-900">
+                  <span className="text-zinc-500">Workspace Geral:</span>
+                  <span className="text-zinc-400 font-bold font-mono">
+                    {finishedD2} finalizadas / {totalD2} total
+                  </span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          {/* Mobile Balance Advice */}
+          <div className="mt-3 block sm:hidden relative z-10 border-t border-zinc-900 pt-2 text-center">
+            {activeD1 - activeD2 >= 3 ? (
+              <span className="text-[9px] text-amber-400 font-bold font-mono">
+                ⚠️ Direcione novas artes ao Designer 2
+              </span>
+            ) : activeD2 - activeD1 >= 3 ? (
+              <span className="text-[9px] text-amber-400 font-bold font-mono">
+                ⚠️ Direcione novas artes ao Designer 1
+              </span>
+            ) : (
+              <span className="text-[9px] text-emerald-400 font-bold font-mono">
+                ✨ Fila de Trabalho Equilibrada
+              </span>
+            )}
           </div>
         </div>
 
@@ -437,12 +701,46 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
         </div>
 
         {/* Actions & Search */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 w-full md:w-auto">
+        <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-2.5 w-full xl:w-auto">
+          {/* Toggle only urgent */}
+          <button
+            type="button"
+            onClick={() => {
+              setFilterUrgentOnly(prev => !prev);
+              playAppSound('click');
+            }}
+            className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
+              filterUrgentOnly
+                ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 font-extrabold shadow-[0_0_12px_rgba(245,158,11,0.05)]'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
+            }`}
+          >
+            <AlertTriangle className={`h-3.5 w-3.5 ${filterUrgentOnly ? 'text-amber-400 animate-pulse' : 'text-zinc-500'}`} />
+            <span>Somente Urgentes</span>
+          </button>
+
+          {/* Toggle hide finished */}
+          <button
+            type="button"
+            onClick={() => {
+              setHideFinishedInColumns(prev => !prev);
+              playAppSound('click');
+            }}
+            className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
+              hideFinishedInColumns
+                ? 'bg-brand-pink/10 border-brand-pink/50 text-brand-pink font-extrabold shadow-[0_0_12px_rgba(219,39,119,0.05)]'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
+            }`}
+          >
+            <EyeOff className={`h-3.5 w-3.5 ${hideFinishedInColumns ? 'text-brand-pink' : 'text-zinc-550'}`} />
+            <span>Ocultar Prontas</span>
+          </button>
+
           {/* Toggle show/hide archived design items */}
           <button
             type="button"
             onClick={() => setShowRemovedFromDesign(prev => !prev)}
-            className={`py-2 px-3.5 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
+            className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
               showRemovedFromDesign
                 ? 'bg-red-500/10 border-red-500/50 text-red-400 font-extrabold shadow-[0_0_12px_rgba(239,68,68,0.05)]'
                 : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
@@ -456,13 +754,13 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
             ) : (
               <>
                 <Trash className="h-3.5 w-3.5 text-zinc-500" />
-                <span>Ver Ocultos do Design</span>
+                <span>Ver Ocultos</span>
               </>
             )}
           </button>
 
           {/* Search */}
-          <div className="relative w-full md:w-72">
+          <div className="relative w-full xl:w-64">
             <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-zinc-500">
               <Search className="h-3.5 w-3.5" />
             </div>
@@ -542,13 +840,27 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                     </div>
 
                     {sale.dataRetirada && (
-                      <div className={`flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded border w-fit ${
-                        urgent
-                          ? 'text-red-400 bg-red-500/10 border-red-500/20'
-                          : 'text-amber-500 bg-amber-500/5 border-amber-500/10'
-                      }`}>
+                      <div className={`flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-lg border w-fit ${getRetiradaBadgeStyle(sale.dataRetirada)}`}>
                         <Calendar className="h-3 w-3" />
-                        <span>Retirada: {new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                        <span>{getRetiradaBadgeText(sale.dataRetirada, sale.turnoEntrega)}</span>
+                      </div>
+                    )}
+
+                    {/* Designer Notes preview directly on card */}
+                    {sale.observacoesDesign && (
+                      <div className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-2 py-1.5 rounded-lg font-mono line-clamp-2" title={sale.observacoesDesign}>
+                        📝 {sale.observacoesDesign}
+                      </div>
+                    )}
+
+                    {/* Item colors list */}
+                    {sale.itens && sale.itens.some(it => it.corSelecionada) && (
+                      <div className="flex flex-wrap gap-1">
+                        {sale.itens.filter(it => it.corSelecionada).map((it, itemIdx) => (
+                          <span key={itemIdx} className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-850 text-zinc-400">
+                            🎨 {it.corSelecionada}
+                          </span>
+                        ))}
                       </div>
                     )}
 
@@ -638,6 +950,31 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                           : `${sale.quantidade}x ${sale.produtoNome}`}
                       </p>
                     </div>
+
+                    {sale.dataRetirada && (
+                      <div className={`flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-lg border w-fit ${getRetiradaBadgeStyle(sale.dataRetirada)}`}>
+                        <Calendar className="h-3 w-3" />
+                        <span>{getRetiradaBadgeText(sale.dataRetirada, sale.turnoEntrega)}</span>
+                      </div>
+                    )}
+
+                    {/* Designer Notes preview directly on card */}
+                    {sale.observacoesDesign && (
+                      <div className="text-[10px] bg-brand-pink/5 border border-brand-pink/15 text-brand-pink/90 px-2 py-1.5 rounded-lg font-mono line-clamp-2" title={sale.observacoesDesign}>
+                        📝 {sale.observacoesDesign}
+                      </div>
+                    )}
+
+                    {/* Item colors list */}
+                    {sale.itens && sale.itens.some(it => it.corSelecionada) && (
+                      <div className="flex flex-wrap gap-1">
+                        {sale.itens.filter(it => it.corSelecionada).map((it, itemIdx) => (
+                          <span key={itemIdx} className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-brand-pink/10 border border-brand-pink/20 text-brand-pink">
+                            🎨 {it.corSelecionada}
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Metadata: who pulled and date */}
                     {sale.puxadoPor && (
@@ -789,6 +1126,31 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                           : `${sale.quantidade}x ${sale.produtoNome}`}
                       </p>
                     </div>
+
+                    {sale.dataRetirada && (
+                      <div className={`flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-lg border w-fit ${getRetiradaBadgeStyle(sale.dataRetirada)}`}>
+                        <Calendar className="h-3 w-3" />
+                        <span>{getRetiradaBadgeText(sale.dataRetirada, sale.turnoEntrega)}</span>
+                      </div>
+                    )}
+
+                    {/* Designer Notes preview directly on card */}
+                    {sale.observacoesDesign && (
+                      <div className="text-[10px] bg-cyan-500/5 border border-cyan-500/15 text-cyan-400 px-2 py-1.5 rounded-lg font-mono line-clamp-2" title={sale.observacoesDesign}>
+                        📝 {sale.observacoesDesign}
+                      </div>
+                    )}
+
+                    {/* Item colors list */}
+                    {sale.itens && sale.itens.some(it => it.corSelecionada) && (
+                      <div className="flex flex-wrap gap-1">
+                        {sale.itens.filter(it => it.corSelecionada).map((it, itemIdx) => (
+                          <span key={itemIdx} className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-cyan-500/10 border border-cyan-500/20 text-cyan-400">
+                            🎨 {it.corSelecionada}
+                          </span>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Metadata: who pulled and date */}
                     {sale.puxadoPor && (
