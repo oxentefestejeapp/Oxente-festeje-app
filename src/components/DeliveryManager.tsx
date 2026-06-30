@@ -75,18 +75,13 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
 
   // Helper helper to check if a sale is Pending delivery
   const isSalePending = (sale: Sale) => {
-    if (sale.status) {
-      return sale.status === 'Pendente';
-    }
-    // Backward compatibility for old sales
-    const missingValue = sale.valorFaltante !== undefined ? sale.valorFaltante : (sale.total - (sale.valorPago ?? sale.total));
-    return missingValue > 0 || !!sale.numeroPedido;
+    return sale.statusProducao !== 'Entregue';
   };
 
   const isForgottenSale = (sale: Sale) => {
     if (!sale.dataRetirada) return false;
-    // It shouldn't be finalized (i.e. if statusProducao is 'Entregue' or sale.status is 'Concluído' or 'Pago total', it's delivered)
-    if (sale.status === 'Concluído' || sale.status === 'Pago total' || sale.statusProducao === 'Entregue') return false;
+    // It shouldn't be finalized (i.e. if statusProducao is 'Entregue' or sale.status is 'Concluído', it's delivered)
+    if (sale.status === 'Concluído' || sale.statusProducao === 'Entregue') return false;
     
     try {
       const pickupDate = new Date(sale.dataRetirada + 'T12:00:00');
@@ -913,7 +908,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
 
                       onUpdateSale({
                         ...selectedSale,
-                        status: 'Pendente',
+                        status: prevValorFaltante > 0 ? 'Pendente' : 'Pago total',
                         valorPago: prevValorPago,
                         valorFaltante: prevValorFaltante,
                         statusProducao: selectedSale.statusProducaoAntesConcluir || 'Pronto para Retirada',
