@@ -66,6 +66,8 @@ interface StockManagerProps {
 export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdateProduct, onAddProduct, isAdmin = false }: StockManagerProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [productToDelete, setProductToDelete] = useState<string | null>(null);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteError, setDeleteError] = useState(false);
   const [editedStocks, setEditedStocks] = useState<Record<string, number>>({});
   const [highlightedProductId, setHighlightedProductId] = useState<string | null>(null);
 
@@ -1041,19 +1043,44 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                             <AlertTriangle className="h-4 w-4 text-red-400 shrink-0" />
                             <span>Tem certeza que deseja remover este produto? Isso excluirá seus registros de estoque.</span>
                           </div>
+                          <div className="space-y-1">
+                            <input
+                              type="password"
+                              placeholder="Digite a senha de exclusão"
+                              value={deletePassword}
+                              onChange={(e) => {
+                                setDeletePassword(e.target.value);
+                                setDeleteError(false);
+                              }}
+                              className="w-full px-2.5 py-1.5 bg-black border border-red-900/40 rounded-lg text-zinc-150 text-xs placeholder-zinc-650 focus:outline-none focus:border-red-500/60 focus:ring-1 focus:ring-red-550/30 transition-all"
+                            />
+                            {deleteError && (
+                              <p className="text-[10px] font-bold text-red-400">Senha incorreta!</p>
+                            )}
+                          </div>
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => {
-                                handleAddToDeletedHistory(p);
-                                onDeleteProduct(p.id);
-                                setProductToDelete(null);
+                                if (deletePassword === '69apagar69') {
+                                  handleAddToDeletedHistory(p);
+                                  onDeleteProduct(p.id);
+                                  setProductToDelete(null);
+                                  setDeletePassword('');
+                                  setDeleteError(false);
+                                } else {
+                                  setDeleteError(true);
+                                }
                               }}
                               className="flex-1 py-1 px-2.5 bg-red-650 hover:bg-red-700 text-white rounded-md text-xs font-semibold shadow-xs select-none cursor-pointer"
                             >
                               Confirmar
                             </button>
                             <button
-                              onClick={() => setProductToDelete(null)}
+                              onClick={() => {
+                                setProductToDelete(null);
+                                setDeletePassword('');
+                                setDeleteError(false);
+                              }}
                               className="flex-1 py-1 px-2.5 bg-black border border-zinc-800 rounded-md text-zinc-400 text-xs font-semibold hover:bg-zinc-900 cursor-pointer"
                             >
                               Cancelar
