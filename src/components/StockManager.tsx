@@ -746,6 +746,7 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
             placeholder="Pesquisar por nome de brinde ou brinco..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
+            autoComplete="off"
             className="w-full pl-10 pr-4 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-sm"
           />
         </div>
@@ -1045,7 +1046,9 @@ export function StockManager({ products, onUpdateStock, onDeleteProduct, onUpdat
                           </div>
                           <div className="space-y-1">
                             <input
-                              type="password"
+                              type="text"
+                              style={{ WebkitTextSecurity: 'disc', MozTextSecurity: 'disc' } as React.CSSProperties}
+                              autoComplete="new-password"
                               placeholder="Digite a senha de exclusão"
                               value={deletePassword}
                               onChange={(e) => {
