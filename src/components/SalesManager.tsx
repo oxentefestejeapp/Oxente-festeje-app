@@ -444,15 +444,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         const diffDays = diffTime / (1000 * 60 * 60 * 24);
         if (diffDays > 7) return false;
       } else if (dateFilter === 'this_month') {
-        const getBrazilMonthYear = (date: Date) => {
-          return date.toLocaleDateString('pt-BR', {
-            timeZone: 'America/Sao_Paulo',
-            year: 'numeric',
-            month: '2-digit'
-          });
-        };
-        const isSameMonthYear = getBrazilMonthYear(saleDate) === getBrazilMonthYear(now);
-        if (!isSameMonthYear) return false;
+        const diffTime = now.getTime() - saleDate.getTime();
+        const diffDays = diffTime / (1000 * 60 * 60 * 24);
+        if (diffDays > 30 || diffDays < -0.5) return false;
       } else if (dateFilter === 'custom') {
         if (startDateStr) {
           const start = new Date(startDateStr + 'T00:00:00');
@@ -1386,14 +1380,9 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
           const diffDays = diffTime / (1000 * 60 * 60 * 24);
           return diffDays <= 7;
         } else if (dateFilter === 'this_month') {
-          const getBrazilMonthYear = (date: Date) => {
-            return date.toLocaleDateString('pt-BR', {
-              timeZone: 'America/Sao_Paulo',
-              year: 'numeric',
-              month: '2-digit'
-            });
-          };
-          return getBrazilMonthYear(saleDate) === getBrazilMonthYear(now);
+          const diffTime = now.getTime() - saleDate.getTime();
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          return diffDays <= 30 && diffDays >= -0.5;
         } else if (dateFilter === 'custom') {
           if (startDateStr) {
             const start = new Date(startDateStr + 'T00:00:00');
@@ -3350,7 +3339,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
                     {editItens.map((item, idx) => {
                       return (
-                        <div key={item.id || idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs">
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs">
                           {/* Product selection/name */}
                           <div className="flex-1 min-w-0 font-medium">
                             {products && products.length > 0 ? (

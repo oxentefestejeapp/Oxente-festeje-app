@@ -33,7 +33,8 @@ import {
   Tooltip, 
   BarChart, 
   Bar, 
-  Cell
+  Cell,
+  Legend
 } from 'recharts';
 import { Sale, StoreInfo, Product, getProductUnitCost } from '../types';
 import { Receipt } from './Receipt';
@@ -175,14 +176,8 @@ const isDateInFilter = (
     }
     
     if (filter === 'this_month') {
-      const getBrazilMonthYear = (date: Date) => {
-        return date.toLocaleDateString('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          year: 'numeric',
-          month: '2-digit'
-        });
-      };
-      return getBrazilMonthYear(saleDate) === getBrazilMonthYear(now);
+      const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
+      return diffDays <= 30 && diffDays >= -0.5;
     }
     
     if (filter === 'custom') {
@@ -218,6 +213,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
   const [specialFilter, setSpecialFilter] = useState<'all' | 'edited' | 'has_designer' | 'finished_art'>('all');
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
   const [showCharts, setShowCharts] = useState(true);
+  const [auditChartTab, setAuditChartTab] = useState<'daily' | 'monthly'>('daily');
 
   // User Comparison specific filters
   const [compDateFilter, setCompDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('all');
@@ -410,14 +406,8 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
           const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
           if (diffDays > 7 || diffDays < 0) return false;
         } else if (dateFilter === 'this_month') {
-          const getBrazilMonthYear = (date: Date) => {
-            return date.toLocaleDateString('pt-BR', {
-              timeZone: 'America/Sao_Paulo',
-              year: 'numeric',
-              month: '2-digit'
-            });
-          };
-          if (getBrazilMonthYear(saleDate) !== getBrazilMonthYear(now)) return false;
+          const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
+          if (diffDays > 30 || diffDays < -0.5) return false;
         } else if (dateFilter === 'custom') {
           if (startDateStr) {
             const start = new Date(startDateStr + 'T00:00:00');
@@ -511,8 +501,8 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
 
   // Memoized Chart Data
   const chartsData = useMemo(() => {
-    // 1. Faturamento ao longo do tempo (Dias com faturamento)
-    const dailyIncome: Record<string, number> = {};
+    // 1. Faturamento e Lucro ao longo do tempo
+    const dailyStats: Record<string, { faturamento: number; lucro: number }> = {};
     const paymentBreakdown: Record<string, { count: number; value: number }> = {
       'Pix': { count: 0, value: 0 },
       'Dinheiro': { count: 0, value: 0 },
@@ -521,11 +511,42 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
     };
 
     auditLogs.forEach(sale => {
-      // Income over time
+      // Cost calculation
+      let saleCost = 0;
+      if (sale.itens && sale.itens.length > 0) {
+        sale.itens.forEach(item => {
+          const isService = item.produtoId?.endsWith('-service');
+          const matchingProduct = products.find(p => p.id === item.produtoId);
+          const costPrice = (item.produtoId === 'taxacartao-service')
+            ? item.precoUn
+            : (isService
+              ? 0
+              : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : (item.precoUn * 0.62)));
+          // @ts-ignore
+          const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
+          saleCost += costPrice * q;
+        });
+      } else {
+        const isService = sale.produtoId?.endsWith('-service');
+        const matchingProduct = products.find(p => p.id === sale.produtoId);
+        const costPrice = (sale.produtoId === 'taxacartao-service')
+          ? sale.precoUn
+          : (isService
+            ? 0
+            : (matchingProduct ? getProductUnitCost(matchingProduct, sale.precoUn || 0) : ((sale.precoUn || 0) * 0.62)));
+        saleCost += costPrice * sale.quantidade;
+      }
+      const saleProfit = Math.max(0, sale.total - saleCost);
+
+      // Income & Profit over time
       try {
         const dateObj = new Date(sale.data);
         const dayKey = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
-        dailyIncome[dayKey] = (dailyIncome[dayKey] || 0) + sale.total;
+        if (!dailyStats[dayKey]) {
+          dailyStats[dayKey] = { faturamento: 0, lucro: 0 };
+        }
+        dailyStats[dayKey].faturamento += sale.total;
+        dailyStats[dayKey].lucro += saleProfit;
       } catch {}
 
       // Payments
@@ -537,9 +558,10 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
     });
 
     // Format income list sorted chronologically
-    const parsedIncomeList = Object.entries(dailyIncome).map(([date, total]) => ({
+    const parsedIncomeList = Object.entries(dailyStats).map(([date, data]) => ({
       date,
-      total: Number(total.toFixed(2)),
+      faturamento: Number(data.faturamento.toFixed(2)),
+      lucro: Number(data.lucro.toFixed(2)),
     }));
     
     // Sort chronological: standard parse of date to enforce correct chronological flow of timeline
@@ -558,10 +580,88 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
     }));
 
     return {
-      incomeTimeline: parsedIncomeList.slice(-10), // Limit to last 10 record days for premium compact look
+      incomeTimeline: parsedIncomeList.slice(-15), // Show up to last 15 days in comparison
       payments: parsedPaymentList,
     };
-  }, [auditLogs]);
+  }, [auditLogs, products]);
+
+  // Memoized Monthly Stats for the Current Year
+  const monthlyDataCurrentYear = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const monthsNames = [
+      'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun',
+      'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+    ];
+    
+    const monthlyStats = monthsNames.map((name, index) => ({
+      monthIndex: index,
+      name,
+      faturamento: 0,
+      lucro: 0
+    }));
+
+    sales.forEach(sale => {
+      if (sale.status === 'Orçamento') return;
+      
+      try {
+        const saleDate = parseSaleDate(sale.data);
+        if (saleDate.getFullYear() === currentYear) {
+          const monthIndex = saleDate.getMonth();
+          
+          let saleCost = 0;
+          if (sale.itens && sale.itens.length > 0) {
+            sale.itens.forEach(item => {
+              const isService = item.produtoId?.endsWith('-service');
+              const matchingProduct = products.find(p => p.id === item.produtoId);
+              const costPrice = (item.produtoId === 'taxacartao-service')
+                ? item.precoUn
+                : (isService
+                  ? 0
+                  : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : (item.precoUn * 0.62)));
+              // @ts-ignore
+              const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
+              saleCost += costPrice * q;
+            });
+          } else {
+            const isService = sale.produtoId?.endsWith('-service');
+            const matchingProduct = products.find(p => p.id === sale.produtoId);
+            const costPrice = (sale.produtoId === 'taxacartao-service')
+              ? sale.precoUn
+              : (isService
+                ? 0
+                : (matchingProduct ? getProductUnitCost(matchingProduct, sale.precoUn || 0) : ((sale.precoUn || 0) * 0.62)));
+            saleCost += costPrice * sale.quantidade;
+          }
+
+          const saleProfit = Math.max(0, sale.total - saleCost);
+
+          monthlyStats[monthIndex].faturamento += sale.total;
+          monthlyStats[monthIndex].lucro += saleProfit;
+        }
+      } catch (e) {
+        console.error('Error calculating monthly stats:', e);
+      }
+    });
+
+    const faturamentoTotalAno = monthlyStats.reduce((acc, m) => acc + m.faturamento, 0);
+    const lucroTotalAno = monthlyStats.reduce((acc, m) => acc + m.lucro, 0);
+    const margemMediaAno = faturamentoTotalAno > 0 ? (lucroTotalAno / faturamentoTotalAno) * 100 : 0;
+
+    return {
+      monthlyStats: monthlyStats.map(m => ({
+        ...m,
+        faturamento: Number(m.faturamento.toFixed(2)),
+        lucro: Number(m.lucro.toFixed(2))
+      })),
+      faturamentoTotalAno,
+      lucroTotalAno,
+      margemMediaAno
+    };
+  }, [sales, products]);
+
+  const totalArtworkFinishedEver = useMemo(() => {
+    return sales.filter(s => s.statusArte === 'Arte Finalizada').length;
+  }, [sales]);
 
   return (
     <div className="space-y-6 select-text text-zinc-100">
@@ -576,6 +676,65 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
             <h2 className="font-display font-semibold text-lg text-zinc-100">Painel de Auditoria de Vendas</h2>
             <p className="text-xs text-zinc-450 mt-0.5">Rastreabilidade completa de todas as vendas e encomendas registradas pelos usuários</p>
           </div>
+        </div>
+      </div>
+
+      {/* Global Date Filter Bar */}
+      <div className="bg-zinc-900 border border-zinc-805 rounded-2xl p-4.5 flex flex-col md:flex-row gap-4 items-center justify-between shadow-sm select-none">
+        <div className="flex items-center gap-2.5">
+          <div className="p-2 bg-brand-pink/10 rounded-xl border border-brand-pink/20 text-brand-pink shrink-0">
+            <Calendar className="h-4 w-4" />
+          </div>
+          <div>
+            <span className="text-xs font-black uppercase tracking-wider text-zinc-100 block">Filtro de Período Geral 📅</span>
+            <span className="text-[10px] text-zinc-500 font-medium">Ajuste as datas para atualizar todas as métricas, lucros e gráficos abaixo</span>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 bg-black/40 border border-zinc-850 p-1.5 rounded-xl w-full md:w-auto">
+          {(['all', 'today', '7days', 'this_month', 'custom'] as const).map((filter) => (
+            <button
+              type="button"
+              key={filter}
+              onClick={() => {
+                setDateFilter(filter);
+                if (filter !== 'custom') {
+                  setStartDateStr('');
+                  setEndDateStr('');
+                }
+              }}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-all border cursor-pointer select-none ${
+                dateFilter === filter 
+                  ? 'bg-brand-pink/15 border-brand-pink/40 text-brand-pink font-extrabold shadow-sm' 
+                  : 'bg-zinc-950 border-zinc-850/80 text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {filter === 'all' && 'Tudo'}
+              {filter === 'today' && 'Hoje'}
+              {filter === '7days' && 'Últimos 7 Dias'}
+              {filter === 'this_month' && 'Últimos 30 Dias'}
+              {filter === 'custom' && 'Período Personalizado 📅'}
+            </button>
+          ))}
+
+          {dateFilter === 'custom' && (
+            <div className="flex items-center gap-1.5 px-2.5 border-l border-zinc-800 text-xs mt-2 md:mt-0 w-full md:w-auto animate-fade-in">
+              <span className="text-zinc-500 font-bold text-[10px] uppercase">De:</span>
+              <input
+                type="date"
+                value={startDateStr}
+                onChange={(e) => setStartDateStr(e.target.value)}
+                className="px-2 py-1 bg-black border border-zinc-800 rounded-lg text-zinc-250 text-xs font-mono focus:outline-none focus:border-brand-pink"
+              />
+              <span className="text-zinc-500 font-bold text-[10px] uppercase">Até:</span>
+              <input
+                type="date"
+                value={endDateStr}
+                onChange={(e) => setEndDateStr(e.target.value)}
+                className="px-2 py-1 bg-black border border-zinc-800 rounded-lg text-zinc-250 text-xs font-mono focus:outline-none focus:border-brand-pink"
+              />
+            </div>
+          )}
         </div>
       </div>
 
@@ -624,11 +783,11 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
         {/* Metric 5 */}
         <div className="bg-zinc-950 border border-zinc-850/80 rounded-2xl p-4 shadow-xs border-l-emerald-900/40 border-l-2">
           <div className="flex items-center justify-between text-zinc-500 mb-2">
-            <span className="text-[10px] font-black tracking-wider uppercase">Artes Finalizadas</span>
+            <span className="text-[10px] font-black tracking-wider uppercase text-emerald-400">Artes Concluídas (Desde Sempre)</span>
             <Sparkles className="h-4 w-4 text-emerald-450" />
           </div>
-          <div className="text-2xl font-black font-mono text-emerald-450">{filteredMetrics.artworkFinishedCount}</div>
-          <p className="text-[10px] text-zinc-450 mt-1">Designs de pedidos totalmente concluídos</p>
+          <div className="text-2xl font-black font-mono text-emerald-450">{totalArtworkFinishedEver}</div>
+          <p className="text-[10px] text-zinc-450 mt-1">Total acumulado histórico ({filteredMetrics.artworkFinishedCount} no filtro)</p>
         </div>
       </div>
 
@@ -659,56 +818,156 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
               className="overflow-hidden"
             >
               <div className="border-t border-zinc-855 p-5 bg-zinc-950/20 space-y-6">
-                {chartsData.incomeTimeline.length === 0 ? (
-                  <div className="py-8 text-center text-zinc-550 border border-dashed border-zinc-850 rounded-xl">
-                    <Activity className="h-8 w-8 mx-auto mb-2 text-zinc-650" />
-                    <p className="text-xs font-bold">Sem movimentações financeiras no período selecionado.</p>
-                    <p className="text-[10px] mt-0.5 text-zinc-600">Ajuste os filtros de data no topo da página de auditoria.</p>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* AREA CHART - EVOLUÇÃO DO FATURAMENTO */}
-                    <div className="bg-zinc-950/50 p-4 border border-zinc-850/70 rounded-xl space-y-3">
-                      <div>
-                        <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">Evolução do Faturamento (Últimos Dias)</h4>
-                        <p className="text-[10px] text-zinc-500 font-medium font-sans">Histórico dinâmico de vendas acumuladas por dia</p>
+                {/* Seleção de Sub-seção de Gráficos */}
+                <div className="flex items-center gap-1.5 bg-black/30 p-1 border border-zinc-850 rounded-xl max-w-sm select-none">
+                  <button
+                    type="button"
+                    onClick={() => setAuditChartTab('daily')}
+                    className={`flex-1 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer ${
+                      auditChartTab === 'daily'
+                        ? 'bg-brand-pink text-black border-brand-pink/20 shadow-xs'
+                        : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200'
+                    }`}
+                  >
+                    📅 Evolução Diária
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAuditChartTab('monthly')}
+                    className={`flex-1 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer ${
+                      auditChartTab === 'monthly'
+                        ? 'bg-brand-pink text-black border-brand-pink/20 shadow-xs'
+                        : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200'
+                    }`}
+                  >
+                    📊 Comparativo Mensal ({new Date().getFullYear()})
+                  </button>
+                </div>
+
+                {auditChartTab === 'daily' ? (
+                  chartsData.incomeTimeline.length === 0 ? (
+                    <div className="py-8 text-center text-zinc-550 border border-dashed border-zinc-850 rounded-xl">
+                      <Activity className="h-8 w-8 mx-auto mb-2 text-zinc-650" />
+                      <p className="text-xs font-bold">Sem movimentações financeiras no período selecionado.</p>
+                      <p className="text-[10px] mt-0.5 text-zinc-600">Ajuste os filtros de data no topo da página de auditoria.</p>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      {/* AREA CHART - EVOLUÇÃO DO FATURAMENTO */}
+                      <div className="bg-zinc-950/50 p-4 border border-zinc-850/70 rounded-xl space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">Evolução do Faturamento &amp; Lucro</h4>
+                            <p className="text-[10px] text-zinc-500 font-medium font-sans">Histórico dinâmico de faturamento e lucro estimados por dia</p>
+                          </div>
+                          <div className="flex items-center gap-2.5 text-[9px] font-bold">
+                            <span className="flex items-center gap-1 text-emerald-450">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Faturamento
+                            </span>
+                            <span className="flex items-center gap-1 text-brand-pink">
+                              <span className="w-1.5 h-1.5 rounded-full bg-brand-pink"></span> Lucro
+                            </span>
+                          </div>
+                        </div>
+                        <div className="h-[200px] w-full text-[9px] font-mono leading-none">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <AreaChart data={chartsData.incomeTimeline} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
+                              <defs>
+                                <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.2}/>
+                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                </linearGradient>
+                                <linearGradient id="colorLucro" x1="0" y1="0" x2="0" y2="1">
+                                  <stop offset="5%" stopColor="#ff4b82" stopOpacity={0.25}/>
+                                  <stop offset="95%" stopColor="#ff4b82" stopOpacity={0}/>
+                                </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e1e24" />
+                              <XAxis dataKey="date" stroke="#52525b" tickLine={false} />
+                              <YAxis stroke="#52525b" tickLine={false} />
+                              <Tooltip 
+                                contentStyle={{ 
+                                  backgroundColor: '#09090b', 
+                                  border: '1px solid #27272a', 
+                                  borderRadius: '10px',
+                                  color: '#f4f4f5' 
+                                }}
+                              />
+                              <Area type="monotone" dataKey="faturamento" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorTotal)" name="Faturamento R$" />
+                              <Area type="monotone" dataKey="lucro" stroke="#ff4b82" strokeWidth={2.5} fillOpacity={1} fill="url(#colorLucro)" name="Lucro R$" />
+                            </AreaChart>
+                          </ResponsiveContainer>
+                        </div>
                       </div>
-                      <div className="h-[200px] w-full text-[9px] font-mono leading-none">
-                        <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart data={chartsData.incomeTimeline} margin={{ top: 10, right: 10, left: -25, bottom: 5 }}>
-                            <defs>
-                              <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
-                                <stop offset="5%" stopColor="#10b981" stopOpacity={0.25}/>
-                                <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                              </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e1e24" />
-                            <XAxis dataKey="date" stroke="#52525b" tickLine={false} />
-                            <YAxis stroke="#52525b" tickLine={false} />
-                            <Tooltip 
-                              contentStyle={{ 
-                                backgroundColor: '#09090b', 
-                                border: '1px solid #27272a', 
-                                borderRadius: '10px',
-                                color: '#f4f4f5' 
-                              }}
-                              itemStyle={{ color: '#10b981', fontWeight: 'bold' }}
-                            />
-                            <Area type="monotone" dataKey="total" stroke="#10b981" strokeWidth={2} fillOpacity={1} fill="url(#colorTotal)" name="Faturamento R$" />
-                          </AreaChart>
-                        </ResponsiveContainer>
+
+                      {/* BAR CHART - MEIOS DE PAGAMENTO */}
+                      <div className="bg-zinc-950/50 p-4 border border-zinc-850/70 rounded-xl space-y-3">
+                        <div>
+                          <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">Desempenho por Forma de Pagamento</h4>
+                          <p className="text-[10px] text-zinc-500 font-medium font-sans">Balanço do volume financeiro total por canais de pagamento</p>
+                        </div>
+                        <div className="h-[200px] w-full text-[9px] font-mono leading-none">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={chartsData.payments} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e1e24" />
+                              <XAxis dataKey="name" stroke="#52525b" tickLine={false} />
+                              <YAxis stroke="#52525b" tickLine={false} />
+                              <Tooltip
+                                contentStyle={{ 
+                                  backgroundColor: '#09090b', 
+                                  border: '1px solid #27272a', 
+                                  borderRadius: '10px',
+                                  color: '#f4f4f5' 
+                                }}
+                                itemStyle={{ color: '#ec4899', fontWeight: 'bold' }}
+                              />
+                              <Bar dataKey="valor" radius={[6, 6, 0, 0]} name="Valor R$">
+                                {chartsData.payments.map((entry, index) => {
+                                  const colors = ['#ec4899', '#f59e0b', '#3b82f6', '#10b981'];
+                                  return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
+                                })}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                ) : (
+                  // Monthly comparative subsection
+                  <div className="space-y-6">
+                    {/* Indicadores do Ano */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 select-none animate-fadeIn">
+                      <div className="bg-zinc-950/60 p-4 border border-zinc-850 rounded-xl shadow-xs">
+                        <span className="block text-[9px] font-black uppercase tracking-wider text-zinc-500">Faturamento Anual ({new Date().getFullYear()})</span>
+                        <div className="text-xl font-black font-mono text-emerald-450 mt-1">
+                          R$ {monthlyDataCurrentYear.faturamentoTotalAno.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                      <div className="bg-zinc-950/60 p-4 border border-zinc-850 rounded-xl shadow-xs">
+                        <span className="block text-[9px] font-black uppercase tracking-wider text-zinc-500">Lucro Anual Estimado</span>
+                        <div className="text-xl font-black font-mono text-brand-pink mt-1">
+                          R$ {monthlyDataCurrentYear.lucroTotalAno.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                      </div>
+                      <div className="bg-zinc-950/60 p-4 border border-zinc-850 rounded-xl shadow-xs">
+                        <span className="block text-[9px] font-black uppercase tracking-wider text-zinc-500">Margem Comercial Média</span>
+                        <div className="text-xl font-black font-mono text-zinc-200 mt-1">
+                          {monthlyDataCurrentYear.margemMediaAno.toFixed(1)}%
+                        </div>
                       </div>
                     </div>
 
-                    {/* BAR CHART - MEIOS DE PAGAMENTO */}
-                    <div className="bg-zinc-950/50 p-4 border border-zinc-850/70 rounded-xl space-y-3">
+                    {/* Gráfico de Barras Mensal */}
+                    <div className="bg-zinc-950/50 p-5 border border-zinc-850/70 rounded-xl space-y-3">
                       <div>
-                        <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">Desempenho por Forma de Pagamento</h4>
-                        <p className="text-[10px] text-zinc-500 font-medium font-sans">Balanço do volume financeiro total por canais de pagamento</p>
+                        <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wide">Faturamento vs Lucro Estimado Mês a Mês</h4>
+                        <p className="text-[10px] text-zinc-500 font-medium font-sans">Comparativo mensal acumulado do faturamento bruto e lucros líquidos estimados</p>
                       </div>
-                      <div className="h-[200px] w-full text-[9px] font-mono leading-none">
+                      
+                      <div className="h-[280px] w-full text-[9px] font-mono leading-none">
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={chartsData.payments} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                          <BarChart data={monthlyDataCurrentYear.monthlyStats} margin={{ top: 15, right: 10, left: -20, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e1e24" />
                             <XAxis dataKey="name" stroke="#52525b" tickLine={false} />
                             <YAxis stroke="#52525b" tickLine={false} />
@@ -719,14 +978,11 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                                 borderRadius: '10px',
                                 color: '#f4f4f5' 
                               }}
-                              itemStyle={{ color: '#ec4899', fontWeight: 'bold' }}
+                              itemStyle={{ fontWeight: 'bold' }}
                             />
-                            <Bar dataKey="valor" radius={[6, 6, 0, 0]} name="Valor R$">
-                              {chartsData.payments.map((entry, index) => {
-                                const colors = ['#ec4899', '#f59e0b', '#3b82f6', '#10b981'];
-                                return <Cell key={`cell-${index}`} fill={colors[index % colors.length]} />;
-                              })}
-                            </Bar>
+                            <Legend wrapperStyle={{ paddingTop: 10, fontSize: '10px' }} />
+                            <Bar dataKey="faturamento" fill="#10b981" radius={[4, 4, 0, 0]} name="Faturamento (R$)" />
+                            <Bar dataKey="lucro" fill="#ec4899" radius={[4, 4, 0, 0]} name="Lucro Estimado (R$)" />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -1086,83 +1342,6 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-4 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-pink text-xs text-zinc-200 placeholder-zinc-650"
             />
-          </div>
-
-          {/* Quick Date Filters row */}
-          <div className="flex flex-wrap items-center gap-1.5 bg-black/40 border border-zinc-850 p-1.5 rounded-xl">
-            <button
-              type="button"
-              onClick={() => setDateFilter('all')}
-              className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
-                dateFilter === 'all' 
-                  ? 'bg-brand-pink text-black' 
-                  : 'text-zinc-400 hover:text-zinc-100'
-              }`}
-            >
-              Tudo
-            </button>
-            <button
-              type="button"
-              onClick={() => setDateFilter('today')}
-              className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
-                dateFilter === 'today' 
-                  ? 'bg-brand-pink text-black' 
-                  : 'text-zinc-400 hover:text-zinc-100'
-              }`}
-            >
-              Hoje
-            </button>
-            <button
-              type="button"
-              onClick={() => setDateFilter('7days')}
-              className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
-                dateFilter === '7days' 
-                  ? 'bg-brand-pink text-black' 
-                  : 'text-zinc-400 hover:text-zinc-100'
-              }`}
-            >
-              7d
-            </button>
-            <button
-              type="button"
-              onClick={() => setDateFilter('this_month')}
-              className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
-                dateFilter === 'this_month' 
-                  ? 'bg-brand-pink text-black' 
-                  : 'text-zinc-400 hover:text-zinc-100'
-              }`}
-            >
-              Mês
-            </button>
-            <button
-              type="button"
-              onClick={() => setDateFilter('custom')}
-              className={`px-2.5 py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer ${
-                dateFilter === 'custom' 
-                  ? 'bg-brand-pink text-black' 
-                  : 'text-zinc-400 hover:text-zinc-100'
-              }`}
-            >
-              Personalizar
-            </button>
-
-            {dateFilter === 'custom' && (
-              <div className="flex items-center gap-1 px-1.5 border-l border-zinc-800 text-[10px] mt-1.5 md:mt-0 w-full md:w-auto">
-                <input
-                  type="date"
-                  value={startDateStr}
-                  onChange={(e) => setStartDateStr(e.target.value)}
-                  className="px-1.5 py-0.5 bg-black border border-zinc-800 rounded text-zinc-200 text-[10px]"
-                />
-                <span className="text-zinc-500">a</span>
-                <input
-                  type="date"
-                  value={endDateStr}
-                  onChange={(e) => setEndDateStr(e.target.value)}
-                  className="px-1.5 py-0.5 bg-black border border-zinc-800 rounded text-zinc-200 text-[10px]"
-                />
-              </div>
-            )}
           </div>
         </div>
 

@@ -214,7 +214,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
           <tbody>
             {sale.itens && sale.itens.length > 0 ? (
               sale.itens.map((item, idx) => (
-                <tr key={item.id || idx} className="border-b border-dashed border-black/60 text-xs">
+                <tr key={idx} className="border-b border-dashed border-black/60 text-xs">
                   <td className="py-2 max-w-[150px] break-words align-top select-text">
                     <span className="font-bold text-black">{item.produtoNome}</span>
                     {item.corSelecionada && (

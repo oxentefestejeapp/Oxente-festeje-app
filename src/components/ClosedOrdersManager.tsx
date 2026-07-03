@@ -521,6 +521,22 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
     }).length;
   }, [sales]);
 
+  const totalFinishedEverD1 = useMemo(() => {
+    return sales.filter(s => {
+      if (s.status === 'Orçamento') return false;
+      if (s.designerId !== 'designer1') return false;
+      return s.statusArte === 'Arte Finalizada';
+    }).length;
+  }, [sales]);
+
+  const totalFinishedEverD2 = useMemo(() => {
+    return sales.filter(s => {
+      if (s.status === 'Orçamento') return false;
+      if (s.designerId !== 'designer2') return false;
+      return s.statusArte === 'Arte Finalizada';
+    }).length;
+  }, [sales]);
+
   return (
     <div className="space-y-6">
       
@@ -621,6 +637,13 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                     {monthlyFinishedD1} concluintes
                   </span>
                 </div>
+                {/* Historic Deliveries */}
+                <div className="flex justify-between items-center text-[10px] pt-1">
+                  <span className="text-zinc-500 font-bold font-semibold text-brand-pink/90">Artes Totais (Desde Sempre):</span>
+                  <span className="text-brand-pink font-extrabold font-mono">
+                    {totalFinishedEverD1} concluídas 🎨
+                  </span>
+                </div>
                 {/* Completion general */}
                 <div className="flex justify-between items-center text-[9px] pt-1 border-t border-zinc-900">
                   <span className="text-zinc-500">Workspace Geral:</span>
@@ -674,6 +697,13 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                   <span className="text-zinc-500 font-bold">Entregas no Mês:</span>
                   <span className="text-zinc-100 font-extrabold font-mono">
                     {monthlyFinishedD2} concluintes
+                  </span>
+                </div>
+                {/* Historic Deliveries */}
+                <div className="flex justify-between items-center text-[10px] pt-1">
+                  <span className="text-zinc-500 font-bold font-semibold text-cyan-400/90">Artes Totais (Desde Sempre):</span>
+                  <span className="text-cyan-400 font-extrabold font-mono">
+                    {totalFinishedEverD2} concluídas 🎨
                   </span>
                 </div>
                 {/* Completion general */}
@@ -955,7 +985,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                 </div>
               </div>
 
-              <div className="space-y-3.5 max-h-[580px] overflow-y-auto pr-1">
+              <div className="space-y-3.5 max-h-[580px] overflow-y-auto pr-1 pt-2.5">
             {designer1Orders.length === 0 ? (
               <div className="p-8 text-center bg-zinc-900/20 border border-dashed border-zinc-850 rounded-xl text-zinc-500 text-[10.5px]">
                 Nenhum pedido com o Designer 1.
@@ -968,14 +998,20 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                   <div 
                     key={sale.id}
                     onClick={() => handleSelectSaleForReceipt(sale)}
-                    className={`border rounded-xl p-4 space-y-3 transition-all cursor-pointer relative group ${
+                    className={`border border-l-4 rounded-xl p-4 space-y-3 transition-all cursor-pointer relative group ${
                       isFinished 
-                        ? 'bg-emerald-950/10 border-emerald-500/20 hover:border-emerald-500/40' 
+                        ? 'bg-emerald-950/10 border-brand-pink/20 border-l-emerald-500 hover:border-emerald-500/40 shadow-[0_0_10px_rgba(236,72,153,0.02)]' 
                         : delayInfo.isDelayed
-                          ? 'bg-red-950/10 border-red-500/35 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
-                          : 'bg-zinc-950 border-zinc-850 hover:border-brand-pink/40'
+                          ? 'bg-red-950/10 border-brand-pink/20 border-l-red-500 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
+                          : 'bg-gradient-to-br from-zinc-950 to-brand-pink/[0.02] border-brand-pink/25 border-l-brand-pink hover:border-brand-pink/40 shadow-[0_0_10px_rgba(236,72,153,0.03)]'
                     }`}
                   >
+                    {/* Floating Designer Badge */}
+                    <div className="absolute top-0 right-4 -translate-y-1/2 flex items-center gap-1 bg-brand-pink text-black text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-md select-none z-10">
+                      <span className="w-1.5 h-1.5 rounded-full bg-black/40 animate-pulse"></span>
+                      <span>MESA D1</span>
+                    </div>
+
                     <div className="flex justify-between items-center">
                       <span className="text-[10px] font-mono font-bold bg-zinc-900 border border-zinc-800 text-zinc-450 px-1.5 py-0.5 rounded">
                         Pedido #{sale.numeroPedido || sale.id.substring(0, 5)}
@@ -1166,7 +1202,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
             </div>
           </div>
 
-          <div className="space-y-3.5 max-h-[580px] overflow-y-auto pr-1">
+          <div className="space-y-3.5 max-h-[580px] overflow-y-auto pr-1 pt-2.5">
             {designer2Orders.length === 0 ? (
               <div className="p-8 text-center bg-zinc-900/20 border border-dashed border-zinc-850 rounded-xl text-zinc-500 text-[10.5px]">
                 Nenhum pedido com o Designer 2.
@@ -1179,14 +1215,20 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                   <div 
                     key={sale.id}
                     onClick={() => handleSelectSaleForReceipt(sale)}
-                    className={`border rounded-xl p-4 space-y-3 transition-all cursor-pointer relative group ${
+                    className={`border border-l-4 rounded-xl p-4 space-y-3 transition-all cursor-pointer relative group ${
                       isFinished 
-                        ? 'bg-emerald-950/10 border-emerald-500/20 hover:border-emerald-500/40' 
+                        ? 'bg-emerald-950/10 border-cyan-500/20 border-l-emerald-500 hover:border-emerald-500/40 shadow-[0_0_10px_rgba(6,182,212,0.02)]' 
                         : delayInfo.isDelayed
-                          ? 'bg-red-950/10 border-red-500/35 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
-                          : 'bg-zinc-950 border-zinc-850 hover:border-cyan-400/40'
+                          ? 'bg-red-950/10 border-cyan-500/20 border-l-red-500 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
+                          : 'bg-gradient-to-br from-zinc-950 to-cyan-500/[0.02] border-cyan-500/25 border-l-cyan-400 hover:border-cyan-400/40 shadow-[0_0_10px_rgba(6,182,212,0.03)]'
                     }`}
                   >
+                    {/* Floating Designer Badge */}
+                    <div className="absolute top-0 right-4 -translate-y-1/2 flex items-center gap-1 bg-cyan-400 text-black text-[8px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-md select-none z-10">
+                      <span className="w-1.5 h-1.5 rounded-full bg-black/40 animate-pulse"></span>
+                      <span>Mesa D2</span>
+                    </div>
+
                     <div className="flex justify-between items-center">
                       <span className="text-[10px] font-mono font-bold bg-zinc-900 border border-zinc-800 text-zinc-450 px-1.5 py-0.5 rounded">
                         Pedido #{sale.numeroPedido || sale.id.substring(0, 5)}
@@ -1746,7 +1788,7 @@ ${produtosTexto}`;
                   <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
                     {editItens.map((item, idx) => {
                       return (
-                        <div key={item.id || idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs">
+                        <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs">
                           {/* Product selection/name */}
                           <div className="flex-1 min-w-0">
                             {products && products.length > 0 ? (
