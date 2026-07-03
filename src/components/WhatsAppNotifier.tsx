@@ -143,7 +143,7 @@ Sábados de 8:30h às 12h
 
   return (
     <AnimatePresence>
-      <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto select-none">
+      <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-start justify-center z-50 p-4 overflow-y-auto select-none py-6 sm:py-12">
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}

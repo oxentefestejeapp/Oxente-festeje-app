@@ -1266,7 +1266,7 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
       {/* Interactive Receipt Preview Modal Overlay */}
       {viewingSale && (
         <div 
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs overflow-y-auto no-print"
+          className="fixed inset-0 z-50 flex items-start justify-center p-4 bg-black/80 backdrop-blur-xs overflow-y-auto no-print py-6 sm:py-12"
           onClick={() => setViewingSale(null)}
         >
           <div 

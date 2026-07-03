@@ -664,15 +664,17 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
              let saleCost = 0;
              if (sale.itens && sale.itens.length > 0) {
                sale.itens.forEach(item => {
+                 const isService = item.produtoId?.endsWith('-service');
                  const matchingProduct = products.find(p => p.id === item.produtoId);
-                 const costPrice = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62);
+                 const costPrice = (item.produtoId === 'taxacartao-service') ? item.precoUn : (isService ? 0 : (matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62)));
                  // @ts-ignore
                  const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
                  saleCost += costPrice * q;
                });
              } else {
+               const isService = sale.produtoId?.endsWith('-service');
                const matchingProduct = products.find(p => p.id === sale.produtoId);
-               const costPrice = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62);
+               const costPrice = (sale.produtoId === 'taxacartao-service') ? sale.precoUn : (isService ? 0 : (matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62)));
                saleCost += costPrice * sale.quantidade;
              }
              const saleProfit = Math.max(0, sale.total - saleCost);
@@ -1382,15 +1384,17 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
       let saleCost = 0;
       if (sale.itens && sale.itens.length > 0) {
         sale.itens.forEach(item => {
+          const isService = item.produtoId?.endsWith('-service');
           const matchingProduct = products.find(p => p.id === item.produtoId);
-          const costPrice = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62);
+          const costPrice = (item.produtoId === 'taxacartao-service') ? item.precoUn : (isService ? 0 : (matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62)));
           // @ts-ignore
           const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
           saleCost += costPrice * q;
         });
       } else {
+        const isService = sale.produtoId?.endsWith('-service');
         const matchingProduct = products.find(p => p.id === sale.produtoId);
-        const costPrice = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62);
+        const costPrice = (sale.produtoId === 'taxacartao-service') ? sale.precoUn : (isService ? 0 : (matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62)));
         saleCost += costPrice * sale.quantidade;
       }
       totalEstimatedCost += saleCost;
@@ -3238,7 +3242,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
       {/* Edit Sale Modal Overlay */}
       <AnimatePresence>
         {editingSale && (
-          <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4 overflow-y-auto select-none">
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-start justify-center z-50 p-4 overflow-y-auto select-none py-6 sm:py-12">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}

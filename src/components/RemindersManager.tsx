@@ -1829,7 +1829,7 @@ Dê desconto para os seus amigos e ganhe até 15% de desconto total na sua próx
       {/* Slide-over or Modal view for simulated thermal Receipt */}
       <AnimatePresence>
         {selectedSaleForReceipt && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 overflow-y-auto backdrop-blur-[1px]">
+          <div className="fixed inset-0 bg-black/80 flex items-start justify-center p-4 z-50 overflow-y-auto backdrop-blur-[1px] py-6 sm:py-12">
             <motion.div
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
