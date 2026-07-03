@@ -134,7 +134,20 @@ export default function App() {
                      (firebaseUser?.displayName && firebaseUser.displayName.toLowerCase().includes('ana clara'));
 
   // 2. Core Persistent State
-  const [products, setProducts] = useState<Product[]>([]);
+  const [products, setRawProducts] = useState<Product[]>([]);
+  const setProducts = (value: Product[] | ((prev: Product[]) => Product[])) => {
+    setRawProducts((current) => {
+      const next = typeof value === 'function' ? value(current) : value;
+      const seen = new Set<string>();
+      return next.filter(p => {
+        if (!p || !p.id) return false;
+        if (seen.has(p.id)) return false;
+        seen.add(p.id);
+        return true;
+      });
+    });
+  };
+
   const [showOnlyCriticalInStock, setShowOnlyCriticalInStock] = useState(false);
   const pendingStockUpdates = useRef<Record<string, number>>({});
   const pendingProducts = useRef<Record<string, Product>>((() => {
@@ -145,7 +158,20 @@ export default function App() {
       return {};
     }
   })());
-  const [sales, setSales] = useState<Sale[]>([]);
+
+  const [sales, setRawSales] = useState<Sale[]>([]);
+  const setSales = (value: Sale[] | ((prev: Sale[]) => Sale[])) => {
+    setRawSales((current) => {
+      const next = typeof value === 'function' ? value(current) : value;
+      const seen = new Set<string>();
+      return next.filter(s => {
+        if (!s || !s.id) return false;
+        if (seen.has(s.id)) return false;
+        seen.add(s.id);
+        return true;
+      });
+    });
+  };
 
   const productsRef = useRef<Product[]>([]);
   const salesRef = useRef<Sale[]>([]);
