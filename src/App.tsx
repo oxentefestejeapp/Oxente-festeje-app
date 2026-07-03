@@ -2820,7 +2820,7 @@ export default function App() {
             )}
 
             {activeTab === 'auditoria' && isAdmin && (
-              <SalesAudit sales={sales} storeInfo={storeInfo} onUpdateSale={handleUpdateSale} />
+              <SalesAudit sales={sales} products={products} storeInfo={storeInfo} onUpdateSale={handleUpdateSale} />
             )}
 
             {activeTab === 'instalar_app' && !isAdmin && isAnaClara && (

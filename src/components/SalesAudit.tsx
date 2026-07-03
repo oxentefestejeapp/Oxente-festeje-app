@@ -35,7 +35,7 @@ import {
   Bar, 
   Cell
 } from 'recharts';
-import { Sale, StoreInfo } from '../types';
+import { Sale, StoreInfo, Product } from '../types';
 import { Receipt } from './Receipt';
 
 const formatAuditDate = (dateStr?: string) => {
@@ -154,10 +154,19 @@ const isDateInFilter = (
     const saleDate = new Date(dateStr);
     const now = new Date();
 
+    const getBrazilDateString = (date: Date) => {
+      return date.toLocaleDateString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+    };
+
     if (filter === 'all') return true;
     
     if (filter === 'today') {
-      return saleDate.toDateString() === now.toDateString();
+      return getBrazilDateString(saleDate) === getBrazilDateString(now);
     }
     
     if (filter === '7days') {
@@ -166,7 +175,14 @@ const isDateInFilter = (
     }
     
     if (filter === 'this_month') {
-      return saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear();
+      const getBrazilMonthYear = (date: Date) => {
+        return date.toLocaleDateString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          year: 'numeric',
+          month: '2-digit'
+        });
+      };
+      return getBrazilMonthYear(saleDate) === getBrazilMonthYear(now);
     }
     
     if (filter === 'custom') {
@@ -188,11 +204,12 @@ const isDateInFilter = (
 
 interface SalesAuditProps {
   sales: Sale[];
+  products: Product[];
   storeInfo: StoreInfo;
   onUpdateSale?: (updatedSale: Sale) => void;
 }
 
-export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) {
+export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: SalesAuditProps) {
   const [searchTerm, setSearchTerm] = useState('');
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('all');
   const [startDateStr, setStartDateStr] = useState('');
@@ -378,15 +395,29 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
         const saleDate = parseSaleDate(targetDateStr);
         const now = new Date();
 
+        const getBrazilDateString = (date: Date) => {
+          return date.toLocaleDateString('pt-BR', {
+            timeZone: 'America/Sao_Paulo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          });
+        };
+
         if (dateFilter === 'today') {
-          if (saleDate.toDateString() !== now.toDateString()) return false;
+          if (getBrazilDateString(saleDate) !== getBrazilDateString(now)) return false;
         } else if (dateFilter === '7days') {
           const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
           if (diffDays > 7 || diffDays < 0) return false;
         } else if (dateFilter === 'this_month') {
-          if (saleDate.getMonth() !== now.getMonth() || saleDate.getFullYear() !== now.getFullYear()) {
-            return false;
-          }
+          const getBrazilMonthYear = (date: Date) => {
+            return date.toLocaleDateString('pt-BR', {
+              timeZone: 'America/Sao_Paulo',
+              year: 'numeric',
+              month: '2-digit'
+            });
+          };
+          if (getBrazilMonthYear(saleDate) !== getBrazilMonthYear(now)) return false;
         } else if (dateFilter === 'custom') {
           if (startDateStr) {
             const start = new Date(startDateStr + 'T00:00:00');
@@ -430,22 +461,59 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
   // Overall statistics for the filtered selection
   const filteredMetrics = useMemo(() => {
     let totalValue = 0;
+    let totalEstimatedCost = 0;
     let editedCount = 0;
     let artworkFinishedCount = 0;
     
-    auditLogs.forEach(s => {
-      totalValue += s.total;
-      if (s.foiAlterado) editedCount++;
-      if (s.statusArte === 'Arte Finalizada') artworkFinishedCount++;
+    auditLogs.forEach(sale => {
+      totalValue += sale.total;
+      if (sale.foiAlterado) editedCount++;
+      if (sale.statusArte === 'Arte Finalizada') artworkFinishedCount++;
+
+      // Cost calculation
+      let saleCost = 0;
+      if (sale.itens && sale.itens.length > 0) {
+        sale.itens.forEach(item => {
+          const isService = item.produtoId?.endsWith('-service');
+          const matchingProduct = products.find(p => p.id === item.produtoId);
+          const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62);
+          const costPrice = (item.produtoId === 'taxacartao-service')
+            ? item.precoUn
+            : (isService
+              ? 0
+              : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
+                ? matchingProduct.precoCusto * Math.min(1, item.precoUn / matchingProduct.preco)
+                : baseCost));
+          // @ts-ignore
+          const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
+          saleCost += costPrice * q;
+        });
+      } else {
+        const isService = sale.produtoId?.endsWith('-service');
+        const matchingProduct = products.find(p => p.id === sale.produtoId);
+        const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62);
+        const costPrice = (sale.produtoId === 'taxacartao-service')
+          ? sale.precoUn
+          : (isService
+            ? 0
+            : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
+              ? matchingProduct.precoCusto * Math.min(1, sale.precoUn / matchingProduct.preco)
+              : baseCost));
+        saleCost += costPrice * sale.quantidade;
+      }
+      totalEstimatedCost += saleCost;
     });
+
+    const totalNetProfit = Math.max(0, totalValue - totalEstimatedCost);
 
     return {
       count: auditLogs.length,
       totalValue,
+      totalProfit: totalNetProfit,
       editedCount,
       artworkFinishedCount
     };
-  }, [auditLogs]);
+  }, [auditLogs, products]);
 
   // Memoized Chart Data
   const chartsData = useMemo(() => {
@@ -518,7 +586,7 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 select-none">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 select-none">
         {/* Metric 1 */}
         <div className="bg-zinc-950 border border-zinc-850/80 rounded-2xl p-4 shadow-xs">
           <div className="flex items-center justify-between text-zinc-500 mb-2">
@@ -539,7 +607,17 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
           <p className="text-[10px] text-zinc-450 mt-1">Valor somado das vendas ativas no filtro</p>
         </div>
 
-        {/* Metric 3 */}
+        {/* Metric 3 - Lucro no Filtro */}
+        <div className="bg-zinc-950 border border-zinc-850/80 rounded-2xl p-4 shadow-xs border-l-brand-pink/40 border-l-2">
+          <div className="flex items-center justify-between text-zinc-500 mb-2">
+            <span className="text-[10px] font-black tracking-wider uppercase">Lucro no Filtro</span>
+            <DollarSign className="h-4 w-4 text-brand-pink" />
+          </div>
+          <div className="text-2xl font-black font-mono text-brand-pink">R$ {filteredMetrics.totalProfit.toFixed(2)}</div>
+          <p className="text-[10px] text-zinc-450 mt-1">Lucro estimado líquido das vendas no filtro</p>
+        </div>
+
+        {/* Metric 4 */}
         <div className="bg-zinc-950 border border-zinc-850/80 rounded-2xl p-4 shadow-xs border-l-red-900/40 border-l-2">
           <div className="flex items-center justify-between text-zinc-500 mb-2">
             <span className="text-[10px] font-black tracking-wider uppercase">Recibos Alterados</span>
@@ -549,7 +627,7 @@ export function SalesAudit({ sales, storeInfo, onUpdateSale }: SalesAuditProps) 
           <p className="text-[10px] text-zinc-450 mt-1">Recibos editados após criação original</p>
         </div>
 
-        {/* Metric 4 */}
+        {/* Metric 5 */}
         <div className="bg-zinc-950 border border-zinc-850/80 rounded-2xl p-4 shadow-xs border-l-emerald-900/40 border-l-2">
           <div className="flex items-center justify-between text-zinc-500 mb-2">
             <span className="text-[10px] font-black tracking-wider uppercase">Artes Finalizadas</span>

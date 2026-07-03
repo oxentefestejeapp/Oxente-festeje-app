@@ -396,6 +396,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'yesterday' | '7days' | 'this_month' | 'custom'>('all');
   const [startDateStr, setStartDateStr] = useState('');
   const [endDateStr, setEndDateStr] = useState('');
+  const [showOldDeliveredSales, setShowOldDeliveredSales] = useState(false);
 
   // State for green closed orders metric start date (custom selector)
   const [metricStartDate, setMetricStartDate] = useState<string>(() => {
@@ -421,20 +422,36 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       const saleDate = new Date(sale.data);
       const now = new Date();
       
+      const getBrazilDateString = (date: Date) => {
+        return date.toLocaleDateString('pt-BR', {
+          timeZone: 'America/Sao_Paulo',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+      };
+      
       if (dateFilter === 'today') {
-        const isToday = saleDate.toDateString() === now.toDateString();
+        const isToday = getBrazilDateString(saleDate) === getBrazilDateString(now);
         if (!isToday) return false;
       } else if (dateFilter === 'yesterday') {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
-        const isYesterday = saleDate.toDateString() === yesterday.toDateString();
+        const isYesterday = getBrazilDateString(saleDate) === getBrazilDateString(yesterday);
         if (!isYesterday) return false;
       } else if (dateFilter === '7days') {
         const diffTime = Math.abs(now.getTime() - saleDate.getTime());
         const diffDays = diffTime / (1000 * 60 * 60 * 24);
         if (diffDays > 7) return false;
       } else if (dateFilter === 'this_month') {
-        const isSameMonthYear = saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear();
+        const getBrazilMonthYear = (date: Date) => {
+          return date.toLocaleDateString('pt-BR', {
+            timeZone: 'America/Sao_Paulo',
+            year: 'numeric',
+            month: '2-digit'
+          });
+        };
+        const isSameMonthYear = getBrazilMonthYear(saleDate) === getBrazilMonthYear(now);
         if (!isSameMonthYear) return false;
       } else if (dateFilter === 'custom') {
         if (startDateStr) {
@@ -465,11 +482,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     return matchName || matchProduct || matchOrderNum || matchPhone || matchItens;
   });
 
-  // Filter out delivered sales that are older than 15 days from the list, unless there is an active search term
+  // Filter out delivered sales that are older than 15 days from the list, unless there is an active search term, an active date filter other than 'all', or showOldDeliveredSales is checked
   const displayedSales = useMemo(() => {
     const term = salesSearchTerm.toLowerCase().trim();
     return filteredSales.filter(sale => {
-      if (!term) {
+      if (!term && dateFilter === 'all' && !showOldDeliveredSales) {
         if (sale.statusProducao === 'Entregue') {
           try {
             const saleDate = new Date(sale.data);
@@ -484,7 +501,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       }
       return true;
     });
-  }, [filteredSales, salesSearchTerm]);
+  }, [filteredSales, salesSearchTerm, dateFilter, showOldDeliveredSales]);
 
   // Filter and Sort products that are available in stock (simplified to alphabetical order)
   const availableProducts = useMemo(() => {
@@ -646,7 +663,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
-      const dateStr = d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+      const dateStr = d.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' });
       dataMap[dateStr] = { value: 0, profit: 0 };
     }
     
@@ -656,7 +673,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       try {
         const saleDate = new Date(sale.data);
         if (!isNaN(saleDate.getTime())) {
-          const dateStr = saleDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+          const dateStr = saleDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' });
           if (dataMap[dateStr] !== undefined) {
              dataMap[dateStr].value += sale.total;
 
@@ -666,7 +683,14 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
                sale.itens.forEach(item => {
                  const isService = item.produtoId?.endsWith('-service');
                  const matchingProduct = products.find(p => p.id === item.produtoId);
-                 const costPrice = (item.produtoId === 'taxacartao-service') ? item.precoUn : (isService ? 0 : (matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62)));
+                 const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62);
+                 const costPrice = (item.produtoId === 'taxacartao-service')
+                   ? item.precoUn
+                   : (isService
+                     ? 0
+                     : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
+                       ? matchingProduct.precoCusto * Math.min(1, item.precoUn / matchingProduct.preco)
+                       : baseCost));
                  // @ts-ignore
                  const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
                  saleCost += costPrice * q;
@@ -674,7 +698,14 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
              } else {
                const isService = sale.produtoId?.endsWith('-service');
                const matchingProduct = products.find(p => p.id === sale.produtoId);
-               const costPrice = (sale.produtoId === 'taxacartao-service') ? sale.precoUn : (isService ? 0 : (matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62)));
+               const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62);
+               const costPrice = (sale.produtoId === 'taxacartao-service')
+                 ? sale.precoUn
+                 : (isService
+                   ? 0
+                   : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
+                     ? matchingProduct.precoCusto * Math.min(1, sale.precoUn / matchingProduct.preco)
+                     : baseCost));
                saleCost += costPrice * sale.quantidade;
              }
              const saleProfit = Math.max(0, sale.total - saleCost);
@@ -694,11 +725,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }));
   };
 
-  const chartData = useMemo(() => getDailyRevenueData(billingPeriod), [sales, billingPeriod]);
+  const chartData = useMemo(() => getDailyRevenueData(billingPeriod), [sales, billingPeriod, products]);
 
   // Premium widgets metrics
   const todayRevenue = useMemo(() => {
-    const todayStr = new Date().toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+    const todayStr = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' });
     const match = chartData.find(d => d.date === todayStr);
     return match ? match.value : 0;
   }, [chartData]);
@@ -1341,18 +1372,34 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
         const saleDate = new Date(sale.data);
         const now = new Date();
         
+        const getBrazilDateString = (date: Date) => {
+          return date.toLocaleDateString('pt-BR', {
+            timeZone: 'America/Sao_Paulo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit'
+          });
+        };
+        
         if (dateFilter === 'today') {
-          return saleDate.toDateString() === now.toDateString();
+          return getBrazilDateString(saleDate) === getBrazilDateString(now);
         } else if (dateFilter === 'yesterday') {
           const yesterday = new Date();
           yesterday.setDate(yesterday.getDate() - 1);
-          return saleDate.toDateString() === yesterday.toDateString();
+          return getBrazilDateString(saleDate) === getBrazilDateString(yesterday);
         } else if (dateFilter === '7days') {
           const diffTime = Math.abs(now.getTime() - saleDate.getTime());
           const diffDays = diffTime / (1000 * 60 * 60 * 24);
           return diffDays <= 7;
         } else if (dateFilter === 'this_month') {
-          return saleDate.getMonth() === now.getMonth() && saleDate.getFullYear() === now.getFullYear();
+          const getBrazilMonthYear = (date: Date) => {
+            return date.toLocaleDateString('pt-BR', {
+              timeZone: 'America/Sao_Paulo',
+              year: 'numeric',
+              month: '2-digit'
+            });
+          };
+          return getBrazilMonthYear(saleDate) === getBrazilMonthYear(now);
         } else if (dateFilter === 'custom') {
           if (startDateStr) {
             const start = new Date(startDateStr + 'T00:00:00');
@@ -1386,7 +1433,14 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
         sale.itens.forEach(item => {
           const isService = item.produtoId?.endsWith('-service');
           const matchingProduct = products.find(p => p.id === item.produtoId);
-          const costPrice = (item.produtoId === 'taxacartao-service') ? item.precoUn : (isService ? 0 : (matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62)));
+          const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62);
+          const costPrice = (item.produtoId === 'taxacartao-service')
+            ? item.precoUn
+            : (isService
+              ? 0
+              : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
+                ? matchingProduct.precoCusto * Math.min(1, item.precoUn / matchingProduct.preco)
+                : baseCost));
           // @ts-ignore
           const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
           saleCost += costPrice * q;
@@ -1394,7 +1448,14 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
       } else {
         const isService = sale.produtoId?.endsWith('-service');
         const matchingProduct = products.find(p => p.id === sale.produtoId);
-        const costPrice = (sale.produtoId === 'taxacartao-service') ? sale.precoUn : (isService ? 0 : (matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62)));
+        const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62);
+        const costPrice = (sale.produtoId === 'taxacartao-service')
+          ? sale.precoUn
+          : (isService
+            ? 0
+            : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
+              ? matchingProduct.precoCusto * Math.min(1, sale.precoUn / matchingProduct.preco)
+              : baseCost));
         saleCost += costPrice * sale.quantidade;
       }
       totalEstimatedCost += saleCost;
@@ -2966,6 +3027,21 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   </div>
                 )}
               </div>
+
+              {/* Optional Show Old Delivered Sales Toggle */}
+              {dateFilter === 'all' && (
+                <div className="flex items-center pl-1.5 select-none animate-fade-in">
+                  <label className="flex items-center gap-2 cursor-pointer group text-[10px] font-bold text-zinc-450 hover:text-zinc-200 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={showOldDeliveredSales}
+                      onChange={(e) => setShowOldDeliveredSales(e.target.checked)}
+                      className="rounded border-zinc-800 bg-black text-brand-pink focus:ring-brand-pink/35 h-3.5 w-3.5 cursor-pointer accent-brand-pink"
+                    />
+                    <span>Exibir entregues antigos (+15 dias) no histórico completo</span>
+                  </label>
+                </div>
+              )}
 
               {/* Financial Performance Overview for main registered user only */}
               {isAdmin && (
