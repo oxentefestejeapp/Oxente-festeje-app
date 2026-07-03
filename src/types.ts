@@ -127,16 +127,48 @@ export interface InstagramPost {
 }
 
 export function getProductUnitPrice(product: Product, quantity: number): number {
-  if (!product.faixasPreco || product.faixasPreco.length === 0) {
-    return product.preco;
-  }
-  let price = product.preco;
-  let highestMinQty = 0;
-  for (const f of product.faixasPreco) {
-    if (quantity >= f.quantidadeMinima && f.quantidadeMinima > highestMinQty) {
-      price = f.preco;
-      highestMinQty = f.quantidadeMinima;
+  let price = product.preco || 0;
+  if (product.faixasPreco && product.faixasPreco.length > 0) {
+    // Default to the tier with the lowest minimum quantity
+    let lowestMinQtyTier = product.faixasPreco[0];
+    for (const f of product.faixasPreco) {
+      if (f.quantidadeMinima < lowestMinQtyTier.quantidadeMinima) {
+        lowestMinQtyTier = f;
+      }
+    }
+    price = lowestMinQtyTier.preco;
+
+    let highestMinQty = 0;
+    for (const f of product.faixasPreco) {
+      if (quantity >= f.quantidadeMinima && f.quantidadeMinima > highestMinQty) {
+        price = f.preco;
+        highestMinQty = f.quantidadeMinima;
+      }
     }
   }
   return price;
+}
+
+export function getProductUnitCost(product: Product, unitPrice: number): number {
+  if (product.precoCusto === undefined || product.precoCusto === null) {
+    return unitPrice * 0.62; // fallback
+  }
+  
+  // If the product has progressive prices, let's find the lowest minimum quantity
+  if (product.faixasPreco && product.faixasPreco.length > 0) {
+    let lowestMinQty = product.faixasPreco[0].quantidadeMinima;
+    for (const f of product.faixasPreco) {
+      if (f.quantidadeMinima < lowestMinQty) {
+        lowestMinQty = f.quantidadeMinima;
+      }
+    }
+    
+    // If the registered precoCusto is higher than or equal to the selling unitPrice,
+    // it's definitely a batch cost! We divide it by the lowestMinQty to get the unit cost.
+    if (lowestMinQty > 1 && product.precoCusto >= unitPrice) {
+      return product.precoCusto / lowestMinQty;
+    }
+  }
+  
+  return product.precoCusto;
 }

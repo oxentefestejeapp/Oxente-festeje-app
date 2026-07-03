@@ -35,7 +35,7 @@ import {
   Bar, 
   Cell
 } from 'recharts';
-import { Sale, StoreInfo, Product } from '../types';
+import { Sale, StoreInfo, Product, getProductUnitCost } from '../types';
 import { Receipt } from './Receipt';
 
 const formatAuditDate = (dateStr?: string) => {
@@ -476,14 +476,11 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
         sale.itens.forEach(item => {
           const isService = item.produtoId?.endsWith('-service');
           const matchingProduct = products.find(p => p.id === item.produtoId);
-          const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62);
           const costPrice = (item.produtoId === 'taxacartao-service')
             ? item.precoUn
             : (isService
               ? 0
-              : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
-                ? matchingProduct.precoCusto * Math.min(1, item.precoUn / matchingProduct.preco)
-                : baseCost));
+              : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : (item.precoUn * 0.62)));
           // @ts-ignore
           const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
           saleCost += costPrice * q;
@@ -491,14 +488,11 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
       } else {
         const isService = sale.produtoId?.endsWith('-service');
         const matchingProduct = products.find(p => p.id === sale.produtoId);
-        const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62);
         const costPrice = (sale.produtoId === 'taxacartao-service')
           ? sale.precoUn
           : (isService
             ? 0
-            : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
-              ? matchingProduct.precoCusto * Math.min(1, sale.precoUn / matchingProduct.preco)
-              : baseCost));
+            : (matchingProduct ? getProductUnitCost(matchingProduct, sale.precoUn || 0) : ((sale.precoUn || 0) * 0.62)));
         saleCost += costPrice * sale.quantidade;
       }
       totalEstimatedCost += saleCost;

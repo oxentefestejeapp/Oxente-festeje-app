@@ -60,7 +60,6 @@ const compressImage = (file: File, maxWidth = 480, maxHeight = 480, quality = 0.
 
 export function ProductForm({ onAddProduct }: ProductFormProps) {
   const [nome, setNome] = useState('');
-  const [preco, setPreco] = useState<number | ''>('');
   const [precoCusto, setPrecoCusto] = useState<number | ''>('');
   const [estoque, setEstoque] = useState<number | ''>('');
   const [estoqueInfinito, setEstoqueInfinito] = useState(false);
@@ -228,11 +227,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       return;
     }
 
-    const precoNum = Number(preco);
-    if (preco === '' || isNaN(precoNum) || precoNum < 0) {
-      setError('Digite um preço de venda válido.');
-      return;
-    }
+    const precoNum = 0;
 
     const precoCustoNum = precoCusto !== '' ? Number(precoCusto) : undefined;
     if (precoCustoNum !== undefined && (isNaN(precoCustoNum) || precoCustoNum < 0)) {
@@ -282,7 +277,6 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       } else {
         setSuccess(`"${newProduct.nome}" cadastrado com sucesso no sistema e sincronizado com a nuvem!`);
         setNome('');
-        setPreco('');
         setPrecoCusto('');
         setEstoque('');
         setEstoqueInfinito(false);
@@ -351,43 +345,22 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
 
         {/* Price and Stock Row */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 md:col-span-1">
-            <div>
-              <label htmlFor="product-price" className="block text-sm font-medium text-zinc-300 mb-1.5">
-                Preço de Venda <span className="text-brand-pink font-bold">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-zinc-500 font-medium text-xs">R$</span>
-                <input
-                  id="product-price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0,00"
-                  value={preco}
-                  onChange={(e) => setPreco(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                  className="w-full pl-8 pr-3 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-xs"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label htmlFor="product-cost-price" className="block text-sm font-medium text-zinc-300 mb-1.5">
-                Preço de Custo <span className="text-zinc-500 text-xs font-normal">(Margem)</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-2.5 text-zinc-500 font-medium text-xs">R$</span>
-                <input
-                  id="product-cost-price"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0,00"
-                  value={precoCusto}
-                  onChange={(e) => setPrecoCusto(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                  className="w-full pl-8 pr-3 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-xs"
-                />
-              </div>
+          <div className="md:col-span-1">
+            <label htmlFor="product-cost-price" className="block text-sm font-medium text-zinc-300 mb-1.5">
+              Preço de Custo <span className="text-zinc-500 text-xs font-normal">(Margem)</span>
+            </label>
+            <div className="relative">
+              <span className="absolute left-3 top-2.5 text-zinc-500 font-medium text-xs">R$</span>
+              <input
+                id="product-cost-price"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0,00"
+                value={precoCusto}
+                onChange={(e) => setPrecoCusto(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                className="w-full pl-8 pr-3 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-xs"
+              />
             </div>
           </div>
 

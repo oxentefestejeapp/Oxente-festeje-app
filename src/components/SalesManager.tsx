@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check, CheckSquare, TrendingUp, TrendingDown, Sparkles, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice } from '../types';
+import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost } from '../types';
 import { Receipt } from './Receipt';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
@@ -683,14 +683,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
                sale.itens.forEach(item => {
                  const isService = item.produtoId?.endsWith('-service');
                  const matchingProduct = products.find(p => p.id === item.produtoId);
-                 const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62);
                  const costPrice = (item.produtoId === 'taxacartao-service')
                    ? item.precoUn
                    : (isService
                      ? 0
-                     : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
-                       ? matchingProduct.precoCusto * Math.min(1, item.precoUn / matchingProduct.preco)
-                       : baseCost));
+                     : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : (item.precoUn * 0.62)));
                  // @ts-ignore
                  const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
                  saleCost += costPrice * q;
@@ -698,14 +695,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
              } else {
                const isService = sale.produtoId?.endsWith('-service');
                const matchingProduct = products.find(p => p.id === sale.produtoId);
-               const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62);
                const costPrice = (sale.produtoId === 'taxacartao-service')
                  ? sale.precoUn
                  : (isService
                    ? 0
-                   : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
-                     ? matchingProduct.precoCusto * Math.min(1, sale.precoUn / matchingProduct.preco)
-                     : baseCost));
+                   : (matchingProduct ? getProductUnitCost(matchingProduct, sale.precoUn || 0) : ((sale.precoUn || 0) * 0.62)));
                saleCost += costPrice * sale.quantidade;
              }
              const saleProfit = Math.max(0, sale.total - saleCost);
@@ -1433,14 +1427,11 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
         sale.itens.forEach(item => {
           const isService = item.produtoId?.endsWith('-service');
           const matchingProduct = products.find(p => p.id === item.produtoId);
-          const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (item.precoUn * 0.62);
           const costPrice = (item.produtoId === 'taxacartao-service')
             ? item.precoUn
             : (isService
               ? 0
-              : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
-                ? matchingProduct.precoCusto * Math.min(1, item.precoUn / matchingProduct.preco)
-                : baseCost));
+              : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : (item.precoUn * 0.62)));
           // @ts-ignore
           const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
           saleCost += costPrice * q;
@@ -1448,14 +1439,11 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
       } else {
         const isService = sale.produtoId?.endsWith('-service');
         const matchingProduct = products.find(p => p.id === sale.produtoId);
-        const baseCost = matchingProduct?.precoCusto !== undefined ? matchingProduct.precoCusto : (sale.precoUn * 0.62);
         const costPrice = (sale.produtoId === 'taxacartao-service')
           ? sale.precoUn
           : (isService
             ? 0
-            : (matchingProduct?.precoCusto !== undefined && matchingProduct.preco && matchingProduct.preco > 0
-              ? matchingProduct.precoCusto * Math.min(1, sale.precoUn / matchingProduct.preco)
-              : baseCost));
+            : (matchingProduct ? getProductUnitCost(matchingProduct, sale.precoUn || 0) : ((sale.precoUn || 0) * 0.62)));
         saleCost += costPrice * sale.quantidade;
       }
       totalEstimatedCost += saleCost;

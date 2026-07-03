@@ -6,7 +6,7 @@
 import React, { useState, useMemo, useRef, DragEvent, ChangeEvent, useEffect } from 'react';
 import { Trash2, Search, Plus, Minus, AlertTriangle, PackageOpen, Tag, Box, Check, X, Pencil, Upload, Loader2, Sparkles, AlertCircle, Layers, Undo2, History, Palette } from 'lucide-react';
 import { motion } from 'motion/react';
-import { Product, PricingTier, ProductColor } from '../types';
+import { Product, PricingTier, ProductColor, getProductUnitCost } from '../types';
 
 // Client-side image compression using HTML5 Canvas to keep Base64 strings tiny (~30KB-50KB)
 const compressImage = (file: File, maxWidth = 480, maxHeight = 480, quality = 0.6): Promise<string> => {
@@ -52,6 +52,36 @@ const compressImage = (file: File, maxWidth = 480, maxHeight = 480, quality = 0.
     reader.onerror = (err) => reject(err);
     reader.readAsDataURL(file);
   });
+};
+
+const getProductBasePrice = (p: Product): number => {
+  if (p.preco && p.preco > 0) return p.preco;
+  if (p.faixasPreco && p.faixasPreco.length > 0) {
+    let lowestMinQtyTier = p.faixasPreco[0];
+    for (const f of p.faixasPreco) {
+      if (f.quantidadeMinima < lowestMinQtyTier.quantidadeMinima) {
+        lowestMinQtyTier = f;
+      }
+    }
+    return lowestMinQtyTier.preco;
+  }
+  return 0;
+};
+
+const getProgressivePriceDisplay = (p: Product): string => {
+  if (!p.faixasPreco || p.faixasPreco.length === 0) {
+    if (p.preco && p.preco > 0) {
+      return `R$ ${p.preco.toFixed(2)}`;
+    }
+    return "Sob Consulta";
+  }
+  const prices = p.faixasPreco.map(f => f.preco);
+  const minPrice = Math.min(...prices);
+  const maxPrice = Math.max(...prices);
+  if (minPrice === maxPrice) {
+    return `R$ ${minPrice.toFixed(2)}`;
+  }
+  return `R$ ${minPrice.toFixed(2)} - R$ ${maxPrice.toFixed(2)}`;
 };
 
 interface StockManagerProps {
@@ -211,7 +241,6 @@ export function StockManager({
   // Edit Modal State
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editNome, setEditNome] = useState('');
-  const [editPreco, setEditPreco] = useState<number | ''>('');
   const [editPrecoCusto, setEditPrecoCusto] = useState<number | ''>('');
   const [editEstoque, setEditEstoque] = useState<number | ''>('');
   const [editEstoqueInfinito, setEditEstoqueInfinito] = useState(false);
@@ -239,7 +268,6 @@ export function StockManager({
   const handleOpenEditModal = (product: Product) => {
     setEditingProduct(product);
     setEditNome(product.nome);
-    setEditPreco(product.preco);
     setEditPrecoCusto(product.precoCusto !== undefined ? product.precoCusto : '');
     setEditEstoque(product.estoque);
     setEditEstoqueInfinito(!!product.estoqueInfinito);
@@ -386,11 +414,7 @@ export function StockManager({
       return;
     }
 
-    const precoNum = Number(editPreco);
-    if (editPreco === '' || isNaN(precoNum) || precoNum < 0) {
-      setEditError('Digite um preço de venda válido.');
-      return;
-    }
+    const precoNum = 0;
 
     const precoCustoNum = editPrecoCusto !== '' ? Number(editPrecoCusto) : undefined;
     if (precoCustoNum !== undefined && (isNaN(precoCustoNum) || precoCustoNum < 0)) {
@@ -461,9 +485,10 @@ export function StockManager({
     products.forEach(p => {
       if (p.estoqueInfinito || p.adicional) return;
       totalStockVolume += p.estoque;
-      const c = p.precoCusto !== undefined ? p.precoCusto : (p.preco * 0.6);
+      const basePrice = getProductBasePrice(p);
+      const c = getProductUnitCost(p, basePrice);
       totalStockCostValue += p.estoque * c;
-      totalStockRetailValue += p.estoque * p.preco;
+      totalStockRetailValue += p.estoque * basePrice;
 
       if (p.estoque <= 0) {
         outOfStockCount++;
@@ -874,17 +899,17 @@ export function StockManager({
                         <span>Brinde / Código cadastrado</span>
                       </p>
                     </div>
-                    <div className="bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-black text-brand-pink shrink-0 shadow-inner flex items-center gap-1">
+                    <div className="bg-zinc-900 border border-zinc-800 px-2.5 py-1.5 rounded-xl text-xs sm:text-sm font-black text-brand-pink shrink-0 shadow-inner flex items-center gap-1" title="Preço Progressivo">
                       <Tag className="h-3.5 w-3.5 animate-pulse text-brand-pink" />
-                      <span>R$ {p.preco.toFixed(2)}</span>
+                      <span>{getProgressivePriceDisplay(p)}</span>
                     </div>
                   </div>
 
                   {/* Details and pricing Grid */}
                   <div className="grid grid-cols-2 gap-2 bg-zinc-900/40 p-3 rounded-xl border border-zinc-900/60 text-left">
                     <div>
-                      <span className="block text-[8px] text-zinc-500 font-extrabold uppercase tracking-widest leading-none mb-1">Preço de Venda</span>
-                      <span className="text-xs font-mono font-bold text-zinc-200">R$ {p.preco.toFixed(2)}</span>
+                      <span className="block text-[8px] text-zinc-500 font-extrabold uppercase tracking-widest leading-none mb-1">Preço (Faixas)</span>
+                      <span className="text-xs font-mono font-bold text-zinc-200">{getProgressivePriceDisplay(p)}</span>
                     </div>
                     <div className="border-l border-zinc-850/80 pl-3">
                       <span className="block text-[8px] text-zinc-500 font-extrabold uppercase tracking-widest leading-none mb-1">Preço de Custo</span>
@@ -1214,41 +1239,21 @@ export function StockManager({
 
               {/* Price rows */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-300 mb-1.5">
-                      Preço de Venda <span className="text-brand-pink font-bold">*</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2.5 text-zinc-500 font-medium text-xs">R$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0,00"
-                        value={editPreco}
-                        onChange={(e) => setEditPreco(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                        className="w-full pl-8 pr-3 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-zinc-300 mb-1.5">
-                      Preço de Custo <span className="text-zinc-500 text-xs font-normal">(Margem)</span>
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-3 top-2.5 text-zinc-500 font-medium text-xs">R$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        placeholder="0,00"
-                        value={editPrecoCusto}
-                        onChange={(e) => setEditPrecoCusto(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                        className="w-full pl-8 pr-3 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-xs"
-                      />
-                    </div>
+                <div>
+                  <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+                    Preço de Custo <span className="text-zinc-500 text-xs font-normal">(Margem)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-2.5 text-zinc-500 font-medium text-xs">R$</span>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder="0,00"
+                      value={editPrecoCusto}
+                      onChange={(e) => setEditPrecoCusto(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                      className="w-full pl-8 pr-3 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink transition-colors text-zinc-100 placeholder-zinc-650 text-xs"
+                    />
                   </div>
                 </div>
 
