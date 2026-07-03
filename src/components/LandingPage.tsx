@@ -1371,26 +1371,26 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             <span>O que você deseja fazer hoje?</span>
           </h2>
 
-          {/* BUTTON 1: Google Maps Direct Link */}
+          {/* BUTTON 1: WhatsApp Chat Link */}
           <MagneticButton
-            href={mapsLink}
+            href={whatsAppLink}
             target="_blank"
             rel="noopener noreferrer"
             delay={0.15}
-            glowColor="rgba(217, 119, 6, 0.3)"
+            glowColor="rgba(16, 185, 129, 0.3)"
             onClick={() => {
-              trackGoogleAdsEvent('click_como_chegar', 'Como Chegar na Loja (Google Maps)');
+              trackGoogleAdsEvent('click_whatsapp_orcamento', 'Fazer Orçamento no WhatsApp');
             }}
-            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
+            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
           >
             <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
-              <MapPin className="h-5 w-5 md:h-7 md:w-7 text-amber-50" />
+              <MessageSquare className="h-5 w-5 md:h-7 md:w-7 text-white" />
             </div>
             <div className="flex-1 relative z-10">
-              <span className="block text-sm md:text-lg">Como Chegar na Loja</span>
-              <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Clique para abrir no Google Maps</span>
+              <span className="block text-sm md:text-lg">Fazer Orçamento no WhatsApp</span>
+              <span className="block text-xs md:text-sm font-normal text-emerald-100/85 mt-0.5 font-sans">Fale diretamente com nossa equipe</span>
             </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-white/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
           </MagneticButton>
 
           {/* BUTTON 2: Instagram Direct Link */}
@@ -1415,26 +1415,26 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-zinc-100/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
           </MagneticButton>
 
-          {/* BUTTON 3: WhatsApp Chat Link */}
+          {/* BUTTON 3: Google Maps Direct Link */}
           <MagneticButton
-            href={whatsAppLink}
+            href={mapsLink}
             target="_blank"
             rel="noopener noreferrer"
             delay={0.35}
-            glowColor="rgba(16, 185, 129, 0.3)"
+            glowColor="rgba(217, 119, 6, 0.3)"
             onClick={() => {
-              trackGoogleAdsEvent('click_whatsapp_orcamento', 'Fazer Orçamento no WhatsApp');
+              trackGoogleAdsEvent('click_como_chegar', 'Como Chegar na Loja (Google Maps)');
             }}
-            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
+            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
           >
             <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
-              <MessageSquare className="h-5 w-5 md:h-7 md:w-7 text-white" />
+              <MapPin className="h-5 w-5 md:h-7 md:w-7 text-amber-50" />
             </div>
             <div className="flex-1 relative z-10">
-              <span className="block text-sm md:text-lg">Fazer Orçamento no WhatsApp</span>
-              <span className="block text-xs md:text-sm font-normal text-emerald-100/85 mt-0.5 font-sans">Fale diretamente com nossa equipe</span>
+              <span className="block text-sm md:text-lg">Como Chegar na Loja</span>
+              <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Clique para abrir no Google Maps</span>
             </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-white/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
           </MagneticButton>
 
           {/* BUTTON 4: Order Real-time Tracking Panel */}
