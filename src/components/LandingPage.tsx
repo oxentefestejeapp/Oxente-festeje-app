@@ -1162,11 +1162,111 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       {/* Main Container */}
       <div className="relative max-w-4xl mx-auto px-6 pt-10 pb-32 z-20 flex flex-col items-center text-center">
         
+        {/* Instagram Feed Section */}
+        <InstagramFeed />
+
+        {/* Central Dashboard Card with custom CTA Buttons */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.5, delay: 0.1 }}
+          className="relative w-full max-w-lg md:max-w-3xl bg-zinc-950/80 backdrop-blur-md rounded-3xl border border-amber-500/35 p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-4 md:gap-6 mb-12"
+        >
+          <h2 className="text-lg md:text-2xl font-display font-bold text-amber-100 flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-4">
+            <Sparkles className="h-5 w-5 md:h-7 md:w-7 text-amber-400 fill-amber-400 animate-pulse" />
+            <span>O que você deseja fazer hoje?</span>
+          </h2>
+
+          {/* BUTTON 1: WhatsApp Chat Link */}
+          <MagneticButton
+            href={whatsAppLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            delay={0.15}
+            glowColor="rgba(16, 185, 129, 0.3)"
+            onClick={() => {
+              trackGoogleAdsEvent('click_whatsapp_orcamento', 'Fazer Orçamento no WhatsApp');
+            }}
+            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
+          >
+            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
+              <MessageSquare className="h-5 w-5 md:h-7 md:w-7 text-white" />
+            </div>
+            <div className="flex-1 relative z-10">
+              <span className="block text-sm md:text-lg">Fazer Orçamento no WhatsApp</span>
+              <span className="block text-xs md:text-sm font-normal text-emerald-100/85 mt-0.5 font-sans">Fale diretamente com nossa equipe</span>
+            </div>
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-white/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+          </MagneticButton>
+
+          {/* BUTTON 2: Instagram Direct Link */}
+          <MagneticButton
+            href="https://www.instagram.com/oxentefesteje/"
+            target="_blank"
+            rel="noopener noreferrer"
+            delay={0.25}
+            glowColor="rgba(225, 48, 108, 0.3)"
+            onClick={() => {
+              trackGoogleAdsEvent('click_instagram', 'Siga-nos no Instagram');
+            }}
+            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-[#e1306c] via-[#f77737] to-[#fcb045] text-white font-display font-black p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
+          >
+            <div className="bg-black/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
+              <Instagram className="h-5 w-5 md:h-7 md:w-7 text-white" />
+            </div>
+            <div className="flex-1 relative z-10">
+              <span className="block text-sm md:text-lg">Siga-nos no Instagram</span>
+              <span className="block text-xs md:text-sm font-bold text-zinc-100/85 mt-0.5 font-sans">@oxentefesteje · Inspirações diárias</span>
+            </div>
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-zinc-100/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+          </MagneticButton>
+
+          {/* BUTTON 3: Google Maps Direct Link */}
+          <MagneticButton
+            href={mapsLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            delay={0.35}
+            glowColor="rgba(217, 119, 6, 0.3)"
+            onClick={() => {
+              trackGoogleAdsEvent('click_como_chegar', 'Como Chegar na Loja (Google Maps)');
+            }}
+            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
+          >
+            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
+              <MapPin className="h-5 w-5 md:h-7 md:w-7 text-amber-50" />
+            </div>
+            <div className="flex-1 relative z-10">
+              <span className="block text-sm md:text-lg">Como Chegar na Loja</span>
+              <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Clique para abrir no Google Maps</span>
+            </div>
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+          </MagneticButton>
+
+          {/* BUTTON 4: Order Real-time Tracking Panel */}
+          <MagneticButton
+            onClick={() => setShowTrackingModal(true)}
+            delay={0.45}
+            glowColor="rgba(245, 158, 11, 0.2)"
+            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-900 to-[#3e240a] border border-amber-500/20 text-amber-100 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:border-amber-500/40 transition-all text-left group cursor-pointer overflow-hidden w-full"
+          >
+            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
+              <Search className="h-5 w-5 md:h-7 md:w-7 text-amber-100" />
+            </div>
+            <div className="flex-1 relative z-10">
+              <span className="block text-sm md:text-lg">Acompanhar meu Pedido</span>
+              <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Consulte o andamento da sua entrega</span>
+            </div>
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+          </MagneticButton>
+        </motion.div>
+
         {/* Profile "About" / Bio Card - Highly Enhanced & Creative */}
         <motion.div
           initial={{ opacity: 0, y: 25 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, delay: 0.2 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
           className="relative w-full max-w-3xl mx-auto bg-[#1a0f07]/90 backdrop-blur-md rounded-3xl border border-amber-500/20 p-6 md:p-8 shadow-[0_15px_35px_rgba(0,0,0,0.6)] text-center mb-12 overflow-hidden"
         >
           {/* Subtle Festive Background Lights/Stars Inside the Card */}
@@ -1359,112 +1459,13 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           </div>
         </motion.div>
 
-        {/* Central Dashboard Card with custom CTA Buttons */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.3 }}
-          className="relative w-full max-w-lg md:max-w-3xl bg-zinc-950/80 backdrop-blur-md rounded-3xl border border-amber-500/35 p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-4 md:gap-6 mb-12"
-        >
-          <h2 className="text-lg md:text-2xl font-display font-bold text-amber-100 flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-4">
-            <Sparkles className="h-5 w-5 md:h-7 md:w-7 text-amber-400 fill-amber-400 animate-pulse" />
-            <span>O que você deseja fazer hoje?</span>
-          </h2>
-
-          {/* BUTTON 1: WhatsApp Chat Link */}
-          <MagneticButton
-            href={whatsAppLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            delay={0.15}
-            glowColor="rgba(16, 185, 129, 0.3)"
-            onClick={() => {
-              trackGoogleAdsEvent('click_whatsapp_orcamento', 'Fazer Orçamento no WhatsApp');
-            }}
-            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
-          >
-            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
-              <MessageSquare className="h-5 w-5 md:h-7 md:w-7 text-white" />
-            </div>
-            <div className="flex-1 relative z-10">
-              <span className="block text-sm md:text-lg">Fazer Orçamento no WhatsApp</span>
-              <span className="block text-xs md:text-sm font-normal text-emerald-100/85 mt-0.5 font-sans">Fale diretamente com nossa equipe</span>
-            </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-white/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
-          </MagneticButton>
-
-          {/* BUTTON 2: Instagram Direct Link */}
-          <MagneticButton
-            href="https://www.instagram.com/oxentefesteje/"
-            target="_blank"
-            rel="noopener noreferrer"
-            delay={0.25}
-            glowColor="rgba(225, 48, 108, 0.3)"
-            onClick={() => {
-              trackGoogleAdsEvent('click_instagram', 'Siga-nos no Instagram');
-            }}
-            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-[#e1306c] via-[#f77737] to-[#fcb045] text-white font-display font-black p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
-          >
-            <div className="bg-black/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
-              <Instagram className="h-5 w-5 md:h-7 md:w-7 text-white" />
-            </div>
-            <div className="flex-1 relative z-10">
-              <span className="block text-sm md:text-lg">Siga-nos no Instagram</span>
-              <span className="block text-xs md:text-sm font-bold text-zinc-100/85 mt-0.5 font-sans">@oxentefesteje · Inspirações diárias</span>
-            </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-zinc-100/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
-          </MagneticButton>
-
-          {/* BUTTON 3: Google Maps Direct Link */}
-          <MagneticButton
-            href={mapsLink}
-            target="_blank"
-            rel="noopener noreferrer"
-            delay={0.35}
-            glowColor="rgba(217, 119, 6, 0.3)"
-            onClick={() => {
-              trackGoogleAdsEvent('click_como_chegar', 'Como Chegar na Loja (Google Maps)');
-            }}
-            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
-          >
-            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
-              <MapPin className="h-5 w-5 md:h-7 md:w-7 text-amber-50" />
-            </div>
-            <div className="flex-1 relative z-10">
-              <span className="block text-sm md:text-lg">Como Chegar na Loja</span>
-              <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Clique para abrir no Google Maps</span>
-            </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
-          </MagneticButton>
-
-          {/* BUTTON 4: Order Real-time Tracking Panel */}
-          <MagneticButton
-            onClick={() => setShowTrackingModal(true)}
-            delay={0.45}
-            glowColor="rgba(245, 158, 11, 0.2)"
-            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-900 to-[#3e240a] border border-amber-500/20 text-amber-100 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:border-amber-500/40 transition-all text-left group cursor-pointer overflow-hidden w-full"
-          >
-            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
-              <Search className="h-5 w-5 md:h-7 md:w-7 text-amber-100" />
-            </div>
-            <div className="flex-1 relative z-10">
-              <span className="block text-sm md:text-lg">Acompanhar meu Pedido</span>
-              <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Consulte o andamento da sua entrega</span>
-            </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
-          </MagneticButton>
-        </motion.div>
-
-        {/* Instagram Feed Section */}
-        <InstagramFeed />
-
         {/* Mural de Recomendações (Love Wall) Section */}
         <motion.div
           initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
-          className="w-full flex flex-col items-center mt-0"
+          className="w-full flex flex-col items-center mt-0 mb-12"
         >
           <div className="flex items-center gap-2 mb-2">
             <Quote className="h-6 w-6 text-amber-400 fill-amber-400/20" />
@@ -1490,8 +1491,8 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                   borderColor: "rgba(197, 146, 24, 0.4)"
                 }}
                 className={`bg-stone-950/85 backdrop-blur-md rounded-2xl p-6 border border-amber-500/25 shadow-lg relative flex flex-col justify-between transition-all duration-300 ${
-                  idx % 3 === 0 ? 'border-l-4 border-l-brand-pink' :
-                  idx % 3 === 1 ? 'border-l-4 border-l-amber-500' : 'border-l-4 border-l-amber-700'
+                  idx % 3 === 0 ? "border-l-4 border-l-brand-pink" :
+                  idx % 3 === 1 ? "border-l-4 border-l-amber-500" : "border-l-4 border-l-amber-700"
                 }`}
               >
                 <div>

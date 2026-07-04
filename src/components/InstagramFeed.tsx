@@ -401,11 +401,29 @@ export const InstagramFeed: React.FC = () => {
     >
       {/* Feed Header */}
       <div className="flex flex-col items-center text-center mb-8">
-        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-500/10 via-amber-500/10 to-red-500/10 px-4 py-1.5 rounded-full border border-amber-500/20 shadow-[0_2px_12px_rgba(245,158,11,0.05)] mb-3">
+        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-500/10 via-amber-500/10 to-red-500/10 px-4 py-1.5 rounded-full border border-amber-500/20 shadow-[0_2px_12px_rgba(245,158,11,0.05)] mb-3 relative group/badge">
           <Instagram className="h-4 w-4 text-pink-400 animate-pulse" />
           <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
             Mural do Instagram <Sparkles className="h-3 w-3 text-amber-400 fill-amber-400" />
           </span>
+          <button
+            onClick={() => {
+              if (isAdminMode) {
+                setIsAdminMode(false);
+              } else {
+                setShowPasswordModal(true);
+              }
+            }}
+            className={`p-0.5 rounded transition-all duration-300 cursor-pointer flex items-center justify-center ${
+              isAdminMode 
+                ? 'text-amber-400 bg-amber-950/40' 
+                : 'opacity-0 w-0 overflow-hidden group-hover/badge:opacity-35 group-hover/badge:w-4 hover:!opacity-100 text-stone-500'
+            }`}
+            title="Configuração do Mural"
+            id="btn-mural-config-invisivel"
+          >
+            {isAdminMode ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+          </button>
         </div>
         <h3 className="text-2xl sm:text-3xl font-display font-black text-amber-100 uppercase tracking-tight">
           Siga @oxentefesteje
@@ -576,50 +594,7 @@ export const InstagramFeed: React.FC = () => {
         </div>
       </div>
 
-      {/* Interactive Action Button to visit profile directly + Invisible Password Trigger */}
-      <div className="relative flex justify-center items-center mt-6 w-full px-12">
-        <div className="relative">
-          <motion.a
-            href="https://www.instagram.com/oxentefesteje/"
-            target="_blank"
-            rel="noopener noreferrer"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.98 }}
-            className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-600 via-rose-600 to-amber-600 hover:from-pink-500 hover:to-amber-500 text-white font-display font-black text-xs uppercase tracking-wider px-6 py-3 rounded-full shadow-lg shadow-black/30 transition-all cursor-pointer border border-white/10"
-            id="btn-acessar-instagram"
-          >
-            <Instagram className="h-4 w-4" />
-            Acessar Perfil Completo
-          </motion.a>
-
-          {/* 
-            BOTÃO INVISÍVEL:
-            Posicionado de forma absoluta à direita do botão principal do Instagram.
-            Dessa forma, o botão do Instagram fica PERFEITAMENTE centralizado na tela,
-            e o botão invisível fica exatamente ao lado dele, sem empurrar ou quebrar o layout.
-          */}
-          <div className="absolute left-full top-1/2 -translate-y-1/2 pl-3">
-            <button
-              onClick={() => {
-                if (isAdminMode) {
-                  setIsAdminMode(false);
-                } else {
-                  setShowPasswordModal(true);
-                }
-              }}
-              className={`h-9 w-9 rounded-full border border-stone-800 flex items-center justify-center transition-all duration-300 cursor-pointer ${
-                isAdminMode 
-                  ? 'bg-amber-950/40 text-amber-400 border-amber-500/30' 
-                  : 'opacity-0 hover:opacity-40 bg-stone-900/40 text-stone-500 hover:text-stone-300'
-              }`}
-              title="Configuração do Mural"
-              id="btn-mural-config-invisivel"
-            >
-              {isAdminMode ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5 text-stone-600" />}
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* O gatilho do cadeado agora está ao lado do ícone do Instagram no cabeçalho do mural */}
 
       {/* Password Modal Popup */}
       <AnimatePresence>
