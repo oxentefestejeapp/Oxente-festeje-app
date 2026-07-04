@@ -4,6 +4,7 @@
  */
 
 import React, { useState, useMemo } from 'react';
+import { motion } from 'motion/react';
 import { Search, Phone, CheckCircle2, Clock, DollarSign, Truck, FileText, Check, ShieldAlert, ArrowRight, User, Calendar } from 'lucide-react';
 import { Sale, PaymentMethod, StoreInfo, Product } from '../types';
 import { Receipt } from './Receipt';
@@ -395,19 +396,26 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
         )}
 
         {/* Category Toggles - Dual state filter buttons */}
-        <div className="flex gap-2 bg-zinc-900/50 p-1 border border-zinc-850 rounded-xl">
+        <div className="flex gap-2 bg-zinc-900/50 p-1 border border-zinc-855 rounded-xl relative select-none">
           <button 
             type="button"
             onClick={() => {
               setCategory('Pendentes');
               setSelectedSaleId(null);
             }}
-            className={`flex-1 py-3 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            className={`flex-1 py-3 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer relative z-10 ${
               category === 'Pendentes' 
-                ? 'bg-brand-pink text-black font-bold shadow-xs' 
+                ? 'text-black font-black' 
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
+            {category === 'Pendentes' && (
+              <motion.div
+                layoutId="deliveryCategoryIndicator"
+                className="absolute inset-0 bg-brand-pink rounded-lg -z-10 shadow-xs"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
             <span>📦</span> Pendentes de Entrega ({pendingSales.length})
           </button>
           <button 
@@ -416,12 +424,19 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
               setCategory('Entregues');
               setSelectedSaleId(null);
             }}
-            className={`flex-1 py-3 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            className={`flex-1 py-3 px-2 rounded-lg text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer relative z-10 ${
               category === 'Entregues' 
-                ? 'bg-emerald-600 text-white font-bold shadow-xs' 
+                ? 'text-white font-black' 
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
+            {category === 'Entregues' && (
+              <motion.div
+                layoutId="deliveryCategoryIndicator"
+                className="absolute inset-0 bg-emerald-650 rounded-lg -z-10 shadow-xs shadow-emerald-950/20"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
             <span>✅</span> Pedidos Entregues ({deliveredSales.length})
           </button>
         </div>

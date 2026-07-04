@@ -819,27 +819,41 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
             >
               <div className="border-t border-zinc-855 p-5 bg-zinc-950/20 space-y-6">
                 {/* Seleção de Sub-seção de Gráficos */}
-                <div className="flex items-center gap-1.5 bg-black/30 p-1 border border-zinc-850 rounded-xl max-w-sm select-none">
+                <div className="flex items-center gap-1.5 bg-black/30 p-1 border border-zinc-850 rounded-xl max-w-sm select-none relative">
                   <button
                     type="button"
                     onClick={() => setAuditChartTab('daily')}
-                    className={`flex-1 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer ${
+                    className={`flex-1 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer relative z-10 ${
                       auditChartTab === 'daily'
-                        ? 'bg-brand-pink text-black border-brand-pink/20 shadow-xs'
+                        ? 'text-black border-transparent'
                         : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200'
                     }`}
                   >
+                    {auditChartTab === 'daily' && (
+                      <motion.div
+                        layoutId="auditChartTabIndicator"
+                        className="absolute inset-0 bg-brand-pink rounded-lg -z-10 shadow-xs"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
                     📅 Evolução Diária
                   </button>
                   <button
                     type="button"
                     onClick={() => setAuditChartTab('monthly')}
-                    className={`flex-1 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer ${
+                    className={`flex-1 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer relative z-10 ${
                       auditChartTab === 'monthly'
-                        ? 'bg-brand-pink text-black border-brand-pink/20 shadow-xs'
+                        ? 'text-black border-transparent'
                         : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200'
                     }`}
                   >
+                    {auditChartTab === 'monthly' && (
+                      <motion.div
+                        layoutId="auditChartTabIndicator"
+                        className="absolute inset-0 bg-brand-pink rounded-lg -z-10 shadow-xs"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
                     📊 Comparativo Mensal ({new Date().getFullYear()})
                   </button>
                 </div>

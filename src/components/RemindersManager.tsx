@@ -392,37 +392,58 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
       
       {/* Subtab Switcher: Lembretes vs Recorrência vs Indicação */}
       {isAdmin && (
-        <div className="flex bg-zinc-950 p-1 border border-zinc-900 rounded-xl max-w-md no-print">
+        <div className="flex bg-zinc-950 p-1 border border-zinc-900 rounded-xl max-w-md no-print relative">
           <button
             onClick={() => setActiveSubTab('lembretes')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent ${
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent relative z-10 ${
               activeSubTab === 'lembretes'
-                ? 'bg-brand-pink text-black font-extrabold'
+                ? 'text-black font-extrabold'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
+            {activeSubTab === 'lembretes' && (
+              <motion.div
+                layoutId="activeSubTabIndicator"
+                className="absolute inset-0 bg-brand-pink rounded-lg -z-10"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
             <Bell className="h-3.5 w-3.5" />
             <span>🔔 Lembretes</span>
           </button>
           <button
             onClick={() => setActiveSubTab('recorrencia')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent ${
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent relative z-10 ${
               activeSubTab === 'recorrencia'
-                ? 'bg-purple-600 text-white shadow-md shadow-purple-950/45 font-extrabold'
+                ? 'text-white font-extrabold'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
+            {activeSubTab === 'recorrencia' && (
+              <motion.div
+                layoutId="activeSubTabIndicator"
+                className="absolute inset-0 bg-purple-650 rounded-lg -z-10 shadow-md shadow-purple-950/40"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
             <Brain className="h-3.5 w-3.5 text-purple-300" />
             <span>🔮 Recorrência</span>
           </button>
           <button
             onClick={() => setActiveSubTab('indicacao')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent ${
+            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent relative z-10 ${
               activeSubTab === 'indicacao'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950/45 font-extrabold'
+                ? 'text-white font-extrabold'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
+            {activeSubTab === 'indicacao' && (
+              <motion.div
+                layoutId="activeSubTabIndicator"
+                className="absolute inset-0 bg-emerald-650 rounded-lg -z-10 shadow-md shadow-emerald-950/40"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
             <Gift className="h-3.5 w-3.5 text-emerald-300" />
             <span>🎁 Indicação 5%</span>
           </button>
@@ -547,45 +568,73 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
           </div>
 
           {/* Filters Row */}
-          <div className="flex gap-1 bg-zinc-900/50 p-1 border border-zinc-850 rounded-xl max-w-md flex-wrap sm:flex-nowrap">
+          <div className="flex gap-1 bg-zinc-900/50 p-1 border border-zinc-850 rounded-xl max-w-md flex-wrap sm:flex-nowrap relative select-none">
             <button 
               onClick={() => setFilterType('todos')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent ${
+              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
                 filterType === 'todos' 
-                  ? 'bg-zinc-800 text-brand-pink border-zinc-700/50 shadow-xs' 
+                  ? 'text-brand-pink font-black' 
                   : 'text-zinc-450 hover:text-zinc-200'
               }`}
             >
+              {filterType === 'todos' && (
+                <motion.div
+                  layoutId="remindersFilterIndicator"
+                  className="absolute inset-0 bg-zinc-800 border border-zinc-700/50 rounded-lg -z-10 shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
               Todos ({todaySales.length})
             </button>
             <button 
               onClick={() => setFilterType('pendentes')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent ${
+              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
                 filterType === 'pendentes' 
-                  ? 'bg-amber-955/20 text-amber-400 border-amber-900/25' 
+                  ? 'text-amber-400 font-black' 
                   : 'text-zinc-450 hover:text-zinc-200'
               }`}
             >
+              {filterType === 'pendentes' && (
+                <motion.div
+                  layoutId="remindersFilterIndicator"
+                  className="absolute inset-0 bg-amber-955/20 border border-amber-900/25 rounded-lg -z-10"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
               A Fazer ({pendingCount})
             </button>
             <button 
               onClick={() => setFilterType('concluidos')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent ${
+              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
                 filterType === 'concluidos' 
-                  ? 'bg-emerald-955/20 text-emerald-400 border-emerald-900/15' 
+                  ? 'text-emerald-400 font-black' 
                   : 'text-zinc-450 hover:text-zinc-200'
               }`}
             >
+              {filterType === 'concluidos' && (
+                <motion.div
+                  layoutId="remindersFilterIndicator"
+                  className="absolute inset-0 bg-emerald-955/20 border border-emerald-900/15 rounded-lg -z-10"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
               Entregues ({completedCount})
             </button>
             <button 
               onClick={() => setFilterType('esquecidos')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent ${
+              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
                 filterType === 'esquecidos' 
-                  ? 'bg-rose-955/25 text-rose-400 border-rose-900/35 shadow-xs' 
+                  ? 'text-rose-400 font-black' 
                   : 'text-zinc-450 hover:text-rose-450/75'
               }`}
             >
+              {filterType === 'esquecidos' && (
+                <motion.div
+                  layoutId="remindersFilterIndicator"
+                  className="absolute inset-0 bg-rose-955/25 border border-rose-900/35 rounded-lg -z-10 shadow-xs"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
               Esquecidas ({forgottenSales.length})
             </button>
           </div>

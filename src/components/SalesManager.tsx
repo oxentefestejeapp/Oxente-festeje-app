@@ -1564,7 +1564,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
             </div>
 
             {/* Interactive Period Switcher */}
-            <div className="flex bg-zinc-950 p-1 border border-zinc-850 rounded-xl self-start sm:self-auto shadow-inner select-none">
+            <div className="flex bg-zinc-950 p-1 border border-zinc-850 rounded-xl self-start sm:self-auto shadow-inner select-none relative">
               {[7, 15, 30].map((period) => (
                 <button
                   key={period}
@@ -1573,12 +1573,19 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     setBillingPeriod(period as any);
                     playSound('success');
                   }}
-                  className={`py-1 px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
+                  className={`py-1 px-3.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1 relative z-10 ${
                     billingPeriod === period
-                      ? 'bg-brand-pink text-black font-black shadow-lg scale-[1.03]'
-                      : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/10'
+                      ? 'text-black font-black'
+                      : 'text-zinc-400 hover:text-zinc-200'
                   }`}
                 >
+                  {billingPeriod === period && (
+                    <motion.div
+                      layoutId="billingPeriodIndicator"
+                      className="absolute inset-0 bg-brand-pink rounded-lg -z-10 shadow-lg shadow-brand-pink/15"
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                    />
+                  )}
                   {period} Dias
                 </button>
               ))}

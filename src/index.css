@@ -56,8 +56,25 @@
   html, body {
     height: auto !important;
     min-height: auto !important;
+    max-height: none !important;
     overflow: visible !important;
     background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Completely remove non-printable components from the layout */
+  .no-print,
+  button:not(#printable-receipt *),
+  input,
+  select,
+  textarea,
+  iframe,
+  aside,
+  nav,
+  header,
+  footer {
+    display: none !important;
   }
 
   /* Hide all elements on the page except the printable-receipt class */
@@ -68,26 +85,49 @@
   #printable-receipt, #printable-receipt * {
     visibility: visible;
   }
+
+  /* Remove positioning/transform contexts and spacing from all parent wrappers during print,
+     excluding #printable-receipt itself and its descendants */
+  #root,
+  #root *:not(#printable-receipt):not(#printable-receipt *) {
+    position: static !important;
+    transform: none !important;
+    filter: none !important;
+    backdrop-filter: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    border: none !important;
+    background: transparent !important;
+  }
   
   #printable-receipt {
-    position: absolute;
-    left: 0;
-    top: 0;
+    position: absolute !important;
+    left: 0 !important;
+    top: 0 !important;
     width: 100% !important;
     max-width: 80mm !important; /* Width for standard thermal receipt printers */
     margin: 0 !important;
-    padding: 10px !important;
+    padding: 12px !important;
     border: none !important;
     box-shadow: none !important;
+    background: #ffffff !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
 
-  /* Prevent table lines, headers, and individual blocks from breaking */
+  /* Prevent table lines, headers, and individual blocks from breaking across pages */
   #printable-receipt tr, 
   #printable-receipt table, 
   #printable-receipt div, 
-  #printable-receipt p {
+  #printable-receipt p,
+  #printable-receipt span,
+  #printable-receipt img {
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }

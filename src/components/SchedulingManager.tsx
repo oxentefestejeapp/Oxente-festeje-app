@@ -157,35 +157,56 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
           )}
         </div>
 
-        <div className="flex gap-1.5 bg-black p-1 border border-zinc-900 rounded-xl shrink-0 self-start md:self-auto">
+        <div className="flex gap-1.5 bg-black p-1 border border-zinc-900 rounded-xl shrink-0 self-start md:self-auto relative select-none">
           <button
             onClick={() => setPaymentFilter('all')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer relative z-10 ${
               paymentFilter === 'all'
-                ? 'bg-zinc-850 text-zinc-150 border border-zinc-750'
+                ? 'text-zinc-150'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
+            {paymentFilter === 'all' && (
+              <motion.div
+                layoutId="schedulingPaymentFilterIndicator"
+                className="absolute inset-0 bg-zinc-850 border border-zinc-750 rounded-lg -z-10"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
             Todos ({scheduledSales.length})
           </button>
           <button
             onClick={() => setPaymentFilter('pending')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer relative z-10 ${
               paymentFilter === 'pending'
-                ? 'bg-amber-955/15 text-amber-400 border border-amber-900/35'
+                ? 'text-amber-400'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
+            {paymentFilter === 'pending' && (
+              <motion.div
+                layoutId="schedulingPaymentFilterIndicator"
+                className="absolute inset-0 bg-amber-955/15 border border-amber-900/35 rounded-lg -z-10"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
             A Receber ({scheduledSales.filter(s => (s.valorFaltante ?? 0) > 0).length})
           </button>
           <button
             onClick={() => setPaymentFilter('paid')}
-            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+            className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer relative z-10 ${
               paymentFilter === 'paid'
-                ? 'bg-emerald-950/20 text-emerald-400 border border-emerald-900/30'
+                ? 'text-emerald-400'
                 : 'text-zinc-400 hover:text-zinc-200'
             }`}
           >
+            {paymentFilter === 'paid' && (
+              <motion.div
+                layoutId="schedulingPaymentFilterIndicator"
+                className="absolute inset-0 bg-emerald-950/20 border border-emerald-900/30 rounded-lg -z-10"
+                transition={{ type: "spring", stiffness: 380, damping: 30 }}
+              />
+            )}
             Pagos ({scheduledSales.filter(s => (s.valorFaltante ?? 0) <= 0).length})
           </button>
         </div>
