@@ -1162,9 +1162,6 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       {/* Main Container */}
       <div className="relative max-w-4xl mx-auto px-6 pt-10 pb-32 z-20 flex flex-col items-center text-center">
         
-        {/* Instagram Feed Section */}
-        <InstagramFeed />
-
         {/* Central Dashboard Card with custom CTA Buttons */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95 }}
@@ -1260,6 +1257,9 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
           </MagneticButton>
         </motion.div>
+
+        {/* Instagram Feed Section */}
+        <InstagramFeed />
 
         {/* Profile "About" / Bio Card - Highly Enhanced & Creative */}
         <motion.div
