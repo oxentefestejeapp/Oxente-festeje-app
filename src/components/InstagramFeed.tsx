@@ -107,7 +107,7 @@ export const InstagramFeed: React.FC = () => {
     if (!slider) return;
 
     let animationFrameId: number;
-    const speed = 0.8; // Safe, ultra-smooth scrolling speed
+    const speed = 2.5; // Increased speed to 2.5 for faster yet smooth scrolling as requested
 
     // Align ref with current scroll position
     scrollXRef.current = slider.scrollLeft;

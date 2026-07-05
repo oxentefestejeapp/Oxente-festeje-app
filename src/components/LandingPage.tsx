@@ -1532,6 +1532,27 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           </motion.div>
         </motion.div>
 
+        {/* Success Counter (Social Proof) */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="mt-16 mb-2 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 text-center z-30 relative py-3.5 px-6 rounded-2xl bg-stone-950/50 backdrop-blur-md border border-amber-500/15 max-w-xl mx-auto shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
+        >
+          <div className="flex items-center gap-2">
+            <Gift className="h-4.5 w-4.5 text-amber-400 animate-pulse shrink-0" />
+            <span className="font-display font-black text-amber-100 text-sm tracking-wide">
+              + de 8.000 brindes personalizados entregues
+            </span>
+          </div>
+          <div className="hidden sm:block h-3.5 w-px bg-stone-800" />
+          <div className="flex items-center gap-1.5 text-xs text-stone-400 font-sans font-semibold">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
+            <span>Garantindo o sucesso de centenas de festas</span>
+          </div>
+        </motion.div>
+
         {/* Footer info and secret entry */}
         <p className="text-[11px] text-zinc-400 font-medium mt-16 flex items-center gap-1.5 justify-center relative z-30">
           <span>© 2026 Oxente Festeje. João Pessoa - PB. Todos os direitos reservados.</span>
