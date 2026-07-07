@@ -1284,6 +1284,60 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             </div>
             <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
           </MagneticButton>
+
+          {/* Tracking Highlight Badge (A única que você acompanha seu pedido em tempo real) */}
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.5 }}
+            className="w-fit max-w-full mx-auto mt-3"
+          >
+            <motion.div
+              animate={{
+                x: [0, -2, 2, -2, 2, -1, 1, 0],
+                rotate: [0, -1.2, 1.2, -1, 1, -0.5, 0.5, 0],
+                boxShadow: [
+                  "0px 0px 15px rgba(120, 53, 4, 0.3)",
+                  "0px 0px 28px rgba(245, 158, 11, 0.85)",
+                  "0px 0px 28px rgba(245, 158, 11, 0.85)",
+                  "0px 0px 15px rgba(120, 53, 4, 0.3)"
+                ],
+                borderColor: [
+                  "rgba(245, 158, 11, 0.3)",
+                  "rgba(251, 191, 36, 0.8)",
+                  "rgba(251, 191, 36, 0.8)",
+                  "rgba(245, 158, 11, 0.3)"
+                ]
+              }}
+              transition={{
+                repeat: Infinity,
+                duration: 1.2,
+                ease: "easeInOut",
+                repeatDelay: 2.5,
+              }}
+              className="relative overflow-hidden px-4 py-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-950/60 via-[#2d1b08]/80 to-amber-950/60 border border-amber-500/30 flex items-center justify-center gap-1.5 sm:gap-2 cursor-default flex-nowrap"
+              id="tracking-highlight-badge"
+            >
+              {/* Shimmer/Light ray sliding effect */}
+              <motion.div
+                className="absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-white/20 to-transparent -skew-x-20 z-10 mix-blend-overlay opacity-90 sm:opacity-100"
+                animate={{
+                  left: ['-100%', '200%'],
+                }}
+                transition={{
+                  repeat: Infinity,
+                  duration: 2.0,
+                  ease: "linear",
+                }}
+              />
+
+              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400 fill-amber-400/10 animate-bounce shrink-0 relative z-20" />
+              <span className="font-display font-black text-amber-200 text-[8px] min-[375px]:text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider relative z-20 whitespace-nowrap">
+                A única que você acompanha seu pedido em tempo real
+              </span>
+              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400 fill-amber-400/10 animate-pulse shrink-0 relative z-20" />
+            </motion.div>
+          </motion.div>
         </motion.div>
 
         {/* Instagram Feed Section */}
