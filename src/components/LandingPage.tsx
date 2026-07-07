@@ -95,6 +95,101 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
     initGoogleAds();
   }, []);
 
+  // Handle Google Ads sitelinks (smooth scroll to sections on load or hash change)
+  useEffect(() => {
+    const handleSitelinkNavigation = () => {
+      // Look for hash in URL (e.g. #/mural, #mural, #/botoes, #botoes, #/depoimentos, etc.)
+      const rawHash = window.location.hash.toLowerCase();
+      const cleanHash = rawHash.replace('#/', '#');
+      
+      // Look for query parameters in URL (e.g. ?section=mural or ?sitelink=depoimentos)
+      const params = new URLSearchParams(window.location.search);
+      const sectionParam = (params.get('section') || params.get('sitelink') || '').toLowerCase();
+
+      let targetId = '';
+
+      if (
+        cleanHash === '#mural' || 
+        cleanHash === '#instagram' || 
+        cleanHash === '#feed' || 
+        sectionParam === 'mural' || 
+        sectionParam === 'instagram' || 
+        sectionParam === 'feed'
+      ) {
+        targetId = 'instagram-feed-section';
+      } else if (
+        cleanHash === '#depoimentos' || 
+        cleanHash === '#recomendacoes' || 
+        cleanHash === '#mural-recomendacoes' || 
+        cleanHash === '#avaliacoes' || 
+        sectionParam === 'depoimentos' || 
+        sectionParam === 'recomendacoes' || 
+        sectionParam === 'avaliacoes'
+      ) {
+        targetId = 'mural-recomendacoes';
+      } else if (
+        cleanHash === '#botoes' || 
+        cleanHash === '#links' || 
+        cleanHash === '#dashboard' || 
+        cleanHash === '#painel' || 
+        sectionParam === 'botoes' || 
+        sectionParam === 'links' || 
+        sectionParam === 'dashboard' || 
+        sectionParam === 'painel'
+      ) {
+        targetId = 'painel-botoes';
+      } else if (
+        cleanHash === '#contato' || 
+        cleanHash === '#endereco' || 
+        cleanHash === '#localizacao' || 
+        sectionParam === 'contato' || 
+        sectionParam === 'endereco' || 
+        sectionParam === 'localizacao'
+      ) {
+        targetId = 'whatsapp-profile-header';
+      } else if (
+        cleanHash === '#sobre' || 
+        cleanHash === '#sobrenos' || 
+        cleanHash === '#sobre-nos' || 
+        cleanHash === '#historia' || 
+        cleanHash === '#essencia' || 
+        sectionParam === 'sobre' || 
+        sectionParam === 'sobrenos' || 
+        sectionParam === 'sobre-nos' || 
+        sectionParam === 'historia' || 
+        sectionParam === 'essencia'
+      ) {
+        targetId = 'sobre-nos';
+      }
+
+      if (targetId) {
+        // Wait briefly for mount completion and smooth-scroll
+        setTimeout(() => {
+          const element = document.getElementById(targetId);
+          if (element) {
+            // Calculate a comfortable scroll position with an offset so it doesn't touch the screen edge
+            const yOffset = -24; // offset margin
+            const yPosition = element.getBoundingClientRect().top + window.pageYOffset + yOffset;
+            
+            window.scrollTo({
+              top: yPosition,
+              behavior: 'smooth'
+            });
+          }
+        }, 350);
+      }
+    };
+
+    // Run once on load/refresh
+    handleSitelinkNavigation();
+
+    // Listen to hash changes during single page navigation
+    window.addEventListener('hashchange', handleSitelinkNavigation);
+    return () => {
+      window.removeEventListener('hashchange', handleSitelinkNavigation);
+    };
+  }, []);
+
   // Access state
   const [showAccessModal, setShowAccessModal] = useState(false);
   const [accessPassword, setAccessPassword] = useState('');
@@ -1219,6 +1314,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.1 }}
           className="relative w-full max-w-lg md:max-w-3xl bg-zinc-950/80 backdrop-blur-md rounded-3xl border border-amber-500/35 p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-4 md:gap-6 mb-12"
+          id="painel-botoes"
         >
           <h2 className="text-lg md:text-2xl font-display font-bold text-amber-100 flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-4">
             <Sparkles className="h-5 w-5 md:h-7 md:w-7 text-amber-400 fill-amber-400 animate-pulse" />
@@ -1369,6 +1465,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
 
         {/* Profile "About" / Bio Card - Highly Enhanced & Creative */}
         <motion.div
+          id="sobre-nos"
           initial={{ opacity: 0, y: 25 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
@@ -1572,6 +1669,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           viewport={{ once: true }}
           transition={{ duration: 0.6 }}
           className="w-full flex flex-col items-center mt-0 mb-12"
+          id="mural-recomendacoes"
         >
           <div className="flex items-center gap-2 mb-2">
             <Quote className="h-6 w-6 text-amber-400 fill-amber-400/20" />
