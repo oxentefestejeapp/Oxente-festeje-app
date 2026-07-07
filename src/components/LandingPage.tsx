@@ -1210,7 +1210,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             />
 
             <Award className="h-4 w-4 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0 relative z-20" />
-            <span className="font-display font-black text-amber-950 text-[9px] min-[375px]:text-[11px] sm:text-xs md:text-sm uppercase tracking-wider relative z-20 whitespace-nowrap">
+            <span className="font-display font-black text-amber-950 text-[9px] min-[375px]:text-[11px] sm:text-xs md:text-sm uppercase tracking-wider relative z-20 sm:whitespace-nowrap whitespace-normal text-center max-w-[220px] sm:max-w-none leading-relaxed">
               A loja de brindes mais seguida de João Pessoa com mais de 100mil seguidores
             </span>
             <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-pulse shrink-0 relative z-20" />
@@ -1360,7 +1360,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               />
 
               <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400 fill-amber-400/10 animate-bounce shrink-0 relative z-20" />
-              <span className="font-display font-black text-amber-200 text-[8px] min-[375px]:text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider relative z-20 whitespace-nowrap">
+              <span className="font-display font-black text-amber-200 text-[8px] min-[375px]:text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider relative z-20 sm:whitespace-nowrap whitespace-normal text-center max-w-[190px] sm:max-w-none leading-relaxed">
                 A única que você acompanha seu pedido em tempo real
               </span>
               <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400 fill-amber-400/10 animate-pulse shrink-0 relative z-20" />
