@@ -1134,25 +1134,20 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       <div id="whatsapp-profile-header" className="relative w-full overflow-hidden z-20">
         
         {/* Cover Banner (Festa Junina / Bonfire background) */}
-        <div className="relative h-56 sm:h-64 md:h-80 lg:h-[400px] w-full overflow-hidden">
-          <OptimizedImage 
+        <div className="relative h-56 sm:h-64 md:h-80 lg:h-[400px] w-full overflow-hidden bg-stone-950">
+          <img 
             src="/banner.png" 
-            fallbackSrc="https://images.unsplash.com/photo-1506224477000-07aa8a76be89"
-            width={1920}
-            quality={100}
-            isAboveFold={true}
             alt="Oxente Festeje Banner" 
+            loading="eager"
+            decoding="sync"
             className="w-full h-full object-cover object-center"
             onError={(e) => {
+              // Only fallback to local files, never replace the user's custom banner with generic Unsplash images
               const currentSrc = e.currentTarget.src;
               if (currentSrc.includes('/banner.png')) {
                 e.currentTarget.src = '/banner.jpg';
               } else if (currentSrc.includes('/banner.jpg')) {
-                e.currentTarget.src = '/input_file_1.png';
-              } else if (currentSrc.includes('/input_file_1.png')) {
-                e.currentTarget.src = '/capa.png';
-              } else {
-                e.currentTarget.src = "https://images.unsplash.com/photo-1506224477000-07aa8a76be89?auto=format&fit=crop&w=1920&q=100&fm=webp";
+                e.currentTarget.src = '/perfil.png';
               }
             }}
           />
@@ -1300,17 +1295,17 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           <MagneticButton
             onClick={() => setShowTrackingModal(true)}
             delay={0.45}
-            glowColor="rgba(245, 158, 11, 0.2)"
-            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-900 to-[#3e240a] border border-amber-500/20 text-amber-100 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:border-amber-500/40 transition-all text-left group cursor-pointer overflow-hidden w-full"
+            glowColor="rgba(56, 189, 248, 0.35)"
+            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-sky-400 via-blue-600 to-indigo-900 border border-sky-400/20 text-white font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:border-sky-400/40 transition-all text-left group cursor-pointer overflow-hidden w-full shadow-[0_4px_20px_rgba(14,165,233,0.15)]"
           >
             <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
-              <Search className="h-5 w-5 md:h-7 md:w-7 text-amber-100" />
+              <Search className="h-5 w-5 md:h-7 md:w-7 text-white" />
             </div>
             <div className="flex-1 relative z-10">
-              <span className="block text-sm md:text-lg">Acompanhar meu Pedido</span>
-              <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Consulte o andamento da sua entrega</span>
+              <span className="block text-sm md:text-lg text-white font-black">Acompanhar meu Pedido</span>
+              <span className="block text-xs md:text-sm font-normal text-sky-100/85 mt-0.5 font-sans">Consulte o andamento da sua entrega</span>
             </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-sky-100/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
           </MagneticButton>
 
           {/* Tracking Highlight Badge (A única que você acompanha seu pedido em tempo real) */}
@@ -1325,16 +1320,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 x: [0, -3, 3, -3, 3, -1.5, 1.5, 0],
                 rotate: [0, -1.5, 1.5, -1.2, 1.2, -0.6, 0.6, 0],
                 boxShadow: [
-                  "0px 0px 15px rgba(120, 53, 4, 0.3)",
-                  "0px 0px 35px rgba(245, 158, 11, 0.95)",
-                  "0px 0px 35px rgba(245, 158, 11, 0.95)",
-                  "0px 0px 15px rgba(120, 53, 4, 0.3)"
+                  "0px 0px 15px rgba(220, 38, 38, 0.35)",
+                  "0px 0px 35px rgba(239, 68, 68, 0.95)",
+                  "0px 0px 35px rgba(239, 68, 68, 0.95)",
+                  "0px 0px 15px rgba(220, 38, 38, 0.35)"
                 ],
                 borderColor: [
-                  "rgba(245, 158, 11, 0.3)",
-                  "rgba(251, 191, 36, 0.9)",
-                  "rgba(251, 191, 36, 0.9)",
-                  "rgba(245, 158, 11, 0.3)"
+                  "rgba(239, 68, 68, 0.3)",
+                  "rgba(248, 113, 113, 0.9)",
+                  "rgba(248, 113, 113, 0.9)",
+                  "rgba(239, 68, 68, 0.3)"
                 ]
               }}
               transition={{
@@ -1344,7 +1339,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 ease: "easeInOut",
                 repeatDelay: 2.5,
               }}
-              className="relative overflow-hidden px-4 py-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-950/60 via-[#2d1b08]/80 to-amber-950/60 border border-amber-500/30 flex items-center justify-center gap-1.5 sm:gap-2 cursor-default flex-nowrap"
+              className="relative overflow-hidden px-4 py-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-red-950/60 via-[#2d0808]/80 to-red-950/60 border border-red-500/35 flex items-center justify-center gap-1.5 sm:gap-2 cursor-default flex-nowrap"
               id="tracking-highlight-badge"
             >
               {/* Shimmer/Light ray sliding effect */}
@@ -1360,11 +1355,11 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 }}
               />
 
-              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400 fill-amber-400/10 animate-bounce shrink-0 relative z-20" />
-              <span className="font-display font-black text-amber-200 text-[8px] min-[375px]:text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider relative z-20 sm:whitespace-nowrap whitespace-normal text-center max-w-[190px] sm:max-w-none leading-relaxed">
+              <Clock className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-400 fill-rose-400/10 animate-bounce shrink-0 relative z-20" />
+              <span className="font-display font-black text-rose-200 text-[8px] min-[375px]:text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider relative z-20 sm:whitespace-nowrap whitespace-normal text-center max-w-[190px] sm:max-w-none leading-relaxed">
                 A única que você acompanha seu pedido em tempo real
               </span>
-              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400 fill-amber-400/10 animate-pulse shrink-0 relative z-20" />
+              <Sparkles className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-rose-400 fill-rose-400/10 animate-pulse shrink-0 relative z-20" />
             </motion.div>
           </motion.div>
         </motion.div>
