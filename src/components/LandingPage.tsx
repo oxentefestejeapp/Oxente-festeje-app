@@ -1167,7 +1167,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="relative overflow-hidden mb-8 px-4 py-3 sm:px-6 sm:py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 border-yellow-200/60 shadow-[0_0_30px_rgba(245,158,11,0.4)] flex items-center justify-center gap-1.5 sm:gap-3 w-full max-w-lg md:max-w-2xl mx-auto cursor-default flex-nowrap"
+          className="relative overflow-hidden mb-8 px-4 py-3 sm:px-6 sm:py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 border-yellow-200/60 shadow-[0_0_30px_rgba(245,158,11,0.4)] flex items-center justify-center gap-1.5 sm:gap-3 w-fit max-w-full mx-auto cursor-default flex-nowrap"
           id="gold-highlight-badge"
         >
           {/* Shimmer/Light ray sliding effect */}
@@ -1184,7 +1184,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           />
 
           <Award className="h-4 w-4 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0 relative z-20" />
-          <span className="font-display font-black text-amber-950 text-[9px] min-[375px]:text-[11px] sm:text-xs md:text-sm lg:text-base uppercase tracking-wider relative z-20 whitespace-nowrap">
+          <span className="font-display font-black text-amber-950 text-[9px] min-[375px]:text-[11px] sm:text-xs md:text-sm uppercase tracking-wider relative z-20 whitespace-nowrap">
             A loja de brindes mais seguida de João Pessoa com mais de 100mil seguidores
           </span>
           <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-pulse shrink-0 relative z-20" />
