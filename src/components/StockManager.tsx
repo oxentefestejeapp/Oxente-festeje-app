@@ -242,6 +242,7 @@ export function StockManager({
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editNome, setEditNome] = useState('');
   const [editPrecoCusto, setEditPrecoCusto] = useState<number | ''>('');
+  const [editPrecoVenda, setEditPrecoVenda] = useState<number | ''>('');
   const [editEstoque, setEditEstoque] = useState<number | ''>('');
   const [editEstoqueInfinito, setEditEstoqueInfinito] = useState(false);
   const [editAdicional, setEditAdicional] = useState(false);
@@ -269,6 +270,7 @@ export function StockManager({
     setEditingProduct(product);
     setEditNome(product.nome);
     setEditPrecoCusto(product.precoCusto !== undefined ? product.precoCusto : '');
+    setEditPrecoVenda(product.preco !== undefined ? product.preco : '');
     setEditEstoque(product.estoque);
     setEditEstoqueInfinito(!!product.estoqueInfinito);
     setEditAdicional(!!product.adicional);
@@ -414,7 +416,18 @@ export function StockManager({
       return;
     }
 
-    const precoNum = 0;
+    let precoNum = 0;
+    if (editAdicional) {
+      if (editPrecoVenda === '') {
+        setEditError('O preço de venda é obrigatório para produtos adicionais.');
+        return;
+      }
+      precoNum = Number(editPrecoVenda);
+      if (isNaN(precoNum) || precoNum < 0) {
+        setEditError('Digite um preço de venda válido.');
+        return;
+      }
+    }
 
     const precoCustoNum = editPrecoCusto !== '' ? Number(editPrecoCusto) : undefined;
     if (precoCustoNum !== undefined && (isNaN(precoCustoNum) || precoCustoNum < 0)) {
@@ -1238,8 +1251,8 @@ export function StockManager({
               </div>
 
               {/* Price rows */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
+              <div className={`grid grid-cols-1 ${editAdicional ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 transition-all duration-300`}>
+                <div className="md:col-span-1">
                   <label className="block text-sm font-medium text-zinc-300 mb-1.5">
                     Preço de Custo <span className="text-zinc-500 text-xs font-normal">(Margem)</span>
                   </label>
@@ -1256,6 +1269,28 @@ export function StockManager({
                     />
                   </div>
                 </div>
+
+                {editAdicional && (
+                  <div className="md:col-span-1 animate-fade-in">
+                    <label htmlFor="edit-product-sale-price" className="block text-sm font-medium text-emerald-450 mb-1.5">
+                      Preço de Venda <span className="text-emerald-500 font-bold">*</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-2.5 text-emerald-500 font-medium text-xs">R$</span>
+                      <input
+                        id="edit-product-sale-price"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0,00"
+                        required
+                        value={editPrecoVenda}
+                        onChange={(e) => setEditPrecoVenda(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                        className="w-full pl-8 pr-3 py-2.5 bg-black border border-emerald-900/40 focus:border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-colors text-emerald-300 placeholder-emerald-800/50 text-xs font-bold font-mono"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-1.5 gap-2">

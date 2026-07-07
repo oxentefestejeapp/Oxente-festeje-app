@@ -61,6 +61,7 @@ const compressImage = (file: File, maxWidth = 480, maxHeight = 480, quality = 0.
 export function ProductForm({ onAddProduct }: ProductFormProps) {
   const [nome, setNome] = useState('');
   const [precoCusto, setPrecoCusto] = useState<number | ''>('');
+  const [precoVenda, setPrecoVenda] = useState<number | ''>('');
   const [estoque, setEstoque] = useState<number | ''>('');
   const [estoqueInfinito, setEstoqueInfinito] = useState(false);
   const [adicional, setAdicional] = useState(false);
@@ -227,7 +228,18 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       return;
     }
 
-    const precoNum = 0;
+    let precoNum = 0;
+    if (adicional) {
+      if (precoVenda === '') {
+        setError('O preço de venda é obrigatório para produtos adicionais.');
+        return;
+      }
+      precoNum = Number(precoVenda);
+      if (isNaN(precoNum) || precoNum < 0) {
+        setError('Digite um preço de venda válido.');
+        return;
+      }
+    }
 
     const precoCustoNum = precoCusto !== '' ? Number(precoCusto) : undefined;
     if (precoCustoNum !== undefined && (isNaN(precoCustoNum) || precoCustoNum < 0)) {
@@ -278,6 +290,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
         setSuccess(`"${newProduct.nome}" cadastrado com sucesso no sistema e sincronizado com a nuvem!`);
         setNome('');
         setPrecoCusto('');
+        setPrecoVenda('');
         setEstoque('');
         setEstoqueInfinito(false);
         setAdicional(false);
@@ -344,7 +357,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
         </div>
 
         {/* Price and Stock Row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className={`grid grid-cols-1 ${adicional ? 'md:grid-cols-3' : 'md:grid-cols-2'} gap-4 transition-all duration-300`}>
           <div className="md:col-span-1">
             <label htmlFor="product-cost-price" className="block text-sm font-medium text-zinc-300 mb-1.5">
               Preço de Custo <span className="text-zinc-500 text-xs font-normal">(Margem)</span>
@@ -363,6 +376,28 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
               />
             </div>
           </div>
+
+          {adicional && (
+            <div className="md:col-span-1 animate-fade-in">
+              <label htmlFor="product-sale-price" className="block text-sm font-medium text-emerald-450 mb-1.5">
+                Preço de Venda <span className="text-emerald-500 font-bold">*</span>
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-2.5 text-emerald-500 font-medium text-xs">R$</span>
+                <input
+                  id="product-sale-price"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0,00"
+                  required
+                  value={precoVenda}
+                  onChange={(e) => setPrecoVenda(e.target.value === '' ? '' : parseFloat(e.target.value))}
+                  className="w-full pl-8 pr-3 py-2.5 bg-black border border-emerald-900/40 focus:border-emerald-500 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-colors text-emerald-300 placeholder-emerald-800/50 text-xs font-bold font-mono"
+                />
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-1.5 gap-2">
