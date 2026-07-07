@@ -1231,7 +1231,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         {/* Cover Banner (Festa Junina / Bonfire background) */}
         <div className="relative h-56 sm:h-64 md:h-80 lg:h-[400px] w-full overflow-hidden bg-stone-950">
           <img 
-            src="/banner.png" 
+            src="/banner.png?v=original" 
             alt="Oxente Festeje Banner" 
             loading="eager"
             decoding="sync"
