@@ -1138,8 +1138,9 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           <OptimizedImage 
             src="/banner.png" 
             fallbackSrc="https://images.unsplash.com/photo-1506224477000-07aa8a76be89"
-            width={1200}
-            quality={65}
+            width={1920}
+            quality={100}
+            isAboveFold={true}
             alt="Oxente Festeje Banner" 
             className="w-full h-full object-cover object-center"
             onError={(e) => {
@@ -1151,7 +1152,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               } else if (currentSrc.includes('/input_file_1.png')) {
                 e.currentTarget.src = '/capa.png';
               } else {
-                e.currentTarget.src = "https://images.unsplash.com/photo-1506224477000-07aa8a76be89?auto=format&fit=crop&w=1200&q=65&fm=webp";
+                e.currentTarget.src = "https://images.unsplash.com/photo-1506224477000-07aa8a76be89?auto=format&fit=crop&w=1920&q=100&fm=webp";
               }
             }}
           />
