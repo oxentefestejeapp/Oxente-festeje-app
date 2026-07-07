@@ -1167,27 +1167,54 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="relative overflow-hidden mb-8 px-4 py-3 sm:px-6 sm:py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 border-yellow-200/60 shadow-[0_0_30px_rgba(245,158,11,0.4)] flex items-center justify-center gap-1.5 sm:gap-3 w-fit max-w-full mx-auto cursor-default flex-nowrap"
-          id="gold-highlight-badge"
+          className="w-fit max-w-full mx-auto mb-8"
         >
-          {/* Shimmer/Light ray sliding effect */}
           <motion.div
-            className="absolute inset-y-0 w-32 bg-gradient-to-r from-transparent via-white to-transparent -skew-x-20 z-10 mix-blend-overlay opacity-90 sm:opacity-100"
             animate={{
-              left: ['-100%', '200%'],
+              x: [0, -3, 3, -3, 3, -1.5, 1.5, 0],
+              rotate: [0, -1.5, 1.5, -1.2, 1.2, -0.6, 0.6, 0],
+              boxShadow: [
+                "0px 0px 30px rgba(245, 158, 11, 0.4)",
+                "0px 0px 55px rgba(251, 191, 36, 0.95)",
+                "0px 0px 55px rgba(251, 191, 36, 0.95)",
+                "0px 0px 30px rgba(245, 158, 11, 0.4)"
+              ],
+              borderColor: [
+                "rgba(253, 224, 71, 0.6)",
+                "rgba(253, 224, 71, 1.0)",
+                "rgba(253, 224, 71, 1.0)",
+                "rgba(253, 224, 71, 0.6)"
+              ]
             }}
             transition={{
+              delay: 0.7, // Começa exatamente quando o fade-in do botão termina
               repeat: Infinity,
-              duration: 2.0,
-              ease: "linear",
+              duration: 1.0, // Tremida mais rápida e chamativa na primeira vez e subsequentes
+              ease: "easeInOut",
+              repeatDelay: 2.5,
             }}
-          />
+            className="relative overflow-hidden px-4 py-3 sm:px-6 sm:py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 flex items-center justify-center gap-1.5 sm:gap-3 cursor-default flex-nowrap"
+            id="gold-highlight-badge"
+          >
+            {/* Shimmer/Light ray sliding effect */}
+            <motion.div
+              className="absolute inset-y-0 w-32 bg-gradient-to-r from-transparent via-white to-transparent -skew-x-20 z-10 mix-blend-overlay opacity-90 sm:opacity-100"
+              animate={{
+                left: ['-100%', '200%'],
+              }}
+              transition={{
+                repeat: Infinity,
+                duration: 2.0,
+                ease: "linear",
+              }}
+            />
 
-          <Award className="h-4 w-4 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0 relative z-20" />
-          <span className="font-display font-black text-amber-950 text-[9px] min-[375px]:text-[11px] sm:text-xs md:text-sm uppercase tracking-wider relative z-20 whitespace-nowrap">
-            A loja de brindes mais seguida de João Pessoa com mais de 100mil seguidores
-          </span>
-          <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-pulse shrink-0 relative z-20" />
+            <Award className="h-4 w-4 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0 relative z-20" />
+            <span className="font-display font-black text-amber-950 text-[9px] min-[375px]:text-[11px] sm:text-xs md:text-sm uppercase tracking-wider relative z-20 whitespace-nowrap">
+              A loja de brindes mais seguida de João Pessoa com mais de 100mil seguidores
+            </span>
+            <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-pulse shrink-0 relative z-20" />
+          </motion.div>
         </motion.div>
 
         {/* Central Dashboard Card with custom CTA Buttons */}
@@ -1294,24 +1321,25 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           >
             <motion.div
               animate={{
-                x: [0, -2, 2, -2, 2, -1, 1, 0],
-                rotate: [0, -1.2, 1.2, -1, 1, -0.5, 0.5, 0],
+                x: [0, -3, 3, -3, 3, -1.5, 1.5, 0],
+                rotate: [0, -1.5, 1.5, -1.2, 1.2, -0.6, 0.6, 0],
                 boxShadow: [
                   "0px 0px 15px rgba(120, 53, 4, 0.3)",
-                  "0px 0px 28px rgba(245, 158, 11, 0.85)",
-                  "0px 0px 28px rgba(245, 158, 11, 0.85)",
+                  "0px 0px 35px rgba(245, 158, 11, 0.95)",
+                  "0px 0px 35px rgba(245, 158, 11, 0.95)",
                   "0px 0px 15px rgba(120, 53, 4, 0.3)"
                 ],
                 borderColor: [
                   "rgba(245, 158, 11, 0.3)",
-                  "rgba(251, 191, 36, 0.8)",
-                  "rgba(251, 191, 36, 0.8)",
+                  "rgba(251, 191, 36, 0.9)",
+                  "rgba(251, 191, 36, 0.9)",
                   "rgba(245, 158, 11, 0.3)"
                 ]
               }}
               transition={{
+                delay: 1.1, // Começa exatamente quando o fade-in do botão termina (delay 0.5s + duration 0.5s + margem)
                 repeat: Infinity,
-                duration: 1.2,
+                duration: 1.0, // Tremida mais rápida e chamativa na primeira vez e subsequentes
                 ease: "easeInOut",
                 repeatDelay: 2.5,
               }}

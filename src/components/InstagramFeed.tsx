@@ -107,7 +107,7 @@ export const InstagramFeed: React.FC = () => {
     if (!slider) return;
 
     let animationFrameId: number;
-    const speed = 2.5; // Increased speed to 2.5 for faster yet smooth scrolling as requested
+    const speed = 4.5; // Increased speed to 4.5 for faster and more dynamic scrolling as requested
 
     // Align ref with current scroll position
     scrollXRef.current = slider.scrollLeft;
@@ -277,8 +277,8 @@ export const InstagramFeed: React.FC = () => {
     setIsCompressing(true);
     setSubmitStatus(null);
     try {
-      // Compresses to max 600px, 0.6 quality, ultra fast and lightweight (approx 20kb - 40kb)
-      const compressedBase64 = await compressImageFile(file, 600, 0.6);
+      // Compresses to max 500px, 0.5 quality, ultra fast and lightweight (approx 15kb - 25kb)
+      const compressedBase64 = await compressImageFile(file, 500, 0.5);
       setNewImage(compressedBase64);
     } catch (err) {
       console.error('Erro ao comprimir imagem:', err);
@@ -484,8 +484,8 @@ export const InstagramFeed: React.FC = () => {
                 <OptimizedImage
                   src={post.imageUrl}
                   alt={post.caption}
-                  width={360}
-                  quality={70}
+                  width={300}
+                  quality={50}
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover transition-transform duration-500 md:group-hover:scale-105"
                 />
@@ -549,8 +549,8 @@ export const InstagramFeed: React.FC = () => {
                 <OptimizedImage
                   src={post.imageUrl}
                   alt={post.caption}
-                  width={360}
-                  quality={70}
+                  width={300}
+                  quality={50}
                   referrerPolicy="no-referrer"
                   className="w-full h-full object-cover transition-transform duration-500 md:group-hover:scale-105"
                 />
