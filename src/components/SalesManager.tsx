@@ -300,14 +300,27 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [editTemTaxaCartao, setEditTemTaxaCartao] = useState(false);
   const [editValorTaxaCartao, setEditValorTaxaCartao] = useState('');
   const [editShowServicosTaxas, setEditShowServicosTaxas] = useState(false);
+  const [editSelectedAddonIds, setEditSelectedAddonIds] = useState<string[]>([]);
+  const [editShowAddons, setEditShowAddons] = useState(false);
 
   const editTotal = useMemo(() => {
     const artVal = editArteDesign ? 5 : 0;
     const segundaArtVal = editSegundaArte ? 5 : 0;
     const urgVal = editTemTaxaUrgencia ? (parseFloat(editValorTaxaUrgencia) || 0) : 0;
     const cartaoVal = editTemTaxaCartao ? (parseFloat(editValorTaxaCartao) || 0) : 0;
-    return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0) + artVal + segundaArtVal + urgVal + cartaoVal;
-  }, [editItens, editArteDesign, editSegundaArte, editTemTaxaUrgencia, editValorTaxaUrgencia, editTemTaxaCartao, editValorTaxaCartao]);
+
+    const referenceQty = editItens.length > 0 ? editItens[0].quantidade : 1;
+    const addonsTotal = editSelectedAddonIds.reduce((sum, addonId) => {
+      const addon = products.find(p => p.id === addonId);
+      if (addon) {
+        const addonPrice = getProductUnitPrice(addon, referenceQty);
+        return sum + (addonPrice * referenceQty);
+      }
+      return sum;
+    }, 0);
+
+    return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0) + artVal + segundaArtVal + urgVal + cartaoVal + addonsTotal;
+  }, [editItens, editArteDesign, editSegundaArte, editTemTaxaUrgencia, editValorTaxaUrgencia, editTemTaxaCartao, editValorTaxaCartao, editSelectedAddonIds, products]);
 
   // Sync edit states when editingSale shifts
   React.useEffect(() => {
@@ -359,9 +372,32 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         setEditValorTaxaCartao('');
       }
 
-      setEditItens(rawItens.filter(item => item.produtoId !== 'artedesign-service' && item.produtoId !== 'segundaarte-service' && item.produtoId !== 'taxaurgencia-service' && item.produtoId !== 'taxacartao-service'));
+      // Initialize selected addon IDs from edit sale items!
+      const addonItems = rawItens.filter(item => {
+        const dbProd = products.find(p => p.id === item.produtoId);
+        return (dbProd && dbProd.adicional) || item.produtoNome.startsWith('Adicional:');
+      });
+      setEditSelectedAddonIds(addonItems.map(item => item.produtoId));
+      setEditShowAddons(false);
+
+      // Filter out services and addon items from the main item list
+      const filteredItens = rawItens.filter(item => {
+        if (item.produtoId === 'artedesign-service' || 
+            item.produtoId === 'segundaarte-service' || 
+            item.produtoId === 'taxaurgencia-service' || 
+            item.produtoId === 'taxacartao-service') {
+          return false;
+        }
+        const dbProd = products.find(p => p.id === item.produtoId);
+        if ((dbProd && dbProd.adicional) || item.produtoNome.startsWith('Adicional:')) {
+          return false;
+        }
+        return true;
+      });
+
+      setEditItens(filteredItens);
     }
-  }, [editingSale]);
+  }, [editingSale, products]);
   
   // Keep track of the active sale being simulated in the receipt section
   const [viewedSale, setViewedSale] = useState<Sale | null>(
@@ -1158,6 +1194,24 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     };
 
     const finalItensToSave = [...editItens];
+
+    // Append selected addons
+    const referenceQty = editItens.length > 0 ? editItens[0].quantidade : 1;
+    for (const addonId of editSelectedAddonIds) {
+      const addon = products.find(p => p.id === addonId);
+      if (addon) {
+        const addonPrice = getProductUnitPrice(addon, referenceQty);
+        finalItensToSave.push({
+          id: `item-${addon.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+          produtoId: addon.id,
+          produtoNome: `Adicional: ${addon.nome}`,
+          precoUn: addonPrice,
+          quantidade: referenceQty,
+          total: addonPrice * referenceQty
+        });
+      }
+    }
+
     if (editArteDesign) {
       finalItensToSave.push({
         id: `item-artedesign-${Date.now()}`,
@@ -3713,6 +3767,88 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     </div>
                   );
                 })()}
+
+                {/* Seleção de Adicionais Opcionais na Edição */}
+                {availableAddons.length > 0 && (
+                  <div className="bg-zinc-950/40 border border-zinc-850 p-4 rounded-xl space-y-3 text-left">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditShowAddons(prev => !prev);
+                        playSound('add');
+                      }}
+                      className="w-full flex items-center justify-between text-left focus:outline-none select-none group"
+                    >
+                      <span className="block text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-sans">
+                        <span>✨ Brinde Adicional / Opcionais do Pedido na Edição:</span>
+                        {editSelectedAddonIds.length > 0 && (
+                          <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[9px] font-extrabold animate-pulse">
+                            {editSelectedAddonIds.length} selecionado{editSelectedAddonIds.length > 1 ? 's' : ''}
+                          </span>
+                        )}
+                      </span>
+                      <span className="text-[10.5px] font-bold text-zinc-400 group-hover:text-zinc-200 transition-colors flex items-center gap-1 bg-zinc-850/60 hover:bg-zinc-800/80 px-2 py-1 rounded-lg">
+                        {editShowAddons ? (
+                          <>Ocultar <span className="font-mono text-[9px]">▲</span></>
+                        ) : (
+                          <>Ver opcionais ({availableAddons.length}) <span className="font-mono text-[9px]">▼</span></>
+                        )}
+                      </span>
+                    </button>
+
+                    {editShowAddons && (
+                      <div className="pt-3 border-t border-zinc-850/50 mt-1 animate-fade-in space-y-3">
+                        <p className="text-[10px] text-zinc-500 leading-normal">
+                          A quantidade dos adicionais marcados acompanhará automaticamente a quantidade do produto principal ({editItens.length > 0 ? editItens[0].quantidade : 1} un.).
+                        </p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
+                          {availableAddons.map(addon => {
+                            const isChecked = editSelectedAddonIds.includes(addon.id);
+                            return (
+                              <label
+                                key={addon.id}
+                                className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
+                                  isChecked
+                                    ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.04)]'
+                                    : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                                }`}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    setEditSelectedAddonIds(prev =>
+                                      prev.includes(addon.id)
+                                        ? prev.filter(id => id !== addon.id)
+                                        : [...prev, addon.id]
+                                    );
+                                    playSound(isChecked ? 'remove' : 'add');
+                                  }}
+                                  className="rounded border-zinc-800 text-emerald-500 focus:ring-0 accent-emerald-500 h-4 w-4 cursor-pointer bg-black"
+                                />
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-xs font-semibold truncate text-zinc-200">
+                                    {addon.nome}
+                                  </span>
+                                  <div className="flex items-center gap-1.5 flex-wrap">
+                                    <span className="text-[10px] font-mono text-emerald-450 font-bold">
+                                      + R$ {addon.preco.toFixed(2)} /un
+                                    </span>
+                                    {!addon.estoqueInfinito && addon.estoque <= 0 && (
+                                      <span className="text-[8px] leading-none bg-red-500/10 border border-red-500/30 text-red-400 font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                        {addon.estoque < 0 ? 'Crítico' : 'Sem Estoque'}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {editingSale && editingSale.status === 'Orçamento' && (
                   <div className="p-3.5 bg-emerald-950/20 border border-emerald-900/40 rounded-xl flex items-center justify-between gap-3 select-none transition-all">
