@@ -65,8 +65,8 @@ export const defaultSales: Sale[] = [
 export const defaultStoreInfo: StoreInfo = {
   nome: 'OXENTE FESTEJE',
   instagram: '@oxentefesteje',
-  telefone: '(81) 99876-5432',
-  endereco: 'Recife - PE',
+  telefone: '(83) 98885-9302',
+  endereco: 'Rua Josina Lessa Feitosa 176 - Mangabeira 1 - João Pessoa - PB',
   whatsappTemplate: `Olá, *{cliente}*!
 
 ®️ seu pedido está pronto para retirada{pedido}

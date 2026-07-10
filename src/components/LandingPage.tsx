@@ -703,8 +703,8 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
   };
 
   // Format phone for WhatsApp
-  const cleanPhone = (savedPhone || '(83) 99876-5432').replace(/\D/g, '');
-  const whatsAppLink = `https://wa.me/55${cleanPhone || '83998765432'}?text=Olá,%20gostaria%20de%20fazer%20um%20orçamento!`;
+  const cleanPhone = '83988859302';
+  const whatsAppLink = `https://api.whatsapp.com/send/?phone=5583988859302&text=Ol%C3%A1%2C+gostaria+de+fazer+um+or%C3%A7amento%21&type=phone_number&app_absent=0`;
   const mapsLink = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(savedAddress || 'Rua Josina Lessa Feitosa 176 Mangabeira João Pessoa PB')}`;
 
   return (

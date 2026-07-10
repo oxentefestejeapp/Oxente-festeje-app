@@ -26,8 +26,8 @@ import { BrandLogo } from './BrandLogo';
 const DEFAULT_STORE_INFO: StoreInfo = {
   nome: "Oxente Festeje",
   instagram: "@oxentefesteje",
-  telefone: "81997380963",
-  endereco: "Rua Josina Lessa, Limoeiro - PE"
+  telefone: "83988859302",
+  endereco: "Rua Josina Lessa Feitosa 176, Mangabeira 1 - João Pessoa - PB"
 };
 
 export function OrderTrackingPage() {
