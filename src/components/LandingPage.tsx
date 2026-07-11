@@ -1245,16 +1245,20 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         
         {/* Cover Banner (Festa Junina / Bonfire background) */}
         <div className="relative h-56 sm:h-64 md:h-80 lg:h-[400px] w-full overflow-hidden bg-stone-950">
-          <img 
-            src="/banner.png?v=original" 
+          <OptimizedImage 
+            src="/banner.webp" 
+            fallbackSrc="/banner.png"
             alt="Oxente Festeje Banner" 
-            loading="eager"
-            decoding="sync"
+            isAboveFold={true}
+            width={1200}
+            quality={75}
             className="w-full h-full object-cover object-center"
             onError={(e) => {
               // Only fallback to local files, never replace the user's custom banner with generic Unsplash images
               const currentSrc = e.currentTarget.src;
-              if (currentSrc.includes('/banner.png')) {
+              if (currentSrc.includes('/banner.webp')) {
+                e.currentTarget.src = '/banner.png';
+              } else if (currentSrc.includes('/banner.png')) {
                 e.currentTarget.src = '/banner.jpg';
               } else if (currentSrc.includes('/banner.jpg')) {
                 e.currentTarget.src = '/perfil.png';
@@ -1527,7 +1531,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             <div className="flex items-center gap-2 relative z-20">
               <Gift className="h-4.5 w-4.5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0" />
               <span className="font-display font-black text-amber-950 text-sm tracking-wide">
-                Mais de 40.000 brindes personalizados entregues
+                Mais de 40.000 brindes personalizados entregues ao longo desses 11 anos
               </span>
             </div>
             <div className="hidden sm:block h-3.5 w-px bg-amber-950/20 relative z-20" />
