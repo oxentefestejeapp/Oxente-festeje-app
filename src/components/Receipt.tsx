@@ -409,27 +409,18 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
 
               if (hasStockIssue) {
                 return (
-                  <div className="border border-red-900/40 bg-red-950/15 text-red-400 rounded-xl p-3 text-[10px] space-y-1.5 leading-relaxed">
-                    <span className="font-extrabold uppercase tracking-wider block text-red-400">⚠️ Estoque Insuficiente no Estoque</span>
+                  <div className="border border-amber-900/40 bg-amber-950/15 text-amber-400 rounded-xl p-3 text-[10px] space-y-1.5 leading-relaxed">
+                    <span className="font-extrabold uppercase tracking-wider block text-amber-400">⚠️ Estoques ficarão negativos</span>
                     <p className="font-medium">
-                      O estoque físico não comporta as quantidades requisitadas:
+                      O estoque atual é menor que o solicitado. Os itens abaixo ficarão com saldo negativo após a faturamento:
                     </p>
                     <ul className="list-disc pl-4 space-y-0.5">
                       {stockAlerts.filter(a => !a.hasSufficient).map((alert, idx) => (
-                        <li key={idx} className="font-semibold text-red-300">
+                        <li key={idx} className="font-semibold text-amber-300">
                           {alert.produtoNome}: necessário {alert.quantidade} un. (Disponível: {alert.currentStock} un.)
                         </li>
                       ))}
                     </ul>
-                    <label className="flex items-start gap-2 pt-1 font-semibold text-red-300 cursor-pointer select-none">
-                      <input
-                        type="checkbox"
-                        checked={confirmForce}
-                        onChange={(e) => setConfirmForce(e.target.checked)}
-                        className="mt-0.5 rounded text-red-500 focus:ring-red-500 bg-black border-zinc-800"
-                      />
-                      <span>Entendo o risco e desejo converter o pedido mesmo assim.</span>
-                    </label>
                   </div>
                 );
               }
@@ -453,19 +444,6 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
               <button
                 type="button"
                 onClick={() => {
-                  const items = getSaleItems(sale);
-                  const stockAlerts = items.map(item => {
-                    const prod = products?.find(p => p.id === item.produtoId);
-                    const hasSufficient = !prod || prod.estoqueInfinito || prod.estoque >= item.quantidade;
-                    return { ...item, hasSufficient };
-                  });
-                  const hasStockIssue = stockAlerts.some(alert => !alert.hasSufficient);
-
-                  if (hasStockIssue && !confirmForce) {
-                    alert('Por favor, marque a caixa de confirmação de estoque para prosseguir de qualquer forma e evitar quebras indesejadas.');
-                    return;
-                  }
-
                   const total = sale.total;
                   const valPaid = paidValue.trim() === '' ? total : parseFloat(paidValue);
                   const finalPaid = isNaN(valPaid) ? total : valPaid;

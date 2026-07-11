@@ -2749,6 +2749,7 @@ export default function App() {
                 onUpdateSale={handleUpdateSale}
                 onDeleteSale={handleDeleteSale}
                 currentUserEmail={firebaseUser?.email || ''}
+                isAdmin={isAdmin}
               />
             )}
 

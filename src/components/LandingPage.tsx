@@ -1463,6 +1463,66 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         {/* Instagram Feed Section */}
         <InstagramFeed />
 
+        {/* Success Counter (Social Proof) */}
+        <motion.div
+          initial={{ opacity: 0, y: 15 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.5, delay: 0.15 }}
+          className="mt-6 mb-6 w-fit max-w-full mx-auto"
+        >
+          <motion.div
+            animate={{
+              x: [0, -3, 3, -3, 3, -1.5, 1.5, 0],
+              rotate: [0, -1.5, 1.5, -1.2, 1.2, -0.6, 0.6, 0],
+              boxShadow: [
+                "0px 0px 30px rgba(245, 158, 11, 0.4)",
+                "0px 0px 55px rgba(251, 191, 36, 0.95)",
+                "0px 0px 55px rgba(251, 191, 36, 0.95)",
+                "0px 0px 30px rgba(245, 158, 11, 0.4)"
+              ],
+              borderColor: [
+                "rgba(253, 224, 71, 0.6)",
+                "rgba(253, 224, 71, 1.0)",
+                "rgba(253, 224, 71, 1.0)",
+                "rgba(253, 224, 71, 0.6)"
+              ]
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: 1.0,
+              ease: "easeInOut",
+              repeatDelay: 2.5,
+            }}
+            className="relative overflow-hidden flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 text-center z-30 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 max-w-xl mx-auto cursor-default flex-nowrap"
+          >
+            {/* Shimmer/Light ray sliding effect */}
+            <motion.div
+              className="absolute inset-y-0 w-32 bg-gradient-to-r from-transparent via-white to-transparent -skew-x-20 z-10 mix-blend-overlay opacity-90 sm:opacity-100"
+              animate={{
+                left: ['-100%', '200%'],
+              }}
+              transition={{
+                repeat: Infinity,
+                duration: 2.0,
+                ease: "linear",
+              }}
+            />
+
+            <div className="flex items-center gap-2 relative z-20">
+              <Gift className="h-4.5 w-4.5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0" />
+              <span className="font-display font-black text-amber-950 text-sm tracking-wide">
+                Mais de 40.000 brindes personalizados entregues
+              </span>
+            </div>
+            <div className="hidden sm:block h-3.5 w-px bg-amber-950/20 relative z-20" />
+            <div className="flex items-center gap-1.5 text-xs text-amber-950 font-sans font-semibold relative z-20">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-700 animate-ping shrink-0" />
+              <span>Garantindo o sucesso de milhares de festas</span>
+            </div>
+          </motion.div>
+        </motion.div>
+
         {/* Profile "About" / Bio Card - Highly Enhanced & Creative */}
         <motion.div
           id="sobre-nos"
@@ -1736,26 +1796,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           </motion.div>
         </motion.div>
 
-        {/* Success Counter (Social Proof) */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.15 }}
-          className="mt-16 mb-2 flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 text-center z-30 relative py-3.5 px-6 rounded-2xl bg-stone-950/50 backdrop-blur-md border border-amber-500/15 max-w-xl mx-auto shadow-[0_10px_30px_rgba(0,0,0,0.3)]"
-        >
-          <div className="flex items-center gap-2">
-            <Gift className="h-4.5 w-4.5 text-amber-400 animate-pulse shrink-0" />
-            <span className="font-display font-black text-amber-100 text-sm tracking-wide">
-              + de 8.000 brindes personalizados entregues
-            </span>
-          </div>
-          <div className="hidden sm:block h-3.5 w-px bg-stone-800" />
-          <div className="flex items-center gap-1.5 text-xs text-stone-400 font-sans font-semibold">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-ping shrink-0" />
-            <span>Garantindo o sucesso de centenas de festas</span>
-          </div>
-        </motion.div>
+
 
         {/* Footer info and secret entry */}
         <p className="text-[11px] text-zinc-400 font-medium mt-16 flex items-center gap-1.5 justify-center relative z-30">

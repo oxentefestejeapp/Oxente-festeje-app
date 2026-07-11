@@ -22,6 +22,7 @@ interface SalesManagerProps {
   onUpdateSale?: (updatedSale: Sale) => void;
   onDeleteSale?: (id: string) => Promise<boolean>;
   currentUserEmail?: string;
+  isAdmin?: boolean;
 }
 
 const paymentMethods: { value: PaymentMethod; label: string; icon: string }[] = [
@@ -81,8 +82,8 @@ export function getCartItemEffectiveQty(
   return item.quantity + differentColorSum;
 }
 
-export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdateStock, onUpdateSale, onDeleteSale, currentUserEmail = '' }: SalesManagerProps) {
-  const isAdmin = currentUserEmail.trim().toLowerCase() === 'oxentefesteje@gmail.com' || currentUserEmail.trim().toLowerCase() === 'abraaoapp@oxente.com';
+export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdateStock, onUpdateSale, onDeleteSale, currentUserEmail = '', isAdmin: passedIsAdmin }: SalesManagerProps) {
+  const isAdmin = passedIsAdmin !== undefined ? passedIsAdmin : (currentUserEmail.trim().toLowerCase() === 'oxentefesteje@gmail.com' || currentUserEmail.trim().toLowerCase() === 'abraaoapp@oxente.com');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [selectedColor, setSelectedColor] = useState('');
   const [billingPeriod, setBillingPeriod] = useState<7 | 15 | 30>(7);
@@ -1140,23 +1141,6 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }
 
     const isBudget = editingSale.status === 'Orçamento' && !editConvertToOrder;
-
-    if (editConvertToOrder) {
-      let hasStockBypass = true;
-      for (const item of editItens) {
-        const prod = products.find(p => p.id === item.produtoId);
-        if (prod && !prod.estoqueInfinito && prod.estoque < item.quantidade) {
-          const confirmBypass = window.confirm(
-            `Atenção: O produto "${item.produtoNome}" tem apenas ${prod.estoque} un. em estoque, mas o pedido solicita ${item.quantidade} un.\n\nDeseja realizar a conversão assim mesmo?`
-          );
-          if (!confirmBypass) {
-            hasStockBypass = false;
-            break;
-          }
-        }
-      }
-      if (!hasStockBypass) return;
-    }
 
     const isScheduledDelivery = !isBudget && editStatusProducao === 'Agendado para Entrega';
     const valPagoNum = isBudget ? 0 : (isScheduledDelivery ? editTotal : (editValorPago.trim() === '' ? editTotal : parseFloat(editValorPago)));
@@ -2381,7 +2365,6 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   id="sale-qty"
                   type="number"
                   min="1"
-                  max={selectedProduct?.estoqueInfinito ? undefined : selectedProduct?.estoque || 999}
                   value={quantidade}
                   onChange={(e) => setQuantidade(e.target.value === '' ? '' : parseInt(e.target.value, 10))}
                   className="w-full px-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 text-sm placeholder-zinc-650 font-semibold"

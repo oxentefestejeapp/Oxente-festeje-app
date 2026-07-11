@@ -396,7 +396,7 @@ export const InstagramFeed: React.FC = () => {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
       transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-      className="w-full mt-0 mb-12 px-4 overflow-hidden relative z-20"
+      className="w-full mt-0 mb-0 px-4 overflow-hidden relative z-20"
       id="instagram-feed-section"
     >
       {/* Feed Header */}
