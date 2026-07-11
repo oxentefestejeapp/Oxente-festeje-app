@@ -90,6 +90,21 @@ const RECOMMENDATIONS = [
 ];
 
 export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: LandingPageProps) {
+  const [activeCommentSweepIndex, setActiveCommentSweepIndex] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setActiveCommentSweepIndex((prev) => {
+        // 6 review cards + 6 pause steps = 12 total steps.
+        // Each step is 600ms, sweeping over cards 0 to 5 sequentially,
+        // then waiting for 6 * 600ms = 3.6s before starting again.
+        const totalSteps = RECOMMENDATIONS.length + 6;
+        return (prev + 1) % totalSteps;
+      });
+    }, 600);
+    return () => clearInterval(interval);
+  }, []);
+
   // Initialize Google Ads Pixel/Tag on mount
   useEffect(() => {
     initGoogleAds();
@@ -1735,47 +1750,114 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             <Quote className="h-6 w-6 text-amber-400 fill-amber-400/20" />
             <h3 className="text-2xl font-display font-black text-amber-100 uppercase tracking-tight">Mural de Recomendações</h3>
           </div>
-          <p className="text-amber-200/70 text-xs md:text-sm max-w-md mb-8 font-sans font-medium">
-            Veja o carinho de quem escolheu tornar seus eventos inesquecíveis com os nossos brindes e lembranças personalizadas!
-          </p>
+
+          <motion.div
+            animate={{
+              x: [0, -2, 2, -2, 2, -1, 1, 0],
+              rotate: [0, -1, 1, -0.8, 0.8, -0.4, 0.4, 0],
+              boxShadow: [
+                "0px 0px 25px rgba(245, 158, 11, 0.35)",
+                "0px 0px 45px rgba(251, 191, 36, 0.85)",
+                "0px 0px 45px rgba(251, 191, 36, 0.85)",
+                "0px 0px 25px rgba(245, 158, 11, 0.35)"
+              ],
+              borderColor: [
+                "rgba(253, 224, 71, 0.5)",
+                "rgba(253, 224, 71, 0.9)",
+                "rgba(253, 224, 71, 0.9)",
+                "rgba(253, 224, 71, 0.5)"
+              ]
+            }}
+            transition={{
+              repeat: Infinity,
+              duration: 1.0,
+              ease: "easeInOut",
+              repeatDelay: 3.0,
+            }}
+            className="relative overflow-hidden py-3.5 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 max-w-xl mx-auto mb-8 cursor-default shadow-[0_10px_30px_rgba(245,158,11,0.25)] flex items-center justify-center gap-3"
+          >
+            {/* Shimmer/Light ray sliding effect */}
+            <motion.div
+              className="absolute inset-y-0 w-32 bg-gradient-to-r from-transparent via-white to-transparent -skew-x-20 z-10 mix-blend-overlay opacity-90 sm:opacity-100"
+              animate={{
+                left: ['-100%', '200%'],
+              }}
+              transition={{
+                repeat: Infinity,
+                duration: 2.2,
+                ease: "linear",
+              }}
+            />
+
+            <div className="flex items-center gap-2 relative z-20">
+              <Star className="h-4.5 w-4.5 text-amber-950 fill-amber-950/20 animate-spin shrink-0" style={{ animationDuration: '4s' }} />
+              <p className="text-amber-950 text-xs md:text-sm font-sans font-bold leading-relaxed max-w-lg">
+                Veja o carinho de quem escolheu tornar seus eventos inesquecíveis com os nossos brindes e lembranças personalizadas!
+              </p>
+            </div>
+          </motion.div>
 
           {/* Grid Layout of post-it cards */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 w-full text-left">
-            {RECOMMENDATIONS.map((r, idx) => (
-              <motion.div
-                key={r.id}
-                initial={{ opacity: 0, y: 35, scale: 0.96 }}
-                whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                viewport={{ once: true, margin: "-30px" }}
-                transition={{ duration: 0.5, delay: idx * 0.08, ease: "easeOut" }}
-                whileHover={{ 
-                  y: -8, 
-                  rotate: idx % 2 === 0 ? 1.5 : -1.5,
-                  boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
-                  borderColor: "rgba(197, 146, 24, 0.4)"
-                }}
-                className={`bg-stone-950/85 backdrop-blur-md rounded-2xl p-6 border border-amber-500/25 shadow-lg relative flex flex-col justify-between transition-all duration-300 ${
-                  idx % 3 === 0 ? "border-l-4 border-l-brand-pink" :
-                  idx % 3 === 1 ? "border-l-4 border-l-amber-500" : "border-l-4 border-l-amber-700"
-                }`}
-              >
-                <div>
-                  <div className="flex gap-0.5 mb-2.5">
-                    {Array.from({ length: r.rating }).map((_, i) => (
-                      <Star key={i} className="h-4 w-4 text-amber-400 fill-amber-400 animate-pulse" style={{ animationDelay: `${i * 0.15}s` }} />
-                    ))}
+            {RECOMMENDATIONS.map((r, idx) => {
+              const isSwept = activeCommentSweepIndex === idx;
+              return (
+                <motion.div
+                  key={r.id}
+                  initial={{ opacity: 0, y: 35, scale: 0.96 }}
+                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                  viewport={{ once: true, margin: "-30px" }}
+                  transition={{ duration: 0.5, delay: idx * 0.08, ease: "easeOut" }}
+                  whileHover={{ 
+                    y: -8, 
+                    rotate: idx % 2 === 0 ? 1.5 : -1.5,
+                    boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.5)",
+                    borderColor: "rgba(197, 146, 24, 0.4)"
+                  }}
+                  animate={isSwept ? {
+                    scale: 1.025,
+                    borderColor: "rgba(251, 191, 36, 0.75)",
+                    boxShadow: "0 20px 40px -10px rgba(245, 158, 11, 0.25)",
+                    y: -4
+                  } : {
+                    scale: 1,
+                    borderColor: "rgba(245, 158, 11, 0.25)",
+                    boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                    y: 0
+                  }}
+                  className={`bg-stone-950/85 backdrop-blur-md rounded-2xl p-6 border relative flex flex-col justify-between overflow-hidden transition-all duration-500 ${
+                    idx % 3 === 0 ? "border-l-4 border-l-brand-pink" :
+                    idx % 3 === 1 ? "border-l-4 border-l-amber-500" : "border-l-4 border-l-amber-700"
+                  }`}
+                >
+                  {/* Sweep shimmer overlay */}
+                  {isSwept && (
+                    <motion.div
+                      className="absolute inset-y-0 w-32 bg-gradient-to-r from-transparent via-white/10 to-transparent -skew-x-20 z-10 pointer-events-none"
+                      initial={{ left: "-100%" }}
+                      animate={{ left: "200%" }}
+                      transition={{ duration: 0.8, ease: "easeInOut" }}
+                    />
+                  )}
+
+                  <div className="relative z-20">
+                    <div className="flex gap-0.5 mb-2.5">
+                      {Array.from({ length: r.rating }).map((_, i) => (
+                        <Star key={i} className={`h-4 w-4 ${isSwept ? 'text-yellow-300 fill-yellow-300' : 'text-amber-400 fill-amber-400'} animate-pulse`} style={{ animationDelay: `${i * 0.15}s` }} />
+                      ))}
+                    </div>
+                    <p className={`text-[13.5px] font-medium leading-relaxed mb-4 transition-colors duration-300 ${isSwept ? 'text-white' : 'text-zinc-100'}`}>
+                      "{r.comment}"
+                    </p>
                   </div>
-                  <p className="text-zinc-100 text-[13.5px] font-medium leading-relaxed mb-4">
-                    "{r.comment}"
-                  </p>
-                </div>
-                <div className="flex items-center justify-between mt-2 border-t border-zinc-800/80 pt-3">
-                  <div>
-                    <h4 className="text-xs font-display font-bold text-amber-200">{r.name}</h4>
+                  <div className="flex items-center justify-between mt-2 border-t border-zinc-800/80 pt-3 relative z-20">
+                    <div>
+                      <h4 className={`text-xs font-display font-bold transition-colors duration-300 ${isSwept ? 'text-yellow-200' : 'text-amber-200'}`}>{r.name}</h4>
+                    </div>
                   </div>
-                </div>
-              </motion.div>
-            ))}
+                </motion.div>
+              );
+            })}
           </div>
 
           {/* Feedback notice badge */}
