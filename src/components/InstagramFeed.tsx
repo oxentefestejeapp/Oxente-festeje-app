@@ -107,7 +107,7 @@ export const InstagramFeed: React.FC = () => {
     if (!slider) return;
 
     let animationFrameId: number;
-    const speed = 3.44; // Reduced speed by an additional 15% (from 4.05) as requested by the user to make reading even more comfortable
+    const speed = 2.75; // Reduced speed by 20% from 3.44 as requested by the user to make reading even more comfortable
 
     // Align ref with current scroll position
     scrollXRef.current = slider.scrollLeft;
