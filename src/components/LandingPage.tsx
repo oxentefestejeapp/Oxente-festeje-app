@@ -788,17 +788,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           className="absolute bottom-[30%] right-[10%] w-[300px] sm:w-[450px] h-[300px] sm:h-[450px] rounded-full bg-rose-500/10 filter blur-[90px] sm:blur-[130px] pointer-events-none z-0"
         />
 
-        {/* PARALLAX SKY ELEMENTS (Moon and Clouds) */}
-        {/* Full Moon (Lua do Sertão) */}
-        <div 
-          style={{ transform: `translateY(${scrollY * 0.28}px)` }}
-          className="absolute top-[120px] right-[8%] w-24 h-24 rounded-full bg-gradient-to-br from-amber-100 via-amber-300 to-amber-500 shadow-[0_0_60px_rgba(245,158,11,0.3)] opacity-75 z-10 pointer-events-none transition-transform duration-75 ease-out"
-        >
-          {/* Lunar details */}
-          <div className="absolute top-[25%] left-[25%] w-4 h-4 rounded-full bg-amber-600/10" />
-          <div className="absolute top-[55%] left-[45%] w-6 h-6 rounded-full bg-amber-600/10" />
-          <div className="absolute top-[40%] left-[65%] w-3 h-3 rounded-full bg-amber-600/10" />
-        </div>
+        {/* PARALLAX SKY ELEMENTS (Clouds) */}
 
         {/* Fluffy Cloud 1 (Left Side) */}
         <div 
@@ -1240,33 +1230,9 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         </svg>
       </motion.div>
 
-      {/* Full-width Profile Header */}
-      <div id="whatsapp-profile-header" className="relative w-full overflow-hidden z-20">
-        
-        {/* Cover Banner (Festa Junina / Bonfire background) */}
-        <div className="relative h-56 sm:h-64 md:h-80 lg:h-[400px] w-full overflow-hidden bg-stone-950">
-          <OptimizedImage 
-            src="/banner.webp" 
-            fallbackSrc="/banner.png"
-            alt="Oxente Festeje Banner" 
-            isAboveFold={true}
-            width={1200}
-            quality={75}
-            className="w-full h-full object-cover object-center"
-            onError={(e) => {
-              // Only fallback to local files, never replace the user's custom banner with generic Unsplash images
-              const currentSrc = e.currentTarget.src;
-              if (currentSrc.includes('/banner.webp')) {
-                e.currentTarget.src = '/banner.png';
-              } else if (currentSrc.includes('/banner.png')) {
-                e.currentTarget.src = '/banner.jpg';
-              } else if (currentSrc.includes('/banner.jpg')) {
-                e.currentTarget.src = '/perfil.png';
-              }
-            }}
-          />
-        </div>
-
+      {/* Full-width Profile Header (Instagram Feed on top instead of cover banner) */}
+      <div id="whatsapp-profile-header" className="relative w-full overflow-hidden z-20 pt-4">
+        <InstagramFeed />
       </div>
 
       {/* Main Container */}
@@ -1479,8 +1445,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           </motion.div>
         </motion.div>
 
-        {/* Instagram Feed Section */}
-        <InstagramFeed />
+
 
         {/* Success Counter (Social Proof) */}
         <motion.div

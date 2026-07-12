@@ -400,11 +400,11 @@ export const InstagramFeed: React.FC = () => {
       id="instagram-feed-section"
     >
       {/* Feed Header */}
-      <div className="flex flex-col items-center text-center mb-8">
-        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-500/10 via-amber-500/10 to-red-500/10 px-4 py-1.5 rounded-full border border-amber-500/20 shadow-[0_2px_12px_rgba(245,158,11,0.05)] mb-4 relative group/badge">
+      <div className="flex flex-col items-center text-center mb-4">
+        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-500/10 via-amber-500/10 to-red-500/10 px-4 py-1.5 rounded-full border border-amber-500/20 shadow-[0_2px_12px_rgba(245,158,11,0.05)] mb-2 relative group/badge">
           <Instagram className="h-4 w-4 text-pink-400 animate-pulse" />
           <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
-            Mural do Instagram <Sparkles className="h-3 w-3 text-amber-400 fill-amber-400" />
+            Oxente Festeje <Sparkles className="h-3 w-3 text-amber-400 fill-amber-400" />
           </span>
           <button
             onClick={() => {
@@ -425,53 +425,6 @@ export const InstagramFeed: React.FC = () => {
             {isAdminMode ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
           </button>
         </div>
-
-        <motion.div
-          animate={{
-            x: [0, -2, 2, -2, 2, -1, 1, 0],
-            rotate: [0, -1, 1, -0.8, 0.8, -0.4, 0.4, 0],
-            boxShadow: [
-              "0px 0px 25px rgba(245, 158, 11, 0.35)",
-              "0px 0px 45px rgba(251, 191, 36, 0.85)",
-              "0px 0px 45px rgba(251, 191, 36, 0.85)",
-              "0px 0px 25px rgba(245, 158, 11, 0.35)"
-            ],
-            borderColor: [
-              "rgba(253, 224, 71, 0.5)",
-              "rgba(253, 224, 71, 0.9)",
-              "rgba(253, 224, 71, 0.9)",
-              "rgba(253, 224, 71, 0.5)"
-            ]
-          }}
-          transition={{
-            repeat: Infinity,
-            duration: 1.0,
-            ease: "easeInOut",
-            repeatDelay: 3.0,
-          }}
-          className="relative overflow-hidden py-4 px-6 sm:px-8 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 max-w-xl mx-auto cursor-default shadow-[0_10px_30px_rgba(245,158,11,0.25)] flex flex-col items-center gap-2"
-        >
-          {/* Shimmer/Light ray sliding effect */}
-          <motion.div
-            className="absolute inset-y-0 w-32 bg-gradient-to-r from-transparent via-white to-transparent -skew-x-20 z-10 mix-blend-overlay opacity-90 sm:opacity-100"
-            animate={{
-              left: ['-100%', '200%'],
-            }}
-            transition={{
-              repeat: Infinity,
-              duration: 2.2,
-              ease: "linear",
-            }}
-          />
-
-          <h3 className="text-xl sm:text-2xl font-display font-black text-amber-950 uppercase tracking-tight relative z-20 flex items-center gap-2">
-            <Instagram className="h-5 w-5 text-amber-950 shrink-0 animate-bounce" />
-            Siga @oxentefesteje
-          </h3>
-          <p className="text-amber-950 text-xs sm:text-sm font-sans font-bold leading-relaxed max-w-md relative z-20">
-            Veja as novidades mais recentes diretamente do nosso feed. Clique em qualquer foto para ver no Instagram!
-          </p>
-        </motion.div>
       </div>
 
       {/* Infinite Rolling Slider Outer Container */}
