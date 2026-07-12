@@ -306,28 +306,20 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
     }
   }, [speechBubble]);
 
-  // Auto trigger triangle speech bubble after 35 seconds of page load
+  // Auto trigger triangle speech bubble disabled to keep landing page quiet
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setTriangleSpeechText("toque em mim pra fazer música!");
-      triggerSpeech('triangulo');
-    }, 35000);
-    return () => clearTimeout(timer);
+    // Disabled as requested to prevent auto sound/speech triggers
   }, []);
 
   const triggerSpeech = (character: 'sanfona' | 'zabumba' | 'triangulo' | 'casal' | 'cacto_esq' | 'cacto_dir') => {
     setSpeechBubble(character);
-    
-    // Play happy instruments audio feedback using web audio synthesizers
-    try {
-      // Cacti only trigger visual speech bubble (no sound output)
-      if (character === 'cacto_esq' || character === 'cacto_dir') {
-        return;
-      }
+    return;
+  };
 
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const now = audioCtx.currentTime;
-      
+  const triggerSpeechUnused = (character: 'sanfona' | 'zabumba' | 'triangulo' | 'casal' | 'cacto_esq' | 'cacto_dir') => {
+    const audioCtx: any = null;
+    const now = 0;
+    try {
       if (character === 'sanfona') {
         // High-quality Accordion: Rich multi-reed chorused tones with a bellows-squeeze volume curve
         const playSqueeze = (startTime: number, duration: number, vol: number) => {
@@ -903,347 +895,20 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         </div>
       )}
 
-      {/* ANIMATED NORTHEAST CANGAÇO BACKGROUND CHARACTERS (Inspired by reference family image) */}
-      
-      {/* 1. Sr. Mandacaru (Cute Cactus wearing traditional Lampião leather hat) */}
-      <motion.div
-        onClick={() => triggerSpeech('cacto_esq')}
-        className="fixed bottom-0 left-[2%] md:left-[4%] z-40 w-24 md:w-32 cursor-pointer pointer-events-auto select-none"
-        animate={{ y: [15, 0, 15], rotate: [-1, 2, -1] }}
-        transition={{ repeat: Infinity, duration: 4.5, ease: "easeInOut" }}
-      >
-        <AnimatePresence>
-          {speechBubble === 'cacto_esq' && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 15 }}
-              className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
-            >
-              <span>🌵 Oxente! 🌵</span>
-              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <svg viewBox="0 0 120 160" className="w-full h-auto drop-shadow-md">
-          {/* Cactus Arms */}
-          <path d="M25,85 Q10,80 15,65 Q20,50 30,58 Q32,68 28,80" fill="#22c55e" stroke="#15803d" strokeWidth="2" />
-          <path d="M95,75 Q110,70 105,55 Q100,40 90,48 Q88,58 92,70" fill="#22c55e" stroke="#15803d" strokeWidth="2" />
-          
-          {/* Cactus Main Body */}
-          <rect x="30" y="45" width="60" height="110" rx="30" fill="#15803d" />
-          <rect x="35" y="48" width="50" height="104" rx="25" fill="#22c55e" />
-          
-          {/* Needles */}
-          <path d="M20,60 L14,58 M18,70 L10,72 M102,50 L108,48 M100,62 L108,65 M40,60 L36,55 M80,65 L84,60 M50,110 L44,112 M70,120 L76,122" stroke="#ffffff" strokeWidth="1.5" strokeLinecap="round" />
-          
-          {/* Vertical Rib lines for 3D Cactus look */}
-          <path d="M48,48 C48,80 48,120 48,150 M72,48 C72,80 72,120 72,150" stroke="#166534" strokeWidth="1.5" strokeLinecap="round" opacity="0.4" />
-          
-          {/* Lampião / Leather Hat (Chapéu de Couro) */}
-          <g>
-            {/* Crown dome */}
-            <path d="M25,48 C25,18 95,18 95,48 Z" fill="#854d0e" stroke="#451a03" strokeWidth="2" />
-            {/* Gold ornaments inside dome */}
-            <circle cx="45" cy="35" r="5" fill="#eab308" stroke="#451a03" strokeWidth="1" />
-            <path d="M45,30 L45,40 M40,35 L50,35" stroke="#451a03" strokeWidth="1" />
-            <circle cx="75" cy="35" r="5" fill="#eab308" stroke="#451a03" strokeWidth="1" />
-            <path d="M75,30 L75,40 M70,35 L80,35" stroke="#451a03" strokeWidth="1" />
-            
-            {/* Curved Brim */}
-            <path d="M15,46 C35,52 85,52 105,46 C115,40 115,54 105,52 C85,56 35,56 15,52 C5,54 5,40 15,46 Z" fill="#a16207" stroke="#451a03" strokeWidth="2" />
-          </g>
-
-          {/* Cute face */}
-          <g>
-            {/* Cheeks */}
-            <circle cx="45" cy="80" r="6" fill="#f43f5e" opacity="0.6" />
-            <circle cx="75" cy="80" r="6" fill="#f43f5e" opacity="0.6" />
-            {/* Eyes */}
-            <circle cx="48" cy="72" r="4.5" fill="#1c1917" />
-            <circle cx="46" cy="70" r="1.5" fill="#ffffff" />
-            <circle cx="72" cy="72" r="4.5" fill="#1c1917" />
-            <circle cx="70" cy="70" r="1.5" fill="#ffffff" />
-            {/* Red spectacles (Lampião style) */}
-            <circle cx="48" cy="72" r="9" fill="none" stroke="#ef4444" strokeWidth="1.8" />
-            <circle cx="72" cy="72" r="9" fill="none" stroke="#ef4444" strokeWidth="1.8" />
-            <line x1="57" y1="72" x2="63" y2="72" stroke="#ef4444" strokeWidth="1.8" />
-            {/* Happy mouth */}
-            <path d="M54,82 Q60,90 66,82" fill="none" stroke="#1c1917" strokeWidth="2" strokeLinecap="round" />
-          </g>
-
-          {/* Red neck scarf */}
-          <path d="M50,96 L60,108 L70,96 L60,94 Z" fill="#dc2626" />
-          <circle cx="60" cy="95" r="3.5" fill="#facc15" />
-        </svg>
-      </motion.div>
-
-      {/* 2. Dona Maria Flor (Cute Lady Cactus with red glasses, pink flower & leather hat) */}
-      <motion.div
-        onClick={() => triggerSpeech('cacto_dir')}
-        className="fixed bottom-0 right-[2%] md:right-[4%] z-40 w-24 md:w-32 cursor-pointer pointer-events-auto select-none"
-        animate={{ y: [18, 0, 18], rotate: [1, -2, 1] }}
-        transition={{ repeat: Infinity, duration: 4.8, ease: "easeInOut" }}
-      >
-        <AnimatePresence>
-          {speechBubble === 'cacto_dir' && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 15 }}
-              className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
-            >
-              <span>🌵 Festeje! 🎉</span>
-              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <svg viewBox="0 0 120 160" className="w-full h-auto drop-shadow-md">
-          {/* Cactus Arms */}
-          <path d="M25,80 Q12,75 18,60 Q22,48 32,54 Q32,65 28,75" fill="#4ade80" stroke="#16a34a" strokeWidth="2" />
-          <path d="M95,85 Q108,80 102,65 Q98,52 88,58 Q88,68 92,78" fill="#4ade80" stroke="#16a34a" strokeWidth="2" />
-          
-          {/* Cactus Main Body */}
-          <rect x="30" y="45" width="60" height="110" rx="30" fill="#16a34a" />
-          <rect x="35" y="48" width="50" height="104" rx="25" fill="#4ade80" />
-          
-          {/* Needles */}
-          <path d="M22,58 L16,56 M104,58 L110,56 M38,62 L32,58 M82,62 L88,58 M50,115 L44,117 M70,115 L76,117" stroke="#ffffff" strokeWidth="1.2" strokeLinecap="round" />
-          
-          {/* Pink Flower on head */}
-          <g transform="translate(60, 20)">
-            <circle cx="0" cy="-6" r="6" fill="#f43f5e" />
-            <circle cx="6" cy="0" r="6" fill="#f43f5e" />
-            <circle cx="0" cy="6" r="6" fill="#f43f5e" />
-            <circle cx="-6" cy="0" r="6" fill="#f43f5e" />
-            <circle cx="0" cy="0" r="4.5" fill="#facc15" />
-          </g>
-
-          {/* Golden Cangaço Leather Hat */}
-          <g>
-            <path d="M30,48 C30,22 90,22 90,48 Z" fill="#a16207" stroke="#451a03" strokeWidth="1.8" />
-            <circle cx="48" cy="36" r="4" fill="#ca8a04" stroke="#451a03" strokeWidth="1" />
-            <circle cx="72" cy="36" r="4" fill="#ca8a04" stroke="#451a03" strokeWidth="1" />
-            <path d="M20,46 C38,51 82,51 100,46 C110,41 110,52 100,50 C82,53 38,53 20,50 C10,52 10,41 20,46 Z" fill="#ca8a04" stroke="#451a03" strokeWidth="1.8" />
-          </g>
-
-          {/* Friendly face with glasses */}
-          <g>
-            {/* Blushing cheeks */}
-            <circle cx="45" cy="82" r="7" fill="#fda4af" opacity="0.8" />
-            <circle cx="75" cy="82" r="7" fill="#fda4af" opacity="0.8" />
-            {/* Eyes winking/smiling */}
-            <circle cx="48" cy="74" r="4.5" fill="#1c1917" />
-            <circle cx="46" cy="72" r="1.5" fill="#ffffff" />
-            
-            {/* Happy wink eye */}
-            <path d="M70,74 Q74,70 78,74" fill="none" stroke="#1c1917" strokeWidth="2.5" strokeLinecap="round" />
-            
-            {/* Elegant Red spectacles (Maria Bonita glasses!) */}
-            <circle cx="48" cy="74" r="10" fill="none" stroke="#ef4444" strokeWidth="2" />
-            <circle cx="72" cy="74" r="10" fill="none" stroke="#ef4444" strokeWidth="2" />
-            <line x1="58" y1="74" x2="62" y2="74" stroke="#ef4444" strokeWidth="2" />
-            
-            {/* Cute smile */}
-            <path d="M54,84 Q60,92 66,84" fill="none" stroke="#1c1917" strokeWidth="2" strokeLinecap="round" />
-          </g>
-
-          {/* Red neck bandanna */}
-          <path d="M52,98 L60,110 L68,98 Z" fill="#ef4444" />
-        </svg>
-      </motion.div>
-
-      {/* 3. Seu Sanfoninha (Smiling Bouncing Accordion Character) */}
-      <motion.div
-        onClick={() => triggerSpeech('sanfona')}
-        className="fixed bottom-[3%] left-[28%] md:left-[31%] z-40 w-16 md:w-20 cursor-pointer pointer-events-auto select-none"
-        animate={{ x: [-3, 3, -3], scaleX: [0.95, 1.05, 0.95], rotate: [-2, 2, -2] }}
-        transition={{ repeat: Infinity, duration: 3.2, ease: "easeInOut" }}
-      >
-        <AnimatePresence>
-          {speechBubble === 'sanfona' && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 15 }}
-              className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
-            >
-              <span>🌵 uai, bora fazer seu pedido! 🌵</span>
-              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <svg viewBox="0 0 100 120" className="w-full h-auto drop-shadow-md">
-          {/* Left Keyboard block */}
-          <rect x="15" y="40" width="12" height="60" rx="3" fill="#dc2626" stroke="#451a03" strokeWidth="1.5" />
-          {/* Black & white keys */}
-          <rect x="17" y="45" width="8" height="5" fill="#ffffff" rx="1" />
-          <rect x="17" y="52" width="8" height="5" fill="#ffffff" rx="1" />
-          <rect x="17" y="59" width="8" height="5" fill="#ffffff" rx="1" />
-          <rect x="17" y="66" width="8" height="5" fill="#ffffff" rx="1" />
-          <rect x="17" y="73" width="8" height="5" fill="#ffffff" rx="1" />
-          <rect x="17" y="80" width="8" height="5" fill="#ffffff" rx="1" />
-          <rect x="17" y="87" width="8" height="5" fill="#ffffff" rx="1" />
-          
-          {/* Bellows (Sanfona folds in middle) */}
-          <path d="M27,45 L35,40 L43,45 L51,40 L59,45 L67,40 L73,45 L73,95 L67,100 L59,95 L51,100 L43,95 L35,100 L27,95 Z" fill="#eab308" stroke="#451a03" strokeWidth="1.5" />
-          <path d="M35,40 L35,100 M51,40 L51,100 M67,40 L67,100" stroke="#ca8a04" strokeWidth="1.5" />
-
-          {/* Right Bass block */}
-          <rect x="73" y="40" width="12" height="60" rx="3" fill="#dc2626" stroke="#451a03" strokeWidth="1.5" />
-          {/* Bass Buttons */}
-          <circle cx="79" cy="48" r="1.5" fill="#ffffff" />
-          <circle cx="79" cy="56" r="1.5" fill="#ffffff" />
-          <circle cx="79" cy="64" r="1.5" fill="#ffffff" />
-          <circle cx="79" cy="72" r="1.5" fill="#ffffff" />
-          <circle cx="79" cy="80" r="1.5" fill="#ffffff" />
-          <circle cx="79" cy="88" r="1.5" fill="#ffffff" />
-
-          {/* Cute face in the bellows */}
-          <g>
-            <circle cx="43" cy="65" r="3.5" fill="#1c1917" />
-            <circle cx="57" cy="65" r="3.5" fill="#1c1917" />
-            <circle cx="42" cy="63" r="1" fill="#ffffff" />
-            <circle cx="56" cy="63" r="1" fill="#ffffff" />
-            <path d="M47,72 Q50,76 53,72" fill="none" stroke="#1c1917" strokeWidth="1.8" strokeLinecap="round" />
-          </g>
-
-          {/* Mini Leather Hat on the Accordion */}
-          <path d="M35,35 C35,20 65,20 65,35 Z" fill="#854d0e" stroke="#451a03" strokeWidth="1.5" />
-          <path d="M28,34 C40,37 60,37 72,34 C76,31 76,38 72,37 C60,39 40,39 28,37 C24,38 24,31 28,34 Z" fill="#a16207" stroke="#451a03" strokeWidth="1.5" />
-        </svg>
-      </motion.div>
-
-      {/* 4. Triângulinho (Cute traditional triangle instrument character) - Placed next to Seu Sanfoninha */}
-      <motion.div
-        onClick={(e) => {
-          e.stopPropagation();
-          setTriangleSpeechText("olha o triângulo do forró! ✨️");
-          triggerSpeech('triangulo');
-        }}
-        className="fixed bottom-[3%] left-[48%] md:left-[50%] -translate-x-1/2 z-40 w-14 md:w-18 cursor-pointer pointer-events-auto select-none"
-        animate={{ y: [-5, 5, -5], rotate: [-6, 6, -6] }}
-        transition={{ repeat: Infinity, duration: 2.5, ease: "easeInOut" }}
-      >
-        <AnimatePresence>
-          {speechBubble === 'triangulo' && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 15 }}
-              className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
-            >
-              <span>📐 {triangleSpeechText} 🎵</span>
-              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <svg viewBox="0 0 100 120" className="w-full h-auto drop-shadow-md">
-          {/* Hanging loop line */}
-          <path d="M50,15 L50,30" stroke="#a16207" strokeWidth="2.5" strokeLinecap="round" />
-          
-          {/* Main Triangle metallic bar */}
-          <path d="M50,30 L15,95 L85,95 Z" fill="none" stroke="#facc15" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round" />
-          {/* Inner silver gleam */}
-          <path d="M50,32 L18,93 L82,93" fill="none" stroke="#ffffff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" opacity="0.8" />
-          
-          {/* Face background inside the triangle for high contrast with landpage background */}
-          <polygon points="50,38 25,90 75,90" fill="#fef08a" stroke="#ca8a04" strokeWidth="1.5" />
-
-          {/* Little Leather Hat on top of the Triangle */}
-          <path d="M38,26 C38,12 62,12 62,26 Z" fill="#854d0e" stroke="#451a03" strokeWidth="1.5" />
-          <path d="M30,25 C40,28 60,28 70,25 C74,22 74,29 70,28 C60,30 40,30 30,28 C26,29 26,22 30,25 Z" fill="#a16207" stroke="#451a03" strokeWidth="1.5" />
-
-          {/* Cute face in the center */}
-          <g transform="translate(0, 15)">
-            <circle cx="42" cy="62" r="3.5" fill="#1c1917" />
-            <circle cx="58" cy="62" r="3.5" fill="#1c1917" />
-            <circle cx="41" cy="60" r="1" fill="#ffffff" />
-            <circle cx="57" cy="60" r="1" fill="#ffffff" />
-            {/* Blushing cheeks */}
-            <circle cx="38" cy="66" r="3" fill="#f43f5e" opacity="0.6" />
-            <circle cx="62" cy="66" r="3" fill="#f43f5e" opacity="0.6" />
-            <path d="M47,68 Q50,72 53,68" fill="none" stroke="#1c1917" strokeWidth="2" strokeLinecap="round" />
-          </g>
-
-          {/* Triangle striker stick animating */}
-          <motion.line 
-            x1="12" y1="75" x2="38" y2="60" 
-            stroke="#94a3b8" strokeWidth="3" strokeLinecap="round" 
-            animate={{ rotate: [0, 20, -10, 0] }}
-            transition={{ repeat: Infinity, duration: 0.8, ease: "easeInOut" }}
-            style={{ originX: "38px", originY: "60px" }}
-          />
-        </svg>
-      </motion.div>
-
-      {/* 5. Zabumbinha (Cute traditional bouncing drum character) */}
-      <motion.div
-        onClick={() => triggerSpeech('zabumba')}
-        className="fixed bottom-[3%] right-[28%] md:right-[31%] z-40 w-14 md:w-18 cursor-pointer pointer-events-auto select-none"
-        animate={{ y: [-6, 4, -6], rotate: [5, -5, 5] }}
-        transition={{ repeat: Infinity, duration: 2.8, ease: "easeInOut" }}
-      >
-        <AnimatePresence>
-          {speechBubble === 'zabumba' && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.8, y: 15 }}
-              className="absolute -top-16 left-1/2 -translate-x-1/2 bg-zinc-950/95 text-amber-300 font-display font-black text-[10px] md:text-xs px-3 py-2 rounded-2xl shadow-xl border-2 border-amber-500/80 whitespace-nowrap z-50 flex items-center gap-1"
-            >
-              <span>🎉 Bem vindo a Oxente Festeje, bora comemorar! 🌵</span>
-              <div className="absolute bottom-[-8px] left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[8px] border-t-amber-500" />
-            </motion.div>
-          )}
-        </AnimatePresence>
-        <svg viewBox="0 0 100 120" className="w-full h-auto drop-shadow-md">
-          {/* Drum body cylinder */}
-          <ellipse cx="50" cy="50" rx="35" ry="15" fill="#854d0e" stroke="#451a03" strokeWidth="2" />
-          <rect x="15" y="50" width="70" height="40" fill="#a16207" stroke="#451a03" strokeWidth="2" />
-          <ellipse cx="50" cy="90" rx="35" ry="15" fill="#854d0e" stroke="#451a03" strokeWidth="2" />
-          
-          {/* Leather strings lace pattern around drum body */}
-          <path d="M15,50 L27,90 L39,50 L51,90 L63,50 L75,90 L85,50" fill="none" stroke="#facc15" strokeWidth="1.8" strokeLinecap="round" />
-
-          {/* Drum Skin Top */}
-          <ellipse cx="50" cy="50" rx="32" ry="12" fill="#fef08a" stroke="#ca8a04" strokeWidth="1" />
-
-          {/* Smiling drum face */}
-          <g>
-            <circle cx="40" cy="70" r="3.5" fill="#1c1917" />
-            <circle cx="60" cy="70" r="3.5" fill="#1c1917" />
-            <circle cx="39" cy="68" r="1" fill="#ffffff" />
-            <circle cx="59" cy="68" r="1" fill="#ffffff" />
-            <circle cx="36" cy="74" r="3.5" fill="#fda4af" opacity="0.6" />
-            <circle cx="64" cy="74" r="3.5" fill="#fda4af" opacity="0.6" />
-            <path d="M46,77 Q50,82 54,77" fill="none" stroke="#1c1917" strokeWidth="2" strokeLinecap="round" />
-          </g>
-
-          {/* Mini Leather Hat on the drum */}
-          <path d="M38,44 C38,30 62,30 62,44 Z" fill="#854d0e" stroke="#451a03" strokeWidth="1.5" />
-          <path d="M30,43 C40,46 60,46 70,43 C74,40 74,47 70,46 C60,48 40,48 30,46 C26,47 26,40 30,43 Z" fill="#a16207" stroke="#451a03" strokeWidth="1.5" />
-          
-          {/* Little drum beating mallet/sticks crossing */}
-          <line x1="12" y1="95" x2="40" y2="108" stroke="#f43f5e" strokeWidth="2.5" strokeLinecap="round" />
-          <circle cx="40" cy="108" r="4.5" fill="#ef4444" />
-        </svg>
-      </motion.div>
-
       {/* Full-width Profile Header (Instagram Feed on top instead of cover banner) */}
-      <div id="whatsapp-profile-header" className="relative w-full overflow-hidden z-20 pt-4">
+      <div id="whatsapp-profile-header" className="relative w-full overflow-hidden z-20 pt-1 sm:pt-4">
         <InstagramFeed />
       </div>
 
       {/* Main Container */}
-      <div className="relative max-w-4xl mx-auto px-6 pt-10 pb-32 z-20 flex flex-col items-center text-center">
+      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 pt-3 sm:pt-10 pb-16 sm:pb-32 z-20 flex flex-col items-center text-center">
         
         {/* Gold Highlight Badge (A loja de brindes mais seguida...) */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.1 }}
-          className="w-fit max-w-full mx-auto mb-8"
+          className="w-fit max-w-full mx-auto mb-3 sm:mb-8"
         >
           <motion.div
             animate={{
@@ -1269,7 +934,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               ease: "easeInOut",
               repeatDelay: 2.5,
             }}
-            className="relative overflow-hidden px-4 py-3 sm:px-6 sm:py-4 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 flex items-center justify-center gap-1.5 sm:gap-3 cursor-default flex-nowrap"
+            className="relative overflow-hidden px-2 py-1.5 min-[375px]:px-3 min-[375px]:py-2 sm:px-6 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 flex items-center justify-center gap-0.5 min-[375px]:gap-1 sm:gap-3 cursor-default flex-nowrap"
             id="gold-highlight-badge"
           >
             {/* Shimmer/Light ray sliding effect */}
@@ -1285,11 +950,11 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               }}
             />
 
-            <Award className="h-4 w-4 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0 relative z-20" />
-            <span className="font-display font-black text-amber-950 text-[9px] min-[375px]:text-[11px] sm:text-xs md:text-sm uppercase tracking-wider relative z-20 sm:whitespace-nowrap whitespace-normal text-center max-w-[220px] sm:max-w-none leading-relaxed">
+            <Award className="h-3 w-3 min-[375px]:h-3.5 min-[375px]:w-3.5 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0 relative z-20" />
+            <span className="font-display font-black text-[#1c1917] text-[6.5px] min-[340px]:text-[7.5px] min-[375px]:text-[8.5px] min-[400px]:text-[9.5px] sm:text-xs md:text-sm uppercase tracking-normal min-[375px]:tracking-wider relative z-20 whitespace-nowrap text-center max-w-none leading-none">
               A loja de brindes mais seguida de João Pessoa com mais de 100mil seguidores
             </span>
-            <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-pulse shrink-0 relative z-20" />
+            <Sparkles className="h-3 w-3 min-[375px]:h-3.5 min-[375px]:w-3.5 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-pulse shrink-0 relative z-20" />
           </motion.div>
         </motion.div>
 
@@ -1298,11 +963,11 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.5, delay: 0.1 }}
-          className="relative w-full max-w-lg md:max-w-3xl bg-zinc-950/80 backdrop-blur-md rounded-3xl border border-amber-500/35 p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-4 md:gap-6 mb-12"
+          className="relative w-full max-w-lg md:max-w-3xl bg-zinc-950/80 backdrop-blur-md rounded-2xl sm:rounded-3xl border border-amber-500/35 p-3.5 sm:p-8 md:p-12 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col gap-3 sm:gap-4 md:gap-6 mb-4 sm:mb-12"
           id="painel-botoes"
         >
-          <h2 className="text-lg md:text-2xl font-display font-bold text-amber-100 flex items-center justify-center gap-2 md:gap-3 mb-2 md:mb-4">
-            <Sparkles className="h-5 w-5 md:h-7 md:w-7 text-amber-400 fill-amber-400 animate-pulse" />
+          <h2 className="text-base sm:text-lg md:text-2xl font-display font-bold text-amber-100 flex items-center justify-center gap-1.5 sm:gap-2 md:gap-3 mb-1 sm:mb-2 md:mb-4">
+            <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 md:h-7 md:w-7 text-amber-400 fill-amber-400 animate-pulse" />
             <span>O que você deseja fazer hoje?</span>
           </h2>
 
@@ -1316,16 +981,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             onClick={() => {
               trackGoogleAdsEvent('click_whatsapp_orcamento', 'Fazer Orçamento no WhatsApp');
             }}
-            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
+            className="relative flex items-center gap-2.5 sm:gap-4 md:gap-6 bg-gradient-to-r from-emerald-600 to-green-800 text-white font-display font-bold p-3 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
           >
-            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
-              <MessageSquare className="h-5 w-5 md:h-7 md:w-7 text-white" />
+            <div className="bg-white/10 p-1.5 sm:p-2.5 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
+              <MessageSquare className="h-4 w-4 sm:h-5 sm:w-5 md:h-7 md:w-7 text-white" />
             </div>
             <div className="flex-1 relative z-10">
-              <span className="block text-sm md:text-lg">Fazer Orçamento no WhatsApp</span>
-              <span className="block text-xs md:text-sm font-normal text-emerald-100/85 mt-0.5 font-sans">Fale diretamente com nossa equipe</span>
+              <span className="block text-[11px] min-[340px]:text-xs sm:text-sm md:text-lg font-black leading-tight">Fazer Orçamento no WhatsApp</span>
+              <span className="block text-[9px] min-[340px]:text-[10px] sm:text-xs md:text-sm font-normal text-emerald-100/85 mt-0.5 font-sans leading-none">Fale diretamente com nossa equipe</span>
             </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-white/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+            <ArrowRight className="h-3.5 w-3.5 sm:h-5 sm:w-5 md:h-6 md:w-6 text-white/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
           </MagneticButton>
 
           {/* BUTTON 2: Instagram Direct Link */}
@@ -1338,16 +1003,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             onClick={() => {
               trackGoogleAdsEvent('click_instagram', 'Siga-nos no Instagram');
             }}
-            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-[#e1306c] via-[#f77737] to-[#fcb045] text-white font-display font-black p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
+            className="relative flex items-center gap-2.5 sm:gap-4 md:gap-6 bg-gradient-to-r from-[#e1306c] via-[#f77737] to-[#fcb045] text-white font-display font-black p-3 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
           >
-            <div className="bg-black/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
-              <Instagram className="h-5 w-5 md:h-7 md:w-7 text-white" />
+            <div className="bg-black/10 p-1.5 sm:p-2.5 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
+              <Instagram className="h-4 w-4 sm:h-5 sm:w-5 md:h-7 md:w-7 text-white" />
             </div>
             <div className="flex-1 relative z-10">
-              <span className="block text-sm md:text-lg">Siga-nos no Instagram</span>
-              <span className="block text-xs md:text-sm font-bold text-zinc-100/85 mt-0.5 font-sans">@oxentefesteje · Inspirações diárias</span>
+              <span className="block text-[11px] min-[340px]:text-xs sm:text-sm md:text-lg font-black leading-tight">Siga-nos no Instagram</span>
+              <span className="block text-[9px] min-[340px]:text-[10px] sm:text-xs md:text-sm font-bold text-zinc-100/85 mt-0.5 font-sans leading-none">@oxentefesteje · Inspirações diárias</span>
             </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-zinc-100/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+            <ArrowRight className="h-3.5 w-3.5 sm:h-5 sm:w-5 md:h-6 md:w-6 text-zinc-100/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
           </MagneticButton>
 
           {/* BUTTON 3: Google Maps Direct Link */}
@@ -1360,16 +1025,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             onClick={() => {
               trackGoogleAdsEvent('click_como_chegar', 'Como Chegar na Loja (Google Maps)');
             }}
-            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
+            className="relative flex items-center gap-2.5 sm:gap-4 md:gap-6 bg-gradient-to-r from-amber-600 to-amber-800 text-amber-50 font-display font-bold p-3 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl md:rounded-3xl hover:brightness-110 transition-all text-left group overflow-hidden w-full"
           >
-            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
-              <MapPin className="h-5 w-5 md:h-7 md:w-7 text-amber-50" />
+            <div className="bg-white/10 p-1.5 sm:p-2.5 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
+              <MapPin className="h-4 w-4 sm:h-5 sm:w-5 md:h-7 md:w-7 text-amber-50" />
             </div>
             <div className="flex-1 relative z-10">
-              <span className="block text-sm md:text-lg">Como Chegar na Loja</span>
-              <span className="block text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans">Clique para abrir no Google Maps</span>
+              <span className="block text-[11px] min-[340px]:text-xs sm:text-sm md:text-lg font-black leading-tight">Como Chegar na Loja</span>
+              <span className="block text-[9px] min-[340px]:text-[10px] sm:text-xs md:text-sm font-normal text-amber-200/80 mt-0.5 font-sans leading-none">Clique para abrir no Google Maps</span>
             </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+            <ArrowRight className="h-3.5 w-3.5 sm:h-5 sm:w-5 md:h-6 md:w-6 text-amber-200/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
           </MagneticButton>
 
           {/* BUTTON 4: Order Real-time Tracking Panel */}
@@ -1377,16 +1042,16 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
             onClick={() => setShowTrackingModal(true)}
             delay={0.45}
             glowColor="rgba(56, 189, 248, 0.35)"
-            className="relative flex items-center gap-4 md:gap-6 bg-gradient-to-r from-sky-400 via-blue-600 to-indigo-900 border border-sky-400/20 text-white font-display font-bold p-4 md:p-6 rounded-2xl md:rounded-3xl hover:border-sky-400/40 transition-all text-left group cursor-pointer overflow-hidden w-full shadow-[0_4px_20px_rgba(14,165,233,0.15)]"
+            className="relative flex items-center gap-2.5 sm:gap-4 md:gap-6 bg-gradient-to-r from-sky-400 via-blue-600 to-indigo-900 border border-sky-400/20 text-white font-display font-bold p-3 sm:p-4 md:p-6 rounded-xl sm:rounded-2xl md:rounded-3xl hover:border-sky-400/40 transition-all text-left group cursor-pointer overflow-hidden w-full shadow-[0_4px_20px_rgba(14,165,233,0.15)]"
           >
-            <div className="bg-white/10 p-2.5 md:p-3.5 rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
-              <Search className="h-5 w-5 md:h-7 md:w-7 text-white" />
+            <div className="bg-white/10 p-1.5 sm:p-2.5 md:p-3.5 rounded-lg sm:rounded-xl md:rounded-2xl group-hover:scale-110 transition-transform flex-shrink-0 relative z-10">
+              <Search className="h-4 w-4 sm:h-5 sm:w-5 md:h-7 md:w-7 text-white" />
             </div>
             <div className="flex-1 relative z-10">
-              <span className="block text-sm md:text-lg text-white font-black">Acompanhar meu Pedido</span>
-              <span className="block text-xs md:text-sm font-normal text-sky-100/85 mt-0.5 font-sans">Consulte o andamento da sua entrega</span>
+              <span className="block text-[11px] min-[340px]:text-xs sm:text-sm md:text-lg text-white font-black leading-tight">Acompanhar meu Pedido</span>
+              <span className="block text-[9px] min-[340px]:text-[10px] sm:text-xs md:text-sm font-normal text-sky-100/85 mt-0.5 font-sans leading-none">Consulte o andamento da sua entrega</span>
             </div>
-            <ArrowRight className="h-5 w-5 md:h-6 md:w-6 text-sky-100/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
+            <ArrowRight className="h-3.5 w-3.5 sm:h-5 sm:w-5 md:h-6 md:w-6 text-sky-100/75 group-hover:translate-x-1 transition-transform mr-1 relative z-10" />
           </MagneticButton>
 
           {/* Tracking Highlight Badge (A única que você acompanha seu pedido em tempo real) */}
@@ -1420,7 +1085,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 ease: "easeInOut",
                 repeatDelay: 2.5,
               }}
-              className="relative overflow-hidden px-4 py-2 rounded-xl sm:rounded-2xl bg-gradient-to-r from-red-950/60 via-[#2d0808]/80 to-red-950/60 border border-red-500/35 flex items-center justify-center gap-1.5 sm:gap-2 cursor-default flex-nowrap"
+              className="relative overflow-hidden px-2.5 py-1.5 min-[375px]:px-3.5 min-[375px]:py-2 rounded-lg sm:rounded-2xl bg-gradient-to-r from-red-950/60 via-[#2d0808]/80 to-red-950/60 border border-red-500/35 flex items-center justify-center gap-1 sm:gap-2 cursor-default flex-nowrap"
               id="tracking-highlight-badge"
             >
               {/* Shimmer/Light ray sliding effect */}
@@ -1453,7 +1118,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
           transition={{ duration: 0.5, delay: 0.15 }}
-          className="mt-6 mb-6 w-fit max-w-full mx-auto"
+          className="mt-2 mb-6 w-fit max-w-full mx-auto"
         >
           <motion.div
             animate={{
@@ -1478,7 +1143,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               ease: "easeInOut",
               repeatDelay: 2.5,
             }}
-            className="relative overflow-hidden flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 text-center z-30 py-3.5 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 max-w-xl mx-auto cursor-default flex-nowrap"
+            className="relative overflow-hidden flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-6 text-center z-30 py-2 px-3 sm:py-3.5 sm:px-6 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 max-w-xl mx-auto cursor-default flex-nowrap"
           >
             {/* Shimmer/Light ray sliding effect */}
             <motion.div
@@ -1493,15 +1158,15 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               }}
             />
 
-            <div className="flex items-center gap-2 relative z-20">
-              <Gift className="h-4.5 w-4.5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0" />
-              <span className="font-display font-black text-amber-950 text-sm tracking-wide">
+            <div className="flex items-center gap-1.5 relative z-20">
+              <Gift className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0" />
+              <span className="font-display font-black text-[#1c1917] text-[10px] sm:text-sm tracking-wide">
                 Mais de 40.000 brindes personalizados entregues ao longo desses 11 anos
               </span>
             </div>
             <div className="hidden sm:block h-3.5 w-px bg-amber-950/20 relative z-20" />
-            <div className="flex items-center gap-1.5 text-xs text-amber-950 font-sans font-semibold relative z-20">
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-700 animate-ping shrink-0" />
+            <div className="flex items-center gap-1 text-[9px] sm:text-xs text-amber-950 font-sans font-semibold relative z-20">
+              <span className="h-1 w-1 rounded-full bg-emerald-700 animate-ping shrink-0" />
               <span>Garantindo o sucesso de milhares de festas</span>
             </div>
           </motion.div>

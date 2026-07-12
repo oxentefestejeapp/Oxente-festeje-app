@@ -107,7 +107,7 @@ export const InstagramFeed: React.FC = () => {
     if (!slider) return;
 
     let animationFrameId: number;
-    const speed = 4.5; // Increased speed to 4.5 for faster and more dynamic scrolling as requested
+    const speed = 4.05; // Reduced speed by 10% from 4.5 as requested by user to make reading easier
 
     // Align ref with current scroll position
     scrollXRef.current = slider.scrollLeft;
@@ -400,14 +400,33 @@ export const InstagramFeed: React.FC = () => {
       id="instagram-feed-section"
     >
       {/* Feed Header */}
-      <div className="flex flex-col items-center text-center mb-4">
-        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-pink-500/10 via-amber-500/10 to-red-500/10 px-4 py-1.5 rounded-full border border-amber-500/20 shadow-[0_2px_12px_rgba(245,158,11,0.05)] mb-2 relative group/badge">
-          <Instagram className="h-4 w-4 text-pink-400 animate-pulse" />
-          <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1">
-            Oxente Festeje <Sparkles className="h-3 w-3 text-amber-400 fill-amber-400" />
+      <div className="flex flex-col items-center text-center mb-2.5 sm:mb-4">
+        <div 
+          onClick={() => {
+            // Clicking the golden button redirects to Instagram feed
+            window.open('https://www.instagram.com/oxentefesteje/', '_blank');
+          }}
+          className="inline-flex items-center gap-1.5 sm:gap-2.5 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 border-yellow-200/60 shadow-[0_4px_15px_rgba(245,158,11,0.25)] hover:shadow-[0_6px_22px_rgba(245,158,11,0.45)] px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-stone-950 font-display font-black uppercase tracking-wider text-[10px] sm:text-xs hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer relative group/badge select-none"
+          id="btn-mural-gold-badge"
+        >
+          {/* Cute party balloon vector instead of cactus icon */}
+          <svg
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5 text-stone-950 animate-pulse shrink-0"
+            style={{ filter: "drop-shadow(0px 1px 1px rgba(0,0,0,0.12))" }}
+          >
+            {/* Balloon body and knot/string */}
+            <path d="M12,2 C7.5,2 4,5.5 4,10 C4,14 7,16.5 10.5,17 L10.5,19 L9,21 C8.5,21.5 8.8,22.5 9.5,22.5 L14.5,22.5 C15.2,22.5 15.5,21.5 15,21 L13.5,19 L13.5,17 C17,16.5 20,14 20,10 C20,5.5 16.5,2 12,2 Z" />
+            {/* Highlight shine */}
+            <path d="M7.5,5.5 C6.5,6.5 6,8 6,9.5 C6,10 6.4,10.4 6.9,10.4 C7.4,10.4 7.8,10 7.8,9.5 C7.8,8.5 8.2,7.5 9,6.7 C9.4,6.3 9.4,5.7 9,5.3 C8.6,4.9 8,4.9 7.5,5.5 Z" fill="#ffffff" opacity="0.6" />
+          </svg>
+          <span className="flex items-center gap-1">
+            Oxente Festeje <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-stone-950 fill-stone-950" />
           </span>
           <button
-            onClick={() => {
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent opening instagram
               if (isAdminMode) {
                 setIsAdminMode(false);
               } else {
@@ -416,8 +435,8 @@ export const InstagramFeed: React.FC = () => {
             }}
             className={`p-0.5 rounded transition-all duration-300 cursor-pointer flex items-center justify-center ${
               isAdminMode 
-                ? 'text-amber-400 bg-amber-950/40' 
-                : 'opacity-0 w-0 overflow-hidden group-hover/badge:opacity-35 group-hover/badge:w-4 hover:!opacity-100 text-stone-500'
+                ? 'text-stone-950 bg-amber-200/40' 
+                : 'opacity-0 w-0 overflow-hidden group-hover/badge:opacity-45 group-hover/badge:w-4 hover:!opacity-100 text-stone-950'
             }`}
             title="Configuração do Mural"
             id="btn-mural-config-invisivel"
@@ -429,7 +448,7 @@ export const InstagramFeed: React.FC = () => {
 
       {/* Infinite Rolling Slider Outer Container */}
       <div 
-        className="relative w-full overflow-x-auto py-4 cursor-grab active:cursor-grabbing select-none no-scrollbar"
+        className="relative w-full overflow-x-auto py-2.5 sm:py-4 cursor-grab active:cursor-grabbing select-none no-scrollbar"
         onMouseEnter={() => setIsPaused(true)}
         onMouseLeave={handleMouseLeave}
         onMouseDown={handleMouseDown}
@@ -457,14 +476,14 @@ export const InstagramFeed: React.FC = () => {
         {/* Rolling Track */}
         <div className="flex gap-0 w-max">
           {/* Primeira metade */}
-          <div className="flex gap-4 sm:gap-6 shrink-0 pr-4 sm:pr-6">
+          <div className="flex gap-2.5 sm:gap-6 shrink-0 pr-2.5 sm:pr-6">
             {activePosts.map((post, idx) => (
               <motion.a
                 key={`${post.id}-1-${idx}`}
                 href={post.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="relative w-64 sm:w-72 h-80 sm:h-96 rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-lg block group"
+                className="relative w-[150px] min-[375px]:w-[170px] min-[410px]:w-[190px] sm:w-72 h-[190px] min-[375px]:h-[220px] min-[410px]:h-[240px] sm:h-96 rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-md sm:shadow-lg block group"
                 whileHover={{ scale: 1.02, y: -4 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 onDragStart={(e) => e.preventDefault()}
@@ -485,7 +504,7 @@ export const InstagramFeed: React.FC = () => {
                 />
 
                 {/* Instagram tag badge */}
-                <span className="absolute top-3 left-3 bg-black/70 backdrop-blur-md text-[10px] text-amber-200 font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border border-amber-500/20 z-10">
+                <span className="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 bg-black/70 backdrop-blur-md text-[7.5px] sm:text-[10px] text-amber-200 font-bold uppercase tracking-wider px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-amber-500/20 z-10">
                   {post.tag}
                 </span>
 
@@ -522,14 +541,14 @@ export const InstagramFeed: React.FC = () => {
           </div>
 
           {/* Segunda metade (Sempre idêntica para o looping infinito sem sobressalto) */}
-          <div className="flex gap-4 sm:gap-6 shrink-0 pr-4 sm:pr-6">
+          <div className="flex gap-2.5 sm:gap-6 shrink-0 pr-2.5 sm:pr-6">
             {activePosts.map((post, idx) => (
               <motion.a
                 key={`${post.id}-2-${idx}`}
                 href={post.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="relative w-64 sm:w-72 h-80 sm:h-96 rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-lg block group"
+                className="relative w-[150px] min-[375px]:w-[170px] min-[410px]:w-[190px] sm:w-72 h-[190px] min-[375px]:h-[220px] min-[410px]:h-[240px] sm:h-96 rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-md sm:shadow-lg block group"
                 whileHover={{ scale: 1.02, y: -4 }}
                 transition={{ duration: 0.3, ease: "easeOut" }}
                 onDragStart={(e) => e.preventDefault()}
@@ -550,7 +569,7 @@ export const InstagramFeed: React.FC = () => {
                 />
 
                 {/* Instagram tag badge */}
-                <span className="absolute top-3 left-3 bg-black/70 backdrop-blur-md text-[10px] text-amber-200 font-bold uppercase tracking-wider px-2.5 py-1 rounded-full border border-amber-500/20 z-10">
+                <span className="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 bg-black/70 backdrop-blur-md text-[7.5px] sm:text-[10px] text-amber-200 font-bold uppercase tracking-wider px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-amber-500/20 z-10">
                   {post.tag}
                 </span>
 
