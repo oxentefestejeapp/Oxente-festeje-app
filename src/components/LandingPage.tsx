@@ -934,7 +934,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               ease: "easeInOut",
               repeatDelay: 2.5,
             }}
-            className="relative overflow-hidden px-2 py-1.5 min-[375px]:px-3 min-[375px]:py-2 sm:px-6 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 flex items-center justify-center gap-0.5 min-[375px]:gap-1 sm:gap-3 cursor-default flex-nowrap"
+            className="relative overflow-hidden px-2 py-1.5 min-[375px]:px-3 min-[375px]:py-2 sm:px-6 sm:py-4 rounded-xl sm:rounded-2xl bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 flex items-center justify-center gap-1 sm:gap-3 cursor-default flex-nowrap"
             id="gold-highlight-badge"
           >
             {/* Shimmer/Light ray sliding effect */}
@@ -950,11 +950,11 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
               }}
             />
 
-            <Award className="h-3 w-3 min-[375px]:h-3.5 min-[375px]:w-3.5 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0 relative z-20" />
-            <span className="font-display font-black text-[#1c1917] text-[6.5px] min-[340px]:text-[7.5px] min-[375px]:text-[8.5px] min-[400px]:text-[9.5px] sm:text-xs md:text-sm uppercase tracking-normal min-[375px]:tracking-wider relative z-20 whitespace-nowrap text-center max-w-none leading-none">
+            <Award className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-bounce shrink-0 relative z-20" />
+            <span className="font-display font-black text-[#1c1917] text-[8px] min-[340px]:text-[9px] min-[375px]:text-[10px] sm:text-xs md:text-sm uppercase tracking-normal min-[375px]:tracking-wider relative z-20 whitespace-normal sm:whitespace-nowrap text-center max-w-[200px] min-[340px]:max-w-[240px] min-[375px]:max-w-[280px] sm:max-w-none leading-tight sm:leading-none">
               A loja de brindes mais seguida de João Pessoa com mais de 100mil seguidores
             </span>
-            <Sparkles className="h-3 w-3 min-[375px]:h-3.5 min-[375px]:w-3.5 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-pulse shrink-0 relative z-20" />
+            <Sparkles className="h-3.5 w-3.5 sm:h-5 sm:w-5 text-amber-950 fill-amber-950/10 animate-pulse shrink-0 relative z-20" />
           </motion.div>
         </motion.div>
 
