@@ -57,8 +57,20 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   onError,
   ...props
 }) => {
-  const [isLoaded, setIsLoaded] = useState(false);
+  const isLocal = src.startsWith('/') && !src.startsWith('//');
+  const [isLoaded, setIsLoaded] = useState(isAboveFold || isLocal);
   const [currentSrc, setCurrentSrc] = useState(() => optimizeImageUrl(src, width, quality));
+
+  React.useEffect(() => {
+    const newSrc = optimizeImageUrl(src, width, quality);
+    setCurrentSrc(prev => {
+      if (prev !== newSrc) {
+        setIsLoaded(isAboveFold || isLocal);
+        return newSrc;
+      }
+      return prev;
+    });
+  }, [src, width, quality, isAboveFold, isLocal]);
 
   const handleLoad = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
     setIsLoaded(true);
@@ -72,6 +84,10 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
       onError(e);
     }
   };
+
+  // Detect key layout classes from className to mirror them to the internal image element
+  const isContain = className.includes('object-contain');
+  const isHAuto = className.includes('h-auto') || className.includes('h-[auto]');
 
   return (
     <div className={`relative overflow-hidden ${className}`}>
@@ -87,7 +103,12 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
         decoding="async"
         onLoad={handleLoad}
         onError={handleError}
-        className={`w-full h-full object-cover transition-opacity duration-500 ease-in-out ${
+        referrerPolicy="no-referrer"
+        className={`w-full transition-opacity duration-500 ease-in-out ${
+          isHAuto ? 'h-auto' : 'h-full'
+        } ${
+          isContain ? 'object-contain' : 'object-cover'
+        } ${
           isLoaded ? 'opacity-100' : 'opacity-0'
         }`}
         {...props}

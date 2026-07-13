@@ -20,6 +20,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { OptimizedImage, compressImageFile } from '../utils/imageOptimizer';
+import bannerTopo from '../assets/banner-topo.webp';
 import { dbSupabase } from '../lib/supabase';
 import { InstagramPost } from '../types';
 
@@ -252,35 +253,6 @@ export const InstagramFeed: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState(false);
 
-  // Sync admin state with window event triggers
-  useEffect(() => {
-    const handleToggleMuralAdmin = () => {
-      if (isAdminMode) {
-        setIsAdminMode(false);
-      } else {
-        setShowPasswordModal(true);
-      }
-    };
-    window.addEventListener('toggle-mural-admin', handleToggleMuralAdmin);
-    return () => {
-      window.removeEventListener('toggle-mural-admin', handleToggleMuralAdmin);
-    };
-  }, [isAdminMode]);
-
-  useEffect(() => {
-    const handleGetState = () => {
-      window.dispatchEvent(new CustomEvent('mural-admin-state', { detail: isAdminMode }));
-    };
-    window.addEventListener('get-mural-admin-state', handleGetState);
-    
-    // Broadcast status when changed
-    window.dispatchEvent(new CustomEvent('mural-admin-state', { detail: isAdminMode }));
-    
-    return () => {
-      window.removeEventListener('get-mural-admin-state', handleGetState);
-    };
-  }, [isAdminMode]);
-
   // New photo form state
   const [newImage, setNewImage] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
@@ -471,15 +443,11 @@ export const InstagramFeed: React.FC = () => {
       <div className="flex flex-col items-center text-center mb-2.5 sm:mb-4">
         <div className="relative group/badge inline-flex items-center justify-center">
           <div 
-            onClick={() => {
-              // Clicking the logo redirects to Instagram feed
-              window.open('https://www.instagram.com/oxentefesteje/', '_blank');
-            }}
-            className="cursor-pointer transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] select-none"
+            className="select-none pointer-events-none"
             id="btn-mural-gold-badge"
           >
             <OptimizedImage
-              src="/logo-mural.png"
+              src={bannerTopo}
               alt="Oxente Festeje Logo"
               width={400}
               quality={75}
@@ -487,6 +455,25 @@ export const InstagramFeed: React.FC = () => {
               className="w-[220px] min-[375px]:w-[264px] sm:w-[330px] md:w-[396px] h-auto object-contain scale-x-[1.2] origin-center"
             />
           </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation(); // Prevent opening instagram
+              if (isAdminMode) {
+                setIsAdminMode(false);
+              } else {
+                setShowPasswordModal(true);
+              }
+            }}
+            className={`absolute -right-8 p-1.5 rounded-xl transition-all duration-300 cursor-pointer flex items-center justify-center ${
+              isAdminMode 
+                ? 'text-stone-950 bg-amber-200/40' 
+                : 'opacity-0 w-0 overflow-hidden group-hover/badge:opacity-45 group-hover/badge:w-8 hover:!opacity-100 text-stone-400'
+            }`}
+            title="Configuração do Mural"
+            id="btn-mural-config-invisivel"
+          >
+            {isAdminMode ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
+          </button>
         </div>
       </div>
 

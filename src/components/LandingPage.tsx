@@ -8,8 +8,6 @@ import {
   MessageSquare, 
   Search, 
   Lock, 
-  Unlock,
-  MessageCircle,
   Check, 
   Star, 
   Volume2, 
@@ -93,20 +91,6 @@ const RECOMMENDATIONS = [
 
 export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: LandingPageProps) {
   const [activeCommentSweepIndex, setActiveCommentSweepIndex] = useState(0);
-  const [isMuralAdmin, setIsMuralAdmin] = useState(false);
-
-  useEffect(() => {
-    const handleStateChange = (e: Event) => {
-      const customEvent = e as CustomEvent<boolean>;
-      setIsMuralAdmin(customEvent.detail);
-    };
-    window.addEventListener('mural-admin-state', handleStateChange);
-    // Request current state from InstagramFeed on mount
-    window.dispatchEvent(new CustomEvent('get-mural-admin-state'));
-    return () => {
-      window.removeEventListener('mural-admin-state', handleStateChange);
-    };
-  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -1527,54 +1511,7 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
           </motion.div>
         </motion.div>
 
-        {/* Enviar Feedback no WhatsApp & Controle de Admin do Mural */}
-        <motion.div 
-          initial={{ opacity: 0, y: 15 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-3 relative z-30 w-full px-4"
-        >
-          {/* Botão de Feedback do WhatsApp */}
-          <a
-            href="https://api.whatsapp.com/send/?phone=5583988859302&text=Ol%C3%A1%2C+gostaria+de+enviar+um+feedback+sobre+os+brindes+que+recebi%21&type=phone_number&app_absent=0"
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={() => {
-              trackGoogleAdsEvent('click_whatsapp_feedback', 'Enviar Feedback no WhatsApp');
-            }}
-            className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 hover:to-emerald-600 text-white font-sans font-extrabold text-xs sm:text-sm uppercase tracking-wider shadow-lg shadow-emerald-950/20 hover:shadow-emerald-500/10 hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer border border-emerald-500/20"
-          >
-            <MessageCircle className="h-4.5 w-4.5 shrink-0" />
-            <span>Enviar Feedback no WhatsApp</span>
-          </a>
 
-          {/* Botão do Cadeado Secreto de Painel do Mural de Fotos */}
-          <button
-            onClick={() => {
-              window.dispatchEvent(new CustomEvent('toggle-mural-admin'));
-            }}
-            className={`flex items-center gap-2 px-5 py-3.5 rounded-2xl transition-all duration-300 border font-sans font-extrabold text-xs sm:text-sm uppercase tracking-wider cursor-pointer hover:scale-[1.02] active:scale-[0.98] ${
-              isMuralAdmin 
-                ? 'bg-amber-450 text-stone-950 border-amber-300 shadow-lg shadow-amber-450/10 hover:bg-amber-400' 
-                : 'bg-stone-900 hover:bg-stone-850 text-stone-300 border-stone-800/85 shadow-md hover:text-white'
-            }`}
-            title="Configuração/Upload do Mural de Fotos"
-            id="btn-mural-config-footer"
-          >
-            {isMuralAdmin ? (
-              <>
-                <Unlock className="h-4.5 w-4.5 text-stone-950 shrink-0" />
-                <span>Painel do Mural Liberado</span>
-              </>
-            ) : (
-              <>
-                <Lock className="h-4.5 w-4.5 text-stone-400 shrink-0" />
-                <span>Painel do Mural Secreto</span>
-              </>
-            )}
-          </button>
-        </motion.div>
 
         {/* Footer info and secret entry */}
         <p className="text-[11px] text-zinc-400 font-medium mt-16 flex items-center gap-1.5 justify-center relative z-30">
