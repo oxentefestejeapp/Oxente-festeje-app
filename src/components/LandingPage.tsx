@@ -802,7 +802,6 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
 
         {/* Subtle vignette overlays to preserve the gold-to-brown gradient and keep text readable */}
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-transparent to-black/45" />
-        <div className="absolute inset-0 bg-radial-at-t from-transparent via-transparent to-black/50" />
       </div>
 
       {/* Background Animated Celebration Fireworks Layer (One-time, on-load/on-refresh) */}
@@ -896,12 +895,12 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
       )}
 
       {/* Full-width Profile Header (Instagram Feed on top instead of cover banner) */}
-      <div id="whatsapp-profile-header" className="relative w-full overflow-hidden z-20 pt-1 sm:pt-4">
+      <div id="whatsapp-profile-header" className="relative w-full overflow-hidden z-20 pt-0 bg-[#110801]" style={{ backgroundColor: '#110801' }}>
         <InstagramFeed />
       </div>
 
       {/* Main Container */}
-      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 pt-3 sm:pt-10 pb-16 sm:pb-32 z-20 flex flex-col items-center text-center">
+      <div className="relative max-w-4xl mx-auto px-4 sm:px-6 pt-2 sm:pt-4 pb-16 sm:pb-32 z-20 flex flex-col items-center text-center">
         
         {/* Gold Highlight Badge (A loja de brindes mais seguida...) */}
         <motion.div

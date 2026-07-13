@@ -15,7 +15,9 @@ import {
   Image as ImageIcon,
   RotateCcw,
   CheckCircle,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { OptimizedImage, compressImageFile } from '../utils/imageOptimizer';
 import { dbSupabase } from '../lib/supabase';
@@ -201,6 +203,43 @@ export const InstagramFeed: React.FC = () => {
         scrollXRef.current = slider.scrollLeft;
       }
     }
+  };
+
+  // Click scrolling helpers for arrow buttons
+  const handlePrev = () => {
+    const slider = containerRef.current;
+    if (!slider) return;
+    setIsPaused(true);
+    const step = window.innerWidth < 640 ? 150 : 260; // sized to match our card width + spacing
+    slider.scrollBy({
+      left: -step,
+      behavior: 'smooth'
+    });
+    
+    setTimeout(() => {
+      if (slider) {
+        scrollXRef.current = slider.scrollLeft;
+      }
+      setIsPaused(false);
+    }, 600);
+  };
+
+  const handleNext = () => {
+    const slider = containerRef.current;
+    if (!slider) return;
+    setIsPaused(true);
+    const step = window.innerWidth < 640 ? 150 : 260;
+    slider.scrollBy({
+      left: step,
+      behavior: 'smooth'
+    });
+    
+    setTimeout(() => {
+      if (slider) {
+        scrollXRef.current = slider.scrollLeft;
+      }
+      setIsPaused(false);
+    }, 600);
   };
   
   // Feed posts state moved to the top of the component to prevent block-scoped variable hoisting issues
@@ -396,34 +435,26 @@ export const InstagramFeed: React.FC = () => {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-50px" }}
       transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-      className="w-full mt-0 mb-0 px-4 overflow-hidden relative z-20"
+      className="w-full pt-2.5 sm:pt-4 mb-0 px-4 overflow-hidden relative z-20"
       id="instagram-feed-section"
     >
       {/* Feed Header */}
       <div className="flex flex-col items-center text-center mb-2.5 sm:mb-4">
-        <div 
-          onClick={() => {
-            // Clicking the golden button redirects to Instagram feed
-            window.open('https://www.instagram.com/oxentefesteje/', '_blank');
-          }}
-          className="inline-flex items-center gap-1.5 sm:gap-2.5 bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 border-2 border-yellow-200/60 shadow-[0_4px_15px_rgba(245,158,11,0.25)] hover:shadow-[0_6px_22px_rgba(245,158,11,0.45)] px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg sm:rounded-xl text-stone-950 font-display font-black uppercase tracking-wider text-[10px] sm:text-xs hover:scale-105 active:scale-95 transition-all duration-300 cursor-pointer relative group/badge select-none"
-          id="btn-mural-gold-badge"
-        >
-          {/* Cute party balloon vector instead of cactus icon */}
-          <svg
-            viewBox="0 0 24 24"
-            fill="currentColor"
-            className="h-3.5 w-3.5 sm:h-4.5 sm:w-4.5 text-stone-950 animate-pulse shrink-0"
-            style={{ filter: "drop-shadow(0px 1px 1px rgba(0,0,0,0.12))" }}
+        <div className="relative group/badge inline-flex items-center justify-center">
+          <div 
+            onClick={() => {
+              // Clicking the logo redirects to Instagram feed
+              window.open('https://www.instagram.com/oxentefesteje/', '_blank');
+            }}
+            className="cursor-pointer transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] select-none"
+            id="btn-mural-gold-badge"
           >
-            {/* Balloon body and knot/string */}
-            <path d="M12,2 C7.5,2 4,5.5 4,10 C4,14 7,16.5 10.5,17 L10.5,19 L9,21 C8.5,21.5 8.8,22.5 9.5,22.5 L14.5,22.5 C15.2,22.5 15.5,21.5 15,21 L13.5,19 L13.5,17 C17,16.5 20,14 20,10 C20,5.5 16.5,2 12,2 Z" />
-            {/* Highlight shine */}
-            <path d="M7.5,5.5 C6.5,6.5 6,8 6,9.5 C6,10 6.4,10.4 6.9,10.4 C7.4,10.4 7.8,10 7.8,9.5 C7.8,8.5 8.2,7.5 9,6.7 C9.4,6.3 9.4,5.7 9,5.3 C8.6,4.9 8,4.9 7.5,5.5 Z" fill="#ffffff" opacity="0.6" />
-          </svg>
-          <span className="flex items-center gap-1">
-            Oxente Festeje <Sparkles className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-stone-950 fill-stone-950" />
-          </span>
+            <img
+              src="/Design sem nome (3).png"
+              alt="Oxente Festeje Logo"
+              className="w-[220px] min-[375px]:w-[264px] sm:w-[330px] md:w-[396px] h-auto object-contain scale-x-[1.2] origin-center"
+            />
+          </div>
           <button
             onClick={(e) => {
               e.stopPropagation(); // Prevent opening instagram
@@ -433,178 +464,199 @@ export const InstagramFeed: React.FC = () => {
                 setShowPasswordModal(true);
               }
             }}
-            className={`p-0.5 rounded transition-all duration-300 cursor-pointer flex items-center justify-center ${
+            className={`absolute -right-8 p-1.5 rounded-xl transition-all duration-300 cursor-pointer flex items-center justify-center ${
               isAdminMode 
                 ? 'text-stone-950 bg-amber-200/40' 
-                : 'opacity-0 w-0 overflow-hidden group-hover/badge:opacity-45 group-hover/badge:w-4 hover:!opacity-100 text-stone-950'
+                : 'opacity-0 w-0 overflow-hidden group-hover/badge:opacity-45 group-hover/badge:w-8 hover:!opacity-100 text-stone-400'
             }`}
             title="Configuração do Mural"
             id="btn-mural-config-invisivel"
           >
-            {isAdminMode ? <Unlock className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+            {isAdminMode ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
           </button>
         </div>
       </div>
 
-      {/* Infinite Rolling Slider Outer Container */}
-      <div 
-        className="relative w-full overflow-x-auto py-2.5 sm:py-4 cursor-grab active:cursor-grabbing select-none no-scrollbar"
-        onMouseEnter={() => setIsPaused(true)}
-        onMouseLeave={handleMouseLeave}
-        onMouseDown={handleMouseDown}
-        onMouseUp={handleMouseUp}
-        onMouseMove={handleMouseMove}
-        onTouchStart={() => setIsPaused(true)}
-        onTouchEnd={() => {
-          setIsPaused(false);
-          setIsDown(false);
-        }}
-        onScroll={handleScroll}
-        ref={containerRef}
-        style={{
-          scrollbarWidth: 'none',
-          msOverflowStyle: 'none',
-        }}
-      >
-        {/* Inject CSS rule dynamically to fully hide webkit scrollbars */}
-        <style>{`
-          .no-scrollbar::-webkit-scrollbar {
-            display: none !important;
-          }
-        `}</style>
+      {/* Infinite Rolling Slider Wrapper with Arrow Buttons */}
+      <div className="relative w-full group/slider px-4 sm:px-10">
+        {/* Left Arrow Button */}
+        <button
+          onClick={handlePrev}
+          className="absolute left-1 sm:left-4 top-1/2 -translate-y-1/2 z-40 bg-gradient-to-r from-amber-400 to-amber-500 border border-yellow-200/50 shadow-[0_4px_15px_rgba(245,158,11,0.55)] hover:shadow-[0_6px_22px_rgba(245,158,11,0.7)] text-stone-950 p-2 sm:p-3 rounded-full cursor-pointer hover:scale-110 active:scale-95 transition-all duration-300 flex items-center justify-center opacity-[0.56] hover:opacity-100 hover:brightness-110"
+          aria-label="Foto anterior"
+        >
+          <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6 stroke-[3px]" />
+        </button>
 
-        {/* Rolling Track */}
-        <div className="flex gap-0 w-max">
-          {/* Primeira metade */}
-          <div className="flex gap-2.5 sm:gap-6 shrink-0 pr-2.5 sm:pr-6">
-            {activePosts.map((post, idx) => (
-              <motion.a
-                key={`${post.id}-1-${idx}`}
-                href={post.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="relative w-[150px] min-[375px]:w-[170px] min-[410px]:w-[190px] sm:w-72 h-[190px] min-[375px]:h-[220px] min-[410px]:h-[240px] sm:h-96 rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-md sm:shadow-lg block group"
-                whileHover={{ scale: 1.02, y: -4 }}
-                transition={{ duration: 0.3, ease: "easeOut" }}
-                onDragStart={(e) => e.preventDefault()}
-                onClick={(e) => {
-                  if (draggedDistanceRef.current > 15) {
-                    e.preventDefault();
-                  }
-                }}
-              >
-                {/* Image background */}
-                <OptimizedImage
-                  src={post.imageUrl}
-                  alt={post.caption}
-                  width={300}
-                  quality={50}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover transition-transform duration-500 md:group-hover:scale-105"
-                />
+        {/* Infinite Rolling Slider Outer Container */}
+        <div 
+          className="relative w-full overflow-x-auto py-2.5 sm:py-4 cursor-grab active:cursor-grabbing select-none no-scrollbar"
+          onMouseEnter={() => setIsPaused(true)}
+          onMouseLeave={handleMouseLeave}
+          onMouseDown={handleMouseDown}
+          onMouseUp={handleMouseUp}
+          onMouseMove={handleMouseMove}
+          onTouchStart={() => setIsPaused(true)}
+          onTouchEnd={() => {
+            setIsPaused(false);
+            setIsDown(false);
+          }}
+          onScroll={handleScroll}
+          ref={containerRef}
+          style={{
+            scrollbarWidth: 'none',
+            msOverflowStyle: 'none',
+          }}
+        >
+          {/* Inject CSS rule dynamically to fully hide webkit scrollbars */}
+          <style>{`
+            .no-scrollbar::-webkit-scrollbar {
+              display: none !important;
+            }
+          `}</style>
 
-                {/* Instagram tag badge */}
-                <span className="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 bg-black/70 backdrop-blur-md text-[7.5px] sm:text-[10px] text-amber-200 font-bold uppercase tracking-wider px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-amber-500/20 z-10">
-                  {post.tag}
-                </span>
+          {/* Rolling Track */}
+          <div className="flex gap-0 w-max">
+            {/* Primeira metade */}
+            <div className="flex gap-2.5 sm:gap-6 shrink-0 pr-2.5 sm:pr-6">
+              {activePosts.map((post, idx) => (
+                <motion.a
+                  key={`${post.id}-1-${idx}`}
+                  href={post.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative w-[128px] min-[375px]:w-[144px] min-[410px]:w-[162px] sm:w-[245px] h-[162px] min-[375px]:h-[187px] min-[410px]:h-[204px] sm:h-[326px] rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-md sm:shadow-lg block group"
+                  whileHover={{ scale: 1.02, y: -4 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  onDragStart={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    if (draggedDistanceRef.current > 15) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  {/* Image background */}
+                  <OptimizedImage
+                    src={post.imageUrl}
+                    alt={post.caption}
+                    width={300}
+                    quality={50}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover transition-transform duration-500 md:group-hover:scale-105"
+                  />
 
-                {/* Dark overlay & info displayed on hover */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 z-20">
-                  {/* Real-time Interaction Stats bar */}
-                  <div className="flex items-center gap-4 text-white text-xs font-mono font-bold mb-2">
-                    <span className="flex items-center gap-1 text-rose-400">
-                      <Heart className="h-4 w-4 fill-rose-500 text-rose-500" /> {post.likes}
-                    </span>
-                    <span className="flex items-center gap-1 text-sky-400">
-                      <MessageCircle className="h-4 w-4 fill-sky-400/20 text-sky-400" /> {post.comments}
-                    </span>
+                  {/* Instagram tag badge */}
+                  <span className="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 bg-black/70 backdrop-blur-md text-[7.5px] sm:text-[10px] text-amber-200 font-bold uppercase tracking-wider px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-amber-500/20 z-10">
+                    {post.tag}
+                  </span>
+
+                  {/* Dark overlay & info displayed on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 z-20">
+                    {/* Real-time Interaction Stats bar */}
+                    <div className="flex items-center gap-4 text-white text-xs font-mono font-bold mb-2">
+                      <span className="flex items-center gap-1 text-rose-400">
+                        <Heart className="h-4 w-4 fill-rose-500 text-rose-500" /> {post.likes}
+                      </span>
+                      <span className="flex items-center gap-1 text-sky-400">
+                        <MessageCircle className="h-4 w-4 fill-sky-400/20 text-sky-400" /> {post.comments}
+                      </span>
+                    </div>
+
+                    {/* Subtitle / Caption */}
+                    <p className="text-stone-200 text-xs leading-relaxed font-sans font-medium line-clamp-3 mb-3">
+                      {post.caption}
+                    </p>
+
+                    {/* Direct link footer action */}
+                    <div className="flex items-center justify-between text-[10px] text-amber-400 font-bold uppercase tracking-wider border-t border-white/10 pt-2.5">
+                      <span className="flex items-center gap-1">
+                        Ver no Instagram <ExternalLink className="h-3 w-3" />
+                      </span>
+                      <span className="text-stone-400 lowercase">@oxentefesteje</span>
+                    </div>
                   </div>
 
-                  {/* Subtitle / Caption */}
-                  <p className="text-stone-200 text-xs leading-relaxed font-sans font-medium line-clamp-3 mb-3">
-                    {post.caption}
-                  </p>
+                  {/* Static subtle overlay for high image readability */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none md:group-hover:opacity-0 transition-opacity duration-300" />
+                </motion.a>
+              ))}
+            </div>
 
-                  {/* Direct link footer action */}
-                  <div className="flex items-center justify-between text-[10px] text-amber-400 font-bold uppercase tracking-wider border-t border-white/10 pt-2.5">
-                    <span className="flex items-center gap-1">
-                      Ver no Instagram <ExternalLink className="h-3 w-3" />
-                    </span>
-                    <span className="text-stone-400 lowercase">@oxentefesteje</span>
+            {/* Segunda metade (Sempre idêntica para o looping infinito sem sobressalto) */}
+            <div className="flex gap-2.5 sm:gap-6 shrink-0 pr-2.5 sm:pr-6">
+              {activePosts.map((post, idx) => (
+                <motion.a
+                  key={`${post.id}-2-${idx}`}
+                  href={post.link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative w-[128px] min-[375px]:w-[144px] min-[410px]:w-[162px] sm:w-[245px] h-[162px] min-[375px]:h-[187px] min-[410px]:h-[204px] sm:h-[326px] rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-md sm:shadow-lg block group"
+                  whileHover={{ scale: 1.02, y: -4 }}
+                  transition={{ duration: 0.3, ease: "easeOut" }}
+                  onDragStart={(e) => e.preventDefault()}
+                  onClick={(e) => {
+                    if (draggedDistanceRef.current > 15) {
+                      e.preventDefault();
+                    }
+                  }}
+                >
+                  {/* Image background */}
+                  <OptimizedImage
+                    src={post.imageUrl}
+                    alt={post.caption}
+                    width={300}
+                    quality={50}
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover transition-transform duration-500 md:group-hover:scale-105"
+                  />
+
+                  {/* Instagram tag badge */}
+                  <span className="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 bg-black/70 backdrop-blur-md text-[7.5px] sm:text-[10px] text-amber-200 font-bold uppercase tracking-wider px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-amber-500/20 z-10">
+                    {post.tag}
+                  </span>
+
+                  {/* Dark overlay & info displayed on hover */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 z-20">
+                    {/* Real-time Interaction Stats bar */}
+                    <div className="flex items-center gap-4 text-white text-xs font-mono font-bold mb-2">
+                      <span className="flex items-center gap-1 text-rose-400">
+                        <Heart className="h-4 w-4 fill-rose-500 text-rose-500" /> {post.likes}
+                      </span>
+                      <span className="flex items-center gap-1 text-sky-400">
+                        <MessageCircle className="h-4 w-4 fill-sky-400/20 text-sky-400" /> {post.comments}
+                      </span>
+                    </div>
+
+                    {/* Subtitle / Caption */}
+                    <p className="text-stone-200 text-xs leading-relaxed font-sans font-medium line-clamp-3 mb-3">
+                      {post.caption}
+                    </p>
+
+                    {/* Direct link footer action */}
+                    <div className="flex items-center justify-between text-[10px] text-amber-400 font-bold uppercase tracking-wider border-t border-white/10 pt-2.5">
+                      <span className="flex items-center gap-1">
+                        Ver no Instagram <ExternalLink className="h-3 w-3" />
+                      </span>
+                      <span className="text-stone-400 lowercase">@oxentefesteje</span>
+                    </div>
                   </div>
-                </div>
 
-                {/* Static subtle overlay for high image readability */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none md:group-hover:opacity-0 transition-opacity duration-300" />
-              </motion.a>
-            ))}
-          </div>
-
-          {/* Segunda metade (Sempre idêntica para o looping infinito sem sobressalto) */}
-          <div className="flex gap-2.5 sm:gap-6 shrink-0 pr-2.5 sm:pr-6">
-            {activePosts.map((post, idx) => (
-              <motion.a
-                key={`${post.id}-2-${idx}`}
-                href={post.link}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="relative w-[150px] min-[375px]:w-[170px] min-[410px]:w-[190px] sm:w-72 h-[190px] min-[375px]:h-[220px] min-[410px]:h-[240px] sm:h-96 rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-md sm:shadow-lg block group"
-                whileHover={{ scale: 1.02, y: -4 }}
-                transition={{ duration: 0.3, ease: "easeOut" }}
-                onDragStart={(e) => e.preventDefault()}
-                onClick={(e) => {
-                  if (draggedDistanceRef.current > 15) {
-                    e.preventDefault();
-                  }
-                }}
-              >
-                {/* Image background */}
-                <OptimizedImage
-                  src={post.imageUrl}
-                  alt={post.caption}
-                  width={300}
-                  quality={50}
-                  referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover transition-transform duration-500 md:group-hover:scale-105"
-                />
-
-                {/* Instagram tag badge */}
-                <span className="absolute top-1.5 left-1.5 sm:top-3 sm:left-3 bg-black/70 backdrop-blur-md text-[7.5px] sm:text-[10px] text-amber-200 font-bold uppercase tracking-wider px-1.5 py-0.5 sm:px-2.5 sm:py-1 rounded-full border border-amber-500/20 z-10">
-                  {post.tag}
-                </span>
-
-                {/* Dark overlay & info displayed on hover */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/40 to-transparent opacity-0 md:group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-4 z-20">
-                  {/* Real-time Interaction Stats bar */}
-                  <div className="flex items-center gap-4 text-white text-xs font-mono font-bold mb-2">
-                    <span className="flex items-center gap-1 text-rose-400">
-                      <Heart className="h-4 w-4 fill-rose-500 text-rose-500" /> {post.likes}
-                    </span>
-                    <span className="flex items-center gap-1 text-sky-400">
-                      <MessageCircle className="h-4 w-4 fill-sky-400/20 text-sky-400" /> {post.comments}
-                    </span>
-                  </div>
-
-                  {/* Subtitle / Caption */}
-                  <p className="text-stone-200 text-xs leading-relaxed font-sans font-medium line-clamp-3 mb-3">
-                    {post.caption}
-                  </p>
-
-                  {/* Direct link footer action */}
-                  <div className="flex items-center justify-between text-[10px] text-amber-400 font-bold uppercase tracking-wider border-t border-white/10 pt-2.5">
-                    <span className="flex items-center gap-1">
-                      Ver no Instagram <ExternalLink className="h-3 w-3" />
-                    </span>
-                    <span className="text-stone-400 lowercase">@oxentefesteje</span>
-                  </div>
-                </div>
-
-                {/* Static subtle overlay for high image readability */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none md:group-hover:opacity-0 transition-opacity duration-300" />
-              </motion.a>
-            ))}
+                  {/* Static subtle overlay for high image readability */}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none md:group-hover:opacity-0 transition-opacity duration-300" />
+                </motion.a>
+              ))}
+            </div>
           </div>
         </div>
+
+        {/* Right Arrow Button */}
+        <button
+          onClick={handleNext}
+          className="absolute right-1 sm:right-4 top-1/2 -translate-y-1/2 z-40 bg-gradient-to-r from-amber-400 to-amber-500 border border-yellow-200/50 shadow-[0_4px_15px_rgba(245,158,11,0.55)] hover:shadow-[0_6px_22px_rgba(245,158,11,0.7)] text-stone-950 p-2 sm:p-3 rounded-full cursor-pointer hover:scale-110 active:scale-95 transition-all duration-300 flex items-center justify-center opacity-[0.56] hover:opacity-100 hover:brightness-110"
+          aria-label="Próxima foto"
+        >
+          <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6 stroke-[3px]" />
+        </button>
       </div>
 
       {/* O gatilho do cadeado agora está ao lado do ícone do Instagram no cabeçalho do mural */}
