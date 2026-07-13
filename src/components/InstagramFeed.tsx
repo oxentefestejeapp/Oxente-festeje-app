@@ -449,9 +449,12 @@ export const InstagramFeed: React.FC = () => {
             className="cursor-pointer transition-all duration-300 hover:scale-[1.03] active:scale-[0.98] select-none"
             id="btn-mural-gold-badge"
           >
-            <img
-              src="/Design sem nome (3).png"
+            <OptimizedImage
+              src="/logo-mural.png"
               alt="Oxente Festeje Logo"
+              width={400}
+              quality={75}
+              isAboveFold={true}
               className="w-[220px] min-[375px]:w-[264px] sm:w-[330px] md:w-[396px] h-auto object-contain scale-x-[1.2] origin-center"
             />
           </div>
