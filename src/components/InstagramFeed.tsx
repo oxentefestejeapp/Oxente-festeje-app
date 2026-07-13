@@ -446,7 +446,7 @@ export const InstagramFeed: React.FC = () => {
             id="btn-mural-gold-badge"
           >
             <OptimizedImage
-              src="/logo-mural.png"
+              src="/logomural.png"
               alt="Oxente Festeje Logo"
               width={400}
               quality={75}
