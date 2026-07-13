@@ -20,7 +20,6 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { OptimizedImage, compressImageFile } from '../utils/imageOptimizer';
-import bannerTopo from '../assets/banner-topo.webp';
 import { dbSupabase } from '../lib/supabase';
 import { InstagramPost } from '../types';
 
@@ -447,7 +446,7 @@ export const InstagramFeed: React.FC = () => {
             id="btn-mural-gold-badge"
           >
             <OptimizedImage
-              src={bannerTopo}
+              src="/banner-topo.webp"
               alt="Oxente Festeje Logo"
               width={400}
               quality={75}

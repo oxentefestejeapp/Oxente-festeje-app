@@ -57,7 +57,7 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
   onError,
   ...props
 }) => {
-  const isLocal = src.startsWith('/') && !src.startsWith('//');
+  const isLocal = typeof src === 'string' && src.startsWith('/') && !src.startsWith('//');
   const [isLoaded, setIsLoaded] = useState(isAboveFold || isLocal);
   const [currentSrc, setCurrentSrc] = useState(() => optimizeImageUrl(src, width, quality));
 
@@ -103,7 +103,6 @@ export const OptimizedImage: React.FC<OptimizedImageProps> = ({
         decoding="async"
         onLoad={handleLoad}
         onError={handleError}
-        referrerPolicy="no-referrer"
         className={`w-full transition-opacity duration-500 ease-in-out ${
           isHAuto ? 'h-auto' : 'h-full'
         } ${
