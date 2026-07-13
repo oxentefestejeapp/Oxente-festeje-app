@@ -20,7 +20,6 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { OptimizedImage, compressImageFile } from '../utils/imageOptimizer';
-import logoMural from '../assets/logo-mural.webp';
 import { dbSupabase } from '../lib/supabase';
 import { InstagramPost } from '../types';
 
@@ -447,7 +446,8 @@ export const InstagramFeed: React.FC = () => {
             id="btn-mural-gold-badge"
           >
             <OptimizedImage
-              src={logoMural}
+              src="/logo-mural.webp"
+              fallbackSrc="/Logo-mural.png"
               alt="Oxente Festeje Logo"
               width={400}
               quality={75}
