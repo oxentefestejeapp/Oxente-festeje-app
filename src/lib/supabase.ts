@@ -86,6 +86,7 @@ ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS preco_custo NUMERIC;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS adicional BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS conferido BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS prazo_urgencia INTEGER;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS linked_product_id TEXT;
 
 -- Desabilitar RLS para permitir que o Realtime distribua as atualizações instantaneamente e sem restrições de token para clientes anônimos (anon key)
 ALTER TABLE oxente_products DISABLE ROW LEVEL SECURITY;
@@ -278,6 +279,7 @@ const mapProductToDb = (product: Product) => ({
   conferido: product.conferido || false,
   prazo_urgencia: product.prazoUrgencia !== undefined && product.prazoUrgencia !== null ? product.prazoUrgencia : null,
   cores: product.cores ? JSON.stringify(product.cores) : null,
+  linked_product_id: product.linkedProductId || null,
   updated_at: new Date().toISOString()
 });
 
@@ -334,7 +336,8 @@ export const mapDbToProduct = (dbItem: any): Product => {
     faixasPreco,
     conferido: finalConferido,
     prazoUrgencia: dbItem.prazo_urgencia !== null && dbItem.prazo_urgencia !== undefined ? Number(dbItem.prazo_urgencia) : undefined,
-    cores: cores || undefined
+    cores: cores || undefined,
+    linkedProductId: dbItem.linked_product_id || undefined
   };
 };
 
@@ -567,7 +570,7 @@ const realDbSupabase = {
           } else {
             // Fallback: if we can't parse but it's a column error, try to delete potentially missing columns one by one
             console.warn('Dynamic Save Healing: Column error received but column name not parsed automatically. Trying fallback removal.');
-            const nonEssential = ['precos_progressivos', 'preco_custo', 'estoque_infinito', 'imagem_base64'];
+            const nonEssential = ['precos_progressivos', 'preco_custo', 'estoque_infinito', 'imagem_base64', 'linked_product_id'];
             let removedAny = false;
             for (const col of nonEssential) {
               if (col in currentPayload) {

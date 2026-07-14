@@ -10,6 +10,7 @@ import { getFormattedSupabaseError } from '../lib/supabase';
 
 interface ProductFormProps {
   onAddProduct: (product: Product) => Promise<boolean> | void;
+  products?: Product[];
 }
 
 // Client-side image compression using HTML5 Canvas to keep Base64 strings tiny (~30KB-50KB)
@@ -58,7 +59,7 @@ const compressImage = (file: File, maxWidth = 480, maxHeight = 480, quality = 0.
   });
 };
 
-export function ProductForm({ onAddProduct }: ProductFormProps) {
+export function ProductForm({ onAddProduct, products }: ProductFormProps) {
   const [nome, setNome] = useState('');
   const [precoCusto, setPrecoCusto] = useState<number | ''>('');
   const [precoVenda, setPrecoVenda] = useState<number | ''>('');
@@ -72,6 +73,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
   const [isCompressing, setIsCompressing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [prazoUrgencia, setPrazoUrgencia] = useState<number | ''>('');
+  const [linkedProductId, setLinkedProductId] = useState<string>('');
   
   // Progressive Pricing Tiers State
   const [faixasPreco, setFaixasPreco] = useState<PricingTier[]>([]);
@@ -248,11 +250,20 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
     }
 
     let estoqueNum = estoqueInfinito ? 0 : Number(estoque);
-    if (cores.length > 0 && !estoqueInfinito) {
+    let coresToSave = cores.length > 0 ? cores : undefined;
+    let estoqueInfinitoToSave = estoqueInfinito || undefined;
+
+    if (linkedProductId && products) {
+      const linkedProd = products.find(p => p.id === linkedProductId);
+      if (linkedProd) {
+        estoqueNum = linkedProd.estoque;
+        estoqueInfinitoToSave = linkedProd.estoqueInfinito;
+      }
+    } else if (cores.length > 0 && !estoqueInfinito) {
       estoqueNum = cores.reduce((sum, c) => sum + c.estoque, 0);
     }
 
-    if (!estoqueInfinito && cores.length === 0 && (estoque === '' || isNaN(estoqueNum) || estoqueNum < 0)) {
+    if (!estoqueInfinito && !linkedProductId && cores.length === 0 && (estoque === '' || isNaN(estoqueNum) || estoqueNum < 0)) {
       setError('O estoque inicial precisa ser maior ou igual a zero.');
       return;
     }
@@ -269,12 +280,13 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
       preco: precoNum,
       precoCusto: precoCustoNum,
       estoque: Math.floor(estoqueNum),
-      cores: cores.length > 0 ? cores : undefined,
+      cores: coresToSave,
       imagemBase64: photo || undefined,
-      estoqueInfinito: estoqueInfinito || undefined,
+      estoqueInfinito: estoqueInfinitoToSave,
       adicional: adicional || undefined,
       faixasPreco: faixasPreco.length > 0 ? faixasPreco : undefined,
       prazoUrgencia: prazoUrgenciaNum,
+      linkedProductId: linkedProductId || undefined,
     };
 
     setIsSaving(true);
@@ -302,6 +314,7 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
         setCores([]);
         setNovaCorNome('');
         setNovaCorEstoque('');
+        setLinkedProductId('');
         
         setTimeout(() => {
           setSuccess('');
@@ -524,6 +537,40 @@ export function ProductForm({ onAddProduct }: ProductFormProps) {
             />
           </div>
         </div>
+
+        {/* 🔗 UNIFICAÇÃO DE ESTOQUE (PRODUTO UNIDO) */}
+        {products && products.length > 0 && (
+          <div className="bg-zinc-950/40 p-4 border border-zinc-800/50 rounded-2xl space-y-3 text-left animate-fade-in">
+            <div className="flex items-center gap-1.5 text-xs font-bold text-blue-400 uppercase tracking-wider select-none font-sans">
+              <Layers className="h-4 w-4 text-blue-400" />
+              <span>Unir Estoque com outro Produto</span>
+            </div>
+            <p className="text-[11px] text-zinc-500 leading-relaxed font-sans">
+              Opcional: Selecione um produto existente para compartilhar e unir o estoque. Este produto recém-criado herdará a quantidade de estoque do produto selecionado, e qualquer venda reduzirá de ambos. As cores de cada produto continuam independentes.
+            </p>
+            <select
+              value={linkedProductId}
+              onChange={(e) => {
+                setLinkedProductId(e.target.value);
+                if (e.target.value) {
+                  const linkedProd = products.find(p => p.id === e.target.value);
+                  if (linkedProd) {
+                    setEstoque(linkedProd.estoque);
+                    setEstoqueInfinito(!!linkedProd.estoqueInfinito);
+                  }
+                }
+              }}
+              className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-zinc-100"
+            >
+              <option value="">Nenhum (Não unir estoque)</option>
+              {products.map(prod => (
+                <option key={prod.id} value={prod.id}>
+                  {prod.nome} (Estoque: {prod.estoque} un)
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {/* Progressive Pricing (Tiers) Form Section */}
         <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800/60 space-y-4">

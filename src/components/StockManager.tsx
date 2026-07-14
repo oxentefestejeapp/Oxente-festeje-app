@@ -253,6 +253,7 @@ export function StockManager({
   const [isEditCompressing, setIsEditCompressing] = useState(false);
   const [isEditSaving, setIsEditSaving] = useState(false);
   const [editPrazoUrgencia, setEditPrazoUrgencia] = useState<number | ''>('');
+  const [editLinkedProductId, setEditLinkedProductId] = useState<string>('');
   
   // Color Options State for Edit
   const [editCores, setEditCores] = useState<ProductColor[]>([]);
@@ -282,6 +283,7 @@ export function StockManager({
     setEditNovaQuantidadeMinima('');
     setEditNovoPrecoFaixa('');
     setEditPrazoUrgencia(product.prazoUrgencia !== undefined && product.prazoUrgencia !== null ? product.prazoUrgencia : '');
+    setEditLinkedProductId(product.linkedProductId || '');
     setEditError('');
     setEditSuccess('');
   };
@@ -436,11 +438,21 @@ export function StockManager({
     }
 
     let estoqueNum = editEstoqueInfinito ? 0 : Number(editEstoque);
-    if (editCores.length > 0 && !editEstoqueInfinito) {
+    let coresToSave = editCores.length > 0 ? editCores : undefined;
+    let estoqueInfinitoToSave = editEstoqueInfinito || undefined;
+
+    if (editLinkedProductId) {
+      const linkedProd = products.find(p => p.id === editLinkedProductId);
+      // If we newly linked this product, inherit the linked product's stock
+      if (linkedProd && editingProduct.linkedProductId !== editLinkedProductId) {
+        estoqueNum = linkedProd.estoque;
+        estoqueInfinitoToSave = linkedProd.estoqueInfinito;
+      }
+    } else if (editCores.length > 0 && !editEstoqueInfinito) {
       estoqueNum = editCores.reduce((sum, c) => sum + c.estoque, 0);
     }
 
-    if (!editEstoqueInfinito && editCores.length === 0 && (editEstoque === '' || isNaN(estoqueNum) || estoqueNum < 0)) {
+    if (!editEstoqueInfinito && !editLinkedProductId && editCores.length === 0 && (editEstoque === '' || isNaN(estoqueNum) || estoqueNum < 0)) {
       setEditError('O estoque precisa ser maior ou igual a zero.');
       return;
     }
@@ -457,12 +469,13 @@ export function StockManager({
       preco: precoNum,
       precoCusto: precoCustoNum,
       estoque: Math.floor(estoqueNum),
-      cores: editCores.length > 0 ? editCores : undefined,
+      cores: coresToSave,
       imagemBase64: editPhoto || undefined,
-      estoqueInfinito: editEstoqueInfinito || undefined,
+      estoqueInfinito: estoqueInfinitoToSave,
       adicional: editAdicional || undefined,
       faixasPreco: editFaixasPreco.length > 0 ? editFaixasPreco : undefined,
       prazoUrgencia: prazoUrgenciaNum,
+      linkedProductId: editLinkedProductId || undefined,
     };
 
     setIsEditSaving(true);
@@ -881,6 +894,16 @@ export function StockManager({
                       <span className="bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
                         ✨ Adicional
                       </span>
+                    )}
+                    {p.linkedProductId && (
+                      (() => {
+                        const linkedName = products.find(prod => prod.id === p.linkedProductId)?.nome || 'Outro Produto';
+                        return (
+                          <span className="bg-blue-500/10 border border-blue-500/30 text-blue-400 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0 max-w-full truncate" title={`Unido a: ${linkedName}`}>
+                            🔗 Unido a: {linkedName}
+                          </span>
+                        );
+                      })()
                     )}
                     {p.estoqueInfinito ? (
                       <span className="bg-brand-pink/10 border border-brand-pink/30 text-brand-pink text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 shrink-0">
@@ -1416,6 +1439,33 @@ export function StockManager({
                   />
                 </div>
               </div>
+
+              {/* 🔗 UNIFICAÇÃO DE ESTOQUE (PRODUTO UNIDO) */}
+              {isAdmin && (
+                <div className="bg-zinc-950/40 p-4 border border-zinc-850 rounded-xl space-y-3 text-left">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-blue-400 uppercase tracking-wider select-none font-sans">
+                    <Layers className="h-4 w-4 text-blue-400" />
+                    <span>Unir Estoque (Compartilhar Quantidade)</span>
+                  </div>
+                  <p className="text-[11px] text-zinc-400 leading-snug font-sans">
+                    Deseja unir o estoque deste produto com outro? Ao unir, as quantidades e opções de cores de ambos os produtos serão sincronizadas automaticamente. Ideal para quando você vende o mesmo item físico de formas diferentes (ex: copo liso vs pintado).
+                  </p>
+                  <select
+                    value={editLinkedProductId}
+                    onChange={(e) => setEditLinkedProductId(e.target.value)}
+                    className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-xs text-zinc-100"
+                  >
+                    <option value="">Nenhum (Não unir estoque)</option>
+                    {products
+                      .filter(prod => prod.id !== editingProduct.id)
+                      .map(prod => (
+                        <option key={prod.id} value={prod.id}>
+                          {prod.nome} (Estoque atual: {prod.estoque} un)
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
 
               {/* Progressive price list */}
               <div className="bg-zinc-950 p-4 rounded-xl border border-zinc-800/65 space-y-4">

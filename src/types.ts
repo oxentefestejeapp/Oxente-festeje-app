@@ -26,6 +26,7 @@ export interface Product {
   adicional?: boolean;
   conferido?: boolean;
   prazoUrgencia?: number;
+  linkedProductId?: string;
 }
 
 export type PaymentMethod = 'Pix' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito';

@@ -1411,6 +1411,66 @@ export default function App() {
     localStorage.setItem('oxente_products', JSON.stringify(updatedProducts));
   };
 
+  const getLinkedProductIds = (productList: Product[], startId: string): Set<string> => {
+    const linked = new Set<string>();
+    const queue = [startId];
+    while (queue.length > 0) {
+      const currentId = queue.shift()!;
+      if (linked.has(currentId)) continue;
+      linked.add(currentId);
+      
+      const prod = productList.find(p => p.id === currentId);
+      if (prod && prod.linkedProductId) {
+        if (!linked.has(prod.linkedProductId)) {
+          queue.push(prod.linkedProductId);
+        }
+      }
+      
+      productList.forEach(p => {
+        if (p.linkedProductId === currentId && !linked.has(p.id)) {
+          queue.push(p.id);
+        }
+      });
+    }
+    return linked;
+  };
+
+  const syncLinkedStockInList = (currentList: Product[], changedIds: string[]): { list: Product[], synced: Product[] } => {
+    let list = [...currentList];
+    const synced: Product[] = [];
+    const processed = new Set<string>();
+
+    changedIds.forEach(id => {
+      if (processed.has(id)) return;
+      
+      const p = list.find(prod => prod.id === id);
+      if (!p) return;
+
+      const groupIds = getLinkedProductIds(list, id);
+      groupIds.forEach(gid => processed.add(gid));
+
+      const targetStock = p.estoque;
+      const targetInfinite = p.estoqueInfinito;
+
+      list = list.map(prod => {
+        if (prod.id !== id && groupIds.has(prod.id)) {
+          if (prod.estoque !== targetStock || prod.estoqueInfinito !== targetInfinite) {
+            const updatedProd = {
+              ...prod,
+              estoque: targetStock,
+              estoqueInfinito: targetInfinite
+            };
+            synced.push(updatedProd);
+            return updatedProd;
+          }
+        }
+        return prod;
+      });
+    });
+
+    return { list, synced };
+  };
+
   const saveSales = (updatedSales: Sale[]) => {
     setSales(updatedSales);
     localStorage.setItem('oxente_sales', JSON.stringify(updatedSales));
@@ -1465,23 +1525,43 @@ export default function App() {
       }
       return p;
     });
-    saveProducts(updated);
 
-    // Trigger critical stock of less than 10 if stock decreased
-    if (oldProduct && !oldProduct.adicional && !oldProduct.estoqueInfinito && !isInfinite && newStock < 10 && newStock < oldStock) {
-      setCriticalStockProduct(itemToSync);
-      setShowCelebration('critical_stock');
-    }
+    // NOW APPLY LINK SYNC!
+    const { list: syncedList, synced: syncedProducts } = syncLinkedStockInList(updated, [id]);
+    
+    // For all extra synced products, also record them in pending stock updates
+    syncedProducts.forEach(sp => {
+      pendingStockUpdates.current[sp.id] = sp.estoque;
+    });
+
+    saveProducts(syncedList);
+
+    // Trigger critical stock of less than 10 if stock decreased for target or linked products
+    const allUpdated = itemToSync ? [itemToSync, ...syncedProducts] : syncedProducts;
+    allUpdated.forEach(p => {
+      const oldProd = currentProducts.find(old => old.id === p.id);
+      const oldS = oldProd ? oldProd.estoque : 999;
+      if (!p.adicional && !p.estoqueInfinito && p.estoque < 10 && p.estoque < oldS) {
+        setCriticalStockProduct(p);
+        setShowCelebration('critical_stock');
+      }
+    });
 
     // Background sync to Supabase using fast optimized method
     try {
       await dbSupabase.updateProductStock(id, newStock, isInfinite);
+      await Promise.all(syncedProducts.map(sp => 
+        dbSupabase.updateProductStock(sp.id, sp.estoque, sp.estoqueInfinito, sp.cores)
+      ));
     } catch (e) {
       console.warn('Erro ao sincronizar estoque em segundo plano:', e);
     } finally {
       // Clear pending state after sync completes with safe buffer delay
       setTimeout(() => {
         delete pendingStockUpdates.current[id];
+        syncedProducts.forEach(sp => {
+          delete pendingStockUpdates.current[sp.id];
+        });
       }, 3000);
     }
   };
@@ -1646,15 +1726,19 @@ export default function App() {
     });
 
     if (productsToSync.length > 0) {
+      // Apply link sync!
+      const { list: syncedList, synced: extraSynced } = syncLinkedStockInList(updatedProducts, productsToSync.map(p => p.id));
+      const allProductsToSync = [...productsToSync, ...extraSynced];
+
       // Record pending local stocks to protect them
-      productsToSync.forEach((p) => {
+      allProductsToSync.forEach((p) => {
         pendingStockUpdates.current[p.id] = p.estoque;
       });
 
-      saveProducts(updatedProducts);
+      saveProducts(syncedList);
 
       // Trigger critical stock of less than 10 if stock decreased
-      productsToSync.forEach((p) => {
+      allProductsToSync.forEach((p) => {
         const oldProd = currentProducts.find((old) => old.id === p.id);
         const oldStock = oldProd ? oldProd.estoque : 999;
         if (!p.adicional && !p.estoqueInfinito && p.estoque < 10 && p.estoque < oldStock) {
@@ -1666,7 +1750,7 @@ export default function App() {
       // Async update each product's stock in Supabase using the fast optimized method
       try {
         const results = await Promise.all(
-          productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito, p.cores))
+          allProductsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito, p.cores))
         );
         if (results.some(r => !r)) {
           setSupabaseSyncStatus('error');
@@ -1679,7 +1763,7 @@ export default function App() {
       } finally {
         // Clear pending states after sync completes, giving a safe buffer for async realtime echoes
         setTimeout(() => {
-          productsToSync.forEach((p) => {
+          allProductsToSync.forEach((p) => {
             delete pendingStockUpdates.current[p.id];
           });
         }, 3000);
@@ -1939,15 +2023,19 @@ export default function App() {
       });
 
       if (productsToSync.length > 0) {
+        // Apply link sync!
+        const { list: syncedList, synced: extraSynced } = syncLinkedStockInList(updatedProducts, productsToSync.map(p => p.id));
+        const allProductsToSync = [...productsToSync, ...extraSynced];
+
         // Registrar atualizações pendentes para proteger o estado local
-        productsToSync.forEach((p) => {
+        allProductsToSync.forEach((p) => {
           pendingStockUpdates.current[p.id] = p.estoque;
         });
 
-        saveProducts(updatedProducts);
+        saveProducts(syncedList);
 
         // Trigger critical stock of less than 10 if stock decreased
-        productsToSync.forEach((p) => {
+        allProductsToSync.forEach((p) => {
           const oldProd = currentProducts.find((old) => old.id === p.id);
           const oldStock = oldProd ? oldProd.estoque : 999;
           if (!p.adicional && !p.estoqueInfinito && p.estoque < 10 && p.estoque < oldStock) {
@@ -1959,7 +2047,7 @@ export default function App() {
         // Atualizar estoque no Supabase de forma assíncrona/otimizada
         try {
           const results = await Promise.all(
-            productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito, p.cores))
+            allProductsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito, p.cores))
           );
           if (results.some(r => !r)) {
             setSupabaseSyncStatus('error');
@@ -1972,7 +2060,7 @@ export default function App() {
         } finally {
           // Mantém as atualizações de estoque pendentes protegidas de ecos de conexões por 3 segundos
           setTimeout(() => {
-            productsToSync.forEach((p) => {
+            allProductsToSync.forEach((p) => {
               delete pendingStockUpdates.current[p.id];
             });
           }, 3000);
@@ -2064,17 +2152,21 @@ export default function App() {
       });
 
       if (productsToSync.length > 0) {
+        // Apply link sync!
+        const { list: syncedList, synced: extraSynced } = syncLinkedStockInList(updatedProducts, productsToSync.map(p => p.id));
+        const allProductsToSync = [...productsToSync, ...extraSynced];
+
         // Registrar atualizações pendentes para proteger o estado local
-        productsToSync.forEach((p) => {
+        allProductsToSync.forEach((p) => {
           pendingStockUpdates.current[p.id] = p.estoque;
         });
 
-        saveProducts(updatedProducts);
+        saveProducts(syncedList);
 
         // Atualizar estoque no Supabase de forma assíncrona/otimizada
         try {
           const results = await Promise.all(
-            productsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito, p.cores))
+            allProductsToSync.map(p => dbSupabase.updateProductStock(p.id, p.estoque, p.estoqueInfinito, p.cores))
           );
           if (results.some(r => !r)) {
             setSupabaseSyncStatus('error');
@@ -2087,7 +2179,7 @@ export default function App() {
         } finally {
           // Mantém pendentes protegidos de sincronizações concorrentes por 3 segundos
           setTimeout(() => {
-            productsToSync.forEach((p) => {
+            allProductsToSync.forEach((p) => {
               delete pendingStockUpdates.current[p.id];
             });
           }, 3000);
@@ -2723,7 +2815,7 @@ export default function App() {
             transition={{ duration: 0.18, ease: 'easeInOut' }}
           >
             {activeTab === 'cadastro' && isAdmin && (
-              <ProductForm onAddProduct={handleAddProduct} />
+              <ProductForm onAddProduct={handleAddProduct} products={products} />
             )}
 
             {activeTab === 'estoque' && (
