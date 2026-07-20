@@ -375,8 +375,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
       // Initialize selected addon IDs from edit sale items!
       const addonItems = rawItens.filter(item => {
-        const dbProd = products.find(p => p.id === item.produtoId);
-        return (dbProd && dbProd.adicional) || item.produtoNome.startsWith('Adicional:');
+        return item.produtoNome.startsWith('Adicional:');
       });
       setEditSelectedAddonIds(addonItems.map(item => item.produtoId));
       setEditShowAddons(false);
@@ -389,8 +388,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
             item.produtoId === 'taxacartao-service') {
           return false;
         }
-        const dbProd = products.find(p => p.id === item.produtoId);
-        if ((dbProd && dbProd.adicional) || item.produtoNome.startsWith('Adicional:')) {
+        if (item.produtoNome.startsWith('Adicional:')) {
           return false;
         }
         return true;
@@ -1927,7 +1925,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-center text-zinc-500 text-xs">
                     Nenhum produto cadastrado. Cadastre pelo menos um item para liberar as vendas.
                   </div>
-                ) : availableProducts.length === 0 ? (
+                ) : (availableProducts.length === 0 && availableAddons.length === 0) ? (
                   <div className="p-3 bg-red-950/10 border border-red-900/30 rounded-xl text-center text-red-400 text-xs font-medium">
                     Todos os produtos estão esgotados!
                   </div>
@@ -1939,11 +1937,24 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     className="w-full px-4 py-2.5 border border-zinc-800 rounded-xl bg-black focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-150 text-sm"
                   >
                     <option value="" className="text-zinc-500">-- Selecione o item --</option>
-                    {availableProducts.map(p => (
-                      <option key={p.id} value={p.id} className="bg-zinc-900 text-zinc-100">
-                        {p.nome} (Preço: R$ {p.preco.toFixed(2)} | Estoque: {p.estoqueInfinito ? '∞ Infinito' : `${p.estoque} un.`})
-                      </option>
-                    ))}
+                    {availableProducts.length > 0 && (
+                      <optgroup label="Produtos / Brindes Principais" className="bg-black text-brand-pink font-semibold">
+                        {availableProducts.map(p => (
+                          <option key={p.id} value={p.id} className="bg-zinc-900 text-zinc-100 font-normal">
+                            {p.nome} (Preço: R$ {p.preco.toFixed(2)} | Estoque: {p.estoqueInfinito ? '∞ Infinito' : `${p.estoque} un.`})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
+                    {availableAddons.length > 0 && (
+                      <optgroup label="Adicionais / Opcionais (Venda avulsa)" className="bg-black text-emerald-450 font-semibold">
+                        {availableAddons.map(p => (
+                          <option key={p.id} value={p.id} className="bg-zinc-900 text-zinc-100 font-normal">
+                            {p.nome} (Preço: R$ {p.preco.toFixed(2)} | Estoque: {p.estoqueInfinito ? '∞ Infinito' : `${p.estoque} un.`})
+                          </option>
+                        ))}
+                      </optgroup>
+                    )}
                   </select>
                 )}
               </div>
@@ -1971,7 +1982,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               )}
 
               {/* Seleção de Adicionais Opcionais */}
-              {selectedProductId && availableAddons.length > 0 && (
+              {selectedProductId && !selectedProduct?.adicional && availableAddons.length > 0 && (
                 <div className="mt-3 bg-zinc-900/40 border border-zinc-800/80 p-3 rounded-xl space-y-2 animate-fade-in">
                   <button
                     type="button"
