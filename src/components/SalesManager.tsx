@@ -213,7 +213,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   };
   
   // Cart state for multi-product orders
-  const [cart, setCart] = useState<{ id: string; product: Product; quantity: number; total: number; addons: Product[]; corSelecionada?: string }[]>([]);
+  const [cart, setCart] = useState<{ id: string; product: Product; quantity: number; total: number; addons: Product[]; corSelecionada?: string; customNome?: string; customPreco?: number }[]>([]);
+
+  // Custom name and price for "Produtos lisos" (liso products)
+  const [customNome, setCustomNome] = useState('');
+  const [customPreco, setCustomPreco] = useState('');
 
   // Selected Addon Product IDs
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
@@ -294,6 +298,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   const [editItens, setEditItens] = useState<SaleItem[]>([]);
   const [selectedAddProductId, setSelectedAddProductId] = useState('');
+  const [editCustomNome, setEditCustomNome] = useState('');
+  const [editCustomPreco, setEditCustomPreco] = useState('');
   const [editArteDesign, setEditArteDesign] = useState(false);
   const [editSegundaArte, setEditSegundaArte] = useState(false);
   const [editTemTaxaUrgencia, setEditTemTaxaUrgencia] = useState(false);
@@ -546,6 +552,22 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
+  const isLisoProduct = useMemo(() => {
+    if (!selectedProduct) return false;
+    const nameLower = selectedProduct.nome.toLowerCase();
+    return nameLower.includes('liso') || nameLower.includes('produtos lisos') || nameLower.includes('produto liso');
+  }, [selectedProduct]);
+
+  const editSelectedProduct = useMemo(() => {
+    return products.find(p => p.id === selectedAddProductId);
+  }, [products, selectedAddProductId]);
+
+  const isLisoEditProduct = useMemo(() => {
+    if (!editSelectedProduct) return false;
+    const nameLower = editSelectedProduct.nome.toLowerCase();
+    return nameLower.includes('liso') || nameLower.includes('produtos lisos') || nameLower.includes('produto liso');
+  }, [editSelectedProduct]);
+
   const totalVendaSemDesconto = useMemo(() => {
     const urgenciaVal = temTaxaUrgencia ? (parseFloat(valorTaxaUrgencia) || 0) : 0;
     const cartaoVal = temTaxaCartao ? (parseFloat(valorTaxaCartao) || 0) : 0;
@@ -553,14 +575,20 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     if (cart.length > 0) {
       const cartTotal = cart.reduce((sum, item) => {
         const effectiveQty = getCartItemEffectiveQty(item, cart);
-        const unitPrice = getProductUnitPrice(item.product, effectiveQty);
+        const unitPrice = item.customPreco !== undefined ? item.customPreco : getProductUnitPrice(item.product, effectiveQty);
         const addonsUnitPrice = item.addons ? item.addons.reduce((s, addon) => s + getProductUnitPrice(addon, effectiveQty), 0) : 0;
         return sum + (item.quantity * (unitPrice + addonsUnitPrice));
       }, 0);
       return cartTotal + (arteDesign ? 5 : 0) + secondArtVal + urgenciaVal + cartaoVal;
     }
+
+    const parsedCustomPrice = parseFloat(customPreco.replace(',', '.'));
+    const currentPrice = (isLisoProduct && !isNaN(parsedCustomPrice) && parsedCustomPrice >= 0)
+      ? parsedCustomPrice
+      : (selectedProduct ? getProductUnitPrice(selectedProduct, Number(quantidade) || 1) : 0);
+
     const mainTotal = selectedProduct && typeof quantidade === 'number' 
-      ? getProductUnitPrice(selectedProduct, quantidade) * quantidade 
+      ? currentPrice * quantidade 
       : 0;
 
     const addonsTotal = selectedAddonIds.reduce((sum, addonId) => {
@@ -573,7 +601,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }, 0);
 
     return mainTotal + addonsTotal + (arteDesign ? 5 : 0) + secondArtVal + urgenciaVal + cartaoVal;
-  }, [cart, selectedProduct, quantidade, selectedAddonIds, products, arteDesign, segundaArte, temTaxaUrgencia, valorTaxaUrgencia, temTaxaCartao, valorTaxaCartao]);
+  }, [cart, selectedProduct, quantidade, selectedAddonIds, products, arteDesign, segundaArte, temTaxaUrgencia, valorTaxaUrgencia, temTaxaCartao, valorTaxaCartao, isLisoProduct, customPreco]);
 
   // Sincronizar o desconto calculado quando o valor total sem desconto mudar e houver desconto digitado em valor fixo R$
   useEffect(() => {
@@ -795,6 +823,27 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return;
     }
 
+    let finalProdName = prod.nome;
+    let unitPrice = getProductUnitPrice(prod, qtyNum);
+    let customNameVal: string | undefined;
+    let customPriceVal: number | undefined;
+
+    if (isLisoProduct) {
+      if (!customNome.trim()) {
+        setFormError('Por favor, digite o nome/descrição para o Produto Liso.');
+        return;
+      }
+      const priceNum = parseFloat(customPreco.replace(',', '.'));
+      if (isNaN(priceNum) || priceNum < 0) {
+        setFormError('Por favor, informe um preço unitário válido para o Produto Liso.');
+        return;
+      }
+      finalProdName = customNome.trim();
+      unitPrice = priceNum;
+      customNameVal = finalProdName;
+      customPriceVal = priceNum;
+    }
+
     setFormError('');
 
     // Prepara os addons selecionados atualmente
@@ -802,7 +851,6 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       .map(id => products.find(p => p.id === id))
       .filter((p): p is Product => !!p);
 
-    const unitPrice = getProductUnitPrice(prod, qtyNum);
     const addonsUnitPrice = currentAddons.reduce((sum, addon) => sum + getProductUnitPrice(addon, qtyNum), 0);
     const uniqueIdSuffix = Math.random().toString(36).substring(2, 7);
     
@@ -814,7 +862,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         quantity: qtyNum,
         total: qtyNum * (unitPrice + addonsUnitPrice),
         addons: currentAddons,
-        corSelecionada: selectedColor || undefined
+        corSelecionada: selectedColor || undefined,
+        customNome: customNameVal,
+        customPreco: customPriceVal
       }
     ]);
 
@@ -826,7 +876,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setSelectedColor('');
     setQuantidade(1);
     setSelectedAddonIds([]);
-    setSuccessMsg(`"${prod.nome}"${selectedColor ? ` (${selectedColor})` : ''} adicionado ao carrinho!`);
+    setCustomNome('');
+    setCustomPreco('');
+    setSuccessMsg(`"${finalProdName}"${selectedColor ? ` (${selectedColor})` : ''} adicionado ao carrinho!`);
     setTimeout(() => setSuccessMsg(''), 2500);
   };
 
@@ -867,11 +919,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       for (const item of cart) {
         // Adiciona o produto principal com corSelecionada e preço progressivo
         const effectiveQty = getCartItemEffectiveQty(item, cart);
-        const mainUnitPrice = getProductUnitPrice(item.product, effectiveQty);
+        const mainUnitPrice = item.customPreco !== undefined ? item.customPreco : getProductUnitPrice(item.product, effectiveQty);
         itemsList.push({
           id: item.id,
           produtoId: item.product.id,
-          produtoNome: item.product.nome,
+          produtoNome: item.customNome || item.product.nome,
           precoUn: mainUnitPrice,
           quantidade: item.quantity,
           total: mainUnitPrice * item.quantity,
@@ -920,12 +972,28 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         }
       }
 
-      const progressiveUnitPrice = getProductUnitPrice(selectedProduct, qtyNum);
+      let finalProdName = selectedProduct.nome;
+      let progressiveUnitPrice = getProductUnitPrice(selectedProduct, qtyNum);
+
+      if (isLisoProduct) {
+        if (!customNome.trim()) {
+          setFormError('Por favor, digite o nome/descrição para o Produto Liso.');
+          return;
+        }
+        const priceNum = parseFloat(customPreco.replace(',', '.'));
+        if (isNaN(priceNum) || priceNum < 0) {
+          setFormError('Por favor, informe um preço unitário válido para o Produto Liso.');
+          return;
+        }
+        finalProdName = customNome.trim();
+        progressiveUnitPrice = priceNum;
+      }
+
       finalItens = [
         {
           id: `item-${selectedProduct.id}-${Date.now()}`,
           produtoId: selectedProduct.id,
-          produtoNome: selectedProduct.nome,
+          produtoNome: finalProdName,
           precoUn: progressiveUnitPrice,
           quantidade: qtyNum,
           total: progressiveUnitPrice * qtyNum,
@@ -1101,6 +1169,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setSelectedProductId('');
     setQuantidade(1);
     setSelectedAddonIds([]);
+    setCustomNome('');
+    setCustomPreco('');
     setArteDesign(false);
     setSegundaArte(false);
     setTemTaxaUrgencia(false);
@@ -1958,6 +2028,46 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   </select>
                 )}
               </div>
+
+              {/* Custom liso product options */}
+              {isLisoProduct && (
+                <div className="mt-3 p-3.5 bg-brand-pink/5 border border-brand-pink/20 rounded-xl space-y-3 text-left animate-fade-in">
+                  <div className="text-[11px] font-bold text-brand-pink uppercase tracking-wide flex items-center gap-1.5">
+                    <span>✏️ Personalizar Produto Liso</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="custom-liso-nome" className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                        O que é este Produto? <span className="text-brand-pink font-bold">*</span>
+                      </label>
+                      <input
+                        id="custom-liso-nome"
+                        type="text"
+                        value={customNome}
+                        onChange={(e) => setCustomNome(e.target.value)}
+                        className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-pink text-xs text-zinc-100 placeholder-zinc-700"
+                        placeholder="Ex: Copo Liso Azul, Caneca Lisa"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="custom-liso-preco" className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                        Preço Unitário (R$) <span className="text-brand-pink font-bold">*</span>
+                      </label>
+                      <input
+                        id="custom-liso-preco"
+                        type="text"
+                        value={customPreco}
+                        onChange={(e) => setCustomPreco(e.target.value)}
+                        className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-pink text-xs text-zinc-100 placeholder-zinc-700 font-mono"
+                        placeholder="Ex: 5.50"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 leading-normal">
+                    Escreva o nome do item e o valor unitário combinado para esta venda. Você pode adicionar múltiplos produtos lisos diferentes ao carrinho!
+                  </p>
+                </div>
+              )}
 
               {/* Color variation selector */}
               {selectedProduct && selectedProduct.cores && selectedProduct.cores.length > 0 && (
@@ -3517,46 +3627,102 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
 
                   {/* Add New Product Block */}
                   {products && products.length > 0 && (
-                    <div className="pt-2 border-t border-zinc-800 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                      <select
-                        id="add-item-select"
-                        value={selectedAddProductId}
-                        onChange={(e) => setSelectedAddProductId(e.target.value)}
-                        className="flex-1 bg-black border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-350 focus:outline-none focus:border-brand-pink cursor-pointer font-medium"
-                      >
-                        <option value="">➕ Selecione um produto para acrescentar...</option>
-                        {products.map(p => (
-                          <option key={p.id} value={p.id}>
-                            {p.nome} - R$ {p.preco.toFixed(2)}
-                          </option>
-                        ))}
-                      </select>
-                      
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (!selectedAddProductId) return;
-                          const dbProd = products.find(p => p.id === selectedAddProductId);
-                          if (dbProd) {
-                            const uniqueIdSuffix = Math.random().toString(36).substring(2, 7);
-                            setEditItens([
-                              ...editItens,
-                              {
-                                id: `item-${dbProd.id}-${Date.now()}-${uniqueIdSuffix}`,
-                                produtoId: dbProd.id,
-                                produtoNome: dbProd.nome,
-                                precoUn: dbProd.preco,
-                                quantidade: 1,
-                                total: dbProd.preco
+                    <div className="pt-2 border-t border-zinc-800 space-y-2">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                        <select
+                          id="add-item-select"
+                          value={selectedAddProductId}
+                          onChange={(e) => {
+                            setSelectedAddProductId(e.target.value);
+                            setEditCustomNome('');
+                            setEditCustomPreco('');
+                          }}
+                          className="flex-1 bg-black border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-350 focus:outline-none focus:border-brand-pink cursor-pointer font-medium"
+                        >
+                          <option value="">➕ Selecione um produto para acrescentar...</option>
+                          {products.map(p => (
+                            <option key={p.id} value={p.id}>
+                              {p.nome} - R$ {p.preco.toFixed(2)}
+                            </option>
+                          ))}
+                        </select>
+                        
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (!selectedAddProductId) return;
+                            const dbProd = products.find(p => p.id === selectedAddProductId);
+                            if (dbProd) {
+                              const isLiso = dbProd.nome.toLowerCase().includes('liso') || dbProd.nome.toLowerCase().includes('produtos lisos') || dbProd.nome.toLowerCase().includes('produto liso');
+                              let finalName = dbProd.nome;
+                              let finalPrice = dbProd.preco;
+
+                              if (isLiso) {
+                                if (!editCustomNome.trim()) {
+                                  alert('Por favor, digite o nome/descrição para o Produto Liso.');
+                                  return;
+                                }
+                                const priceNum = parseFloat(editCustomPreco.replace(',', '.'));
+                                if (isNaN(priceNum) || priceNum < 0) {
+                                  alert('Por favor, informe um preço unitário válido para o Produto Liso.');
+                                  return;
+                                }
+                                finalName = editCustomNome.trim();
+                                finalPrice = priceNum;
                               }
-                            ]);
-                            setSelectedAddProductId('');
-                          }
-                        }}
-                        className="py-1.5 px-3 bg-brand-pink/15 hover:bg-brand-pink border border-brand-pink/35 text-brand-pink hover:text-black font-bold rounded-lg text-[11px] transition-all cursor-pointer whitespace-nowrap active:scale-95"
-                      >
-                        Acrescentar
-                      </button>
+
+                              const uniqueIdSuffix = Math.random().toString(36).substring(2, 7);
+                              setEditItens([
+                                ...editItens,
+                                {
+                                  id: `item-${dbProd.id}-${Date.now()}-${uniqueIdSuffix}`,
+                                  produtoId: dbProd.id,
+                                  produtoNome: finalName,
+                                  precoUn: finalPrice,
+                                  quantidade: 1,
+                                  total: finalPrice
+                                }
+                              ]);
+                              setSelectedAddProductId('');
+                              setEditCustomNome('');
+                              setEditCustomPreco('');
+                            }
+                          }}
+                          className="py-1.5 px-3 bg-brand-pink/15 hover:bg-brand-pink border border-brand-pink/35 text-brand-pink hover:text-black font-bold rounded-lg text-[11px] transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                        >
+                          Acrescentar
+                        </button>
+                      </div>
+
+                      {isLisoEditProduct && (
+                        <div className="p-3 bg-brand-pink/5 border border-brand-pink/20 rounded-lg space-y-2 text-left animate-fade-in">
+                          <div className="text-[10px] font-bold text-brand-pink uppercase">✏️ Personalizar Produto Liso na Edição</div>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            <div>
+                              <label htmlFor="edit-custom-liso-nome" className="block text-[9px] text-zinc-400 mb-0.5 font-bold">O que é este Produto? *</label>
+                              <input
+                                id="edit-custom-liso-nome"
+                                type="text"
+                                value={editCustomNome}
+                                onChange={(e) => setEditCustomNome(e.target.value)}
+                                className="w-full px-2.5 py-1 bg-black border border-zinc-800 rounded focus:outline-none focus:border-brand-pink text-xs text-zinc-150 placeholder-zinc-700"
+                                placeholder="Ex: Copo Liso Verde"
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="edit-custom-liso-preco" className="block text-[9px] text-zinc-400 mb-0.5 font-bold">Preço Unitário (R$) *</label>
+                              <input
+                                id="edit-custom-liso-preco"
+                                type="text"
+                                value={editCustomPreco}
+                                onChange={(e) => setEditCustomPreco(e.target.value)}
+                                className="w-full px-2.5 py-1 bg-black border border-zinc-800 rounded focus:outline-none focus:border-brand-pink text-xs text-zinc-150 font-mono placeholder-zinc-700"
+                                placeholder="Ex: 4.80"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
