@@ -2580,7 +2580,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     <div key={item.id} className="py-2.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-bold text-zinc-100 truncate block">{item.product.nome}</span>
+                          <span className="font-bold text-zinc-100 truncate block">{item.customNome || item.product.nome}</span>
                           {item.corSelecionada && (
                             <span className="inline-flex items-center gap-1 bg-brand-pink/10 border border-brand-pink/20 text-brand-pink text-[9px] px-1.5 py-0.5 rounded-full font-bold select-none">
                               🎨 {item.corSelecionada}
@@ -2589,7 +2589,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                         </div>
                         {(() => {
                           const effectiveQty = getCartItemEffectiveQty(item, cart);
-                          const unitPrice = getProductUnitPrice(item.product, effectiveQty);
+                          const unitPrice = item.customPreco !== undefined ? item.customPreco : getProductUnitPrice(item.product, effectiveQty);
                           return (
                             <span className="text-[10px] text-zinc-500 font-mono">
                               {item.quantity}x de R$ {unitPrice.toFixed(2)}
@@ -2620,7 +2620,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                         <span className="font-bold text-brand-pink font-mono">
                           R$ {(() => {
                             const effectiveQty = getCartItemEffectiveQty(item, cart);
-                            const unitPrice = getProductUnitPrice(item.product, effectiveQty);
+                            const unitPrice = item.customPreco !== undefined ? item.customPreco : getProductUnitPrice(item.product, effectiveQty);
                             const addonsUnitPrice = item.addons ? item.addons.reduce((sum, addon) => sum + getProductUnitPrice(addon, effectiveQty), 0) : 0;
                             return (item.quantity * (unitPrice + addonsUnitPrice)).toFixed(2);
                           })()}
