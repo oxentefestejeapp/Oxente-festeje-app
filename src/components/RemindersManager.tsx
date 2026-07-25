@@ -290,9 +290,14 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
     }
   };
 
-  // Filter sales that are scheduled for pickup today (excluding estimates)
+  // Filter sales that are scheduled for pickup today OR un-delivered orders from past days (excluding estimates)
   const todaySales = useMemo(() => {
-    return sales.filter(s => s.dataRetirada === todayStr && s.status !== 'Orçamento');
+    return sales.filter(s => {
+      if (s.status === 'Orçamento' || !s.dataRetirada) return false;
+      if (s.dataRetirada === todayStr) return true;
+      if (s.dataRetirada < todayStr && s.statusProducao !== 'Entregue') return true;
+      return false;
+    });
   }, [sales, todayStr]);
 
   // Filter sales scheduled for pickup tomorrow (excluding estimates)
@@ -307,19 +312,31 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
 
   // Apply visual status filters on today's or forgotten sales
   const filteredSales = useMemo(() => {
+    let result: Sale[] = [];
     if (filterType === 'esquecidos') {
-      return forgottenSales;
+      result = forgottenSales;
+    } else {
+      result = todaySales.filter(sale => {
+        const isPending = sale.statusProducao !== 'Entregue';
+        
+        if (filterType === 'pendentes') {
+          return isPending;
+        }
+        if (filterType === 'concluidos') {
+          return !isPending;
+        }
+        return true;
+      });
     }
-    return todaySales.filter(sale => {
-      const isPending = sale.statusProducao !== 'Entregue';
-      
-      if (filterType === 'pendentes') {
-        return isPending;
+
+    // Sort: Overdue/rolled-over items first (sorted by dataRetirada asc), then today's items
+    return [...result].sort((a, b) => {
+      const dateA = a.dataRetirada || '';
+      const dateB = b.dataRetirada || '';
+      if (dateA !== dateB) {
+        return dateA.localeCompare(dateB);
       }
-      if (filterType === 'concluidos') {
-        return !isPending;
-      }
-      return true;
+      return 0;
     });
   }, [todaySales, forgottenSales, filterType]);
 
@@ -328,7 +345,9 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
     return todaySales.filter(s => s.statusProducao !== 'Entregue').length;
   }, [todaySales]);
 
-  const completedCount = todaySales.length - pendingCount;
+  const completedCount = useMemo(() => {
+    return sales.filter(s => s.dataRetirada === todayStr && s.statusProducao === 'Entregue' && s.status !== 'Orçamento').length;
+  }, [sales, todayStr]);
 
   // Handle reminder click to trigger ready status update & WhatsApp notification
   const handleReminderAction = (sale: Sale) => {
@@ -560,7 +579,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                   </>
                 ) : (
                   <>
-                    Rastreie os pedidos com retirada agendada para hoje. Clique em <strong className="text-brand-pink font-semibold">"Avisar Pronto &amp; Contatar"</strong> para marcar a encomenda como <strong className="text-purple-400">Pronto para Retirada</strong> e preparar a mensagem detalhada do WhatsApp no formato oficial de contato do salão.
+                    Rastreie os pedidos com retirada agendada para hoje ou rolados de datas anteriores não entregues. Pedidos pendentes de dias passados continuam aparecendo <strong>automática e diariamente</strong> nos Lembretes do Dia até serem concluídos/entregues.
                   </>
                 )}
               </p>
@@ -843,10 +862,42 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                         </p>
                       )}
                       {sale.dataRetirada && sale.dataRetirada !== todayStr && (
-                        <p className="text-[11px] text-rose-400 font-bold mt-1.5 flex items-center gap-1.5 bg-rose-950/10 border border-rose-900/15 px-2.5 py-1 rounded-lg">
-                          <Calendar className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                          <span>Retirada agendada para: {formatLocalDate(sale.dataRetirada)} ({getDaysLate(sale.dataRetirada)} {getDaysLate(sale.dataRetirada) === 1 ? 'dia' : 'dias'} de atraso)</span>
-                        </p>
+                        <div className="mt-1.5 space-y-1.5">
+                          <p className="text-[11px] text-rose-400 font-bold flex items-center gap-1.5 bg-rose-950/10 border border-rose-900/15 px-2.5 py-1 rounded-lg">
+                            <Calendar className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                            <span>Retirada original: {formatLocalDate(sale.dataRetirada)} ({getDaysLate(sale.dataRetirada)} {getDaysLate(sale.dataRetirada) === 1 ? 'dia' : 'dias'} de atraso - Rolado para Hoje)</span>
+                          </p>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playAppSound('click');
+                                onUpdateSale({
+                                  ...sale,
+                                  dataRetirada: todayStr
+                                });
+                              }}
+                              className="text-[10px] font-extrabold bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 border border-blue-800/40 px-2.5 py-1 rounded-lg cursor-pointer transition-colors flex items-center gap-1"
+                              title="Atualizar a data de retirada oficialmente para HOJE"
+                            >
+                              <span>📅 Atualizar Data para Hoje</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                playAppSound('click');
+                                onUpdateSale({
+                                  ...sale,
+                                  dataRetirada: tomorrowStr
+                                });
+                              }}
+                              className="text-[10px] font-extrabold bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 border border-purple-800/40 px-2.5 py-1 rounded-lg cursor-pointer transition-colors flex items-center gap-1"
+                              title="Adiar a data de retirada oficialmente para AMANHÃ"
+                            >
+                              <span>⏭️ Adiar p/ Amanhã</span>
+                            </button>
+                          </div>
+                        </div>
                       )}
                     </div>
 
