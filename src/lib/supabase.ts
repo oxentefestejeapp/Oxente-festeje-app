@@ -169,6 +169,7 @@ ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS desconto_referral NUMERIC;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS cashback_gasto NUMERIC;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS referral_sended BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS bloqueado_lembrete BOOLEAN DEFAULT FALSE;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS data_aviso_atraso TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS pedido_vinculo_numero TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
@@ -707,18 +708,25 @@ const realDbSupabase = {
     try {
       const dbRow = mapSaleToDb(sale) as any;
       let attempt = 0;
-      while (attempt < 2) {
+      while (attempt < 5) {
         const { error } = await supabase.from('oxente_sales').upsert(dbRow);
         if (error) {
           lastSupabaseError = error;
-          // Se as colunas novas não existirem no banco (erro 42703), omitimos e tentamos de novo
-          if (error.code === '42703') {
-            console.warn('Colunas novas podem não existir no Supabase, tentando salvar sem elas.');
-            delete dbRow.pedido_anotado;
-            delete dbRow.aviso_pronto_sended;
-            delete dbRow.turno_entrega;
-            delete dbRow.bloqueado_lembrete;
-            delete dbRow.pedido_vinculo_numero;
+          const errMsg = error.message || '';
+          // Se alguma coluna nova não existir no banco no Supabase/cache, removemos e re-tentamos
+          if (error.code === '42703' || error.code === 'PGRST204' || errMsg.includes('Could not find the') || errMsg.includes('column')) {
+            console.warn('Coluna não encontrada no Supabase, contornando schema cache...');
+            const colMatch = errMsg.match(/Could not find the '([^']+)' column/);
+            if (colMatch && colMatch[1] && colMatch[1] in dbRow) {
+              delete dbRow[colMatch[1]];
+            } else {
+              delete dbRow.data_aviso_atraso;
+              delete dbRow.bloqueado_lembrete;
+              delete dbRow.pedido_vinculo_numero;
+              delete dbRow.pedido_anotado;
+              delete dbRow.aviso_pronto_sended;
+              delete dbRow.turno_entrega;
+            }
             attempt++;
             continue;
           }

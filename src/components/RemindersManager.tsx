@@ -24,7 +24,9 @@ import {
   Eye,
   Lock,
   Unlock,
-  Link
+  Link,
+  Search,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sale, StoreInfo } from '../types';
@@ -62,6 +64,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
   const [isDelayedReminderSelected, setIsDelayedReminderSelected] = useState<boolean>(false);
   const [selectedSaleForReceipt, setSelectedSaleForReceipt] = useState<Sale | null>(null);
   const [filterType, setFilterType] = useState<'todos' | 'pendentes' | 'concluidos' | 'esquecidos'>('todos');
+  const [searchQuery, setSearchQuery] = useState('');
   const [readyId, setReadyId] = useState<string | null>(null);
   const [schedulingSaleId, setSchedulingSaleId] = useState<string | null>(null);
   
@@ -324,6 +327,23 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
       result = todaySales.filter(sale => sale.statusProducao !== 'Entregue');
     }
 
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      const cleanQ = q.replace(/\D/g, '');
+      result = result.filter(sale => {
+        const clientMatch = sale.cliente?.toLowerCase().includes(q);
+        const orderMatch = sale.numeroPedido?.toLowerCase().includes(q) || 
+                           sale.id?.toLowerCase().includes(q) || 
+                           sale.pedidoVinculoNumero?.toLowerCase().includes(q);
+        const phone = sale.telefoneCliente || '';
+        const rawPhone = phone.replace(/\D/g, '');
+        const phoneMatch = cleanQ.length > 0 && rawPhone.includes(cleanQ);
+        const phoneTextMatch = phone.toLowerCase().includes(q);
+        
+        return clientMatch || orderMatch || phoneMatch || phoneTextMatch;
+      });
+    }
+
     // Sort: Overdue/rolled-over items first (sorted by dataRetirada asc), then today's items
     return [...result].sort((a, b) => {
       const dateA = a.dataRetirada || '';
@@ -333,7 +353,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
       }
       return 0;
     });
-  }, [todaySales, forgottenSales, filterType, sales, todayStr]);
+  }, [todaySales, forgottenSales, filterType, sales, todayStr, searchQuery]);
 
   // Counts for Today
   const pendingCount = useMemo(() => {
@@ -581,76 +601,100 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
             </div>
           </div>
 
-          {/* Filters Row */}
-          <div className="flex gap-1 bg-zinc-900/50 p-1 border border-zinc-850 rounded-xl max-w-md flex-wrap sm:flex-nowrap relative select-none">
-            <button 
-              onClick={() => setFilterType('todos')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
-                filterType === 'todos' 
-                  ? 'text-brand-pink font-black' 
-                  : 'text-zinc-450 hover:text-zinc-200'
-              }`}
-            >
-              {filterType === 'todos' && (
-                <motion.div
-                  layoutId="remindersFilterIndicator"
-                  className="absolute inset-0 bg-zinc-800 border border-zinc-700/50 rounded-lg -z-10 shadow-xs"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
+          {/* Filters & Search Row */}
+          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
+            {/* Filters Row */}
+            <div className="flex gap-1 bg-zinc-900/50 p-1 border border-zinc-850 rounded-xl w-full sm:w-auto sm:max-w-md flex-wrap sm:flex-nowrap relative select-none">
+              <button 
+                onClick={() => setFilterType('todos')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
+                  filterType === 'todos' 
+                    ? 'text-brand-pink font-black' 
+                    : 'text-zinc-450 hover:text-zinc-200'
+                }`}
+              >
+                {filterType === 'todos' && (
+                  <motion.div
+                    layoutId="remindersFilterIndicator"
+                    className="absolute inset-0 bg-zinc-800 border border-zinc-700/50 rounded-lg -z-10 shadow-xs"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                Todos ({todaySales.length})
+              </button>
+              <button 
+                onClick={() => setFilterType('pendentes')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
+                  filterType === 'pendentes' 
+                    ? 'text-amber-400 font-black' 
+                    : 'text-zinc-450 hover:text-zinc-200'
+                }`}
+              >
+                {filterType === 'pendentes' && (
+                  <motion.div
+                    layoutId="remindersFilterIndicator"
+                    className="absolute inset-0 bg-amber-955/20 border border-amber-900/25 rounded-lg -z-10"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                A Fazer ({pendingCount})
+              </button>
+              <button 
+                onClick={() => setFilterType('concluidos')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
+                  filterType === 'concluidos' 
+                    ? 'text-emerald-400 font-black' 
+                    : 'text-zinc-450 hover:text-zinc-200'
+                }`}
+              >
+                {filterType === 'concluidos' && (
+                  <motion.div
+                    layoutId="remindersFilterIndicator"
+                    className="absolute inset-0 bg-emerald-955/20 border border-emerald-900/15 rounded-lg -z-10"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                Entregues ({completedCount})
+              </button>
+              <button 
+                onClick={() => setFilterType('esquecidos')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
+                  filterType === 'esquecidos' 
+                    ? 'text-rose-400 font-black' 
+                    : 'text-zinc-450 hover:text-rose-450/75'
+                }`}
+              >
+                {filterType === 'esquecidos' && (
+                  <motion.div
+                    layoutId="remindersFilterIndicator"
+                    className="absolute inset-0 bg-rose-955/25 border border-rose-900/35 rounded-lg -z-10 shadow-xs"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                Esquecidas ({forgottenSales.length})
+              </button>
+            </div>
+
+            {/* Search Input Bar */}
+            <div className="relative w-full sm:w-64 shrink-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar cliente, nº pedido ou telefone..."
+                className="w-full bg-zinc-900/90 border border-zinc-800 rounded-xl pl-8 pr-7 py-2 text-[11px] text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-pink/50 focus:ring-1 focus:ring-brand-pink/50 transition-all"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-0.5 rounded-full"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
               )}
-              Todos ({todaySales.length})
-            </button>
-            <button 
-              onClick={() => setFilterType('pendentes')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
-                filterType === 'pendentes' 
-                  ? 'text-amber-400 font-black' 
-                  : 'text-zinc-450 hover:text-zinc-200'
-              }`}
-            >
-              {filterType === 'pendentes' && (
-                <motion.div
-                  layoutId="remindersFilterIndicator"
-                  className="absolute inset-0 bg-amber-955/20 border border-amber-900/25 rounded-lg -z-10"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-              A Fazer ({pendingCount})
-            </button>
-            <button 
-              onClick={() => setFilterType('concluidos')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
-                filterType === 'concluidos' 
-                  ? 'text-emerald-400 font-black' 
-                  : 'text-zinc-450 hover:text-zinc-200'
-              }`}
-            >
-              {filterType === 'concluidos' && (
-                <motion.div
-                  layoutId="remindersFilterIndicator"
-                  className="absolute inset-0 bg-emerald-955/20 border border-emerald-900/15 rounded-lg -z-10"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-              Entregues ({completedCount})
-            </button>
-            <button 
-              onClick={() => setFilterType('esquecidos')}
-              className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
-                filterType === 'esquecidos' 
-                  ? 'text-rose-400 font-black' 
-                  : 'text-zinc-450 hover:text-rose-450/75'
-              }`}
-            >
-              {filterType === 'esquecidos' && (
-                <motion.div
-                  layoutId="remindersFilterIndicator"
-                  className="absolute inset-0 bg-rose-955/25 border border-rose-900/35 rounded-lg -z-10 shadow-xs"
-                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
-                />
-              )}
-              Esquecidas ({forgottenSales.length})
-            </button>
+            </div>
           </div>
 
           {/* List of today's reminders */}
