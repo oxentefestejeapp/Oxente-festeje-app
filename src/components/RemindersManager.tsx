@@ -294,8 +294,9 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
   const todaySales = useMemo(() => {
     return sales.filter(s => {
       if (s.status === 'Orçamento' || !s.dataRetirada) return false;
+      if (s.statusProducao === 'Entregue') return false;
       if (s.dataRetirada === todayStr) return true;
-      if (s.dataRetirada < todayStr && s.statusProducao !== 'Entregue') return true;
+      if (s.dataRetirada < todayStr) return true;
       return false;
     });
   }, [sales, todayStr]);
@@ -315,18 +316,12 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
     let result: Sale[] = [];
     if (filterType === 'esquecidos') {
       result = forgottenSales;
+    } else if (filterType === 'concluidos') {
+      result = sales.filter(s => s.status !== 'Orçamento' && s.statusProducao === 'Entregue' && s.dataRetirada && s.dataRetirada <= todayStr);
+    } else if (filterType === 'pendentes') {
+      result = todaySales.filter(sale => sale.statusProducao !== 'Entregue');
     } else {
-      result = todaySales.filter(sale => {
-        const isPending = sale.statusProducao !== 'Entregue';
-        
-        if (filterType === 'pendentes') {
-          return isPending;
-        }
-        if (filterType === 'concluidos') {
-          return !isPending;
-        }
-        return true;
-      });
+      result = todaySales.filter(sale => sale.statusProducao !== 'Entregue');
     }
 
     // Sort: Overdue/rolled-over items first (sorted by dataRetirada asc), then today's items
@@ -338,7 +333,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
       }
       return 0;
     });
-  }, [todaySales, forgottenSales, filterType]);
+  }, [todaySales, forgottenSales, filterType, sales, todayStr]);
 
   // Counts for Today
   const pendingCount = useMemo(() => {
@@ -346,7 +341,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
   }, [todaySales]);
 
   const completedCount = useMemo(() => {
-    return sales.filter(s => s.dataRetirada === todayStr && s.statusProducao === 'Entregue' && s.status !== 'Orçamento').length;
+    return sales.filter(s => s.dataRetirada && s.dataRetirada <= todayStr && s.statusProducao === 'Entregue' && s.status !== 'Orçamento').length;
   }, [sales, todayStr]);
 
   // Handle reminder click to trigger ready status update & WhatsApp notification
@@ -874,7 +869,10 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                                 playAppSound('click');
                                 onUpdateSale({
                                   ...sale,
-                                  dataRetirada: todayStr
+                                  dataRetirada: todayStr,
+                                  dataAvisoAtraso: undefined,
+                                  foiAlterado: true,
+                                  editadoEm: new Date().toISOString()
                                 });
                               }}
                               className="text-[10px] font-extrabold bg-blue-950/40 hover:bg-blue-900/60 text-blue-300 border border-blue-800/40 px-2.5 py-1 rounded-lg cursor-pointer transition-colors flex items-center gap-1"
@@ -888,11 +886,14 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                                 playAppSound('click');
                                 onUpdateSale({
                                   ...sale,
-                                  dataRetirada: tomorrowStr
+                                  dataRetirada: tomorrowStr,
+                                  dataAvisoAtraso: undefined,
+                                  foiAlterado: true,
+                                  editadoEm: new Date().toISOString()
                                 });
                               }}
                               className="text-[10px] font-extrabold bg-purple-950/40 hover:bg-purple-900/60 text-purple-300 border border-purple-800/40 px-2.5 py-1 rounded-lg cursor-pointer transition-colors flex items-center gap-1"
-                              title="Adiar a data de retirada oficialmente para AMANHÃ"
+                              title="Adiar a data de retirada officially para AMANHÃ"
                             >
                               <span>⏭️ Adiar p/ Amanhã</span>
                             </button>
@@ -1006,7 +1007,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                           </button>
                         )}
 
-                        {isReadyForPickup && (
+                        {(isReadyForPickup || (sale.dataRetirada && sale.dataRetirada < todayStr)) && (
                           <button
                             type="button"
                             onClick={() => {
@@ -1014,10 +1015,23 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                               setIsDelayedReminderSelected(true);
                               setSelectedSaleForWA(sale);
                             }}
-                            className="flex-1 py-2.5 px-4 font-extrabold rounded-xl text-[11px] bg-amber-600 hover:bg-amber-500 text-white shadow-md shadow-amber-955/20 transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                            className={`flex-1 py-2.5 px-4 font-extrabold rounded-xl text-[11px] transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shadow-md ${
+                              sale.dataAvisoAtraso === todayStr
+                                ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-rose-955/20 border border-rose-500/30'
+                                : 'bg-emerald-600 hover:bg-emerald-550 text-white shadow-emerald-955/20 border border-emerald-500/30'
+                            }`}
+                            title={
+                              sale.dataAvisoAtraso === todayStr
+                                ? 'Cliente já foi notificado sobre o atraso hoje! Clique para reenviar.'
+                                : 'Cliente ainda não foi notificado hoje sobre o atraso. Clique para enviar lembrete via WhatsApp.'
+                            }
                           >
                             <MessageSquare className="h-4 w-4 shrink-0" />
-                            <span>Lembrar Retirada em Atraso</span>
+                            <span>
+                              {sale.dataAvisoAtraso === todayStr
+                                ? 'Aviso de Atraso Enviado 🔴'
+                                : 'Lembrar Retirada em Atraso 🟢'}
+                            </span>
                           </button>
                         )}
                         

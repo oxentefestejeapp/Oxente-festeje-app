@@ -382,6 +382,7 @@ const mapSaleToDb = (sale: Sale) => ({
   cashback_gasto: sale.cashbackGasto || null,
   referral_sended: sale.referralSended || false,
   bloqueado_lembrete: sale.bloqueadoLembrete || false,
+  data_aviso_atraso: sale.dataAvisoAtraso || null,
   pedido_vinculo_numero: sale.pedidoVinculoNumero || null,
   updated_at: sale.updatedAt || new Date().toISOString()
 });
@@ -427,6 +428,7 @@ export const mapDbToSale = (dbItem: any): Sale => ({
   cashbackGasto: dbItem.cashback_gasto !== null && dbItem.cashback_gasto !== undefined ? Number(dbItem.cashback_gasto) : undefined,
   referralSended: dbItem.referral_sended || false,
   bloqueadoLembrete: dbItem.bloqueado_lembrete || false,
+  dataAvisoAtraso: dbItem.data_aviso_atraso || undefined,
   pedidoVinculoNumero: dbItem.pedido_vinculo_numero || undefined,
   updatedAt: dbItem.updated_at || undefined
 });

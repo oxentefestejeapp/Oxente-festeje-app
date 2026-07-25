@@ -118,12 +118,16 @@ Sábados de 8:30h às 12h
     }
 
     // Save changes to sale object (phone & order number)
+    const todayStr = new Date().toISOString().split('T')[0];
     const updatedSale: Sale = {
       ...sale,
       cliente: clientName.trim(),
       telefoneCliente: phone.trim() || undefined,
       numeroPedido: orderNumber.trim() || undefined,
-      avisoProntoSended: true,
+      avisoProntoSended: messageType === 'ready' ? true : sale.avisoProntoSended,
+      ...(messageType === 'delayed' ? { dataAvisoAtraso: todayStr } : {}),
+      foiAlterado: true,
+      editadoEm: new Date().toISOString()
     };
 
     if (onUpdateSale) {

@@ -104,6 +104,7 @@ export interface Sale {
   updatedAt?: string;
   pendingSync?: boolean;
   bloqueadoLembrete?: boolean;
+  dataAvisoAtraso?: string; // Format YYYY-MM-DD when delayed reminder was sent
   pedidoVinculoNumero?: string;
   corSelecionada?: string;
 }
