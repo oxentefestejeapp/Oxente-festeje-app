@@ -139,19 +139,26 @@
   }
 }
 
-/* Elegant custom scrollbar */
+/* Permanent & highly visible custom scrollbar across all browsers */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #c59218 #18181b;
+}
+
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 9px;
+  height: 9px;
 }
 ::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: #f4ebd4;
+  background: #18181b;
   border-radius: 9999px;
 }
-::-webkit-scrollbar-thumb:hover {
+::-webkit-scrollbar-thumb {
   background: #c59218;
+  border-radius: 9999px;
+  border: 2px solid #18181b;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #eab308;
 }
 
