@@ -63,7 +63,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
   const [selectedSaleForWA, setSelectedSaleForWA] = useState<Sale | null>(null);
   const [isDelayedReminderSelected, setIsDelayedReminderSelected] = useState<boolean>(false);
   const [selectedSaleForReceipt, setSelectedSaleForReceipt] = useState<Sale | null>(null);
-  const [filterType, setFilterType] = useState<'todos' | 'pendentes' | 'concluidos' | 'esquecidos'>('todos');
+  const [filterType, setFilterType] = useState<'todos' | 'pendentes' | 'avisados' | 'concluidos' | 'esquecidos'>('pendentes');
   const [searchQuery, setSearchQuery] = useState('');
   const [readyId, setReadyId] = useState<string | null>(null);
   const [schedulingSaleId, setSchedulingSaleId] = useState<string | null>(null);
@@ -314,6 +314,9 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
     return sales.filter(s => s.dataRetirada && s.dataRetirada < todayStr && s.status !== 'Orçamento' && s.statusProducao !== 'Entregue');
   }, [sales, todayStr]);
 
+  // Helper to check if sale has been notified
+  const isAvisado = (sale: Sale) => Boolean(sale.avisoProntoSended || sale.statusProducao === 'Pronto para Retirada');
+
   // Apply visual status filters on today's or forgotten sales
   const filteredSales = useMemo(() => {
     let result: Sale[] = [];
@@ -321,9 +324,12 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
       result = forgottenSales;
     } else if (filterType === 'concluidos') {
       result = sales.filter(s => s.status !== 'Orçamento' && s.statusProducao === 'Entregue' && s.dataRetirada && s.dataRetirada <= todayStr);
+    } else if (filterType === 'avisados') {
+      result = todaySales.filter(sale => isAvisado(sale) && sale.statusProducao !== 'Entregue');
     } else if (filterType === 'pendentes') {
-      result = todaySales.filter(sale => sale.statusProducao !== 'Entregue');
+      result = todaySales.filter(sale => !isAvisado(sale) && sale.statusProducao !== 'Entregue');
     } else {
+      // 'todos' shows active reminders for today that are not delivered
       result = todaySales.filter(sale => sale.statusProducao !== 'Entregue');
     }
 
@@ -357,7 +363,11 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
 
   // Counts for Today
   const pendingCount = useMemo(() => {
-    return todaySales.filter(s => s.statusProducao !== 'Entregue').length;
+    return todaySales.filter(s => !isAvisado(s) && s.statusProducao !== 'Entregue').length;
+  }, [todaySales]);
+
+  const notifiedCount = useMemo(() => {
+    return todaySales.filter(s => isAvisado(s) && s.statusProducao !== 'Entregue').length;
   }, [todaySales]);
 
   const completedCount = useMemo(() => {
@@ -604,10 +614,10 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
           {/* Filters & Search Row */}
           <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center justify-between">
             {/* Filters Row */}
-            <div className="flex gap-1 bg-zinc-900/50 p-1 border border-zinc-850 rounded-xl w-full sm:w-auto sm:max-w-md flex-wrap sm:flex-nowrap relative select-none">
+            <div className="flex gap-1 bg-zinc-900/50 p-1 border border-zinc-850 rounded-xl w-full sm:w-auto sm:max-w-xl flex-wrap sm:flex-nowrap relative select-none">
               <button 
                 onClick={() => setFilterType('todos')}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
+                className={`flex-1 py-1.5 px-2.5 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
                   filterType === 'todos' 
                     ? 'text-brand-pink font-black' 
                     : 'text-zinc-450 hover:text-zinc-200'
@@ -624,7 +634,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
               </button>
               <button 
                 onClick={() => setFilterType('pendentes')}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
+                className={`flex-1 py-1.5 px-2.5 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
                   filterType === 'pendentes' 
                     ? 'text-amber-400 font-black' 
                     : 'text-zinc-450 hover:text-zinc-200'
@@ -637,11 +647,28 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                     transition={{ type: "spring", stiffness: 380, damping: 30 }}
                   />
                 )}
-                A Fazer ({pendingCount})
+                Avisar ({pendingCount})
+              </button>
+              <button 
+                onClick={() => setFilterType('avisados')}
+                className={`flex-1 py-1.5 px-2.5 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
+                  filterType === 'avisados' 
+                    ? 'text-orange-400 font-black' 
+                    : 'text-zinc-450 hover:text-zinc-200'
+                }`}
+              >
+                {filterType === 'avisados' && (
+                  <motion.div
+                    layoutId="remindersFilterIndicator"
+                    className="absolute inset-0 bg-orange-955/20 border border-orange-900/25 rounded-lg -z-10"
+                    transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                  />
+                )}
+                Avisados ({notifiedCount})
               </button>
               <button 
                 onClick={() => setFilterType('concluidos')}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
+                className={`flex-1 py-1.5 px-2.5 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
                   filterType === 'concluidos' 
                     ? 'text-emerald-400 font-black' 
                     : 'text-zinc-450 hover:text-zinc-200'
@@ -658,7 +685,7 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
               </button>
               <button 
                 onClick={() => setFilterType('esquecidos')}
-                className={`flex-1 py-1.5 px-3 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
+                className={`flex-1 py-1.5 px-2.5 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer select-none border border-transparent relative z-10 ${
                   filterType === 'esquecidos' 
                     ? 'text-rose-400 font-black' 
                     : 'text-zinc-450 hover:text-rose-450/75'
@@ -1238,12 +1265,16 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                   <h4 className="text-xs font-bold text-zinc-300">
                     {filterType === 'esquecidos' 
                       ? 'Nenhuma encomenda esquecida encontrada' 
-                      : 'Sem lembretes filtrados para hoje'}
+                      : filterType === 'avisados'
+                        ? 'Nenhum pedido avisado aguardando retirada'
+                        : 'Sem lembretes pendentes para avisar hoje! 🎉'}
                   </h4>
                   <p className="text-[10.5px] text-zinc-500 mt-0.5">
                     {filterType === 'esquecidos'
                       ? 'Todos os pedidos de datas passadas foram devidamente entregues ou faturados!'
-                      : 'Altere os botões de filtro acima ou confira os demais dias.'}
+                      : filterType === 'avisados'
+                        ? 'Os pedidos que já foram avisados ao cliente e ainda não foram entregues aparecerão aqui.'
+                        : 'Altere os botões de filtro acima ou confira os demais dias.'}
                   </p>
                 </div>
               </div>

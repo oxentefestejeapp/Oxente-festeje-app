@@ -337,7 +337,14 @@ export default function App() {
 
   const todayRemindersCount = React.useMemo(() => {
     const todayStr = getTodayString();
-    return sales.filter(s => s.dataRetirada && s.dataRetirada <= todayStr && s.statusProducao !== 'Entregue' && s.status !== 'Orçamento').length;
+    return sales.filter(s => 
+      s.dataRetirada && 
+      s.dataRetirada <= todayStr && 
+      s.statusProducao !== 'Entregue' && 
+      s.status !== 'Orçamento' &&
+      !s.avisoProntoSended &&
+      s.statusProducao !== 'Pronto para Retirada'
+    ).length;
   }, [sales]);
 
   const totalFaltante = React.useMemo(() => {
