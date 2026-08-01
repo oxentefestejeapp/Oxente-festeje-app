@@ -13,6 +13,7 @@ import {
   Brain,
   Sparkles,
   RefreshCw,
+  RotateCcw,
   Gift,
   HelpCircle,
   TrendingUp,
@@ -391,6 +392,18 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
 
     onUpdateSale(updatedSale);
     setSelectedSaleForWA(updatedSale);
+  };
+
+  const handleUndoAvisado = (sale: Sale) => {
+    playAppSound('click');
+    const updatedSale: Sale = {
+      ...sale,
+      avisoProntoSended: false,
+      statusProducao: sale.statusProducao === 'Pronto para Retirada' ? 'Em Produção' : sale.statusProducao,
+      foiAlterado: true,
+      editadoEm: new Date().toISOString()
+    };
+    onUpdateSale(updatedSale);
   };
 
   const getDayOfWeekName = () => {
@@ -1075,6 +1088,18 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                                   : 'Avisar Pronto & Contatar'}
                             </span>
                             <ArrowRight className="h-3 w-3 shrink-0 animate-bounce-horizontal" />
+                          </button>
+                        )}
+
+                        {isAvisado(sale) && (
+                          <button
+                            type="button"
+                            onClick={() => handleUndoAvisado(sale)}
+                            className="flex-1 py-2 px-3 bg-amber-955/25 hover:bg-amber-900/40 text-amber-300 hover:text-amber-200 border border-amber-800/40 hover:border-amber-600/60 font-black rounded-xl text-[10.5px] transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                            title="Desfazer aviso enviado ou status de pronto. Volta este pedido para a lista de Avisar (pendentes)."
+                          >
+                            <RotateCcw className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                            <span>Desfazer Avisado</span>
                           </button>
                         )}
 

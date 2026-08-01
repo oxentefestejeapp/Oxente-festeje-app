@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { MessageSquare, X, Send, Phone, Hash, User, ExternalLink, Check } from 'lucide-react';
+import { MessageSquare, X, Send, Phone, Hash, User, ExternalLink, Check, RotateCcw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sale, StoreInfo } from '../types';
 import { playAppSound } from '../lib/audio';
@@ -143,6 +143,24 @@ Sábados de 8:30h às 12h
       setSuccess(false);
       onClose();
     }, 2500);
+  };
+
+  const isAvisado = Boolean(sale?.avisoProntoSended || sale?.statusProducao === 'Pronto para Retirada');
+
+  const handleUndoAvisado = () => {
+    playAppSound('click');
+    if (!sale) return;
+    const updatedSale: Sale = {
+      ...sale,
+      avisoProntoSended: false,
+      statusProducao: sale.statusProducao === 'Pronto para Retirada' ? 'Em Produção' : sale.statusProducao,
+      foiAlterado: true,
+      editadoEm: new Date().toISOString()
+    };
+    if (onUpdateSale) {
+      onUpdateSale(updatedSale);
+    }
+    onClose();
   };
 
   return (
@@ -304,22 +322,35 @@ Sábados de 8:30h às 12h
                 </div>
 
                 {/* Footer Buttons */}
-                <div className="flex gap-3 justify-end pt-3 border-t border-zinc-850">
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="px-4 py-2 bg-zinc-850 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer select-none"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer select-none flex items-center gap-2"
-                  >
-                    <Send className="h-3.5 w-3.5" />
-                    <span>Enviar no WhatsApp</span>
-                    <ExternalLink className="h-3 w-3 opacity-70" />
-                  </button>
+                <div className="flex flex-wrap gap-2.5 justify-between items-center pt-3 border-t border-zinc-850">
+                  {isAvisado ? (
+                    <button
+                      type="button"
+                      onClick={handleUndoAvisado}
+                      className="px-3.5 py-2 bg-amber-955/25 hover:bg-amber-900/40 text-amber-300 hover:text-amber-200 border border-amber-800/40 hover:border-amber-600/60 font-bold rounded-xl text-xs transition-all cursor-pointer flex items-center gap-1.5 active:scale-95 shadow-sm"
+                      title="Desfazer aviso enviado e retornar este pedido para a lista de Avisar"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                      <span>Desfazer Avisado</span>
+                    </button>
+                  ) : <div />}
+                  <div className="flex gap-2.5 items-center">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="px-4 py-2 bg-zinc-850 hover:bg-zinc-800 text-zinc-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer select-none"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl text-xs shadow-md transition-all cursor-pointer select-none flex items-center gap-2"
+                    >
+                      <Send className="h-3.5 w-3.5" />
+                      <span>Enviar no WhatsApp</span>
+                      <ExternalLink className="h-3 w-3 opacity-70" />
+                    </button>
+                  </div>
                 </div>
               </>
             )}
