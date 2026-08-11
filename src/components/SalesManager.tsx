@@ -329,9 +329,17 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0) + artVal + segundaArtVal + urgVal + cartaoVal + addonsTotal;
   }, [editItens, editArteDesign, editSegundaArte, editTemTaxaUrgencia, editValorTaxaUrgencia, editTemTaxaCartao, editValorTaxaCartao, editSelectedAddonIds, products]);
 
+  const editingSaleIdRef = React.useRef<string | null>(null);
+
   // Sync edit states when editingSale shifts
   React.useEffect(() => {
     if (editingSale) {
+      // Prevent resetting form state if we are already editing this exact sale
+      if (editingSaleIdRef.current === editingSale.id) {
+        return;
+      }
+      editingSaleIdRef.current = editingSale.id;
+
       setEditCliente(editingSale.cliente);
       setEditTelefone(editingSale.telefoneCliente || '');
       setEditNumeroPedido(editingSale.numeroPedido || '');
@@ -401,6 +409,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       });
 
       setEditItens(filteredItens);
+    } else {
+      editingSaleIdRef.current = null;
     }
   }, [editingSale, products]);
   
@@ -558,6 +568,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     return nameLower.includes('liso') || nameLower.includes('produtos lisos') || nameLower.includes('produto liso');
   }, [selectedProduct]);
 
+  const isAvulsoProduct = useMemo(() => {
+    return selectedProductId === 'produto-avulso';
+  }, [selectedProductId]);
+
   const editSelectedProduct = useMemo(() => {
     return products.find(p => p.id === selectedAddProductId);
   }, [products, selectedAddProductId]);
@@ -567,6 +581,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     const nameLower = editSelectedProduct.nome.toLowerCase();
     return nameLower.includes('liso') || nameLower.includes('produtos lisos') || nameLower.includes('produto liso');
   }, [editSelectedProduct]);
+
+  const isAvulsoEditProduct = useMemo(() => {
+    return selectedAddProductId === 'produto-avulso';
+  }, [selectedAddProductId]);
 
   const totalVendaSemDesconto = useMemo(() => {
     const urgenciaVal = temTaxaUrgencia ? (parseFloat(valorTaxaUrgencia) || 0) : 0;
@@ -583,11 +601,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }
 
     const parsedCustomPrice = parseFloat(customPreco.replace(',', '.'));
-    const currentPrice = (isLisoProduct && !isNaN(parsedCustomPrice) && parsedCustomPrice >= 0)
+    const currentPrice = ((isLisoProduct || isAvulsoProduct) && !isNaN(parsedCustomPrice) && parsedCustomPrice >= 0)
       ? parsedCustomPrice
       : (selectedProduct ? getProductUnitPrice(selectedProduct, Number(quantidade) || 1) : 0);
 
-    const mainTotal = selectedProduct && typeof quantidade === 'number' 
+    const mainTotal = (selectedProduct || isAvulsoProduct) && typeof quantidade === 'number' 
       ? currentPrice * quantidade 
       : 0;
 
@@ -601,7 +619,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }, 0);
 
     return mainTotal + addonsTotal + (arteDesign ? 5 : 0) + secondArtVal + urgenciaVal + cartaoVal;
-  }, [cart, selectedProduct, quantidade, selectedAddonIds, products, arteDesign, segundaArte, temTaxaUrgencia, valorTaxaUrgencia, temTaxaCartao, valorTaxaCartao, isLisoProduct, customPreco]);
+  }, [cart, selectedProduct, quantidade, selectedAddonIds, products, arteDesign, segundaArte, temTaxaUrgencia, valorTaxaUrgencia, temTaxaCartao, valorTaxaCartao, isLisoProduct, isAvulsoProduct, customPreco]);
 
   // Sincronizar o desconto calculado quando o valor total sem desconto mudar e houver desconto digitado em valor fixo R$
   useEffect(() => {
@@ -805,8 +823,26 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       setFormError('Selecione um produto para adicionar ao carrinho.');
       return;
     }
-    const prod = products.find(p => p.id === selectedProductId);
-    if (!prod) {
+    let prod = products.find(p => p.id === selectedProductId);
+
+    if (isAvulsoProduct) {
+      if (!customNome.trim()) {
+        setFormError('Por favor, digite o nome do Produto Avulso.');
+        return;
+      }
+      const priceNum = parseFloat(customPreco.replace(',', '.'));
+      if (isNaN(priceNum) || priceNum < 0) {
+        setFormError('Por favor, informe um preço unitário válido para o Produto Avulso.');
+        return;
+      }
+      prod = {
+        id: `avulso-${Date.now()}`,
+        nome: customNome.trim(),
+        preco: priceNum,
+        estoque: 999,
+        estoqueInfinito: true
+      };
+    } else if (!prod) {
       setFormError('Produto selecionado inválido.');
       return;
     }
@@ -824,18 +860,18 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }
 
     let finalProdName = prod.nome;
-    let unitPrice = getProductUnitPrice(prod, qtyNum);
+    let unitPrice = isAvulsoProduct ? parseFloat(customPreco.replace(',', '.')) : getProductUnitPrice(prod, qtyNum);
     let customNameVal: string | undefined;
     let customPriceVal: number | undefined;
 
-    if (isLisoProduct) {
+    if (isLisoProduct || isAvulsoProduct) {
       if (!customNome.trim()) {
-        setFormError('Por favor, digite o nome/descrição para o Produto Liso.');
+        setFormError(isAvulsoProduct ? 'Por favor, digite o nome do Produto Avulso.' : 'Por favor, digite o nome/descrição para o Produto Liso.');
         return;
       }
       const priceNum = parseFloat(customPreco.replace(',', '.'));
       if (isNaN(priceNum) || priceNum < 0) {
-        setFormError('Por favor, informe um preço unitário válido para o Produto Liso.');
+        setFormError('Por favor, informe um preço unitário válido.');
         return;
       }
       finalProdName = customNome.trim();
@@ -947,10 +983,43 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       }
       finalItens = itemsList;
     } else {
-      if (!selectedProduct) {
-        setFormError('Produto não encontrado no banco de dados.');
-        return;
+      let finalProdName = '';
+      let progressiveUnitPrice = 0;
+
+      if (isAvulsoProduct) {
+        if (!customNome.trim()) {
+          setFormError('Por favor, digite o nome do Produto Avulso.');
+          return;
+        }
+        const priceNum = parseFloat(customPreco.replace(',', '.'));
+        if (isNaN(priceNum) || priceNum < 0) {
+          setFormError('Por favor, informe um preço unitário válido para o Produto Avulso.');
+          return;
+        }
+        finalProdName = customNome.trim();
+        progressiveUnitPrice = priceNum;
+      } else {
+        if (!selectedProduct) {
+          setFormError('Produto não encontrado no banco de dados.');
+          return;
+        }
+        finalProdName = selectedProduct.nome;
+        progressiveUnitPrice = getProductUnitPrice(selectedProduct, Number(quantidade) || 1);
+        if (isLisoProduct) {
+          if (!customNome.trim()) {
+            setFormError('Por favor, digite o nome/descrição para o Produto Liso.');
+            return;
+          }
+          const priceNum = parseFloat(customPreco.replace(',', '.'));
+          if (isNaN(priceNum) || priceNum < 0) {
+            setFormError('Por favor, informe um preço unitário válido para o Produto Liso.');
+            return;
+          }
+          finalProdName = customNome.trim();
+          progressiveUnitPrice = priceNum;
+        }
       }
+
       const qtyNum = Number(quantidade);
       if (quantidade === '' || isNaN(qtyNum) || qtyNum < 1) {
         setFormError('A quantidade da venda precisa ser de no mínimo 1 item.');
@@ -972,27 +1041,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         }
       }
 
-      let finalProdName = selectedProduct.nome;
-      let progressiveUnitPrice = getProductUnitPrice(selectedProduct, qtyNum);
-
-      if (isLisoProduct) {
-        if (!customNome.trim()) {
-          setFormError('Por favor, digite o nome/descrição para o Produto Liso.');
-          return;
-        }
-        const priceNum = parseFloat(customPreco.replace(',', '.'));
-        if (isNaN(priceNum) || priceNum < 0) {
-          setFormError('Por favor, informe um preço unitário válido para o Produto Liso.');
-          return;
-        }
-        finalProdName = customNome.trim();
-        progressiveUnitPrice = priceNum;
-      }
-
       finalItens = [
         {
-          id: `item-${selectedProduct.id}-${Date.now()}`,
-          produtoId: selectedProduct.id,
+          id: `item-${isAvulsoProduct ? `avulso-${Date.now()}` : (selectedProduct ? selectedProduct.id : '1')}-${Date.now()}`,
+          produtoId: isAvulsoProduct ? `avulso-${Date.now()}` : (selectedProduct?.id || ''),
           produtoNome: finalProdName,
           precoUn: progressiveUnitPrice,
           quantidade: qtyNum,
@@ -1965,10 +2017,30 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
 
             {/* Choose Product select box and Audio Trigger toggle */}
             <div className="space-y-3 bg-zinc-950/25 p-4 border border-zinc-900 rounded-xl">
-              <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-2">
-                <label className="text-xs font-black tracking-widest text-zinc-400 uppercase flex items-center gap-1">
-                  <span>🛍️</span> MARCADOR & CATÁLOGO
-                </label>
+              <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-2 flex-wrap">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-black tracking-widest text-zinc-400 uppercase flex items-center gap-1">
+                    <span>🛍️</span> MARCADOR & CATÁLOGO
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedProductId('produto-avulso');
+                      setCustomNome('');
+                      setCustomPreco('');
+                      playSound('add');
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer border ${
+                      isAvulsoProduct
+                        ? 'bg-purple-950/50 border-purple-500/60 text-purple-300 shadow-sm shadow-purple-950/50'
+                        : 'bg-zinc-900 border-zinc-800 text-purple-400 hover:text-purple-300 hover:border-purple-800/60'
+                    }`}
+                    title="Lançar um produto avulso (não cadastrado no estoque da loja)"
+                  >
+                    <Plus className="h-3 w-3" />
+                    <span>+ Produto Avulso</span>
+                  </button>
+                </div>
                 
                 {/* Audio chime toggle */}
                 <button
@@ -1995,7 +2067,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   <div className="p-3 bg-zinc-950 border border-zinc-800 rounded-xl text-center text-zinc-500 text-xs">
                     Nenhum produto cadastrado. Cadastre pelo menos um item para liberar as vendas.
                   </div>
-                ) : (availableProducts.length === 0 && availableAddons.length === 0) ? (
+                ) : (availableProducts.length === 0 && availableAddons.length === 0 && !isAvulsoProduct) ? (
                   <div className="p-3 bg-red-950/10 border border-red-900/30 rounded-xl text-center text-red-400 text-xs font-medium">
                     Todos os produtos estão esgotados!
                   </div>
@@ -2003,10 +2075,19 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   <select
                     id="sale-p-select"
                     value={selectedProductId}
-                    onChange={(e) => setSelectedProductId(e.target.value)}
+                    onChange={(e) => {
+                      setSelectedProductId(e.target.value);
+                      if (e.target.value === 'produto-avulso') {
+                        setCustomNome('');
+                        setCustomPreco('');
+                      }
+                    }}
                     className="w-full px-4 py-2.5 border border-zinc-800 rounded-xl bg-black focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-150 text-sm"
                   >
                     <option value="" className="text-zinc-500">-- Selecione o item --</option>
+                    <option value="produto-avulso" className="bg-purple-950 text-purple-300 font-bold">
+                      📦 + PRODUTO AVULSO (Item não cadastrado na loja)
+                    </option>
                     {availableProducts.length > 0 && (
                       <optgroup label="Produtos / Brindes Principais" className="bg-black text-brand-pink font-semibold">
                         {availableProducts.map(p => (
@@ -2028,6 +2109,47 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   </select>
                 )}
               </div>
+
+              {/* Custom Avulso Product options */}
+              {isAvulsoProduct && (
+                <div className="mt-3 p-3.5 bg-purple-950/20 border border-purple-500/30 rounded-xl space-y-3 text-left animate-fade-in">
+                  <div className="text-[11px] font-bold text-purple-400 uppercase tracking-wide flex items-center gap-1.5 font-sans">
+                    <Sparkles className="h-4 w-4 text-purple-400" />
+                    <span>📦 Lançar Produto Avulso (Fora do Estoque)</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label htmlFor="custom-avulso-nome" className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                        Nome do Produto <span className="text-brand-pink font-bold">*</span>
+                      </label>
+                      <input
+                        id="custom-avulso-nome"
+                        type="text"
+                        value={customNome}
+                        onChange={(e) => setCustomNome(e.target.value)}
+                        className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 text-xs text-zinc-100 placeholder-zinc-700"
+                        placeholder="Ex: Bolo de Aniversário 2kg, Camisa Trazida"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="custom-avulso-preco" className="block text-[10px] font-semibold text-zinc-400 mb-1">
+                        Preço Unitário (R$) <span className="text-brand-pink font-bold">*</span>
+                      </label>
+                      <input
+                        id="custom-avulso-preco"
+                        type="text"
+                        value={customPreco}
+                        onChange={(e) => setCustomPreco(e.target.value)}
+                        className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-purple-500 text-xs text-zinc-100 placeholder-zinc-700 font-mono"
+                        placeholder="Ex: 85.00"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-[10px] text-zinc-500 leading-normal">
+                    Informe o nome e o valor unitário. O recibo sairá com o nome exato digitado acima (<strong>{customNome.trim() || 'Nome do produto'}</strong>) sem aparecer como &quot;Produto Avulso&quot;.
+                  </p>
+                </div>
+              )}
 
               {/* Custom liso product options */}
               {isLisoProduct && (
@@ -3474,8 +3596,15 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     <Pencil className="h-4 w-4" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-zinc-100 text-sm">Editar Informações da Venda</h3>
-                    <p className="text-[10px] text-zinc-500 mt-0.5">ID: {editingSale.id}</p>
+                    <div className="flex items-center gap-2">
+                      <h3 className="font-semibold text-zinc-100 text-sm">Editar Informações da Venda</h3>
+                      <span className="text-[9px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-400 px-2 py-0.5 rounded-full flex items-center gap-1">
+                        🔒 Edição Protegida
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-zinc-400 mt-0.5">
+                      Sincronizações externas ignoradas durante a edição. Salve para atualizar na nuvem. (ID: {editingSale.id})
+                    </p>
                   </div>
                 </div>
                 <button
@@ -3626,76 +3755,134 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   </div>
 
                   {/* Add New Product Block */}
-                  {products && products.length > 0 && (
-                    <div className="pt-2 border-t border-zinc-800 space-y-2">
-                      <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                        <select
-                          id="add-item-select"
-                          value={selectedAddProductId}
-                          onChange={(e) => {
-                            setSelectedAddProductId(e.target.value);
+                  <div className="pt-2 border-t border-zinc-800 space-y-2">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <select
+                        id="add-item-select"
+                        value={selectedAddProductId}
+                        onChange={(e) => {
+                          setSelectedAddProductId(e.target.value);
+                          setEditCustomNome('');
+                          setEditCustomPreco('');
+                        }}
+                        className="flex-1 bg-black border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-350 focus:outline-none focus:border-brand-pink cursor-pointer font-medium"
+                      >
+                        <option value="">➕ Selecione um produto para acrescentar...</option>
+                        <option value="produto-avulso">📦 + Produto Avulso (Não cadastrado)</option>
+                        {products && products.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.nome} - R$ {p.preco.toFixed(2)}
+                          </option>
+                        ))}
+                      </select>
+                      
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!selectedAddProductId) return;
+                          if (selectedAddProductId === 'produto-avulso') {
+                            if (!editCustomNome.trim()) {
+                              alert('Por favor, digite o nome do Produto Avulso.');
+                              return;
+                            }
+                            const priceNum = parseFloat(editCustomPreco.replace(',', '.'));
+                            if (isNaN(priceNum) || priceNum < 0) {
+                              alert('Por favor, informe um preço unitário válido para o Produto Avulso.');
+                              return;
+                            }
+                            const uniqueIdSuffix = Math.random().toString(36).substring(2, 7);
+                            setEditItens([
+                              ...editItens,
+                              {
+                                id: `item-avulso-${Date.now()}-${uniqueIdSuffix}`,
+                                produtoId: `avulso-${Date.now()}`,
+                                produtoNome: editCustomNome.trim(),
+                                precoUn: priceNum,
+                                quantidade: 1,
+                                total: priceNum
+                              }
+                            ]);
+                            setSelectedAddProductId('');
                             setEditCustomNome('');
                             setEditCustomPreco('');
-                          }}
-                          className="flex-1 bg-black border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-350 focus:outline-none focus:border-brand-pink cursor-pointer font-medium"
-                        >
-                          <option value="">➕ Selecione um produto para acrescentar...</option>
-                          {products.map(p => (
-                            <option key={p.id} value={p.id}>
-                              {p.nome} - R$ {p.preco.toFixed(2)}
-                            </option>
-                          ))}
-                        </select>
-                        
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (!selectedAddProductId) return;
-                            const dbProd = products.find(p => p.id === selectedAddProductId);
-                            if (dbProd) {
-                              const isLiso = dbProd.nome.toLowerCase().includes('liso') || dbProd.nome.toLowerCase().includes('produtos lisos') || dbProd.nome.toLowerCase().includes('produto liso');
-                              let finalName = dbProd.nome;
-                              let finalPrice = dbProd.preco;
+                            return;
+                          }
 
-                              if (isLiso) {
-                                if (!editCustomNome.trim()) {
-                                  alert('Por favor, digite o nome/descrição para o Produto Liso.');
-                                  return;
-                                }
-                                const priceNum = parseFloat(editCustomPreco.replace(',', '.'));
-                                if (isNaN(priceNum) || priceNum < 0) {
-                                  alert('Por favor, informe um preço unitário válido para o Produto Liso.');
-                                  return;
-                                }
-                                finalName = editCustomNome.trim();
-                                finalPrice = priceNum;
+                          const dbProd = products.find(p => p.id === selectedAddProductId);
+                          if (dbProd) {
+                            const isLiso = dbProd.nome.toLowerCase().includes('liso') || dbProd.nome.toLowerCase().includes('produtos lisos') || dbProd.nome.toLowerCase().includes('produto liso');
+                            let finalName = dbProd.nome;
+                            let finalPrice = dbProd.preco;
+
+                            if (isLiso) {
+                              if (!editCustomNome.trim()) {
+                                alert('Por favor, digite o nome/descrição para o Produto Liso.');
+                                return;
                               }
-
-                              const uniqueIdSuffix = Math.random().toString(36).substring(2, 7);
-                              setEditItens([
-                                ...editItens,
-                                {
-                                  id: `item-${dbProd.id}-${Date.now()}-${uniqueIdSuffix}`,
-                                  produtoId: dbProd.id,
-                                  produtoNome: finalName,
-                                  precoUn: finalPrice,
-                                  quantidade: 1,
-                                  total: finalPrice
-                                }
-                              ]);
-                              setSelectedAddProductId('');
-                              setEditCustomNome('');
-                              setEditCustomPreco('');
+                              const priceNum = parseFloat(editCustomPreco.replace(',', '.'));
+                              if (isNaN(priceNum) || priceNum < 0) {
+                                alert('Por favor, informe um preço unitário válido para o Produto Liso.');
+                                return;
+                              }
+                              finalName = editCustomNome.trim();
+                              finalPrice = priceNum;
                             }
-                          }}
-                          className="py-1.5 px-3 bg-brand-pink/15 hover:bg-brand-pink border border-brand-pink/35 text-brand-pink hover:text-black font-bold rounded-lg text-[11px] transition-all cursor-pointer whitespace-nowrap active:scale-95"
-                        >
-                          Acrescentar
-                        </button>
-                      </div>
 
-                      {isLisoEditProduct && (
-                        <div className="p-3 bg-brand-pink/5 border border-brand-pink/20 rounded-lg space-y-2 text-left animate-fade-in">
+                            const uniqueIdSuffix = Math.random().toString(36).substring(2, 7);
+                            setEditItens([
+                              ...editItens,
+                              {
+                                id: `item-${dbProd.id}-${Date.now()}-${uniqueIdSuffix}`,
+                                produtoId: dbProd.id,
+                                produtoNome: finalName,
+                                precoUn: finalPrice,
+                                quantidade: 1,
+                                total: finalPrice
+                              }
+                            ]);
+                            setSelectedAddProductId('');
+                            setEditCustomNome('');
+                            setEditCustomPreco('');
+                          }
+                        }}
+                        className="py-1.5 px-3 bg-brand-pink/15 hover:bg-brand-pink border border-brand-pink/35 text-brand-pink hover:text-black font-bold rounded-lg text-[11px] transition-all cursor-pointer whitespace-nowrap active:scale-95"
+                      >
+                        Acrescentar
+                      </button>
+                    </div>
+
+                    {isAvulsoEditProduct && (
+                      <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-lg space-y-2 text-left animate-fade-in">
+                        <div className="text-[10px] font-bold text-purple-400 uppercase">📦 Lançar Produto Avulso na Edição</div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label htmlFor="edit-custom-avulso-nome" className="block text-[9px] text-zinc-400 mb-0.5 font-bold">Nome do Produto *</label>
+                            <input
+                              id="edit-custom-avulso-nome"
+                              type="text"
+                              value={editCustomNome}
+                              onChange={(e) => setEditCustomNome(e.target.value)}
+                              className="w-full px-2.5 py-1 bg-black border border-zinc-800 rounded focus:outline-none focus:border-purple-500 text-xs text-zinc-150 placeholder-zinc-700"
+                              placeholder="Ex: Bolo de Aniversário 2kg"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="edit-custom-avulso-preco" className="block text-[9px] text-zinc-400 mb-0.5 font-bold">Preço Unitário (R$) *</label>
+                            <input
+                              id="edit-custom-avulso-preco"
+                              type="text"
+                              value={editCustomPreco}
+                              onChange={(e) => setEditCustomPreco(e.target.value)}
+                              className="w-full px-2.5 py-1 bg-black border border-zinc-800 rounded focus:outline-none focus:border-purple-500 text-xs text-zinc-150 font-mono placeholder-zinc-700"
+                              placeholder="Ex: 85.00"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {isLisoEditProduct && (
+                      <div className="p-3 bg-brand-pink/5 border border-brand-pink/20 rounded-lg space-y-2 text-left animate-fade-in">
                           <div className="text-[10px] font-bold text-brand-pink uppercase">✏️ Personalizar Produto Liso na Edição</div>
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <div>
@@ -3724,7 +3911,6 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                         </div>
                       )}
                     </div>
-                  )}
                 </div>
 
                 {/* Opções de Serviços e Taxas Adicionais na Edição */}
