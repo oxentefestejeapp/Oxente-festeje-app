@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check, CheckSquare, TrendingUp, TrendingDown, Sparkles, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost } from '../types';
+import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost, calculateSaleItemUnitCost } from '../types';
 import { Receipt } from './Receipt';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
@@ -756,25 +756,13 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
              let saleCost = 0;
              if (sale.itens && sale.itens.length > 0) {
                sale.itens.forEach(item => {
-                 const isService = item.produtoId?.endsWith('-service');
-                 const matchingProduct = products.find(p => p.id === item.produtoId);
-                 const costPrice = (item.produtoId === 'taxacartao-service')
-                   ? item.precoUn
-                   : (isService
-                     ? 0
-                     : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : (item.precoUn * 0.62)));
+                 const costPrice = calculateSaleItemUnitCost(item, sale.data, products);
                  // @ts-ignore
                  const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
                  saleCost += costPrice * q;
                });
              } else {
-               const isService = sale.produtoId?.endsWith('-service');
-               const matchingProduct = products.find(p => p.id === sale.produtoId);
-               const costPrice = (sale.produtoId === 'taxacartao-service')
-                 ? sale.precoUn
-                 : (isService
-                   ? 0
-                   : (matchingProduct ? getProductUnitCost(matchingProduct, sale.precoUn || 0) : ((sale.precoUn || 0) * 0.62)));
+               const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, precoUn: sale.precoUn || 0 }, sale.data, products);
                saleCost += costPrice * sale.quantidade;
              }
              const saleProfit = Math.max(0, sale.total - saleCost);
@@ -1105,6 +1093,19 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       }
     }
 
+    // Attach unit cost snapshot to each item
+    finalItens = finalItens.map(item => {
+      const isService = item.produtoId?.endsWith('-service');
+      const matchingProduct = products.find(p => p.id === item.produtoId);
+      const itemCost = (item.produtoId === 'taxacartao-service')
+        ? item.precoUn
+        : (isService ? 0 : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : item.precoUn * 0.62));
+      return {
+        ...item,
+        custoUn: item.custoUn !== undefined ? item.custoUn : itemCost
+      };
+    });
+
     const valPagoNum = valorPagoInput.trim() === '' ? 0 : parseFloat(valorPagoInput);
     const finalValorPago = registroTipo === 'Orçamento' ? 0 : (isNaN(valPagoNum) ? 0 : valPagoNum);
     const finalValorFaltante = registroTipo === 'Orçamento' ? totalVenda : Math.max(0, totalVenda - finalValorPago);
@@ -1297,7 +1298,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       ]
     };
 
-    const finalItensToSave = [...editItens];
+    let finalItensToSave = [...editItens];
 
     // Append selected addons
     const referenceQty = editItens.length > 0 ? editItens[0].quantidade : 1;
@@ -1363,6 +1364,19 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         });
       }
     }
+
+    // Attach unit cost snapshot to each item
+    finalItensToSave = finalItensToSave.map(item => {
+      const isService = item.produtoId?.endsWith('-service');
+      const matchingProduct = products.find(p => p.id === item.produtoId);
+      const itemCost = (item.produtoId === 'taxacartao-service')
+        ? item.precoUn
+        : (isService ? 0 : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : item.precoUn * 0.62));
+      return {
+        ...item,
+        custoUn: item.custoUn !== undefined ? item.custoUn : itemCost
+      };
+    });
 
     const hasStructuralChanges = 
       (editingSale.cliente !== (editCliente.trim() || 'Consumidor')) ||
@@ -1572,25 +1586,13 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
       let saleCost = 0;
       if (sale.itens && sale.itens.length > 0) {
         sale.itens.forEach(item => {
-          const isService = item.produtoId?.endsWith('-service');
-          const matchingProduct = products.find(p => p.id === item.produtoId);
-          const costPrice = (item.produtoId === 'taxacartao-service')
-            ? item.precoUn
-            : (isService
-              ? 0
-              : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : (item.precoUn * 0.62)));
+          const costPrice = calculateSaleItemUnitCost(item, sale.data, products);
           // @ts-ignore
           const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
           saleCost += costPrice * q;
         });
       } else {
-        const isService = sale.produtoId?.endsWith('-service');
-        const matchingProduct = products.find(p => p.id === sale.produtoId);
-        const costPrice = (sale.produtoId === 'taxacartao-service')
-          ? sale.precoUn
-          : (isService
-            ? 0
-            : (matchingProduct ? getProductUnitCost(matchingProduct, sale.precoUn || 0) : ((sale.precoUn || 0) * 0.62)));
+        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, precoUn: sale.precoUn || 0 }, sale.data, products);
         saleCost += costPrice * sale.quantidade;
       }
       totalEstimatedCost += saleCost;

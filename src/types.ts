@@ -39,6 +39,7 @@ export interface SaleItem {
   quantidade: number;
   total: number;
   corSelecionada?: string; // Optional track color chosen for this item
+  custoUn?: number; // Historical unit cost snapshot
 }
 
 export interface SaleOriginalValues {
@@ -173,4 +174,53 @@ export function getProductUnitCost(product: Product, unitPrice: number): number 
   }
   
   return product.precoCusto;
+}
+
+export function calculateSaleItemUnitCost(
+  item: { produtoId?: string; precoUn: number; custoUn?: number },
+  saleDateStr: string,
+  products: Product[]
+): number {
+  if (item.produtoId === 'taxacartao-service') {
+    return item.precoUn;
+  }
+  const isService = item.produtoId?.endsWith('-service');
+  if (isService) {
+    return 0;
+  }
+
+  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  let saleDateFormatted = '';
+  try {
+    const saleDateObj = new Date(saleDateStr);
+    if (!isNaN(saleDateObj.getTime())) {
+      saleDateFormatted = saleDateObj.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+    }
+  } catch (err) {
+    console.error(err);
+  }
+
+  const isToday = saleDateFormatted !== '' && saleDateFormatted === todayStr;
+  const matchingProduct = products.find(p => p.id === item.produtoId);
+
+  // If sale was registered TODAY, use the current cost price from the catalog (if matched),
+  // so that cost price changes made TODAY immediately update TODAY's sales profit!
+  if (isToday) {
+    if (matchingProduct) {
+      return getProductUnitCost(matchingProduct, item.precoUn);
+    }
+    return item.custoUn !== undefined ? item.custoUn : item.precoUn * 0.62;
+  }
+
+  // For PREVIOUS DAYS, prefer historical custoUn snapshot saved on the item
+  if (item.custoUn !== undefined) {
+    return item.custoUn;
+  }
+
+  // Fallback for older sales made before custoUn was recorded
+  if (matchingProduct) {
+    return getProductUnitCost(matchingProduct, item.precoUn);
+  }
+
+  return item.precoUn * 0.62;
 }

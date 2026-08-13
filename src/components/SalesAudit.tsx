@@ -36,7 +36,7 @@ import {
   Cell,
   Legend
 } from 'recharts';
-import { Sale, StoreInfo, Product, getProductUnitCost } from '../types';
+import { Sale, StoreInfo, Product, getProductUnitCost, calculateSaleItemUnitCost } from '../types';
 import { Receipt } from './Receipt';
 
 const formatAuditDate = (dateStr?: string) => {
@@ -464,25 +464,13 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
       let saleCost = 0;
       if (sale.itens && sale.itens.length > 0) {
         sale.itens.forEach(item => {
-          const isService = item.produtoId?.endsWith('-service');
-          const matchingProduct = products.find(p => p.id === item.produtoId);
-          const costPrice = (item.produtoId === 'taxacartao-service')
-            ? item.precoUn
-            : (isService
-              ? 0
-              : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : (item.precoUn * 0.62)));
+          const costPrice = calculateSaleItemUnitCost(item, sale.data, products);
           // @ts-ignore
           const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
           saleCost += costPrice * q;
         });
       } else {
-        const isService = sale.produtoId?.endsWith('-service');
-        const matchingProduct = products.find(p => p.id === sale.produtoId);
-        const costPrice = (sale.produtoId === 'taxacartao-service')
-          ? sale.precoUn
-          : (isService
-            ? 0
-            : (matchingProduct ? getProductUnitCost(matchingProduct, sale.precoUn || 0) : ((sale.precoUn || 0) * 0.62)));
+        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, precoUn: sale.precoUn || 0 }, sale.data, products);
         saleCost += costPrice * sale.quantidade;
       }
       totalEstimatedCost += saleCost;
@@ -515,25 +503,13 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
       let saleCost = 0;
       if (sale.itens && sale.itens.length > 0) {
         sale.itens.forEach(item => {
-          const isService = item.produtoId?.endsWith('-service');
-          const matchingProduct = products.find(p => p.id === item.produtoId);
-          const costPrice = (item.produtoId === 'taxacartao-service')
-            ? item.precoUn
-            : (isService
-              ? 0
-              : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : (item.precoUn * 0.62)));
+          const costPrice = calculateSaleItemUnitCost(item, sale.data, products);
           // @ts-ignore
           const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
           saleCost += costPrice * q;
         });
       } else {
-        const isService = sale.produtoId?.endsWith('-service');
-        const matchingProduct = products.find(p => p.id === sale.produtoId);
-        const costPrice = (sale.produtoId === 'taxacartao-service')
-          ? sale.precoUn
-          : (isService
-            ? 0
-            : (matchingProduct ? getProductUnitCost(matchingProduct, sale.precoUn || 0) : ((sale.precoUn || 0) * 0.62)));
+        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, precoUn: sale.precoUn || 0 }, sale.data, products);
         saleCost += costPrice * sale.quantidade;
       }
       const saleProfit = Math.max(0, sale.total - saleCost);
@@ -611,25 +587,13 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
           let saleCost = 0;
           if (sale.itens && sale.itens.length > 0) {
             sale.itens.forEach(item => {
-              const isService = item.produtoId?.endsWith('-service');
-              const matchingProduct = products.find(p => p.id === item.produtoId);
-              const costPrice = (item.produtoId === 'taxacartao-service')
-                ? item.precoUn
-                : (isService
-                  ? 0
-                  : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : (item.precoUn * 0.62)));
+              const costPrice = calculateSaleItemUnitCost(item, sale.data, products);
               // @ts-ignore
               const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
               saleCost += costPrice * q;
             });
           } else {
-            const isService = sale.produtoId?.endsWith('-service');
-            const matchingProduct = products.find(p => p.id === sale.produtoId);
-            const costPrice = (sale.produtoId === 'taxacartao-service')
-              ? sale.precoUn
-              : (isService
-                ? 0
-                : (matchingProduct ? getProductUnitCost(matchingProduct, sale.precoUn || 0) : ((sale.precoUn || 0) * 0.62)));
+            const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, precoUn: sale.precoUn || 0 }, sale.data, products);
             saleCost += costPrice * sale.quantidade;
           }
 
