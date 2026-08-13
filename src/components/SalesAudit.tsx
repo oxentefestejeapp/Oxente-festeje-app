@@ -470,7 +470,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
           saleCost += costPrice * q;
         });
       } else {
-        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, precoUn: sale.precoUn || 0 }, sale.data, products);
+        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0 }, sale.data, products);
         saleCost += costPrice * sale.quantidade;
       }
       totalEstimatedCost += saleCost;
@@ -509,7 +509,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
           saleCost += costPrice * q;
         });
       } else {
-        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, precoUn: sale.precoUn || 0 }, sale.data, products);
+        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0 }, sale.data, products);
         saleCost += costPrice * sale.quantidade;
       }
       const saleProfit = Math.max(0, sale.total - saleCost);
@@ -593,7 +593,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
               saleCost += costPrice * q;
             });
           } else {
-            const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, precoUn: sale.precoUn || 0 }, sale.data, products);
+            const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0 }, sale.data, products);
             saleCost += costPrice * sale.quantidade;
           }
 

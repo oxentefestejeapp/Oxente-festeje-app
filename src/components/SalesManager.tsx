@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check, CheckSquare, TrendingUp, TrendingDown, Sparkles, Activity } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost, calculateSaleItemUnitCost } from '../types';
+import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost, calculateSaleItemUnitCost, findMatchingProduct } from '../types';
 import { Receipt } from './Receipt';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
@@ -762,7 +762,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
                  saleCost += costPrice * q;
                });
              } else {
-               const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, precoUn: sale.precoUn || 0 }, sale.data, products);
+               const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0 }, sale.data, products);
                saleCost += costPrice * sale.quantidade;
              }
              const saleProfit = Math.max(0, sale.total - saleCost);
@@ -1095,14 +1095,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
     // Attach unit cost snapshot to each item
     finalItens = finalItens.map(item => {
-      const isService = item.produtoId?.endsWith('-service');
-      const matchingProduct = products.find(p => p.id === item.produtoId);
-      const itemCost = (item.produtoId === 'taxacartao-service')
-        ? item.precoUn
-        : (isService ? 0 : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : item.precoUn * 0.62));
+      const itemCost = calculateSaleItemUnitCost(item, new Date().toISOString(), products);
       return {
         ...item,
-        custoUn: item.custoUn !== undefined ? item.custoUn : itemCost
+        custoUn: itemCost
       };
     });
 
@@ -1367,14 +1363,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
     // Attach unit cost snapshot to each item
     finalItensToSave = finalItensToSave.map(item => {
-      const isService = item.produtoId?.endsWith('-service');
-      const matchingProduct = products.find(p => p.id === item.produtoId);
-      const itemCost = (item.produtoId === 'taxacartao-service')
-        ? item.precoUn
-        : (isService ? 0 : (matchingProduct ? getProductUnitCost(matchingProduct, item.precoUn) : item.precoUn * 0.62));
+      const itemCost = calculateSaleItemUnitCost(item, editingSale.data || new Date().toISOString(), products);
       return {
         ...item,
-        custoUn: item.custoUn !== undefined ? item.custoUn : itemCost
+        custoUn: itemCost
       };
     });
 
@@ -1592,7 +1584,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
           saleCost += costPrice * q;
         });
       } else {
-        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, precoUn: sale.precoUn || 0 }, sale.data, products);
+        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0 }, sale.data, products);
         saleCost += costPrice * sale.quantidade;
       }
       totalEstimatedCost += saleCost;

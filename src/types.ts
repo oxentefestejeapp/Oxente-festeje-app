@@ -153,31 +153,120 @@ export function getProductUnitPrice(product: Product, quantity: number): number 
 }
 
 export function getProductUnitCost(product: Product, unitPrice: number): number {
-  if (product.precoCusto === undefined || product.precoCusto === null) {
-    return unitPrice * 0.62; // fallback
+  if (product.precoCusto !== undefined && product.precoCusto !== null && !isNaN(product.precoCusto)) {
+    return product.precoCusto;
   }
-  
-  // If the product has progressive prices, let's find the lowest minimum quantity
-  if (product.faixasPreco && product.faixasPreco.length > 0) {
-    let lowestMinQty = product.faixasPreco[0].quantidadeMinima;
-    for (const f of product.faixasPreco) {
-      if (f.quantidadeMinima < lowestMinQty) {
-        lowestMinQty = f.quantidadeMinima;
+  const baseCatalogPrice = product.preco || (product.faixasPreco && product.faixasPreco.length > 0 ? product.faixasPreco[0].preco : unitPrice);
+  return baseCatalogPrice * 0.62; // fallback based on catalog base price when cost is not configured
+}
+
+function normalizeStr(str: string): string {
+  return str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // remove accents
+    .toLowerCase()
+    .replace(/^adicional:\s*/i, '')
+    .replace(/[^a-z0-9]/g, ' ') // remove special chars
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function findMatchingProduct(
+  produtoId: string | undefined,
+  produtoNome: string | undefined,
+  products: Product[]
+): Product | undefined {
+  if (!products || products.length === 0) return undefined;
+
+  // 1. Direct ID match
+  if (produtoId && !produtoId.startsWith('avulso-') && produtoId !== 'produto-avulso') {
+    const directMatch = products.find(p => p.id === produtoId);
+    if (directMatch) return directMatch;
+  }
+
+  if (!produtoNome) return undefined;
+  const normItemName = normalizeStr(produtoNome);
+  if (!normItemName) return undefined;
+
+  // 2. Exact normalized name match
+  const exactNameMatch = products.find(p => normalizeStr(p.nome) === normItemName);
+  if (exactNameMatch) return exactNameMatch;
+
+  // 3. Substring name match (e.g. "Taça de Gin 500ml" vs "Taça de Gin")
+  const partialMatch = products.find(p => {
+    const normProdName = normalizeStr(p.nome);
+    if (!normProdName) return false;
+    return normProdName.includes(normItemName) || normItemName.includes(normProdName);
+  });
+  if (partialMatch) return partialMatch;
+
+  // 4. Overlap scoring match (finds best candidate sharing key words)
+  const STOP_WORDS = new Set(['de', 'da', 'do', 'dos', 'das', 'com', 'para', 'por', 'sem', 'em', 'a', 'o', 'e', 'ou', 'no', 'na']);
+  const itemWords = normItemName
+    .split(' ')
+    .filter(w => w.length > 2 && !STOP_WORDS.has(w));
+
+  if (itemWords.length > 0) {
+    let bestMatch: Product | undefined = undefined;
+    let maxScore = 0;
+
+    for (const p of products) {
+      const normProdName = normalizeStr(p.nome);
+      if (!normProdName) continue;
+      
+      const prodWords = new Set(
+        normProdName
+          .split(' ')
+          .filter(w => w.length > 2 && !STOP_WORDS.has(w))
+      );
+
+      let score = 0;
+      for (const w of itemWords) {
+        if (prodWords.has(w) || normProdName.includes(w)) {
+          score += 1;
+        }
+      }
+
+      if (score > maxScore) {
+        maxScore = score;
+        bestMatch = p;
       }
     }
-    
-    // If the registered precoCusto is higher than or equal to the selling unitPrice,
-    // it's definitely a batch cost! We divide it by the lowestMinQty to get the unit cost.
-    if (lowestMinQty > 1 && product.precoCusto >= unitPrice) {
-      return product.precoCusto / lowestMinQty;
+
+    if (bestMatch && maxScore >= 1) {
+      return bestMatch;
     }
   }
-  
-  return product.precoCusto;
+
+  return undefined;
+}
+
+function parseToBrazilDateString(dateVal: any): string {
+  if (!dateVal) return '';
+  if (dateVal instanceof Date) {
+    if (isNaN(dateVal.getTime())) return '';
+    return dateVal.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  }
+  const str = String(dateVal).trim();
+  let d = new Date(str);
+  if (!isNaN(d.getTime())) {
+    return d.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  }
+  const brMatch = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (brMatch) {
+    const day = brMatch[1].padStart(2, '0');
+    const month = brMatch[2].padStart(2, '0');
+    const year = brMatch[3];
+    d = new Date(`${year}-${month}-${day}T12:00:00`);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+    }
+  }
+  return '';
 }
 
 export function calculateSaleItemUnitCost(
-  item: { produtoId?: string; precoUn: number; custoUn?: number },
+  item: { produtoId?: string; produtoNome?: string; nome?: string; precoUn: number; custoUn?: number },
   saleDateStr: string,
   products: Product[]
 ): number {
@@ -189,38 +278,27 @@ export function calculateSaleItemUnitCost(
     return 0;
   }
 
-  const todayStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
-  let saleDateFormatted = '';
-  try {
-    const saleDateObj = new Date(saleDateStr);
-    if (!isNaN(saleDateObj.getTime())) {
-      saleDateFormatted = saleDateObj.toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+  const nameToMatch = item.produtoNome || item.nome;
+  const matchingProduct = findMatchingProduct(item.produtoId, nameToMatch, products);
+
+  if (matchingProduct) {
+    // 1. If matching product in catalog has an explicit precoCusto configured:
+    if (matchingProduct.precoCusto !== undefined && matchingProduct.precoCusto !== null && !isNaN(matchingProduct.precoCusto)) {
+      return matchingProduct.precoCusto;
     }
-  } catch (err) {
-    console.error(err);
+    // 2. If matching product in catalog has a base catalog price, estimate unit cost from the CATALOG base price
+    // (so that discounts or edited sale prices do not distort physical product unit cost)
+    const baseCatalogPrice = matchingProduct.preco || (matchingProduct.faixasPreco && matchingProduct.faixasPreco.length > 0 ? matchingProduct.faixasPreco[0].preco : 0);
+    if (baseCatalogPrice > 0) {
+      return baseCatalogPrice * 0.62;
+    }
   }
 
-  const isToday = saleDateFormatted !== '' && saleDateFormatted === todayStr;
-  const matchingProduct = products.find(p => p.id === item.produtoId);
-
-  // If sale was registered TODAY, use the current cost price from the catalog (if matched),
-  // so that cost price changes made TODAY immediately update TODAY's sales profit!
-  if (isToday) {
-    if (matchingProduct) {
-      return getProductUnitCost(matchingProduct, item.precoUn);
-    }
-    return item.custoUn !== undefined ? item.custoUn : item.precoUn * 0.62;
-  }
-
-  // For PREVIOUS DAYS, prefer historical custoUn snapshot saved on the item
-  if (item.custoUn !== undefined) {
+  // 3. If item has a custom/historical custoUn explicitly saved on it
+  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn)) {
     return item.custoUn;
   }
 
-  // Fallback for older sales made before custoUn was recorded
-  if (matchingProduct) {
-    return getProductUnitCost(matchingProduct, item.precoUn);
-  }
-
+  // Fallback for avulso / uncataloged items
   return item.precoUn * 0.62;
 }
