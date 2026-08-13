@@ -1545,12 +1545,12 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         {/* MODAL 1: Order Tracking Lookup dialog */}
         <AnimatePresence>
           {showTrackingModal && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[999999] flex items-center justify-center p-4">
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-lg bg-stone-900 rounded-3xl overflow-hidden shadow-2xl border border-amber-500/35"
+                className="w-full max-w-lg bg-stone-900 rounded-3xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.9)] border-2 border-amber-500/40"
               >
                 {/* Header card banner */}
                 <div className="bg-gradient-to-r from-amber-500/10 via-amber-600/15 to-orange-500/10 p-6 text-left relative overflow-hidden border-b border-amber-500/20">
@@ -1689,12 +1689,12 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         {/* MODAL 2: Locked app entry dialog with (69pagina69) password */}
         <AnimatePresence>
           {showAccessModal && (
-            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[999999] flex items-center justify-center p-4">
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.95, opacity: 0 }}
-                className="w-full max-w-sm bg-stone-900 rounded-3xl overflow-hidden shadow-2xl border border-amber-500/35"
+                className="w-full max-w-sm bg-stone-900 rounded-3xl overflow-hidden shadow-[0_20px_60px_rgba(0,0,0,0.9)] border-2 border-amber-500/40"
               >
                 <div className="bg-gradient-to-r from-amber-500/10 via-amber-600/15 to-orange-500/10 p-6 text-left relative overflow-hidden border-b border-amber-500/20">
                   <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full translate-x-12 -translate-y-12 pointer-events-none" />

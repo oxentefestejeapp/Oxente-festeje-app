@@ -126,6 +126,7 @@ export interface InstagramPost {
   caption: string;
   tag: string;
   link: string;
+  categoria?: string;
   createdAt?: string;
 }
 

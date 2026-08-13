@@ -23,7 +23,46 @@ import { OptimizedImage, compressImageFile } from '../utils/imageOptimizer';
 import { dbSupabase } from '../lib/supabase';
 import { InstagramPost } from '../types';
 
+const createComingSoonCard = (categoryTitle: string, emoji: string) => {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
+    <defs>
+      <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#18181b"/>
+        <stop offset="50%" stop-color="#09090b"/>
+        <stop offset="100%" stop-color="#1c1917"/>
+      </linearGradient>
+      <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#fef08a"/>
+        <stop offset="25%" stop-color="#f59e0b"/>
+        <stop offset="75%" stop-color="#d97706"/>
+        <stop offset="100%" stop-color="#b45309"/>
+      </linearGradient>
+    </defs>
+    <rect width="600" height="600" rx="32" fill="url(#bgGrad)"/>
+    <rect x="20" y="20" width="560" height="560" rx="24" fill="none" stroke="url(#goldGrad)" stroke-width="2.5" stroke-dasharray="10 8" opacity="0.65"/>
+    <rect x="36" y="36" width="528" height="528" rx="18" fill="none" stroke="url(#goldGrad)" stroke-width="1" opacity="0.25"/>
+    
+    <circle cx="300" cy="190" r="72" fill="#f59e0b" fill-opacity="0.08" stroke="url(#goldGrad)" stroke-width="2.5"/>
+    <circle cx="300" cy="190" r="58" fill="#18181b" stroke="#fef08a" stroke-width="1" opacity="0.6"/>
+    
+    <path d="M300 145 L307 180 L342 187 L307 194 L300 229 L293 194 L258 187 L293 180 Z" fill="url(#goldGrad)"/>
+    
+    <text x="300" y="310" dominant-baseline="middle" text-anchor="middle" fill="#fef08a" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="28" letter-spacing="3">${categoryTitle.toUpperCase()} ${emoji}</text>
+    
+    <g transform="translate(90, 350)">
+      <rect width="420" height="64" rx="32" fill="url(#goldGrad)"/>
+      <text x="210" y="38" dominant-baseline="middle" text-anchor="middle" fill="#09090b" font-family="system-ui, -apple-system, sans-serif" font-weight="900" font-size="23" letter-spacing="1">EM BREVE MAIS FOTOS!</text>
+    </g>
+    
+    <text x="300" y="460" dominant-baseline="middle" text-anchor="middle" fill="#d6d3d1" font-family="system-ui, -apple-system, sans-serif" font-weight="600" font-size="18">Estamos preparando novos modelos</text>
+    
+    <text x="300" y="520" dominant-baseline="middle" text-anchor="middle" fill="#f59e0b" font-family="system-ui, -apple-system, sans-serif" font-weight="800" font-size="16" letter-spacing="2">✨ OXENTE FESTEJE BRINDES ✨</text>
+  </svg>`;
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+};
+
 const INSTAGRAM_POSTS: InstagramPost[] = [
+  // Geral
   {
     id: 1,
     imageUrl: "https://images.unsplash.com/photo-1513151233558-d860c5398176?q=80&w=600&auto=format&fit=crop",
@@ -31,6 +70,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     comments: 48,
     caption: "Mais uma remessa linda de copos neon saindo para brilhar! Os mais pedidos do Nordeste ✨🕺 #coposneon",
     tag: "Copos Long Drink",
+    categoria: "Geral",
     link: "https://www.instagram.com/oxentefesteje/"
   },
   {
@@ -40,6 +80,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     comments: 32,
     caption: "Tirantes super resistentes e coloridos para sua atlética ou carnaval! Carregue seu copo com muito estilo 🌵🍻",
     tag: "Tirantes Exclusivos",
+    categoria: "Geral",
     link: "https://www.instagram.com/oxentefesteje/"
   },
   {
@@ -49,6 +90,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     comments: 55,
     caption: "Sustentabilidade e beleza! Nossos copos ecológicos personalizados fazem o maior sucesso nos eventos 🌱🥂",
     tag: "Copos Ecológicos",
+    categoria: "Geral",
     link: "https://www.instagram.com/oxentefesteje/"
   },
   {
@@ -58,6 +100,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     comments: 73,
     caption: "Brinde com quem você ama! Kit festa com taças de gin personalizadas de altíssima qualidade 🎉❤️",
     tag: "Taças de Gin",
+    categoria: "Geral",
     link: "https://www.instagram.com/oxentefesteje/"
   },
   {
@@ -67,6 +110,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     comments: 41,
     caption: "Seus convidados vão pirar com essas cores vibrantes! Brindes que marcam momentos inesquecíveis 🔥🍹",
     tag: "Canecas Térmicas",
+    categoria: "Geral",
     link: "https://www.instagram.com/oxentefesteje/"
   },
   {
@@ -76,6 +120,100 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     comments: 29,
     caption: "Sofisticação e exclusividade para o aniversário de 15 anos ou evento da sua empresa 💼🎓",
     tag: "Copos Acrílicos",
+    categoria: "Geral",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  // ABC
+  {
+    id: 7,
+    imageUrl: createComingSoonCard("ABC", "🎓"),
+    likes: "0",
+    comments: 0,
+    caption: "Em breve mais fotos do Tema ABC por aqui! Fique atento às novidades no nosso Instagram @oxentefesteje ✨✏️🎒",
+    tag: "Tema ABC",
+    categoria: "ABC",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 8,
+    imageUrl: createComingSoonCard("ABC", "✏️"),
+    likes: "0",
+    comments: 0,
+    caption: "Lembrancinhas e copos personalizados para Doutores do ABC! Em breve novos modelos disponíveis ✨🌟",
+    tag: "Brindes ABC",
+    categoria: "ABC",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 9,
+    imageUrl: createComingSoonCard("ABC", "📘"),
+    likes: "0",
+    comments: 0,
+    caption: "Cores e estampas exclusivas para encantar na festa de ABC! Novas fotos em breve 🎉",
+    tag: "Lembrancinhas ABC",
+    categoria: "ABC",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  // Formatura
+  {
+    id: 10,
+    imageUrl: createComingSoonCard("Formatura", "🎓"),
+    likes: "0",
+    comments: 0,
+    caption: "Em breve mais fotos de Formatura por aqui! Taças, tirantes e copos personalizados para o seu baile de formatura ✨🍾",
+    tag: "Formatura",
+    categoria: "Formatura",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 11,
+    imageUrl: createComingSoonCard("Formatura", "🥂"),
+    likes: "0",
+    comments: 0,
+    caption: "Taças de Gin e Canecas de Formatura personalizadas. Novas fotos da categoria em breve! 🎉🎓",
+    tag: "Taças Formatura",
+    categoria: "Formatura",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 12,
+    imageUrl: createComingSoonCard("Formatura", "🍾"),
+    likes: "0",
+    comments: 0,
+    caption: "Kits de formandos com tirantes e copos gravados a laser. Seu baile com identidade única! 🎓🔥",
+    tag: "Kits Formandos",
+    categoria: "Formatura",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  // Corporativo
+  {
+    id: 13,
+    imageUrl: createComingSoonCard("Corporativo", "💼"),
+    likes: "0",
+    comments: 0,
+    caption: "Em breve mais fotos de Brindes Corporativos por aqui! Brindes elegantes para marcas, convenções e eventos ✨🏢",
+    tag: "Corporativo",
+    categoria: "Corporativo",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 14,
+    imageUrl: createComingSoonCard("Corporativo", "🏢"),
+    likes: "0",
+    comments: 0,
+    caption: "Canecas térmicas e squeezes gravados com a logomarca para presentear clientes VIP 🤝☕",
+    tag: "Eventos Empresas",
+    categoria: "Corporativo",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 15,
+    imageUrl: createComingSoonCard("Corporativo", "🎯"),
+    likes: "0",
+    comments: 0,
+    caption: "Kits de integração e convenções corporativas com a qualidade Oxente Festeje 📈🎯",
+    tag: "Kits Corporativos",
+    categoria: "Corporativo",
     link: "https://www.instagram.com/oxentefesteje/"
   }
 ];
@@ -252,6 +390,10 @@ export const InstagramFeed: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState(false);
 
+  // Category filter state
+  const [activeCategory, setActiveCategory] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo'>('Geral');
+  const [selectedCategoryForm, setSelectedCategoryForm] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo'>('Geral');
+
   // New photo form state
   const [newImage, setNewImage] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
@@ -302,6 +444,9 @@ export const InstagramFeed: React.FC = () => {
       setShowPasswordModal(false);
       setPasswordError(false);
       setPasswordInput('');
+      setTimeout(() => {
+        document.getElementById('panel-mural-admin')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 150);
     } else {
       setPasswordError(true);
       setPasswordInput('');
@@ -350,6 +495,7 @@ export const InstagramFeed: React.FC = () => {
       comments: generatedComments,
       caption: finalCaption,
       tag: finalTag,
+      categoria: selectedCategoryForm,
       link: finalLink,
     };
 
@@ -425,9 +571,39 @@ export const InstagramFeed: React.FC = () => {
     }
   };
 
-  // Ensure there's always posts to show
-  const activePosts = posts.length > 0 ? posts : INSTAGRAM_POSTS;
-  const duplicatedPosts = [...activePosts, ...activePosts];
+  // Filter posts based on activeCategory
+  const allCurrentPosts = posts.length > 0 ? posts : INSTAGRAM_POSTS;
+
+  // Sanitize unsplash default images for ABC, Formatura, and Corporativo
+  const sanitizedPosts = allCurrentPosts.map(post => {
+    const cat = post.categoria || '';
+    if ((cat === 'ABC' || cat === 'Formatura' || cat === 'Corporativo') && (post.imageUrl.includes('unsplash.com') || !post.imageUrl)) {
+      const emoji = cat === 'ABC' ? '🎓' : cat === 'Formatura' ? '🥂' : '💼';
+      return {
+        ...post,
+        imageUrl: createComingSoonCard(cat, emoji)
+      };
+    }
+    return post;
+  });
+
+  const filteredPosts = sanitizedPosts.filter(post => {
+    if (activeCategory === 'Geral') return true;
+    const catTarget = activeCategory.toLowerCase();
+    const postCat = (post.categoria || '').toLowerCase();
+    const postTag = (post.tag || '').toLowerCase();
+    const postCaption = (post.caption || '').toLowerCase();
+    return postCat === catTarget || postTag.includes(catTarget) || postCaption.includes(catTarget);
+  });
+
+  // Ensure there's always posts to show for selected category
+  const activePosts = filteredPosts.length > 0 
+    ? filteredPosts 
+    : INSTAGRAM_POSTS.filter(p => {
+        if (activeCategory === 'Geral') return true;
+        const catTarget = activeCategory.toLowerCase();
+        return (p.categoria || '').toLowerCase() === catTarget || (p.tag || '').toLowerCase().includes(catTarget);
+      });
 
   return (
     <motion.div
@@ -439,7 +615,7 @@ export const InstagramFeed: React.FC = () => {
       id="instagram-feed-section"
     >
       {/* Feed Header */}
-      <div className="flex flex-col items-center text-center mb-2.5 sm:mb-4">
+      <div className="flex flex-col items-center text-center mb-1.5 sm:mb-2">
         <div className="relative group/badge inline-flex items-center justify-center">
           <div 
             className="select-none pointer-events-none"
@@ -474,6 +650,35 @@ export const InstagramFeed: React.FC = () => {
             {isAdminMode ? <Unlock className="h-3.5 w-3.5" /> : <Lock className="h-3.5 w-3.5" />}
           </button>
         </div>
+      </div>
+
+      {/* Gold Category Buttons - Positioned right below the logo and right above photo carousel */}
+      <div className="flex flex-nowrap items-center justify-center gap-1 min-[360px]:gap-1.5 sm:gap-3 mb-3.5 sm:mb-5 relative z-30 px-1 sm:px-2 max-w-full sm:max-w-2xl mx-auto">
+        {(['Geral', 'ABC', 'Formatura', 'Corporativo'] as const).map((cat) => {
+          const isActive = activeCategory === cat;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => {
+                setActiveCategory(cat);
+                const slider = containerRef.current;
+                if (slider) {
+                  slider.scrollLeft = 0;
+                  scrollXRef.current = 0;
+                }
+              }}
+              className={`px-2 py-1 min-[360px]:px-2.5 min-[360px]:py-1.5 sm:px-5 sm:py-2 rounded-full font-display text-[10px] min-[360px]:text-[11px] sm:text-sm tracking-normal min-[380px]:tracking-wider uppercase transition-all duration-300 cursor-pointer flex-shrink-0 flex items-center justify-center gap-1 whitespace-nowrap ${
+                isActive
+                  ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-stone-950 font-black border border-yellow-200 sm:border-2 shadow-[0_0_15px_rgba(245,158,11,0.5)] scale-[1.03] sm:scale-105'
+                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold border border-amber-400/40 hover:border-amber-300 hover:text-yellow-200'
+              }`}
+              id={`btn-category-${cat.toLowerCase()}`}
+            >
+              <span>{cat}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Infinite Rolling Slider Wrapper with Arrow Buttons */}
@@ -663,12 +868,12 @@ export const InstagramFeed: React.FC = () => {
       {/* Password Modal Popup */}
       <AnimatePresence>
         {showPasswordModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-stone-900 border border-amber-500/20 p-6 rounded-2xl max-w-sm w-full shadow-2xl relative"
+              className="bg-stone-900 border-2 border-amber-500/40 p-6 sm:p-7 rounded-3xl max-w-sm w-full shadow-[0_20px_60px_rgba(0,0,0,0.9)] relative"
             >
               <button 
                 onClick={() => {
@@ -810,7 +1015,20 @@ export const InstagramFeed: React.FC = () => {
                 {/* Form fields */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Tag / Categoria</label>
+                    <label className="block text-[10px] font-mono uppercase text-amber-400 font-bold mb-1">Categoria / Tema</label>
+                    <select
+                      value={selectedCategoryForm}
+                      onChange={(e) => setSelectedCategoryForm(e.target.value as any)}
+                      className="w-full bg-stone-950 border border-amber-500/30 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-amber-200 font-bold outline-none transition-colors cursor-pointer"
+                    >
+                      <option value="Geral">Geral</option>
+                      <option value="ABC">ABC</option>
+                      <option value="Formatura">Formatura</option>
+                      <option value="Corporativo">Corporativo</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Tag / Nome do Produto</label>
                     <input
                       type="text"
                       placeholder="Ex: Copos Long Drink"
@@ -819,37 +1037,37 @@ export const InstagramFeed: React.FC = () => {
                       className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none transition-colors"
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   <div>
-                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Link do Post (Insta)</label>
+                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Link Insta</label>
                     <input
                       type="text"
                       placeholder="URL do Instagram"
                       value={link}
                       onChange={(e) => setLink(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none transition-colors"
+                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-2.5 py-2 text-xs text-stone-200 outline-none transition-colors"
                     />
                   </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Curtidas (opcional)</label>
+                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Curtidas</label>
                     <input
                       type="text"
                       placeholder="Ex: 1.5k"
                       value={likes}
                       onChange={(e) => setLikes(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none transition-colors"
+                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-2.5 py-2 text-xs text-stone-200 outline-none transition-colors"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Comentários (opcional)</label>
+                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Comentários</label>
                     <input
                       type="number"
                       placeholder="Ex: 45"
                       value={comments}
                       onChange={(e) => setComments(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none transition-colors"
+                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-2.5 py-2 text-xs text-stone-200 outline-none transition-colors"
                     />
                   </div>
                 </div>
