@@ -66,61 +66,31 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
   // Geral
   {
     id: 1,
-    imageUrl: "https://images.unsplash.com/photo-1513151233558-d860c5398176?q=80&w=600&auto=format&fit=crop",
-    likes: "1.2k",
-    comments: 48,
-    caption: "Mais uma remessa linda de copos neon saindo para brilhar! Os mais pedidos do Nordeste ✨🕺 #coposneon",
-    tag: "Copos Long Drink",
+    imageUrl: createComingSoonCard("Geral", "✨"),
+    likes: "0",
+    comments: 0,
+    caption: "Em breve mais fotos do nosso Mural Geral! Fique atento às novidades no nosso Instagram @oxentefesteje ✨",
+    tag: "Mural Oxente",
     categoria: "Geral",
     link: "https://www.instagram.com/oxentefesteje/"
   },
   {
     id: 2,
-    imageUrl: "https://images.unsplash.com/photo-1516450360452-9312f5e86fc7?q=80&w=600&auto=format&fit=crop",
-    likes: "842",
-    comments: 32,
-    caption: "Tirantes super resistentes e coloridos para sua atlética ou carnaval! Carregue seu copo com muito estilo 🌵🍻",
-    tag: "Tirantes Exclusivos",
+    imageUrl: createComingSoonCard("Geral", "🌵"),
+    likes: "0",
+    comments: 0,
+    caption: "Mural de fotos exclusivo Oxente Festeje. Em breve novos modelos de brindes disponíveis! 🌵🍻",
+    tag: "Oxente Festeje",
     categoria: "Geral",
     link: "https://www.instagram.com/oxentefesteje/"
   },
   {
     id: 3,
-    imageUrl: "https://images.unsplash.com/photo-1530103862676-de8c9debad1d?q=80&w=600&auto=format&fit=crop",
-    likes: "958",
-    comments: 55,
-    caption: "Sustentabilidade e beleza! Nossos copos ecológicos personalizados fazem o maior sucesso nos eventos 🌱🥂",
-    tag: "Copos Ecológicos",
-    categoria: "Geral",
-    link: "https://www.instagram.com/oxentefesteje/"
-  },
-  {
-    id: 4,
-    imageUrl: "https://images.unsplash.com/photo-1541532713592-79a0317b6b77?q=80&w=600&auto=format&fit=crop",
-    likes: "1.5k",
-    comments: 73,
-    caption: "Brinde com quem você ama! Kit festa com taças de gin personalizadas de altíssima qualidade 🎉❤️",
-    tag: "Taças de Gin",
-    categoria: "Geral",
-    link: "https://www.instagram.com/oxentefesteje/"
-  },
-  {
-    id: 5,
-    imageUrl: "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=600&auto=format&fit=crop",
-    likes: "1.1k",
-    comments: 41,
-    caption: "Seus convidados vão pirar com essas cores vibrantes! Brindes que marcam momentos inesquecíveis 🔥🍹",
-    tag: "Canecas Térmicas",
-    categoria: "Geral",
-    link: "https://www.instagram.com/oxentefesteje/"
-  },
-  {
-    id: 6,
-    imageUrl: "https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?q=80&w=600&auto=format&fit=crop",
-    likes: "789",
-    comments: 29,
-    caption: "Sofisticação e exclusividade para o aniversário de 15 anos ou evento da sua empresa 💼🎓",
-    tag: "Copos Acrílicos",
+    imageUrl: createComingSoonCard("Geral", "🥂"),
+    likes: "0",
+    comments: 0,
+    caption: "Brindes e copos personalizados para todas as ocasiões. Novas fotos em breve! 🎉",
+    tag: "Brindes Exclusivos",
     categoria: "Geral",
     link: "https://www.instagram.com/oxentefesteje/"
   },
@@ -574,18 +544,23 @@ export const InstagramFeed: React.FC = () => {
     }
   };
 
-  // Merge user-uploaded posts with default INSTAGRAM_POSTS (preventing duplicate IDs)
-  // User uploaded posts come first
-  const combinedPosts = [
-    ...posts,
-    ...INSTAGRAM_POSTS.filter(defaultPost => !posts.some(p => String(p.id) === String(defaultPost.id)))
-  ];
+  // Filtering for activeCategory:
+  const activeCatLower = activeCategory.toLowerCase();
+  
+  // User uploaded posts for current active category
+  const userCatPosts = posts.filter(post => {
+    const postCat = (post.categoria || 'Geral').toLowerCase();
+    return postCat === activeCatLower;
+  });
 
-  // Sanitize unsplash default images for ABC, Formatura, and Corporativo
-  const sanitizedPosts = combinedPosts.map(post => {
+  // Default / placeholder posts for current active category
+  const defaultCatPosts = INSTAGRAM_POSTS.filter(post => {
+    const postCat = (post.categoria || 'Geral').toLowerCase();
+    return postCat === activeCatLower;
+  }).map(post => {
     const cat = post.categoria || 'Geral';
-    if ((cat === 'ABC' || cat === 'Formatura' || cat === 'Corporativo') && (post.imageUrl.includes('unsplash.com') || !post.imageUrl)) {
-      const emoji = cat === 'ABC' ? '🎓' : cat === 'Formatura' ? '🥂' : '💼';
+    if (post.imageUrl.includes('unsplash.com') || !post.imageUrl) {
+      const emoji = cat === 'ABC' ? '🎓' : cat === 'Formatura' ? '🥂' : cat === 'Corporativo' ? '💼' : '✨';
       return {
         ...post,
         imageUrl: createComingSoonCard(cat, emoji)
@@ -594,12 +569,9 @@ export const InstagramFeed: React.FC = () => {
     return post;
   });
 
-  // Strict filtering by activeCategory: Geral shows ONLY Geral posts, ABC shows ONLY ABC posts, etc.
-  const activePosts = sanitizedPosts.filter(post => {
-    const postCat = (post.categoria || 'Geral').toLowerCase();
-    const activeCatLower = activeCategory.toLowerCase();
-    return postCat === activeCatLower;
-  });
+  // If user uploaded photos exist for this category, display ONLY the user's photos!
+  // Otherwise, show the default placeholders.
+  const activePosts = userCatPosts.length > 0 ? userCatPosts : defaultCatPosts;
 
   return (
     <motion.div
