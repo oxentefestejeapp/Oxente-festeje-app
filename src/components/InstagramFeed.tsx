@@ -186,11 +186,79 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     tag: "Kits Corporativos",
     categoria: "Corporativo",
     link: "https://www.instagram.com/oxentefesteje/"
+  },
+  // Laser
+  {
+    id: 16,
+    imageUrl: createComingSoonCard("Laser", "⚡"),
+    likes: "0",
+    comments: 0,
+    caption: "Em breve mais fotos de Copos e Brindes com Gravação a Laser! Acabamento impecável e alta durabilidade ✨⚡",
+    tag: "Gravação a Laser",
+    categoria: "Laser",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 17,
+    imageUrl: createComingSoonCard("Laser", "⚡"),
+    likes: "0",
+    comments: 0,
+    caption: "Gravação a Laser em Copos Stanley, Kouda, Squeezes e Canecas Inox com sua marca 🎯⚡",
+    tag: "Produtos Laser",
+    categoria: "Laser",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 18,
+    imageUrl: createComingSoonCard("Laser", "⚡"),
+    likes: "0",
+    comments: 0,
+    caption: "Personalização a Laser com riqueza de detalhes para casamentos, formaturas e corporativo ⚡🔥",
+    tag: "Gravação Exclusiva",
+    categoria: "Laser",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  // Impressora 3D
+  {
+    id: 19,
+    imageUrl: createComingSoonCard("Impressora 3D", "🖨️"),
+    likes: "0",
+    comments: 0,
+    caption: "Em breve mais fotos de Brindes e Troféus em Impressão 3D! Modelagens exclusivas e personalizadas 🖨️✨",
+    tag: "Impressora 3D",
+    categoria: "Impressora 3D",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 20,
+    imageUrl: createComingSoonCard("Impressora 3D", "🖨️"),
+    likes: "0",
+    comments: 0,
+    caption: "Peças decorativas, topos de bolo e chaveiros exclusivos produzidos em Impressão 3D 💡🖨️",
+    tag: "Peças 3D",
+    categoria: "Impressora 3D",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 21,
+    imageUrl: createComingSoonCard("Impressora 3D", "🖨️"),
+    likes: "0",
+    comments: 0,
+    caption: "Prototipagem e brindes corporativos tecnológicos em 3D com a marca Oxente Festeje 🚀🖨️",
+    tag: "Brindes 3D",
+    categoria: "Impressora 3D",
+    link: "https://www.instagram.com/oxentefesteje/"
   }
 ];
 
 export const InstagramFeed: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const categoryBarRef = useRef<HTMLDivElement>(null);
+  const isCatDraggingRef = useRef(false);
+  const catStartXRef = useRef(0);
+  const catScrollLeftRef = useRef(0);
+  const catHasDraggedRef = useRef(false);
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [isDown, setIsDown] = useState(false);
@@ -350,6 +418,61 @@ export const InstagramFeed: React.FC = () => {
       setIsPaused(false);
     }, 600);
   };
+
+  const scrollCategories = (direction: 'left' | 'right') => {
+    if (categoryBarRef.current) {
+      const step = 130;
+      categoryBarRef.current.scrollBy({
+        left: direction === 'left' ? -step : step,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  // Drag / Slide handlers for Category Bar
+  const handleCatMouseDown = (e: React.MouseEvent) => {
+    if (!categoryBarRef.current) return;
+    isCatDraggingRef.current = true;
+    catHasDraggedRef.current = false;
+    catStartXRef.current = e.pageX - categoryBarRef.current.offsetLeft;
+    catScrollLeftRef.current = categoryBarRef.current.scrollLeft;
+  };
+
+  const handleCatMouseMove = (e: React.MouseEvent) => {
+    if (!isCatDraggingRef.current || !categoryBarRef.current) return;
+    const x = e.pageX - categoryBarRef.current.offsetLeft;
+    const walk = (x - catStartXRef.current) * 1.5;
+    if (Math.abs(x - catStartXRef.current) > 4) {
+      catHasDraggedRef.current = true;
+    }
+    categoryBarRef.current.scrollLeft = catScrollLeftRef.current - walk;
+  };
+
+  const handleCatMouseUpOrLeave = () => {
+    isCatDraggingRef.current = false;
+  };
+
+  const handleCatTouchStart = (e: React.TouchEvent) => {
+    if (!categoryBarRef.current || e.touches.length === 0) return;
+    isCatDraggingRef.current = true;
+    catHasDraggedRef.current = false;
+    catStartXRef.current = e.touches[0].pageX - categoryBarRef.current.offsetLeft;
+    catScrollLeftRef.current = categoryBarRef.current.scrollLeft;
+  };
+
+  const handleCatTouchMove = (e: React.TouchEvent) => {
+    if (!isCatDraggingRef.current || !categoryBarRef.current || e.touches.length === 0) return;
+    const x = e.touches[0].pageX - categoryBarRef.current.offsetLeft;
+    const walk = (x - catStartXRef.current) * 1.5;
+    if (Math.abs(x - catStartXRef.current) > 4) {
+      catHasDraggedRef.current = true;
+    }
+    categoryBarRef.current.scrollLeft = catScrollLeftRef.current - walk;
+  };
+
+  const handleCatTouchEnd = () => {
+    isCatDraggingRef.current = false;
+  };
   
   // Feed posts state moved to the top of the component to prevent block-scoped variable hoisting issues
   
@@ -362,8 +485,8 @@ export const InstagramFeed: React.FC = () => {
   const [passwordError, setPasswordError] = useState(false);
 
   // Category filter state
-  const [activeCategory, setActiveCategory] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo'>('Geral');
-  const [selectedCategoryForm, setSelectedCategoryForm] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo'>('Geral');
+  const [activeCategory, setActiveCategory] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D'>('Geral');
+  const [selectedCategoryForm, setSelectedCategoryForm] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D'>('Geral');
 
   // New photo form state
   const [newImage, setNewImage] = useState<string | null>(null);
@@ -560,7 +683,7 @@ export const InstagramFeed: React.FC = () => {
   }).map(post => {
     const cat = post.categoria || 'Geral';
     if (post.imageUrl.includes('unsplash.com') || !post.imageUrl) {
-      const emoji = cat === 'ABC' ? '🎓' : cat === 'Formatura' ? '🥂' : cat === 'Corporativo' ? '💼' : '✨';
+      const emoji = cat === 'ABC' ? '🎓' : cat === 'Formatura' ? '🥂' : cat === 'Corporativo' ? '💼' : cat === 'Laser' ? '⚡' : cat === 'Impressora 3D' ? '🖨️' : '✨';
       return {
         ...post,
         imageUrl: createComingSoonCard(cat, emoji)
@@ -621,33 +744,72 @@ export const InstagramFeed: React.FC = () => {
       </div>
 
       {/* Gold Category Buttons - Positioned right below the logo and right above photo carousel */}
-      <div className="flex flex-nowrap items-center justify-center gap-1 min-[360px]:gap-1.5 sm:gap-3 mb-3.5 sm:mb-5 relative z-30 px-1 sm:px-2 max-w-full sm:max-w-2xl mx-auto">
-        {(['Geral', 'ABC', 'Formatura', 'Corporativo'] as const).map((cat) => {
-          const isActive = activeCategory === cat;
-          return (
-            <button
-              key={cat}
-              type="button"
-              onClick={() => {
-                setActiveCategory(cat);
-                setSelectedCategoryForm(cat);
-                const slider = containerRef.current;
-                if (slider) {
-                  slider.scrollLeft = 0;
-                  scrollXRef.current = 0;
-                }
-              }}
-              className={`px-2 py-1 min-[360px]:px-2.5 min-[360px]:py-1.5 sm:px-5 sm:py-2 rounded-full font-display text-[10px] min-[360px]:text-[11px] sm:text-sm tracking-normal min-[380px]:tracking-wider uppercase transition-all duration-300 cursor-pointer flex-shrink-0 flex items-center justify-center gap-1 whitespace-nowrap ${
-                isActive
-                  ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-stone-950 font-black border border-yellow-200 sm:border-2 shadow-[0_0_15px_rgba(245,158,11,0.5)] scale-[1.03] sm:scale-105'
-                  : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold border border-amber-400/40 hover:border-amber-300 hover:text-yellow-200'
-              }`}
-              id={`btn-category-${cat.toLowerCase()}`}
-            >
-              <span>{cat}</span>
-            </button>
-          );
-        })}
+      <div className="flex items-center justify-center gap-1 sm:gap-2 mb-3.5 sm:mb-5 relative z-30 px-2 max-w-full sm:max-w-2xl mx-auto">
+        {/* Category Left Small Arrow */}
+        <button
+          type="button"
+          onClick={() => scrollCategories('left')}
+          className="p-1 sm:p-1.5 rounded-full bg-amber-500/15 hover:bg-amber-400 text-amber-300 hover:text-stone-950 border border-amber-400/30 hover:border-yellow-200 transition-all duration-300 cursor-pointer shrink-0 flex items-center justify-center shadow-sm active:scale-90"
+          title="Categoria anterior"
+          aria-label="Categoria anterior"
+        >
+          <ChevronLeft className="h-3.5 w-3.5 sm:h-4 sm:w-4 stroke-[2.5px]" />
+        </button>
+
+        {/* Scrollable Categories Row - Draggable, No scrollbar visible */}
+        <div 
+          ref={categoryBarRef}
+          onMouseDown={handleCatMouseDown}
+          onMouseMove={handleCatMouseMove}
+          onMouseUp={handleCatMouseUpOrLeave}
+          onMouseLeave={handleCatMouseUpOrLeave}
+          onTouchStart={handleCatTouchStart}
+          onTouchMove={handleCatTouchMove}
+          onTouchEnd={handleCatTouchEnd}
+          className="flex flex-nowrap items-center gap-1 min-[360px]:gap-1.5 sm:gap-2.5 overflow-x-auto no-scrollbar py-1 px-0.5 max-w-full select-none cursor-grab active:cursor-grabbing"
+        >
+          {(['Geral', 'ABC', 'Formatura', 'Corporativo', 'Laser', 'Impressora 3D'] as const).map((cat) => {
+            const isActive = activeCategory === cat;
+            return (
+              <button
+                key={cat}
+                type="button"
+                onClick={(e) => {
+                  if (catHasDraggedRef.current) {
+                    e.preventDefault();
+                    return;
+                  }
+                  setActiveCategory(cat);
+                  setSelectedCategoryForm(cat);
+                  const slider = containerRef.current;
+                  if (slider) {
+                    slider.scrollLeft = 0;
+                    scrollXRef.current = 0;
+                  }
+                }}
+                className={`px-2.5 py-1 min-[360px]:px-3 min-[360px]:py-1.5 sm:px-5 sm:py-2 rounded-full font-display text-[10px] min-[360px]:text-[11px] sm:text-sm tracking-normal min-[380px]:tracking-wider uppercase transition-all duration-300 cursor-pointer flex-shrink-0 flex items-center justify-center gap-1 whitespace-nowrap ${
+                  isActive
+                    ? 'bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 text-stone-950 font-black border border-yellow-200 sm:border-2 shadow-[0_0_15px_rgba(245,158,11,0.5)] scale-[1.03] sm:scale-105'
+                    : 'bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 font-bold border border-amber-400/40 hover:border-amber-300 hover:text-yellow-200'
+                }`}
+                id={`btn-category-${cat.toLowerCase().replace(/\s+/g, '-')}`}
+              >
+                <span>{cat}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Category Right Small Arrow */}
+        <button
+          type="button"
+          onClick={() => scrollCategories('right')}
+          className="p-1 sm:p-1.5 rounded-full bg-amber-500/15 hover:bg-amber-400 text-amber-300 hover:text-stone-950 border border-amber-400/30 hover:border-yellow-200 transition-all duration-300 cursor-pointer shrink-0 flex items-center justify-center shadow-sm active:scale-90"
+          title="Próxima categoria"
+          aria-label="Próxima categoria"
+        >
+          <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4 stroke-[2.5px]" />
+        </button>
       </div>
 
       {/* Infinite Rolling Slider Wrapper with Arrow Buttons */}
@@ -995,6 +1157,8 @@ export const InstagramFeed: React.FC = () => {
                       <option value="ABC">ABC</option>
                       <option value="Formatura">Formatura</option>
                       <option value="Corporativo">Corporativo</option>
+                      <option value="Laser">Laser</option>
+                      <option value="Impressora 3D">Impressora 3D</option>
                     </select>
                   </div>
                   <div>
