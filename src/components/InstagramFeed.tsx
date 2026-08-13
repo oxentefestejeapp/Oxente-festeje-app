@@ -248,6 +248,37 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     tag: "Brindes 3D",
     categoria: "Impressora 3D",
     link: "https://www.instagram.com/oxentefesteje/"
+  },
+  // Papelaria
+  {
+    id: 22,
+    imageUrl: createComingSoonCard("Papelaria", "📝"),
+    likes: "0",
+    comments: 0,
+    caption: "Em breve mais fotos de Itens de Papelaria Personalizada! Cadernos, blocos e convites em alta qualidade 📝✨",
+    tag: "Papelaria Personalizada",
+    categoria: "Papelaria",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 23,
+    imageUrl: createComingSoonCard("Papelaria", "✏️"),
+    likes: "0",
+    comments: 0,
+    caption: "Agendas, planners e embalagens de papelaria exclusivas para suas festas e escritório 🏷️✏️",
+    tag: "Kits de Papelaria",
+    categoria: "Papelaria",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 24,
+    imageUrl: createComingSoonCard("Papelaria", "💌"),
+    likes: "0",
+    comments: 0,
+    caption: "Convites e mimos especiais em papelaria refinada pela marca Oxente Festeje 💌🎉",
+    tag: "Papelaria de Festa",
+    categoria: "Papelaria",
+    link: "https://www.instagram.com/oxentefesteje/"
   }
 ];
 
@@ -485,8 +516,8 @@ export const InstagramFeed: React.FC = () => {
   const [passwordError, setPasswordError] = useState(false);
 
   // Category filter state
-  const [activeCategory, setActiveCategory] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D'>('Geral');
-  const [selectedCategoryForm, setSelectedCategoryForm] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D'>('Geral');
+  const [activeCategory, setActiveCategory] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D' | 'Papelaria'>('Geral');
+  const [selectedCategoryForm, setSelectedCategoryForm] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D' | 'Papelaria'>('Geral');
 
   // New photo form state
   const [newImage, setNewImage] = useState<string | null>(null);
@@ -683,7 +714,7 @@ export const InstagramFeed: React.FC = () => {
   }).map(post => {
     const cat = post.categoria || 'Geral';
     if (post.imageUrl.includes('unsplash.com') || !post.imageUrl) {
-      const emoji = cat === 'ABC' ? '🎓' : cat === 'Formatura' ? '🥂' : cat === 'Corporativo' ? '💼' : cat === 'Laser' ? '⚡' : cat === 'Impressora 3D' ? '🖨️' : '✨';
+      const emoji = cat === 'ABC' ? '🎓' : cat === 'Formatura' ? '🥂' : cat === 'Corporativo' ? '💼' : cat === 'Laser' ? '⚡' : cat === 'Impressora 3D' ? '🖨️' : cat === 'Papelaria' ? '📝' : '✨';
       return {
         ...post,
         imageUrl: createComingSoonCard(cat, emoji)
@@ -768,7 +799,7 @@ export const InstagramFeed: React.FC = () => {
           onTouchEnd={handleCatTouchEnd}
           className="flex flex-nowrap items-center gap-1 min-[360px]:gap-1.5 sm:gap-2.5 overflow-x-auto no-scrollbar py-1 px-0.5 max-w-full select-none cursor-grab active:cursor-grabbing"
         >
-          {(['Geral', 'ABC', 'Formatura', 'Corporativo', 'Laser', 'Impressora 3D'] as const).map((cat) => {
+          {(['Geral', 'ABC', 'Formatura', 'Corporativo', 'Laser', 'Impressora 3D', 'Papelaria'] as const).map((cat) => {
             const isActive = activeCategory === cat;
             return (
               <button
@@ -1159,6 +1190,7 @@ export const InstagramFeed: React.FC = () => {
                       <option value="Corporativo">Corporativo</option>
                       <option value="Laser">Laser</option>
                       <option value="Impressora 3D">Impressora 3D</option>
+                      <option value="Papelaria">Papelaria</option>
                     </select>
                   </div>
                   <div>
