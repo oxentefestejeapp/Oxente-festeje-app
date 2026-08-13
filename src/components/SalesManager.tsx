@@ -3632,35 +3632,90 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   {/* List of current items */}
                   <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
                     {editItens.map((item, idx) => {
+                      const isAvulso = item.produtoId.startsWith('avulso-') || item.produtoId === 'produto-avulso' || !products?.some(p => p.id === item.produtoId);
+
                       return (
                         <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs">
                           {/* Product selection/name */}
                           <div className="flex-1 min-w-0 font-medium">
-                            {products && products.length > 0 ? (
-                              <select
-                                value={item.produtoId}
-                                onChange={(e) => {
-                                  const selectedId = e.target.value;
-                                  const dbProd = products.find(p => p.id === selectedId);
-                                  if (dbProd) {
-                                    const updated = editItens.map((item, i) => i === idx ? {
-                                      ...item,
-                                      produtoId: dbProd.id,
-                                      produtoNome: dbProd.nome,
-                                      precoUn: dbProd.preco,
-                                      total: dbProd.preco * item.quantidade
-                                    } : item);
+                            {isAvulso ? (
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5">
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span className="px-1.5 py-0.5 bg-purple-950/80 border border-purple-500/40 text-purple-300 rounded text-[10px] font-bold flex items-center gap-1">
+                                    📦 Avulso
+                                  </span>
+                                  {products && products.length > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const firstProd = products[0];
+                                        const updated = editItens.map((it, i) => i === idx ? {
+                                          ...it,
+                                          produtoId: firstProd.id,
+                                          produtoNome: firstProd.nome,
+                                          precoUn: firstProd.preco,
+                                          total: firstProd.preco * it.quantidade
+                                        } : it);
+                                        setEditItens(updated);
+                                      }}
+                                      className="text-[10px] text-zinc-500 hover:text-zinc-300 underline cursor-pointer whitespace-nowrap"
+                                      title="Converter em produto do catálogo"
+                                    >
+                                      (Mudar p/ Catálogo)
+                                    </button>
+                                  )}
+                                </div>
+                                <input
+                                  type="text"
+                                  value={item.produtoNome}
+                                  onChange={(e) => {
+                                    const newName = e.target.value;
+                                    const updated = editItens.map((it, i) => i === idx ? {
+                                      ...it,
+                                      produtoNome: newName
+                                    } : it);
                                     setEditItens(updated);
-                                  }
-                                }}
-                                className="w-full bg-black border border-zinc-805 rounded-lg px-2 py-1 text-zinc-200 text-xs focus:outline-none focus:border-brand-pink font-medium cursor-pointer"
-                              >
-                                {products.map(p => (
-                                  <option key={p.id} value={p.id}>{p.nome} - R$ {p.preco.toFixed(2)}</option>
-                                ))}
-                              </select>
+                                  }}
+                                  placeholder="Nome do produto avulso..."
+                                  className="w-full bg-black border border-purple-900 focus:border-purple-500 rounded-lg px-2 py-1 text-purple-200 text-xs focus:outline-none font-medium"
+                                />
+                              </div>
                             ) : (
-                              <span className="font-semibold text-zinc-300 block truncate">{item.produtoNome}</span>
+                              products && products.length > 0 ? (
+                                <select
+                                  value={item.produtoId}
+                                  onChange={(e) => {
+                                    const selectedId = e.target.value;
+                                    if (selectedId === 'convert-to-avulso') {
+                                      const updated = editItens.map((it, i) => i === idx ? {
+                                        ...it,
+                                        produtoId: `avulso-${Date.now()}`
+                                      } : it);
+                                      setEditItens(updated);
+                                      return;
+                                    }
+                                    const dbProd = products.find(p => p.id === selectedId);
+                                    if (dbProd) {
+                                      const updated = editItens.map((it, i) => i === idx ? {
+                                        ...it,
+                                        produtoId: dbProd.id,
+                                        produtoNome: dbProd.nome,
+                                        precoUn: dbProd.preco,
+                                        total: dbProd.preco * it.quantidade
+                                      } : it);
+                                      setEditItens(updated);
+                                    }
+                                  }}
+                                  className="w-full bg-black border border-zinc-805 rounded-lg px-2 py-1 text-zinc-200 text-xs focus:outline-none focus:border-brand-pink font-medium cursor-pointer"
+                                >
+                                  {products.map(p => (
+                                    <option key={p.id} value={p.id}>{p.nome} - R$ {p.preco.toFixed(2)}</option>
+                                  ))}
+                                  <option value="convert-to-avulso">📦 + Converter para Produto Avulso...</option>
+                                </select>
+                              ) : (
+                                <span className="font-semibold text-zinc-300 block truncate">{item.produtoNome}</span>
+                              )
                             )}
                           </div>
 
