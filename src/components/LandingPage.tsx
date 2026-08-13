@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { initGoogleAds, trackGoogleAdsEvent } from '../lib/analytics';
 
@@ -1543,8 +1544,8 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
         </p>
 
         {/* MODAL 1: Order Tracking Lookup dialog */}
-        <AnimatePresence>
-          {showTrackingModal && (
+        {showTrackingModal && typeof document !== 'undefined' && createPortal(
+          <AnimatePresence key="tracking-portal">
             <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[999999] flex items-center justify-center p-4">
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
@@ -1683,12 +1684,13 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 </div>
               </motion.div>
             </div>
-          )}
-        </AnimatePresence>
+          </AnimatePresence>,
+          document.body
+        )}
 
         {/* MODAL 2: Locked app entry dialog with (69pagina69) password */}
-        <AnimatePresence>
-          {showAccessModal && (
+        {showAccessModal && typeof document !== 'undefined' && createPortal(
+          <AnimatePresence key="access-portal">
             <div className="fixed inset-0 bg-black/90 backdrop-blur-md z-[999999] flex items-center justify-center p-4">
               <motion.div
                 initial={{ scale: 0.95, opacity: 0 }}
@@ -1753,8 +1755,9 @@ export function LandingPage({ onUnlockSystem, savedPhone, savedAddress }: Landin
                 </form>
               </motion.div>
             </div>
-          )}
-        </AnimatePresence>
+          </AnimatePresence>,
+          document.body
+        )}
 
 
 

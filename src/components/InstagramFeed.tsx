@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Instagram, 
@@ -866,8 +867,8 @@ export const InstagramFeed: React.FC = () => {
       {/* O gatilho do cadeado agora está ao lado do ícone do Instagram no cabeçalho do mural */}
 
       {/* Password Modal Popup */}
-      <AnimatePresence>
-        {showPasswordModal && (
+      {showPasswordModal && typeof document !== 'undefined' && createPortal(
+        <AnimatePresence key="mural-password-portal">
           <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -920,8 +921,9 @@ export const InstagramFeed: React.FC = () => {
               </form>
             </motion.div>
           </div>
-        )}
-      </AnimatePresence>
+        </AnimatePresence>,
+        document.body
+      )}
 
       {/* ADMIN PHOTO MANAGEMENT SYSTEM */}
       <AnimatePresence>
