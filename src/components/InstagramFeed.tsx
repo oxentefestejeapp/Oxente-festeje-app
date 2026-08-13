@@ -445,6 +445,7 @@ export const InstagramFeed: React.FC = () => {
       setShowPasswordModal(false);
       setPasswordError(false);
       setPasswordInput('');
+      setSelectedCategoryForm(activeCategory);
       setTimeout(() => {
         document.getElementById('panel-mural-admin')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }, 150);
@@ -524,7 +525,8 @@ export const InstagramFeed: React.FC = () => {
         setTag('');
         setLikes('');
         setComments('');
-        setSubmitStatus({ type: 'success', message: 'Foto adicionada com sucesso ao mural!' });
+        setActiveCategory(selectedCategoryForm);
+        setSubmitStatus({ type: 'success', message: `Foto adicionada com sucesso à categoria "${selectedCategoryForm}"!` });
         
         if (fileInputRef.current) fileInputRef.current.value = '';
       } else {
@@ -663,6 +665,7 @@ export const InstagramFeed: React.FC = () => {
               type="button"
               onClick={() => {
                 setActiveCategory(cat);
+                setSelectedCategoryForm(cat);
                 const slider = containerRef.current;
                 if (slider) {
                   slider.scrollLeft = 0;

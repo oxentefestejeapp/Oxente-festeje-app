@@ -218,11 +218,30 @@ ALTER TABLE oxente_users DISABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_users;
 CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_users FOR ALL USING (true) WITH CHECK (true);
 
--- 5. Ajustar Réplica de Identidade (Garante payload completo em UPDATES e DELETES no canais Realtime)
+-- 5. Tabela de Posts do Instagram / Mural
+CREATE TABLE IF NOT EXISTS oxente_instagram_posts (
+  id TEXT PRIMARY KEY,
+  image_url TEXT NOT NULL,
+  likes TEXT,
+  comments INTEGER,
+  caption TEXT,
+  tag TEXT,
+  categoria TEXT DEFAULT 'Geral',
+  link TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE oxente_instagram_posts ADD COLUMN IF NOT EXISTS categoria TEXT DEFAULT 'Geral';
+ALTER TABLE oxente_instagram_posts DISABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_instagram_posts;
+CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_instagram_posts FOR ALL USING (true) WITH CHECK (true);
+
+-- 6. Ajustar Réplica de Identidade (Garante payload completo em UPDATES e DELETES no canais Realtime)
 ALTER TABLE oxente_products REPLICA IDENTITY FULL;
 ALTER TABLE oxente_sales REPLICA IDENTITY FULL;
 ALTER TABLE oxente_store_info REPLICA IDENTITY FULL;
 ALTER TABLE oxente_users REPLICA IDENTITY FULL;
+ALTER TABLE oxente_instagram_posts REPLICA IDENTITY FULL;
 
 -- 6. Habilitar Tempo Real (Realtime) para as Tabelas
 -- Usamos um bloco PL/pgSQL seguro para evitar erros de tabela já cadastrada ao reexecutar o script
@@ -876,6 +895,7 @@ const realDbSupabase = {
         comments: Number(item.comments) || 0,
         caption: item.caption || '',
         tag: item.tag || '',
+        categoria: item.categoria || 'Geral',
         link: item.link || '',
         createdAt: item.created_at
       }));
@@ -893,6 +913,7 @@ const realDbSupabase = {
         comments: post.comments,
         caption: post.caption,
         tag: post.tag,
+        categoria: post.categoria || 'Geral',
         link: post.link,
         created_at: new Date().toISOString()
       };
