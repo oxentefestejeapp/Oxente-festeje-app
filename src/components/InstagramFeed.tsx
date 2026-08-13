@@ -574,12 +574,16 @@ export const InstagramFeed: React.FC = () => {
     }
   };
 
-  // Filter posts based on activeCategory
-  const allCurrentPosts = posts.length > 0 ? posts : INSTAGRAM_POSTS;
+  // Merge user-uploaded posts with default INSTAGRAM_POSTS (preventing duplicate IDs)
+  // User uploaded posts come first
+  const combinedPosts = [
+    ...posts,
+    ...INSTAGRAM_POSTS.filter(defaultPost => !posts.some(p => String(p.id) === String(defaultPost.id)))
+  ];
 
   // Sanitize unsplash default images for ABC, Formatura, and Corporativo
-  const sanitizedPosts = allCurrentPosts.map(post => {
-    const cat = post.categoria || '';
+  const sanitizedPosts = combinedPosts.map(post => {
+    const cat = post.categoria || 'Geral';
     if ((cat === 'ABC' || cat === 'Formatura' || cat === 'Corporativo') && (post.imageUrl.includes('unsplash.com') || !post.imageUrl)) {
       const emoji = cat === 'ABC' ? '🎓' : cat === 'Formatura' ? '🥂' : '💼';
       return {
@@ -590,23 +594,12 @@ export const InstagramFeed: React.FC = () => {
     return post;
   });
 
-  const filteredPosts = sanitizedPosts.filter(post => {
-    if (activeCategory === 'Geral') return true;
-    const catTarget = activeCategory.toLowerCase();
-    const postCat = (post.categoria || '').toLowerCase();
-    const postTag = (post.tag || '').toLowerCase();
-    const postCaption = (post.caption || '').toLowerCase();
-    return postCat === catTarget || postTag.includes(catTarget) || postCaption.includes(catTarget);
+  // Strict filtering by activeCategory: Geral shows ONLY Geral posts, ABC shows ONLY ABC posts, etc.
+  const activePosts = sanitizedPosts.filter(post => {
+    const postCat = (post.categoria || 'Geral').toLowerCase();
+    const activeCatLower = activeCategory.toLowerCase();
+    return postCat === activeCatLower;
   });
-
-  // Ensure there's always posts to show for selected category
-  const activePosts = filteredPosts.length > 0 
-    ? filteredPosts 
-    : INSTAGRAM_POSTS.filter(p => {
-        if (activeCategory === 'Geral') return true;
-        const catTarget = activeCategory.toLowerCase();
-        return (p.categoria || '').toLowerCase() === catTarget || (p.tag || '').toLowerCase().includes(catTarget);
-      });
 
   return (
     <motion.div
