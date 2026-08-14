@@ -236,6 +236,31 @@ ALTER TABLE oxente_instagram_posts DISABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Acesso Livre Ler-Gravar-Editar" ON oxente_instagram_posts;
 CREATE POLICY "Acesso Livre Ler-Gravar-Editar" ON oxente_instagram_posts FOR ALL USING (true) WITH CHECK (true);
 
+-- 5.1 Configuração do Bucket Público para Fotos do Mural (WhatsApp Miniaturas)
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('mural_fotos', 'mural_fotos', true)
+ON CONFLICT (id) DO UPDATE SET public = true;
+
+DROP POLICY IF EXISTS "Acesso Público para Ler Fotos Mural" ON storage.objects;
+CREATE POLICY "Acesso Público para Ler Fotos Mural"
+ON storage.objects FOR SELECT
+USING (bucket_id = 'mural_fotos');
+
+DROP POLICY IF EXISTS "Acesso Livre para Upload Fotos Mural" ON storage.objects;
+CREATE POLICY "Acesso Livre para Upload Fotos Mural"
+ON storage.objects FOR INSERT
+WITH CHECK (bucket_id = 'mural_fotos');
+
+DROP POLICY IF EXISTS "Acesso Livre para Update Fotos Mural" ON storage.objects;
+CREATE POLICY "Acesso Livre para Update Fotos Mural"
+ON storage.objects FOR UPDATE
+USING (bucket_id = 'mural_fotos');
+
+DROP POLICY IF EXISTS "Acesso Livre para Deletar Fotos Mural" ON storage.objects;
+CREATE POLICY "Acesso Livre para Deletar Fotos Mural"
+ON storage.objects FOR DELETE
+USING (bucket_id = 'mural_fotos');
+
 -- 6. Ajustar Réplica de Identidade (Garante payload completo em UPDATES e DELETES no canais Realtime)
 ALTER TABLE oxente_products REPLICA IDENTITY FULL;
 ALTER TABLE oxente_sales REPLICA IDENTITY FULL;
@@ -905,6 +930,59 @@ const realDbSupabase = {
     }
   },
 
+  async uploadInstagramPhoto(fileOrBase64: Blob | File | string, filename?: string): Promise<string | null> {
+    try {
+      let fileBody: Blob;
+      let fileExt = 'png';
+      let contentType = 'image/png';
+
+      if (typeof fileOrBase64 === 'string') {
+        if (fileOrBase64.startsWith('data:image/jpeg') || fileOrBase64.startsWith('data:image/jpg')) {
+          fileExt = 'jpg';
+          contentType = 'image/jpeg';
+        } else if (fileOrBase64.startsWith('data:image/webp')) {
+          fileExt = 'webp';
+          contentType = 'image/webp';
+        }
+        const res = await fetch(fileOrBase64);
+        fileBody = await res.blob();
+      } else {
+        fileBody = fileOrBase64;
+        if (fileOrBase64.type) {
+          contentType = fileOrBase64.type;
+          if (contentType.includes('jpeg') || contentType.includes('jpg')) fileExt = 'jpg';
+          else if (contentType.includes('webp')) fileExt = 'webp';
+          else if (contentType.includes('png')) fileExt = 'png';
+        }
+      }
+
+      const cleanName = filename ? filename.toLowerCase().replace(/[^a-z0-9]/gi, '_') : 'mural_foto';
+      const path = `${cleanName}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.${fileExt}`;
+
+      const { data, error } = await supabase.storage
+        .from('mural_fotos')
+        .upload(path, fileBody, {
+          contentType,
+          cacheControl: '31536000',
+          upsert: true
+        });
+
+      if (error) {
+        console.warn('Upload no bucket mural_fotos falhou (verifique se executou o script SQL no Supabase):', error.message);
+        return null;
+      }
+
+      const { data: publicData } = supabase.storage
+        .from('mural_fotos')
+        .getPublicUrl(data.path);
+
+      return publicData.publicUrl;
+    } catch (e) {
+      console.warn('Erro ao fazer upload da foto do mural no storage:', e);
+      return null;
+    }
+  },
+
   async saveInstagramPost(post: Omit<InstagramPost, 'id' | 'createdAt'> & { id?: string | number }): Promise<boolean> {
     try {
       const payload: any = {
@@ -1384,6 +1462,11 @@ const sandboxDbSupabase = {
       endereco: 'Rua Josina Lessa feitosa 176',
       whatsappTemplate: 'Olá {cliente}, seu pedido {numero} está {status}!'
     };
+  },
+
+  uploadInstagramPhoto: async (fileOrBase64: Blob | File | string, filename?: string): Promise<string | null> => {
+    // If it's a string, return as is or null
+    return typeof fileOrBase64 === 'string' ? fileOrBase64 : null;
   },
 
   fetchInstagramPosts: async (): Promise<InstagramPost[] | null> => {

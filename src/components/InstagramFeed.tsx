@@ -794,8 +794,19 @@ export const InstagramFeed: React.FC = () => {
     const finalTag = tag.trim() || 'Novidade';
     const finalLink = link.trim() || 'https://www.instagram.com/oxentefesteje/';
 
+    // Upload image to Supabase Storage bucket 'mural_fotos' so it has a permanent public HTTP link for WhatsApp previews
+    let uploadedImageUrl = newImage;
+    try {
+      const storageUrl = await dbSupabase.uploadInstagramPhoto(newImage, finalTag || selectedCategoryForm);
+      if (storageUrl) {
+        uploadedImageUrl = storageUrl;
+      }
+    } catch (uploadErr) {
+      console.warn('Fallback: salvando foto diretamente no banco:', uploadErr);
+    }
+
     const newPostData = {
-      imageUrl: newImage,
+      imageUrl: uploadedImageUrl,
       likes: generatedLikes,
       comments: generatedComments,
       caption: finalCaption,
@@ -1305,6 +1316,19 @@ export const InstagramFeed: React.FC = () => {
               </div>
 
               <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const sqlCode = `-- Executar no Supabase SQL Editor para habilitar Miniaturas de Fotos do WhatsApp:\nINSERT INTO storage.buckets (id, name, public) VALUES ('mural_fotos', 'mural_fotos', true) ON CONFLICT (id) DO UPDATE SET public = true;\nDROP POLICY IF EXISTS "Acesso Público para Ler Fotos Mural" ON storage.objects;\nCREATE POLICY "Acesso Público para Ler Fotos Mural" ON storage.objects FOR SELECT USING (bucket_id = 'mural_fotos');\nDROP POLICY IF EXISTS "Acesso Livre para Upload Fotos Mural" ON storage.objects;\nCREATE POLICY "Acesso Livre para Upload Fotos Mural" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'mural_fotos');\nDROP POLICY IF EXISTS "Acesso Livre para Update Fotos Mural" ON storage.objects;\nCREATE POLICY "Acesso Livre para Update Fotos Mural" ON storage.objects FOR UPDATE USING (bucket_id = 'mural_fotos');\nDROP POLICY IF EXISTS "Acesso Livre para Deletar Fotos Mural" ON storage.objects;\nCREATE POLICY "Acesso Livre para Deletar Fotos Mural" ON storage.objects FOR DELETE USING (bucket_id = 'mural_fotos');`;
+                    navigator.clipboard.writeText(sqlCode);
+                    alert('Código SQL do Storage copiado! Cole no SQL Editor do Supabase se ainda não executou.');
+                  }}
+                  className="px-3 py-1.5 rounded-lg border border-amber-500/30 hover:border-amber-400 bg-amber-500/10 text-[10px] text-amber-300 font-mono flex items-center gap-1.5 transition-all cursor-pointer"
+                  title="Copiar script SQL para criar o Bucket público de fotos no Supabase"
+                >
+                  <Copy className="h-3 w-3" /> SQL Storage Nuvem
+                </button>
+
                 <button
                   onClick={handleRestoreDefaults}
                   className="px-3 py-1.5 rounded-lg border border-stone-800 hover:border-red-500/30 text-[10px] text-stone-400 hover:text-red-400 font-mono flex items-center gap-1.5 transition-all cursor-pointer"
