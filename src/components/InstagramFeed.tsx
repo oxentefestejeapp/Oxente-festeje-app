@@ -22,11 +22,27 @@ import {
   Copy,
   Download,
   Share2,
-  Check
+  Check,
+  ArrowUp,
+  ArrowDown,
+  ListOrdered,
+  Layers
 } from 'lucide-react';
 import { OptimizedImage, compressImageFile } from '../utils/imageOptimizer';
 import { dbSupabase } from '../lib/supabase';
 import { InstagramPost } from '../types';
+
+export const DEFAULT_MURAL_CATEGORIES = [
+  'Geral',
+  'ABC',
+  'Formatura',
+  'Corporativo',
+  'Laser',
+  'Impressora 3D',
+  'Papelaria',
+  'Kit Presente',
+  'Promoções'
+] as const;
 
 const createComingSoonCard = (categoryTitle: string, emoji: string) => {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600">
@@ -75,7 +91,7 @@ export const getWebsiteProductLink = (categoria: string, tag?: string, id?: stri
   return `${baseUrl}/?mural=1&tema=${encodeURIComponent(cleanCategory)}&item=${encodeURIComponent(cleanTag)}${idParam}#mural`;
 };
 
-const INSTAGRAM_POSTS: InstagramPost[] = [
+export const INSTAGRAM_POSTS: InstagramPost[] = [
   // Geral
   {
     id: 1,
@@ -707,8 +723,52 @@ export const InstagramFeed: React.FC = () => {
   }, [selectedPostModal]);
 
   // Category filter state
-  const [activeCategory, setActiveCategory] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D' | 'Papelaria' | 'Kit Presente' | 'Promoções'>('Geral');
-  const [selectedCategoryForm, setSelectedCategoryForm] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D' | 'Papelaria' | 'Kit Presente' | 'Promoções'>('Geral');
+  const [activeCategory, setActiveCategory] = useState<string>('Geral');
+  const [selectedCategoryForm, setSelectedCategoryForm] = useState<string>('Geral');
+
+  // Category order management state
+  const [categoryOrder, setCategoryOrder] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem('oxente_mural_categories_order');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const set = new Set(parsed);
+          const combined = [...parsed];
+          DEFAULT_MURAL_CATEGORIES.forEach((c) => {
+            if (!set.has(c)) combined.push(c);
+          });
+          return combined;
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return [...DEFAULT_MURAL_CATEGORIES];
+  });
+
+  const [adminTab, setAdminTab] = useState<'fotos' | 'ordem'>('fotos');
+  const [orderSavedNotification, setOrderSavedNotification] = useState(false);
+
+  const moveCategory = (index: number, direction: -1 | 1) => {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= categoryOrder.length) return;
+    const updated = [...categoryOrder];
+    const item = updated.splice(index, 1)[0];
+    updated.splice(newIndex, 0, item);
+    setCategoryOrder(updated);
+    localStorage.setItem('oxente_mural_categories_order', JSON.stringify(updated));
+    setOrderSavedNotification(true);
+    setTimeout(() => setOrderSavedNotification(false), 2500);
+  };
+
+  const handleResetCategoryOrder = () => {
+    const defaults = [...DEFAULT_MURAL_CATEGORIES];
+    setCategoryOrder(defaults);
+    localStorage.setItem('oxente_mural_categories_order', JSON.stringify(defaults));
+    setOrderSavedNotification(true);
+    setTimeout(() => setOrderSavedNotification(false), 2500);
+  };
 
   // URL Auto-Open Logic: Detects link received from WhatsApp and opens the exact photo modal immediately
   useEffect(() => {
@@ -1119,7 +1179,7 @@ export const InstagramFeed: React.FC = () => {
           onTouchEnd={handleCatTouchEnd}
           className="flex flex-nowrap items-center gap-1 min-[360px]:gap-1.5 sm:gap-2.5 overflow-x-auto no-scrollbar py-1 px-0.5 max-w-full select-none cursor-grab active:cursor-grabbing"
         >
-          {(['Geral', 'ABC', 'Formatura', 'Corporativo', 'Laser', 'Impressora 3D', 'Papelaria', 'Kit Presente', 'Promoções'] as const).map((cat) => {
+          {categoryOrder.map((cat) => {
             const isActive = activeCategory === cat;
             return (
               <button
@@ -1435,17 +1495,17 @@ export const InstagramFeed: React.FC = () => {
             id="panel-mural-admin"
           >
             {/* Header / Title */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-stone-800 pb-4 mb-6 gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between border-b border-stone-800 pb-4 mb-4 gap-4">
               <div>
                 <h4 className="text-sm font-mono font-bold text-amber-400 uppercase tracking-widest flex items-center gap-2">
-                  <Sparkles className="h-4 w-4" /> Gerenciador de Fotos do Mural
+                  <Sparkles className="h-4 w-4" /> Painel de Configuração do Mural
                 </h4>
                 <p className="text-[11px] text-stone-400 mt-1">
-                  Adicione novas fotos e gerencie as fotos ativas. Uploads são automaticamente otimizados e comprimidos.
+                  Gerencie fotos, uploads e personalize a sequência dos botões de categorias do mural.
                 </p>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={() => {
@@ -1464,7 +1524,7 @@ export const InstagramFeed: React.FC = () => {
                   className="px-3 py-1.5 rounded-lg border border-stone-800 hover:border-red-500/30 text-[10px] text-stone-400 hover:text-red-400 font-mono flex items-center gap-1.5 transition-all cursor-pointer"
                   title="Apagar fotos customizadas e voltar para as de fábrica"
                 >
-                  <RotateCcw className="h-3 w-3" /> Restaurar Padrões
+                  <RotateCcw className="h-3 w-3" /> Restaurar Fotos
                 </button>
 
                 <button
@@ -1476,202 +1536,348 @@ export const InstagramFeed: React.FC = () => {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-              {/* Form Side - Left */}
-              <form onSubmit={handleSavePost} className="lg:col-span-5 space-y-4">
-                <h5 className="text-xs font-display font-bold text-amber-200 uppercase tracking-wider">Nova Foto</h5>
-                
-                {/* File Upload Selector Block */}
-                <div 
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-stone-800 hover:border-amber-500/30 bg-stone-950/60 rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[140px] relative overflow-hidden group"
-                >
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleImageChange}
-                    accept="image/*"
-                    className="hidden"
-                  />
+            {/* Admin Tabs Switcher */}
+            <div className="flex items-center gap-2 mb-6 border-b border-stone-800 pb-3">
+              <button
+                type="button"
+                onClick={() => setAdminTab('fotos')}
+                className={`px-4 py-2 rounded-xl font-display text-xs uppercase tracking-wider font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                  adminTab === 'fotos'
+                    ? 'bg-amber-400 text-stone-950 shadow-md shadow-amber-500/20'
+                    : 'bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-stone-200 border border-stone-800'
+                }`}
+                id="btn-admin-tab-fotos"
+              >
+                <ImageIcon className="h-4 w-4" />
+                <span>Gerenciar Fotos & Upload</span>
+              </button>
 
-                  {newImage ? (
-                    <div className="absolute inset-0 z-0">
-                      <img 
-                        src={newImage} 
-                        alt="Preview comprimido" 
-                        className="w-full h-full object-cover opacity-30 filter blur-[1px]"
-                      />
-                    </div>
-                  ) : null}
+              <button
+                type="button"
+                onClick={() => setAdminTab('ordem')}
+                className={`px-4 py-2 rounded-xl font-display text-xs uppercase tracking-wider font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                  adminTab === 'ordem'
+                    ? 'bg-amber-400 text-stone-950 shadow-md shadow-amber-500/20'
+                    : 'bg-stone-900 hover:bg-stone-800 text-stone-400 hover:text-stone-200 border border-stone-800'
+                }`}
+                id="btn-admin-tab-ordem"
+              >
+                <ListOrdered className="h-4 w-4" />
+                <span>Ordem dos Botões do Mural</span>
+              </button>
+            </div>
 
-                  <div className="relative z-10 flex flex-col items-center">
-                    {isCompressing ? (
-                      <div className="flex flex-col items-center gap-2">
-                        <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
-                        <span className="text-[10px] text-amber-400 font-mono">Otimizando e comprimindo ao máximo...</span>
-                      </div>
-                    ) : newImage ? (
-                      <div className="flex flex-col items-center gap-1.5">
-                        <CheckCircle className="h-6 w-6 text-emerald-400" />
-                        <span className="text-xs font-bold text-stone-200">Foto Carregada e Comprimida!</span>
-                        <span className="text-[9px] text-emerald-400 font-mono bg-emerald-950/40 border border-emerald-500/20 px-2 py-0.5 rounded-full">Pronta para o site</span>
-                      </div>
-                    ) : (
-                      <>
-                        <Upload className="h-6 w-6 text-stone-500 group-hover:text-amber-400 transition-colors mb-2" />
-                        <span className="text-xs font-bold text-stone-300">Escolha ou Arraste uma Foto Real</span>
-                        <span className="text-[10px] text-stone-500 mt-1">Será comprimida instantaneamente</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-
-                {/* Form fields */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[10px] font-mono uppercase text-amber-400 font-bold mb-1">Categoria / Tema</label>
-                    <select
-                      value={selectedCategoryForm}
-                      onChange={(e) => setSelectedCategoryForm(e.target.value as any)}
-                      className="w-full bg-stone-950 border border-amber-500/30 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-amber-200 font-bold outline-none transition-colors cursor-pointer"
-                    >
-                      <option value="Geral">Geral</option>
-                      <option value="ABC">ABC</option>
-                      <option value="Formatura">Formatura</option>
-                      <option value="Corporativo">Corporativo</option>
-                      <option value="Laser">Laser</option>
-                      <option value="Impressora 3D">Impressora 3D</option>
-                      <option value="Papelaria">Papelaria</option>
-                      <option value="Kit Presente">Kit Presente</option>
-                      <option value="Promoções">Promoções</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Tag / Nome do Produto</label>
+            {/* TAB 1: Photos Management */}
+            {adminTab === 'fotos' && (
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                {/* Form Side - Left */}
+                <form onSubmit={handleSavePost} className="lg:col-span-5 space-y-4">
+                  <h5 className="text-xs font-display font-bold text-amber-200 uppercase tracking-wider">Nova Foto</h5>
+                  
+                  {/* File Upload Selector Block */}
+                  <div 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="border-2 border-dashed border-stone-800 hover:border-amber-500/30 bg-stone-950/60 rounded-xl p-6 text-center cursor-pointer transition-all flex flex-col items-center justify-center min-h-[140px] relative overflow-hidden group"
+                  >
                     <input
-                      type="text"
-                      placeholder="Ex: Copos Long Drink"
-                      value={tag}
-                      onChange={(e) => setTag(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none transition-colors"
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleImageChange}
+                      accept="image/*"
+                      className="hidden"
                     />
-                  </div>
-                </div>
 
-                <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                  <div>
-                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Link do Site / Insta</label>
-                    <input
-                      type="text"
-                      placeholder="https://www.oxentefesteje.com.br/..."
-                      value={link}
-                      onChange={(e) => setLink(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-2.5 py-2 text-xs text-stone-200 outline-none transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Curtidas</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 1.5k"
-                      value={likes}
-                      onChange={(e) => setLikes(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-2.5 py-2 text-xs text-stone-200 outline-none transition-colors"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Comentários</label>
-                    <input
-                      type="number"
-                      placeholder="Ex: 45"
-                      value={comments}
-                      onChange={(e) => setComments(e.target.value)}
-                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-2.5 py-2 text-xs text-stone-200 outline-none transition-colors"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Legenda da Foto</label>
-                  <textarea
-                    placeholder="Digite uma bela legenda para o mural..."
-                    rows={2}
-                    value={caption}
-                    onChange={(e) => setCaption(e.target.value)}
-                    className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none resize-none transition-colors"
-                  />
-                </div>
-
-                {submitStatus && (
-                  <div className={`p-2.5 rounded-lg text-[11px] font-sans flex items-center gap-2 ${
-                    submitStatus.type === 'success' 
-                      ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/20' 
-                      : 'bg-red-950/40 text-red-300 border border-red-500/20'
-                  }`}>
-                    {submitStatus.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                    <span>{submitStatus.message}</span>
-                  </div>
-                )}
-
-                <button
-                  type="submit"
-                  disabled={isSaving || isCompressing}
-                  className="w-full bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-stone-950 font-display font-black text-xs uppercase tracking-wider py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  {isSaving ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
-                      Salvando...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4" /> Adicionar ao Mural
-                    </>
-                  )}
-                </button>
-              </form>
-
-              {/* Photo List Side - Right */}
-              <div className="lg:col-span-7 space-y-4">
-                <h5 className="text-xs font-display font-bold text-amber-200 uppercase tracking-wider">
-                  Fotos Ativas no Mural ({activePosts.length})
-                </h5>
-
-                <div className="max-h-[360px] overflow-y-auto pr-2 space-y-2 border border-stone-800/60 bg-stone-950/20 rounded-2xl p-3 scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent">
-                  {activePosts.map((post) => (
-                    <div 
-                      key={post.id}
-                      className="flex items-center gap-3 bg-stone-950/50 border border-stone-800/60 p-2 rounded-xl group hover:border-amber-500/10 transition-colors"
-                    >
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-stone-900 border border-stone-800 flex-shrink-0">
+                    {newImage ? (
+                      <div className="absolute inset-0 z-0">
                         <img 
-                          src={post.imageUrl} 
-                          alt="" 
-                          className="w-full h-full object-cover"
+                          src={newImage} 
+                          alt="Preview comprimido" 
+                          className="w-full h-full object-cover opacity-30 filter blur-[1px]"
                         />
                       </div>
+                    ) : null}
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-mono font-bold text-amber-300 uppercase tracking-wider">{post.tag}</span>
-                          <span className="text-[9px] text-stone-500">❤️ {post.likes}</span>
+                    <div className="relative z-10 flex flex-col items-center">
+                      {isCompressing ? (
+                        <div className="flex flex-col items-center gap-2">
+                          <div className="w-6 h-6 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                          <span className="text-[10px] text-amber-400 font-mono">Otimizando e comprimindo ao máximo...</span>
                         </div>
-                        <p className="text-[11px] text-stone-300 truncate mt-0.5">{post.caption}</p>
-                      </div>
-
-                      <button
-                        type="button"
-                        onClick={() => handleDeletePost(post.id)}
-                        className="p-2 text-stone-500 hover:text-red-400 hover:bg-red-950/20 rounded-lg transition-colors cursor-pointer"
-                        title="Remover esta foto"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      ) : newImage ? (
+                        <div className="flex flex-col items-center gap-1.5">
+                          <CheckCircle className="h-6 w-6 text-emerald-400" />
+                          <span className="text-xs font-bold text-stone-200">Foto Carregada e Comprimida!</span>
+                          <span className="text-[9px] text-emerald-400 font-mono bg-emerald-950/40 border border-emerald-500/20 px-2 py-0.5 rounded-full">Pronta para o site</span>
+                        </div>
+                      ) : (
+                        <>
+                          <Upload className="h-6 w-6 text-stone-500 group-hover:text-amber-400 transition-colors mb-2" />
+                          <span className="text-xs font-bold text-stone-300">Escolha ou Arraste uma Foto Real</span>
+                          <span className="text-[10px] text-stone-500 mt-1">Será comprimida instantaneamente</span>
+                        </>
+                      )}
                     </div>
-                  ))}
+                  </div>
+
+                  {/* Form fields */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[10px] font-mono uppercase text-amber-400 font-bold mb-1">Categoria / Tema</label>
+                      <select
+                        value={selectedCategoryForm}
+                        onChange={(e) => setSelectedCategoryForm(e.target.value as any)}
+                        className="w-full bg-stone-950 border border-amber-500/30 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-amber-200 font-bold outline-none transition-colors cursor-pointer"
+                      >
+                        {categoryOrder.map((cat) => (
+                          <option key={cat} value={cat}>{cat}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Tag / Nome do Produto</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Copos Long Drink"
+                        value={tag}
+                        onChange={(e) => setTag(e.target.value)}
+                        className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                    <div>
+                      <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Link do Site / Insta</label>
+                      <input
+                        type="text"
+                        placeholder="https://www.oxentefesteje.com.br/..."
+                        value={link}
+                        onChange={(e) => setLink(e.target.value)}
+                        className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-2.5 py-2 text-xs text-stone-200 outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Curtidas</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 1.5k"
+                        value={likes}
+                        onChange={(e) => setLikes(e.target.value)}
+                        className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-2.5 py-2 text-xs text-stone-200 outline-none transition-colors"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Comentários</label>
+                      <input
+                        type="number"
+                        placeholder="Ex: 45"
+                        value={comments}
+                        onChange={(e) => setComments(e.target.value)}
+                        className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-2.5 py-2 text-xs text-stone-200 outline-none transition-colors"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Legenda da Foto</label>
+                    <textarea
+                      placeholder="Digite uma bela legenda para o mural..."
+                      rows={2}
+                      value={caption}
+                      onChange={(e) => setCaption(e.target.value)}
+                      className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-3 py-2 text-xs text-stone-200 outline-none resize-none transition-colors"
+                    />
+                  </div>
+
+                  {submitStatus && (
+                    <div className={`p-2.5 rounded-lg text-[11px] font-sans flex items-center gap-2 ${
+                      submitStatus.type === 'success' 
+                        ? 'bg-emerald-950/40 text-emerald-300 border border-emerald-500/20' 
+                        : 'bg-red-950/40 text-red-300 border border-red-500/20'
+                    }`}>
+                      {submitStatus.type === 'success' ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                      <span>{submitStatus.message}</span>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isSaving || isCompressing}
+                    className="w-full bg-gradient-to-r from-amber-500 to-rose-600 hover:from-amber-400 hover:to-rose-500 text-stone-950 font-display font-black text-xs uppercase tracking-wider py-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-stone-950 border-t-transparent rounded-full animate-spin" />
+                        Salvando...
+                      </>
+                    ) : (
+                      <>
+                        <Plus className="h-4 w-4" /> Adicionar ao Mural
+                      </>
+                    )}
+                  </button>
+                </form>
+
+                {/* Photo List Side - Right */}
+                <div className="lg:col-span-7 space-y-4">
+                  <h5 className="text-xs font-display font-bold text-amber-200 uppercase tracking-wider">
+                    Fotos Ativas no Mural ({activePosts.length})
+                  </h5>
+
+                  <div className="max-h-[360px] overflow-y-auto pr-2 space-y-2 border border-stone-800/60 bg-stone-950/20 rounded-2xl p-3 scrollbar-thin scrollbar-thumb-stone-800 scrollbar-track-transparent">
+                    {activePosts.map((post) => (
+                      <div 
+                        key={post.id}
+                        className="flex items-center gap-3 bg-stone-950/50 border border-stone-800/60 p-2 rounded-xl group hover:border-amber-500/10 transition-colors"
+                      >
+                        <div className="w-12 h-12 rounded-lg overflow-hidden bg-stone-900 border border-stone-800 flex-shrink-0">
+                          <img 
+                            src={post.imageUrl} 
+                            alt="" 
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-mono font-bold text-amber-300 uppercase tracking-wider">{post.tag}</span>
+                            <span className="text-[9px] text-stone-500">❤️ {post.likes}</span>
+                          </div>
+                          <p className="text-[11px] text-stone-300 truncate mt-0.5">{post.caption}</p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleDeletePost(post.id)}
+                          className="p-2 text-stone-500 hover:text-red-400 hover:bg-red-950/20 rounded-lg transition-colors cursor-pointer"
+                          title="Remover esta foto"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
+
+            {/* TAB 2: Categories Order Management */}
+            {adminTab === 'ordem' && (
+              <div className="space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-stone-950/60 border border-stone-800 p-4 rounded-2xl">
+                  <div>
+                    <h5 className="text-xs font-display font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">
+                      <ListOrdered className="h-4 w-4" /> Ordenar Botões de Categorias
+                    </h5>
+                    <p className="text-[11px] text-stone-400 mt-1">
+                      Use os botões de subir e descer para reposicionar as abas do mural. A ordem é salva automaticamente.
+                    </p>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {orderSavedNotification && (
+                      <span className="text-[11px] text-emerald-400 font-mono bg-emerald-950/60 border border-emerald-500/30 px-3 py-1.5 rounded-xl flex items-center gap-1.5 animate-fade-in">
+                        <Check className="h-3.5 w-3.5" /> Salvo!
+                      </span>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleResetCategoryOrder}
+                      className="px-3 py-1.5 rounded-xl border border-stone-800 hover:border-amber-500/40 text-[11px] text-stone-300 hover:text-amber-200 font-mono flex items-center gap-1.5 transition-colors cursor-pointer bg-stone-900"
+                      title="Voltar à sequência padrão de fábrica"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" /> Restaurar Ordem Padrão
+                    </button>
+                  </div>
+                </div>
+
+                {/* Categories List Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {categoryOrder.map((cat, index) => {
+                    const postCount = posts.filter(p => (p.categoria || 'Geral') === cat).length;
+                    const isFirst = index === 0;
+                    const isLast = index === categoryOrder.length - 1;
+
+                    return (
+                      <div
+                        key={cat}
+                        className="flex items-center justify-between p-3 rounded-2xl bg-stone-950/70 border border-stone-800 hover:border-amber-500/30 transition-all group"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="w-6 h-6 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300 text-[10px] font-mono font-black flex items-center justify-center shrink-0">
+                            {index + 1}
+                          </span>
+
+                          <div className="min-w-0">
+                            <div className="font-display font-bold text-xs sm:text-sm text-stone-100 uppercase tracking-wide truncate">
+                              {cat}
+                            </div>
+                            <div className="text-[10px] text-stone-500 font-mono">
+                              {postCount} {postCount === 1 ? 'foto' : 'fotos'} no catálogo
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Order Controls */}
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => moveCategory(index, -1)}
+                            disabled={isFirst}
+                            className={`p-2 rounded-xl transition-all cursor-pointer ${
+                              isFirst 
+                                ? 'opacity-20 text-stone-600 cursor-not-allowed' 
+                                : 'bg-stone-900 hover:bg-amber-400 text-stone-300 hover:text-stone-950 active:scale-95 border border-stone-800'
+                            }`}
+                            title="Mover para cima / esquerda"
+                            aria-label={`Mover ${cat} para a esquerda`}
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => moveCategory(index, 1)}
+                            disabled={isLast}
+                            className={`p-2 rounded-xl transition-all cursor-pointer ${
+                              isLast 
+                                ? 'opacity-20 text-stone-600 cursor-not-allowed' 
+                                : 'bg-stone-900 hover:bg-amber-400 text-stone-300 hover:text-stone-950 active:scale-95 border border-stone-800'
+                            }`}
+                            title="Mover para baixo / direita"
+                            aria-label={`Mover ${cat} para a direita`}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Live Preview Strip */}
+                <div className="bg-stone-950/40 border border-stone-800/80 rounded-2xl p-4">
+                  <div className="text-[10px] font-mono uppercase text-amber-400 font-bold mb-2 flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5" /> Pré-visualização da barra no site:
+                  </div>
+                  <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+                    {categoryOrder.map((cat, idx) => (
+                      <span
+                        key={cat}
+                        className={`px-3 py-1 rounded-full text-[10px] font-display font-bold uppercase whitespace-nowrap ${
+                          idx === 0 
+                            ? 'bg-gradient-to-r from-amber-400 to-yellow-300 text-stone-950 border border-yellow-200' 
+                            : 'bg-amber-500/10 text-amber-300 border border-amber-400/30'
+                        }`}
+                      >
+                        {cat}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1777,23 +1983,8 @@ export const InstagramFeed: React.FC = () => {
                   </p>
                 )}
 
-                {/* Copy Feedback Notification */}
-                <AnimatePresence>
-                  {copyFeedback && (
-                    <motion.div
-                      initial={{ opacity: 0, y: 5 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -5 }}
-                      className="mb-3 px-3 py-2 bg-emerald-950/90 border border-emerald-500/50 rounded-xl text-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 text-center shadow-lg"
-                    >
-                      <Check className="h-4 w-4 text-emerald-400 shrink-0" />
-                      <span>{copyFeedback}</span>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-
                 {/* Action Buttons */}
-                <div className="space-y-2 sm:space-y-2.5">
+                <div className="space-y-2.5">
                   {/* Button 1: WhatsApp Quote Button with Photo & Model pre-filled */}
                   <button
                     type="button"
@@ -1806,28 +1997,6 @@ export const InstagramFeed: React.FC = () => {
                     </svg>
                     <span>Pedir Orçamento no WhatsApp</span>
                   </button>
-
-                  {/* Photo tools: Copy & Download */}
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => handleCopyPhoto(selectedPostModal)}
-                      className="bg-zinc-800/90 hover:bg-zinc-700 text-stone-200 hover:text-white text-xs font-semibold py-2 px-3 rounded-xl border border-zinc-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                      title="Copiar imagem para colar no WhatsApp"
-                    >
-                      <Copy className="h-3.5 w-3.5 text-amber-400" />
-                      <span>Copiar Foto</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleDownloadPhoto(selectedPostModal)}
-                      className="bg-zinc-800/90 hover:bg-zinc-700 text-stone-200 hover:text-white text-xs font-semibold py-2 px-3 rounded-xl border border-zinc-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                      title="Baixar imagem no aparelho"
-                    >
-                      <Download className="h-3.5 w-3.5 text-amber-400" />
-                      <span>Baixar Foto</span>
-                    </button>
-                  </div>
 
                   {/* Button 2: Store / Instagram Details Button */}
                   <a

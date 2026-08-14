@@ -57,6 +57,7 @@ import { SchedulingManager } from './components/SchedulingManager';
 import QrScannerTab from './components/QrScannerTab';
 import { OrderTrackingPage } from './components/OrderTrackingPage';
 import { LandingPage } from './components/LandingPage';
+import { SystemProductPhotoModal } from './components/SystemProductPhotoModal';
 import { disableGoogleAds } from './lib/analytics';
 
 import { Product, Sale, StoreInfo } from './types';
@@ -2327,7 +2328,7 @@ export default function App() {
     }
   };
 
-  if (isDirectMuralUrl() || (!isLandingBypassed && userStatus !== 'approved')) {
+  if ((!isLandingBypassed && userStatus !== 'approved') || (isDirectMuralUrl() && userStatus !== 'approved')) {
     return (
       <LandingPage 
         onUnlockSystem={() => {
@@ -3004,6 +3005,9 @@ export default function App() {
           />
         )}
       </AnimatePresence>
+
+      {/* WhatsApp / Mural Product Photo Quick Inspector for logged-in System */}
+      <SystemProductPhotoModal />
 
     </div>
   );
