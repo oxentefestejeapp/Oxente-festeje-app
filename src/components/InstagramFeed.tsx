@@ -653,40 +653,32 @@ export const InstagramFeed: React.FC = () => {
     }
   };
 
-  // Dispatch to WhatsApp or Native Share
+  // Dispatch to WhatsApp directly to store number 83988859302 with product details & image
   const handleSendToWhatsApp = async (post: InstagramPost) => {
     const phone = '5583988859302';
     
+    // Auto-copy photo in background for desktop Ctrl+V paste convenience
+    handleCopyPhoto(post).catch(() => {});
+
     let msg = `Olá, equipe Oxente Festeje! 👋\n`;
-    msg += `Gostaria de um orçamento sobre este modelo que vi no mural:\n\n`;
+    msg += `Gostaria de um orçamento sobre este produto:\n\n`;
     if (post.tag) msg += `🏷️ *Modelo:* ${post.tag}\n`;
     if (post.categoria) msg += `✨ *Categoria:* ${post.categoria}\n`;
     if (post.caption) msg += `📝 *Detalhes:* ${post.caption}\n`;
     
-    // Auto-copy photo in background
-    handleCopyPhoto(post).catch(() => {});
-
-    // Try native share on mobile if supported
-    try {
-      const blob = await imageSrcToBlob(post.imageUrl);
-      if (blob.size > 0 && navigator.canShare) {
-        const safeName = (post.tag || 'produto').toLowerCase().replace(/[^a-z0-9]/gi, '-');
-        const file = new File([blob], `${safeName}.png`, { type: 'image/png' });
-        if (navigator.canShare({ files: [file] })) {
-          await navigator.share({
-            title: `Orçamento Oxente Festeje - ${post.tag || 'Produto'}`,
-            text: msg,
-            files: [file]
-          });
-          return;
-        }
-      }
-    } catch (e) {
-      console.log('Native share ignorado ou cancelado:', e);
+    // Add direct photo URL if it's a web/supabase URL so WhatsApp generates thumbnail preview
+    if (post.imageUrl && !post.imageUrl.startsWith('data:')) {
+      msg += `\n📸 *Foto do Modelo:* ${post.imageUrl}\n`;
     }
 
-    // Direct WhatsApp Web / App redirect
+    if (post.link && post.link !== 'https://www.instagram.com/oxentefesteje/') {
+      msg += `🔗 *Instagram:* ${post.link}\n`;
+    }
+
+    // Direct WhatsApp redirect to the store's phone number
     const waUrl = `https://api.whatsapp.com/send/?phone=${phone}&text=${encodeURIComponent(msg)}&type=phone_number&app_absent=0`;
+    
+    // Open WhatsApp directly
     window.open(waUrl, '_blank');
   };
 
