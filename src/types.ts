@@ -279,15 +279,20 @@ export function calculateSaleItemUnitCost(
     return 0;
   }
 
+  // 1. If item has a custom/historical custoUn explicitly saved on it (e.g. custom avulso cost or specific product cost)
+  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
+    return item.custoUn;
+  }
+
   const nameToMatch = item.produtoNome || item.nome;
   const matchingProduct = findMatchingProduct(item.produtoId, nameToMatch, products);
 
   if (matchingProduct) {
-    // 1. If matching product in catalog has an explicit precoCusto configured:
+    // 2. If matching product in catalog has an explicit precoCusto configured:
     if (matchingProduct.precoCusto !== undefined && matchingProduct.precoCusto !== null && !isNaN(matchingProduct.precoCusto)) {
       return matchingProduct.precoCusto;
     }
-    // 2. If matching product in catalog has a base catalog price, estimate unit cost from the CATALOG base price
+    // 3. If matching product in catalog has a base catalog price, estimate unit cost from the CATALOG base price
     // (so that discounts or edited sale prices do not distort physical product unit cost)
     const baseCatalogPrice = matchingProduct.preco || (matchingProduct.faixasPreco && matchingProduct.faixasPreco.length > 0 ? matchingProduct.faixasPreco[0].preco : 0);
     if (baseCatalogPrice > 0) {
@@ -295,11 +300,6 @@ export function calculateSaleItemUnitCost(
     }
   }
 
-  // 3. If item has a custom/historical custoUn explicitly saved on it
-  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn)) {
-    return item.custoUn;
-  }
-
-  // Fallback for avulso / uncataloged items
+  // Fallback for avulso / uncataloged items if no custom cost was set
   return item.precoUn * 0.62;
 }

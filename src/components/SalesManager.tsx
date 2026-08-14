@@ -213,11 +213,12 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   };
   
   // Cart state for multi-product orders
-  const [cart, setCart] = useState<{ id: string; product: Product; quantity: number; total: number; addons: Product[]; corSelecionada?: string; customNome?: string; customPreco?: number }[]>([]);
+  const [cart, setCart] = useState<{ id: string; product: Product; quantity: number; total: number; addons: Product[]; corSelecionada?: string; customNome?: string; customPreco?: number; customCusto?: number }[]>([]);
 
-  // Custom name and price for "Produtos lisos" (liso products)
+  // Custom name, price and cost for "Produtos lisos" / "Produtos avulsos"
   const [customNome, setCustomNome] = useState('');
   const [customPreco, setCustomPreco] = useState('');
+  const [customCusto, setCustomCusto] = useState('');
 
   // Selected Addon Product IDs
   const [selectedAddonIds, setSelectedAddonIds] = useState<string[]>([]);
@@ -300,6 +301,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [selectedAddProductId, setSelectedAddProductId] = useState('');
   const [editCustomNome, setEditCustomNome] = useState('');
   const [editCustomPreco, setEditCustomPreco] = useState('');
+  const [editCustomCusto, setEditCustomCusto] = useState('');
   const [editArteDesign, setEditArteDesign] = useState(false);
   const [editSegundaArte, setEditSegundaArte] = useState(false);
   const [editTemTaxaUrgencia, setEditTemTaxaUrgencia] = useState(false);
@@ -823,10 +825,12 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         setFormError('Por favor, informe um preço unitário válido para o Produto Avulso.');
         return;
       }
+      const custoNum = customCusto.trim() ? parseFloat(customCusto.replace(',', '.')) : undefined;
       prod = {
         id: `avulso-${Date.now()}`,
         nome: customNome.trim(),
         preco: priceNum,
+        precoCusto: (custoNum !== undefined && !isNaN(custoNum) && custoNum >= 0) ? custoNum : undefined,
         estoque: 999,
         estoqueInfinito: true
       };
@@ -851,6 +855,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     let unitPrice = isAvulsoProduct ? parseFloat(customPreco.replace(',', '.')) : getProductUnitPrice(prod, qtyNum);
     let customNameVal: string | undefined;
     let customPriceVal: number | undefined;
+    let customCustoVal: number | undefined = isAvulsoProduct && customCusto.trim() ? parseFloat(customCusto.replace(',', '.')) : undefined;
+    if (customCustoVal !== undefined && (isNaN(customCustoVal) || customCustoVal < 0)) {
+      customCustoVal = undefined;
+    }
 
     if (isLisoProduct || isAvulsoProduct) {
       if (!customNome.trim()) {
@@ -888,7 +896,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         addons: currentAddons,
         corSelecionada: selectedColor || undefined,
         customNome: customNameVal,
-        customPreco: customPriceVal
+        customPreco: customPriceVal,
+        customCusto: customCustoVal
       }
     ]);
 
@@ -902,6 +911,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setSelectedAddonIds([]);
     setCustomNome('');
     setCustomPreco('');
+    setCustomCusto('');
     setSuccessMsg(`"${finalProdName}"${selectedColor ? ` (${selectedColor})` : ''} adicionado ao carrinho!`);
     setTimeout(() => setSuccessMsg(''), 2500);
   };
@@ -944,6 +954,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         // Adiciona o produto principal com corSelecionada e preço progressivo
         const effectiveQty = getCartItemEffectiveQty(item, cart);
         const mainUnitPrice = item.customPreco !== undefined ? item.customPreco : getProductUnitPrice(item.product, effectiveQty);
+        const itemCusto = item.customCusto !== undefined && !isNaN(item.customCusto)
+          ? item.customCusto
+          : (item.product.precoCusto !== undefined && item.product.precoCusto !== null && !isNaN(item.product.precoCusto) ? item.product.precoCusto : undefined);
+
         itemsList.push({
           id: item.id,
           produtoId: item.product.id,
@@ -951,20 +965,23 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
           precoUn: mainUnitPrice,
           quantidade: item.quantity,
           total: mainUnitPrice * item.quantity,
-          corSelecionada: item.corSelecionada
+          corSelecionada: item.corSelecionada,
+          custoUn: itemCusto
         });
 
         // Adiciona os adicionais deste item do carrinho
         if (item.addons && item.addons.length > 0) {
           for (const addon of item.addons) {
             const addonPrice = getProductUnitPrice(addon, effectiveQty);
+            const addonCost = addon.precoCusto !== undefined && addon.precoCusto !== null && !isNaN(addon.precoCusto) ? addon.precoCusto : undefined;
             itemsList.push({
               id: `item-${addon.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
               produtoId: addon.id,
               produtoNome: `Adicional: ${addon.nome}`,
               precoUn: addonPrice,
               quantidade: item.quantity,
-              total: addonPrice * item.quantity
+              total: addonPrice * item.quantity,
+              custoUn: addonCost
             });
           }
         }
@@ -973,6 +990,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     } else {
       let finalProdName = '';
       let progressiveUnitPrice = 0;
+      let singleItemCusto: number | undefined = undefined;
 
       if (isAvulsoProduct) {
         if (!customNome.trim()) {
@@ -984,6 +1002,10 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
           setFormError('Por favor, informe um preço unitário válido para o Produto Avulso.');
           return;
         }
+        const custoNum = customCusto.trim() ? parseFloat(customCusto.replace(',', '.')) : undefined;
+        if (custoNum !== undefined && !isNaN(custoNum) && custoNum >= 0) {
+          singleItemCusto = custoNum;
+        }
         finalProdName = customNome.trim();
         progressiveUnitPrice = priceNum;
       } else {
@@ -993,6 +1015,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         }
         finalProdName = selectedProduct.nome;
         progressiveUnitPrice = getProductUnitPrice(selectedProduct, Number(quantidade) || 1);
+        if (selectedProduct.precoCusto !== undefined && selectedProduct.precoCusto !== null && !isNaN(selectedProduct.precoCusto)) {
+          singleItemCusto = selectedProduct.precoCusto;
+        }
         if (isLisoProduct) {
           if (!customNome.trim()) {
             setFormError('Por favor, digite o nome/descrição para o Produto Liso.');
@@ -1018,13 +1043,15 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         const addon = products.find(p => p.id === addonId);
         if (addon) {
           const addonPrice = getProductUnitPrice(addon, qtyNum);
+          const addonCost = addon.precoCusto !== undefined && addon.precoCusto !== null && !isNaN(addon.precoCusto) ? addon.precoCusto : undefined;
           addonItems.push({
             id: `item-${addon.id}-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
             produtoId: addon.id,
             produtoNome: `Adicional: ${addon.nome}`,
             precoUn: addonPrice,
             quantidade: qtyNum,
-            total: addonPrice * qtyNum
+            total: addonPrice * qtyNum,
+            custoUn: addonCost
           });
         }
       }
@@ -1037,7 +1064,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
           precoUn: progressiveUnitPrice,
           quantidade: qtyNum,
           total: progressiveUnitPrice * qtyNum,
-          corSelecionada: selectedColor || undefined
+          corSelecionada: selectedColor || undefined,
+          custoUn: singleItemCusto
         },
         ...addonItems
       ];
@@ -1220,6 +1248,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setSelectedAddonIds([]);
     setCustomNome('');
     setCustomPreco('');
+    setCustomCusto('');
     setArteDesign(false);
     setSegundaArte(false);
     setTemTaxaUrgencia(false);
@@ -2074,6 +2103,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                       if (e.target.value === 'produto-avulso') {
                         setCustomNome('');
                         setCustomPreco('');
+                        setCustomCusto('');
                       }
                     }}
                     className="w-full px-4 py-2.5 border border-zinc-800 rounded-xl bg-black focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-150 text-sm"
@@ -2111,7 +2141,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     <Sparkles className="h-4 w-4 text-purple-400" />
                     <span>📦 Lançar Produto Avulso (Fora do Estoque)</span>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div>
                       <label htmlFor="custom-avulso-nome" className="block text-[10px] font-semibold text-zinc-400 mb-1">
                         Nome do Produto <span className="text-brand-pink font-bold">*</span>
@@ -2127,7 +2157,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     </div>
                     <div>
                       <label htmlFor="custom-avulso-preco" className="block text-[10px] font-semibold text-zinc-400 mb-1">
-                        Preço Unitário (R$) <span className="text-brand-pink font-bold">*</span>
+                        Preço de Venda (R$) <span className="text-brand-pink font-bold">*</span>
                       </label>
                       <input
                         id="custom-avulso-preco"
@@ -2138,9 +2168,23 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                         placeholder="Ex: 85.00"
                       />
                     </div>
+                    <div>
+                      <label htmlFor="custom-avulso-custo" className="block text-[10px] font-semibold text-emerald-400 mb-1 flex items-center justify-between">
+                        <span>Preço de Custo (R$)</span>
+                        <span className="text-[9px] text-zinc-500 font-normal">(p/ lucro)</span>
+                      </label>
+                      <input
+                        id="custom-avulso-custo"
+                        type="text"
+                        value={customCusto}
+                        onChange={(e) => setCustomCusto(e.target.value)}
+                        className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-emerald-500 text-xs text-emerald-300 placeholder-zinc-700 font-mono"
+                        placeholder="Ex: 35.00"
+                      />
+                    </div>
                   </div>
                   <p className="text-[10px] text-zinc-500 leading-normal">
-                    Informe o nome e o valor unitário. O recibo sairá com o nome exato digitado acima (<strong>{customNome.trim() || 'Nome do produto'}</strong>) sem aparecer como &quot;Produto Avulso&quot;.
+                    Informe o nome, preço de venda e preço de custo unitário. O lucro real deste produto avulso será calculado com base no custo informado acima.
                   </p>
                 </div>
               )}
@@ -3783,6 +3827,26 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                               />
                             </div>
 
+                            {/* Cost Override */}
+                            <div className="relative w-20" title="Preço de Custo Unitário">
+                              <span className="absolute left-1.5 inset-y-0 flex items-center text-[9px] text-emerald-500/70 select-none font-sans">C$</span>
+                              <input
+                                type="number"
+                                step="0.01"
+                                placeholder="Custo"
+                                value={item.custoUn !== undefined ? item.custoUn : ''}
+                                onChange={(e) => {
+                                  const cVal = e.target.value === '' ? undefined : (parseFloat(e.target.value) || 0);
+                                  const updated = editItens.map((it, i) => i === idx ? {
+                                    ...it,
+                                    custoUn: cVal
+                                  } : it);
+                                  setEditItens(updated);
+                                }}
+                                className="w-full bg-black border border-emerald-900/50 rounded-lg pl-5 pr-1 py-1 text-right text-xs font-semibold text-emerald-300 focus:outline-none focus:border-emerald-500 font-mono placeholder-zinc-700"
+                              />
+                            </div>
+
                             {/* Remove button */}
                             {editItens.length > 1 && (
                               <button
@@ -3813,6 +3877,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                           setSelectedAddProductId(e.target.value);
                           setEditCustomNome('');
                           setEditCustomPreco('');
+                          setEditCustomCusto('');
                         }}
                         className="flex-1 bg-black border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-350 focus:outline-none focus:border-brand-pink cursor-pointer font-medium"
                       >
@@ -3839,6 +3904,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                               alert('Por favor, informe um preço unitário válido para o Produto Avulso.');
                               return;
                             }
+                            const custoNum = editCustomCusto.trim() ? parseFloat(editCustomCusto.replace(',', '.')) : undefined;
                             const uniqueIdSuffix = Math.random().toString(36).substring(2, 7);
                             setEditItens([
                               ...editItens,
@@ -3848,12 +3914,14 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                                 produtoNome: editCustomNome.trim(),
                                 precoUn: priceNum,
                                 quantidade: 1,
-                                total: priceNum
+                                total: priceNum,
+                                custoUn: (custoNum !== undefined && !isNaN(custoNum) && custoNum >= 0) ? custoNum : undefined
                               }
                             ]);
                             setSelectedAddProductId('');
                             setEditCustomNome('');
                             setEditCustomPreco('');
+                            setEditCustomCusto('');
                             return;
                           }
 
@@ -3886,12 +3954,14 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                                 produtoNome: finalName,
                                 precoUn: finalPrice,
                                 quantidade: 1,
-                                total: finalPrice
+                                total: finalPrice,
+                                custoUn: dbProd.precoCusto
                               }
                             ]);
                             setSelectedAddProductId('');
                             setEditCustomNome('');
                             setEditCustomPreco('');
+                            setEditCustomCusto('');
                           }
                         }}
                         className="py-1.5 px-3 bg-brand-pink/15 hover:bg-brand-pink border border-brand-pink/35 text-brand-pink hover:text-black font-bold rounded-lg text-[11px] transition-all cursor-pointer whitespace-nowrap active:scale-95"
@@ -3903,7 +3973,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     {isAvulsoEditProduct && (
                       <div className="p-3 bg-purple-950/20 border border-purple-500/30 rounded-lg space-y-2 text-left animate-fade-in">
                         <div className="text-[10px] font-bold text-purple-400 uppercase">📦 Lançar Produto Avulso na Edição</div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                           <div>
                             <label htmlFor="edit-custom-avulso-nome" className="block text-[9px] text-zinc-400 mb-0.5 font-bold">Nome do Produto *</label>
                             <input
@@ -3916,7 +3986,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                             />
                           </div>
                           <div>
-                            <label htmlFor="edit-custom-avulso-preco" className="block text-[9px] text-zinc-400 mb-0.5 font-bold">Preço Unitário (R$) *</label>
+                            <label htmlFor="edit-custom-avulso-preco" className="block text-[9px] text-zinc-400 mb-0.5 font-bold">Preço de Venda (R$) *</label>
                             <input
                               id="edit-custom-avulso-preco"
                               type="text"
@@ -3924,6 +3994,17 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                               onChange={(e) => setEditCustomPreco(e.target.value)}
                               className="w-full px-2.5 py-1 bg-black border border-zinc-800 rounded focus:outline-none focus:border-purple-500 text-xs text-zinc-150 font-mono placeholder-zinc-700"
                               placeholder="Ex: 85.00"
+                            />
+                          </div>
+                          <div>
+                            <label htmlFor="edit-custom-avulso-custo" className="block text-[9px] text-emerald-400 mb-0.5 font-bold">Preço de Custo (R$)</label>
+                            <input
+                              id="edit-custom-avulso-custo"
+                              type="text"
+                              value={editCustomCusto}
+                              onChange={(e) => setEditCustomCusto(e.target.value)}
+                              className="w-full px-2.5 py-1 bg-black border border-zinc-800 rounded focus:outline-none focus:border-emerald-500 text-xs text-emerald-300 font-mono placeholder-zinc-700"
+                              placeholder="Ex: 35.00"
                             />
                           </div>
                         </div>
