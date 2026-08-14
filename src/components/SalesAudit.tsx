@@ -20,7 +20,12 @@ import {
   ChevronDown,
   ChevronUp,
   TrendingUp,
-  Activity
+  Activity,
+  Package,
+  ArrowUpDown,
+  Percent,
+  Calculator,
+  ArrowUpRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -34,10 +39,44 @@ import {
   BarChart, 
   Bar, 
   Cell,
-  Legend
+  Legend,
+  ComposedChart,
+  Line
 } from 'recharts';
 import { Sale, StoreInfo, Product, getProductUnitCost, calculateSaleItemUnitCost } from '../types';
 import { Receipt } from './Receipt';
+
+export const isAvulsoItem = (item: { produtoId?: string; produtoNome?: string; nome?: string; custoUn?: number }) => {
+  if (!item) return false;
+  if (item.produtoId?.startsWith('avulso-') || item.produtoId === 'produto-avulso' || item.produtoId?.startsWith('custom-')) return true;
+  if (item.produtoNome?.toLowerCase().includes('avulso') || item.nome?.toLowerCase().includes('avulso')) return true;
+  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn)) return true;
+  return false;
+};
+
+export const isAvulsoSale = (sale: Sale, products: Product[] = []) => {
+  if (sale.produtoId?.startsWith('avulso-') || sale.produtoId === 'produto-avulso' || sale.produtoId?.startsWith('custom-')) {
+    return true;
+  }
+  if (sale.produtoNome?.toLowerCase().includes('avulso')) {
+    return true;
+  }
+  if (sale.itens && sale.itens.some(item => isAvulsoItem(item))) {
+    return true;
+  }
+  if (products.length > 0) {
+    if (sale.itens && sale.itens.length > 0) {
+      return sale.itens.some(it => {
+        const found = products.find(p => p.id === it.produtoId || p.nome?.toLowerCase() === it.produtoNome?.toLowerCase());
+        return !found && it.produtoId !== 'taxacartao-service' && !it.produtoId?.endsWith('-service');
+      });
+    } else {
+      const found = products.find(p => p.id === sale.produtoId || p.nome?.toLowerCase() === sale.produtoNome?.toLowerCase());
+      return !found && sale.produtoId !== 'taxacartao-service' && !sale.produtoId?.endsWith('-service');
+    }
+  }
+  return false;
+};
 
 const formatAuditDate = (dateStr?: string) => {
   if (!dateStr) return '';
@@ -210,10 +249,11 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
   const [startDateStr, setStartDateStr] = useState('');
   const [endDateStr, setEndDateStr] = useState('');
   const [selectedUserFilter, setSelectedUserFilter] = useState<string>('all');
-  const [specialFilter, setSpecialFilter] = useState<'all' | 'edited' | 'has_designer' | 'finished_art'>('all');
+  const [specialFilter, setSpecialFilter] = useState<'all' | 'avulso' | 'edited' | 'has_designer' | 'finished_art'>('all');
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
   const [showCharts, setShowCharts] = useState(true);
-  const [auditChartTab, setAuditChartTab] = useState<'daily' | 'monthly'>('daily');
+  const [auditChartTab, setAuditChartTab] = useState<'daily' | 'monthly' | 'avulso'>('daily');
+  const [avulsoSortBy, setAvulsoSortBy] = useState<'recent' | 'profit_desc' | 'profit_asc' | 'margin_desc' | 'sales_desc'>('recent');
 
   // User Comparison specific filters
   const [compDateFilter, setCompDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('all');
@@ -373,6 +413,9 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
       }
 
       // 1.5. Special Audit Filter
+      if (specialFilter === 'avulso' && !isAvulsoSale(sale, products)) {
+        return false;
+      }
       if (specialFilter === 'edited' && !sale.foiAlterado) {
         return false;
       }
@@ -623,6 +666,177 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
     };
   }, [sales, products]);
 
+  // Memoized Analytics for Avulso (Uncataloged) Orders
+  const avulsoAnalytics = useMemo(() => {
+    const rawList: Array<{
+      sale: Sale;
+      orderNum: string;
+      client: string;
+      phone?: string;
+      date: string;
+      parsedDate: Date;
+      creator: string;
+      productNames: string;
+      totalVenda: number;
+      totalCusto: number;
+      totalLucro: number;
+      margem: number;
+      hasExplicitCost: boolean;
+      itemsCount: number;
+      itensBreakdown: Array<{
+        nome: string;
+        qtd: number;
+        precoUn: number;
+        custoUn: number;
+        isExplicit: boolean;
+        subtotalVenda: number;
+        subtotalCusto: number;
+        subtotalLucro: number;
+      }>;
+    }> = [];
+
+    let sumVenda = 0;
+    let sumCusto = 0;
+    let sumLucro = 0;
+    let countExplicitCost = 0;
+
+    auditLogs.forEach(sale => {
+      if (!isAvulsoSale(sale, products)) return;
+
+      let orderCost = 0;
+      let hasExplicitCost = false;
+      let itemsCount = 0;
+      const itensBreakdown: Array<{
+        nome: string;
+        qtd: number;
+        precoUn: number;
+        custoUn: number;
+        isExplicit: boolean;
+        subtotalVenda: number;
+        subtotalCusto: number;
+        subtotalLucro: number;
+      }> = [];
+
+      if (sale.itens && sale.itens.length > 0) {
+        sale.itens.forEach(item => {
+          const unitCost = calculateSaleItemUnitCost(item, sale.data, products);
+          // @ts-ignore
+          const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
+          const itemTotalCost = unitCost * q;
+          const itemTotalVenda = item.total !== undefined ? item.total : (item.precoUn * q);
+          const itemTotalLucro = itemTotalVenda - itemTotalCost;
+          const isExplicit = item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0;
+
+          if (isExplicit) hasExplicitCost = true;
+          orderCost += itemTotalCost;
+          itemsCount += q;
+
+          itensBreakdown.push({
+            nome: item.produtoNome || item.nome || 'Item Avulso',
+            qtd: q,
+            precoUn: item.precoUn,
+            custoUn: unitCost,
+            isExplicit,
+            subtotalVenda: itemTotalVenda,
+            subtotalCusto: itemTotalCost,
+            subtotalLucro: itemTotalLucro
+          });
+        });
+      } else {
+        const isExplicit = sale.custoUn !== undefined && sale.custoUn !== null && !isNaN(sale.custoUn) && sale.custoUn >= 0;
+        const unitCost = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0, custoUn: sale.custoUn }, sale.data, products);
+        const itemTotalCost = unitCost * sale.quantidade;
+        const itemTotalLucro = sale.total - itemTotalCost;
+        if (isExplicit) hasExplicitCost = true;
+        orderCost += itemTotalCost;
+        itemsCount += sale.quantidade;
+
+        itensBreakdown.push({
+          nome: sale.produtoNome || 'Produto Avulso',
+          qtd: sale.quantidade,
+          precoUn: sale.precoUn || (sale.total / (sale.quantidade || 1)),
+          custoUn: unitCost,
+          isExplicit,
+          subtotalVenda: sale.total,
+          subtotalCusto: itemTotalCost,
+          subtotalLucro: itemTotalLucro
+        });
+      }
+
+      const totalVenda = sale.total;
+      const totalLucro = totalVenda - orderCost;
+      const margem = totalVenda > 0 ? (totalLucro / totalVenda) * 100 : 0;
+
+      if (hasExplicitCost) countExplicitCost++;
+      sumVenda += totalVenda;
+      sumCusto += orderCost;
+      sumLucro += totalLucro;
+
+      let saleDate = new Date();
+      try {
+        saleDate = parseSaleDate(sale.data);
+      } catch {}
+
+      rawList.push({
+        sale,
+        orderNum: sale.numeroPedido || (sale.id ? sale.id.substring(0, 6).toUpperCase() : 'S/N'),
+        client: sale.cliente,
+        phone: sale.telefoneCliente,
+        date: sale.data,
+        parsedDate: saleDate,
+        creator: sale.criadoPorEmail || 'Sistema/Legado',
+        productNames: sale.produtoNome,
+        totalVenda: Number(totalVenda.toFixed(2)),
+        totalCusto: Number(orderCost.toFixed(2)),
+        totalLucro: Number(totalLucro.toFixed(2)),
+        margem: Number(margem.toFixed(1)),
+        hasExplicitCost,
+        itemsCount,
+        itensBreakdown
+      });
+    });
+
+    // Sort according to avulsoSortBy
+    const sortedList = [...rawList].sort((a, b) => {
+      if (avulsoSortBy === 'profit_desc') return b.totalLucro - a.totalLucro;
+      if (avulsoSortBy === 'profit_asc') return a.totalLucro - b.totalLucro;
+      if (avulsoSortBy === 'margin_desc') return b.margem - a.margem;
+      if (avulsoSortBy === 'sales_desc') return b.totalVenda - a.totalVenda;
+      // Default: recent
+      return b.parsedDate.getTime() - a.parsedDate.getTime();
+    });
+
+    const margemMedia = sumVenda > 0 ? (sumLucro / sumVenda) * 100 : 0;
+
+    // Chart representation: display chronological flow or up to last 16 orders
+    const chartOrders = [...rawList]
+      .sort((a, b) => a.parsedDate.getTime() - b.parsedDate.getTime())
+      .slice(-16)
+      .map(item => ({
+        label: `#${item.orderNum} ${item.client.split(' ')[0]}`,
+        cliente: item.client,
+        numeroPedido: item.orderNum,
+        venda: item.totalVenda,
+        custo: item.totalCusto,
+        lucro: item.totalLucro,
+        margem: item.margem,
+        data: item.parsedDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
+        hasExplicitCost: item.hasExplicitCost,
+        produtos: item.productNames
+      }));
+
+    return {
+      list: sortedList,
+      chartOrders,
+      totalOrders: rawList.length,
+      sumVenda: Number(sumVenda.toFixed(2)),
+      sumCusto: Number(sumCusto.toFixed(2)),
+      sumLucro: Number(sumLucro.toFixed(2)),
+      margemMedia: Number(margemMedia.toFixed(1)),
+      countExplicitCost
+    };
+  }, [auditLogs, products, avulsoSortBy]);
+
   const totalArtworkFinishedEver = useMemo(() => {
     return sales.filter(s => s.statusArte === 'Arte Finalizada').length;
   }, [sales]);
@@ -783,11 +997,11 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
             >
               <div className="border-t border-zinc-855 p-5 bg-zinc-950/20 space-y-6">
                 {/* Seleção de Sub-seção de Gráficos */}
-                <div className="flex items-center gap-1.5 bg-black/30 p-1 border border-zinc-850 rounded-xl max-w-sm select-none relative">
+                <div className="flex flex-wrap items-center gap-1.5 bg-black/30 p-1 border border-zinc-850 rounded-xl max-w-xl select-none relative">
                   <button
                     type="button"
                     onClick={() => setAuditChartTab('daily')}
-                    className={`flex-1 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer relative z-10 ${
+                    className={`px-3 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer relative z-10 ${
                       auditChartTab === 'daily'
                         ? 'text-black border-transparent'
                         : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200'
@@ -805,7 +1019,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                   <button
                     type="button"
                     onClick={() => setAuditChartTab('monthly')}
-                    className={`flex-1 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer relative z-10 ${
+                    className={`px-3 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer relative z-10 ${
                       auditChartTab === 'monthly'
                         ? 'text-black border-transparent'
                         : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200'
@@ -819,6 +1033,24 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                       />
                     )}
                     📊 Comparativo Mensal ({new Date().getFullYear()})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAuditChartTab('avulso')}
+                    className={`px-3 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer relative z-10 ${
+                      auditChartTab === 'avulso'
+                        ? 'text-black border-transparent'
+                        : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200'
+                    }`}
+                  >
+                    {auditChartTab === 'avulso' && (
+                      <motion.div
+                        layoutId="auditChartTabIndicator"
+                        className="absolute inset-0 bg-brand-pink rounded-lg -z-10 shadow-xs"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    📦 Pedidos Avulsos ({avulsoAnalytics.totalOrders})
                   </button>
                 </div>
 
@@ -911,7 +1143,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                       </div>
                     </div>
                   )
-                ) : (
+                ) : auditChartTab === 'monthly' ? (
                   // Monthly comparative subsection
                   <div className="space-y-6">
                     {/* Indicadores do Ano */}
@@ -965,6 +1197,277 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                         </ResponsiveContainer>
                       </div>
                     </div>
+                  </div>
+                ) : (
+                  // AVULSO (UNCATALOGED) DETAILED ANALYTICS AND PROFIT CHART
+                  <div className="space-y-6 animate-fadeIn">
+                    {/* KPI Cards: Avulso Profit Summary */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 select-none">
+                      {/* Card 1: Pedidos Avulsos */}
+                      <div className="bg-zinc-950/70 p-4 border border-zinc-850 rounded-xl shadow-xs">
+                        <div className="flex items-center justify-between text-zinc-500 mb-1.5">
+                          <span className="text-[9px] font-black uppercase tracking-wider">Pedidos Avulsos</span>
+                          <Package className="h-4 w-4 text-purple-400" />
+                        </div>
+                        <div className="text-2xl font-black font-mono text-zinc-100">{avulsoAnalytics.totalOrders}</div>
+                        <p className="text-[10px] text-zinc-450 mt-1">
+                          {avulsoAnalytics.countExplicitCost > 0 ? (
+                            <span className="text-emerald-400 font-semibold">{avulsoAnalytics.countExplicitCost} com custo informado</span>
+                          ) : (
+                            <span>Itens fora do catálogo no período</span>
+                          )}
+                        </p>
+                      </div>
+
+                      {/* Card 2: Faturamento Avulso Total */}
+                      <div className="bg-zinc-950/70 p-4 border border-zinc-850 rounded-xl shadow-xs">
+                        <div className="flex items-center justify-between text-zinc-500 mb-1.5">
+                          <span className="text-[9px] font-black uppercase tracking-wider">Venda Bruta Total</span>
+                          <TrendingUp className="h-4 w-4 text-emerald-450" />
+                        </div>
+                        <div className="text-2xl font-black font-mono text-emerald-450">
+                          R$ {avulsoAnalytics.sumVenda.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <p className="text-[10px] text-zinc-450 mt-1">Valor total faturado com avulsos</p>
+                      </div>
+
+                      {/* Card 3: Preço de Custo Total (Subtraído) */}
+                      <div className="bg-zinc-950/70 p-4 border border-amber-900/30 rounded-xl shadow-xs border-l-amber-500/60 border-l-2">
+                        <div className="flex items-center justify-between text-zinc-500 mb-1.5">
+                          <span className="text-[9px] font-black uppercase tracking-wider text-amber-400">Preço de Custo Total</span>
+                          <Calculator className="h-4 w-4 text-amber-400" />
+                        </div>
+                        <div className="text-2xl font-black font-mono text-amber-400">
+                          R$ {avulsoAnalytics.sumCusto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <p className="text-[10px] text-zinc-450 mt-1">Custo total subtraído das vendas</p>
+                      </div>
+
+                      {/* Card 4: Lucro Líquido Real Total */}
+                      <div className="bg-zinc-950/70 p-4 border border-brand-pink/30 rounded-xl shadow-xs border-l-brand-pink border-l-2">
+                        <div className="flex items-center justify-between text-zinc-500 mb-1.5">
+                          <span className="text-[9px] font-black uppercase tracking-wider text-brand-pink">Lucro Líquido Real</span>
+                          <DollarSign className="h-4 w-4 text-brand-pink" />
+                        </div>
+                        <div className="text-2xl font-black font-mono text-brand-pink">
+                          R$ {avulsoAnalytics.sumLucro.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <p className="text-[10px] text-zinc-400 mt-1 flex items-center gap-1.5">
+                          <span className="px-1.5 py-0.2 bg-brand-pink/15 text-brand-pink rounded font-bold text-[9px] font-mono">
+                            Margem: {avulsoAnalytics.margemMedia}%
+                          </span>
+                          <span>(Venda - Custo)</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Chart: Venda vs Custo vs Lucro por Pedido Avulso */}
+                    {avulsoAnalytics.chartOrders.length === 0 ? (
+                      <div className="py-12 text-center text-zinc-550 border border-dashed border-zinc-850 rounded-xl">
+                        <Package className="h-8 w-8 mx-auto mb-2 text-zinc-650" />
+                        <p className="text-xs font-bold">Nenhum pedido avulso registrado no período selecionado.</p>
+                        <p className="text-[10px] mt-0.5 text-zinc-600">Ao lançar novos pedidos com `+ PRODUTO AVULSO` e preço de custo, eles aparecerão aqui.</p>
+                      </div>
+                    ) : (
+                      <div className="bg-zinc-950/50 p-5 border border-zinc-850/70 rounded-xl space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <h4 className="text-xs font-bold text-zinc-200 uppercase tracking-wide flex items-center gap-2">
+                              <span>Gráfico Comparativo: Faturamento vs Custo vs Lucro de Cada Pedido</span>
+                              <span className="text-[9px] px-2 py-0.5 bg-brand-pink/10 border border-brand-pink/20 rounded font-bold text-brand-pink">
+                                Lucro Real = Venda - Custo
+                              </span>
+                            </h4>
+                            <p className="text-[10px] text-zinc-500 font-medium font-sans">
+                              Demonstrativo analítico do retorno financeiro e margem obtida em cada pedido avulso
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center gap-3 text-[9px] font-bold select-none">
+                            <span className="flex items-center gap-1 text-emerald-450">
+                              <span className="w-2 h-2 rounded-sm bg-emerald-500"></span> Venda (R$)
+                            </span>
+                            <span className="flex items-center gap-1 text-amber-400">
+                              <span className="w-2 h-2 rounded-sm bg-amber-500"></span> Custo (R$)
+                            </span>
+                            <span className="flex items-center gap-1 text-brand-pink">
+                              <span className="w-2 h-2 rounded-sm bg-brand-pink"></span> Lucro Real (R$)
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="h-[280px] w-full text-[9px] font-mono leading-none">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={avulsoAnalytics.chartOrders} margin={{ top: 15, right: 10, left: -15, bottom: 25 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e1e24" />
+                              <XAxis 
+                                dataKey="label" 
+                                stroke="#71717a" 
+                                tickLine={false} 
+                                angle={-25}
+                                textAnchor="end"
+                                height={40}
+                                interval={0}
+                              />
+                              <YAxis stroke="#71717a" tickLine={false} />
+                              <Tooltip
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    const data = payload[0].payload;
+                                    return (
+                                      <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-xl shadow-2xl text-xs space-y-1.5 max-w-xs">
+                                        <div className="flex items-center justify-between gap-2 border-b border-zinc-800 pb-1">
+                                          <span className="font-mono font-bold text-zinc-200">Pedido #{data.numeroPedido}</span>
+                                          <span className="text-[10px] text-zinc-500 font-mono">{data.data}</span>
+                                        </div>
+                                        <div className="text-zinc-300 font-medium truncate">
+                                          Cliente: <strong className="text-zinc-100">{data.cliente}</strong>
+                                        </div>
+                                        <div className="text-zinc-400 text-[10px] truncate" title={data.produtos}>
+                                          {data.produtos}
+                                        </div>
+                                        <div className="space-y-1 pt-1 border-t border-zinc-850 font-mono text-[11px]">
+                                          <div className="flex justify-between text-emerald-450">
+                                            <span>Preço de Venda:</span>
+                                            <strong>R$ {data.venda.toFixed(2)}</strong>
+                                          </div>
+                                          <div className="flex justify-between text-amber-400">
+                                            <span>Preço de Custo:</span>
+                                            <strong>- R$ {data.custo.toFixed(2)}</strong>
+                                          </div>
+                                          <div className="flex justify-between text-brand-pink font-bold border-t border-zinc-800 pt-1">
+                                            <span>Lucro Líquido:</span>
+                                            <span>R$ {data.lucro.toFixed(2)} ({data.margem}%)</span>
+                                          </div>
+                                        </div>
+                                        {data.hasExplicitCost && (
+                                          <div className="pt-1 text-[9px] text-emerald-400 font-semibold flex items-center gap-1">
+                                            <span>✓ Preço de custo informado manualmente</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Bar dataKey="venda" fill="#10b981" radius={[4, 4, 0, 0]} name="Valor de Venda (R$)" />
+                              <Bar dataKey="custo" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Preço de Custo (R$)" />
+                              <Bar dataKey="lucro" fill="#ec4899" radius={[4, 4, 0, 0]} name="Lucro Líquido Real (R$)" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Breakdown Ranking Table / Cards of every Avulso Order */}
+                    {avulsoAnalytics.list.length > 0 && (
+                      <div className="space-y-3 bg-zinc-950/40 p-4 border border-zinc-850/80 rounded-xl">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-850 pb-3">
+                          <div className="flex items-center gap-2">
+                            <Package className="h-4 w-4 text-purple-400" />
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-200">
+                              Detalhamento de Lucro por Pedido Avulso ({avulsoAnalytics.list.length})
+                            </h4>
+                          </div>
+
+                          {/* Sorting options */}
+                          <div className="flex items-center gap-2 select-none">
+                            <span className="text-[10px] text-zinc-500 font-extrabold uppercase flex items-center gap-1">
+                              <ArrowUpDown className="h-3 w-3 text-zinc-400" /> Ordenar por:
+                            </span>
+                            <select
+                              value={avulsoSortBy}
+                              onChange={(e) => setAvulsoSortBy(e.target.value as any)}
+                              className="bg-black border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-200 font-bold focus:outline-none focus:border-brand-pink"
+                            >
+                              <option value="recent">📅 Mais Recentes</option>
+                              <option value="profit_desc">💰 Maior Lucro (R$)</option>
+                              <option value="profit_asc">📉 Menor Lucro (R$)</option>
+                              <option value="margin_desc">📈 Maior Margem (%)</option>
+                              <option value="sales_desc">💎 Maior Venda (R$)</option>
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* List items */}
+                        <div className="divide-y divide-zinc-850/50 max-h-[380px] overflow-y-auto pr-1 space-y-2">
+                          {avulsoAnalytics.list.map((item, idx) => (
+                            <div 
+                              key={item.sale.id || idx}
+                              onClick={() => setViewingSale(item.sale)}
+                              className="pt-2 pb-2 px-3 hover:bg-zinc-900/60 rounded-xl transition-colors cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-3 group border border-transparent hover:border-zinc-800"
+                              title="Clique para abrir o recibo"
+                            >
+                              {/* Left: Info */}
+                              <div className="space-y-1 flex-1 min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="bg-zinc-850 text-zinc-200 px-1.5 py-0.5 rounded text-[10px] font-mono font-black uppercase">
+                                    Pedido #{item.orderNum}
+                                  </span>
+                                  <span className="text-[10px] text-zinc-500 font-mono">
+                                    {item.parsedDate.toLocaleDateString('pt-BR')} {item.parsedDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                  {item.hasExplicitCost ? (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/40">
+                                      🏷️ Custo Informado
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-zinc-850 text-zinc-400">
+                                      ⚡ Custo Estimado
+                                    </span>
+                                  )}
+                                  <span className="text-[9.5px] font-mono text-zinc-450">
+                                    Por: {item.creator}
+                                  </span>
+                                </div>
+
+                                <div className="text-zinc-200 text-xs font-semibold">
+                                  {item.client} {item.phone && <span className="text-zinc-500 text-[10.5px] font-mono font-normal">({item.phone})</span>}
+                                </div>
+
+                                <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-1.5">
+                                  <span className="text-zinc-500">Item:</span>
+                                  <span className="text-zinc-300 font-medium bg-zinc-900 px-1.5 py-0.5 rounded text-[10.5px]">
+                                    {item.productNames}
+                                  </span>
+                                  {item.itensBreakdown.length > 0 && (
+                                    <span className="text-zinc-550 text-[10px] font-mono">
+                                      ({item.itensBreakdown.map(i => `${i.nome} x${i.qtd} [Custo Un: R$ ${i.custoUn.toFixed(2)}]`).join(', ')})
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Right: Profit Breakdown */}
+                              <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-1 border-t border-dashed border-zinc-850 sm:border-0 pt-1.5 sm:pt-0 shrink-0">
+                                <div className="text-[10.5px] font-mono text-zinc-400 flex items-center gap-2">
+                                  <span>Venda: <strong className="text-emerald-450">R$ {item.totalVenda.toFixed(2)}</strong></span>
+                                  <span className="text-zinc-650">|</span>
+                                  <span>Custo: <strong className="text-amber-400">- R$ {item.totalCusto.toFixed(2)}</strong></span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs font-black font-mono text-brand-pink bg-brand-pink/10 border border-brand-pink/25 px-2 py-0.5 rounded-lg">
+                                    Lucro: R$ {item.totalLucro.toFixed(2)} ({item.margem}%)
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setViewingSale(item.sale);
+                                    }}
+                                    className="p-1 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded transition-colors"
+                                    title="Abrir Recibo"
+                                  >
+                                    <Eye className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1289,6 +1792,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
           </div>
           {[
             { id: 'all', label: 'Todos os Pedidos' },
+            { id: 'avulso', label: `📦 Pedidos Avulsos (${avulsoAnalytics.totalOrders})` },
             { id: 'edited', label: '🚨 Recibos Alterados' },
             { id: 'has_designer', label: '🎨 Em Design' },
             { id: 'finished_art', label: '✨ Arte Concluída' }
@@ -1299,7 +1803,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
               className={`px-3 py-1 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
                 specialFilter === tab.id
                   ? 'bg-brand-pink/15 text-brand-pink border-brand-pink/30 shadow-xs'
-                  : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-250 hover:bg-zinc-850/50'
+                  : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200 hover:bg-zinc-850/50'
               }`}
             >
               {tab.label}
@@ -1330,6 +1834,30 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
               const creator = sale.criadoPorEmail || 'Sistema/Legado';
               const isLegacy = !sale.criadoPorEmail;
               const saleDate = parseSaleDate(sale.data);
+              const isAvulso = isAvulsoSale(sale, products);
+              
+              // Calculate specific profit for this sale
+              let saleCost = 0;
+              let hasExplicitItemCost = false;
+              if (sale.itens && sale.itens.length > 0) {
+                sale.itens.forEach(item => {
+                  const unitCost = calculateSaleItemUnitCost(item, sale.data, products);
+                  // @ts-ignore
+                  const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
+                  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
+                    hasExplicitItemCost = true;
+                  }
+                  saleCost += unitCost * q;
+                });
+              } else {
+                if (sale.custoUn !== undefined && sale.custoUn !== null && !isNaN(sale.custoUn) && sale.custoUn >= 0) {
+                  hasExplicitItemCost = true;
+                }
+                const unitCost = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0, custoUn: sale.custoUn }, sale.data, products);
+                saleCost += unitCost * sale.quantidade;
+              }
+              const saleProfit = sale.total - saleCost;
+              const saleMargin = sale.total > 0 ? (saleProfit / sale.total) * 100 : 0;
               
               return (
                 <div 
@@ -1356,6 +1884,12 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                         <Clock className="w-3 h-3 text-zinc-550" />
                         <span>{saleDate.toLocaleDateString('pt-BR')} {saleDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                       </span>
+                      {isAvulso && (
+                        <span className="inline-flex items-center gap-1 font-mono text-[9px] font-bold px-2 py-0.5 rounded-full bg-purple-950/40 text-purple-300 border border-purple-900/30">
+                          <Package className="h-3 w-3" />
+                          <span>Pedido Avulso</span>
+                        </span>
+                      )}
                       <span className="text-brand-pink opacity-0 group-hover:opacity-100 transition-opacity text-[10px] font-bold ml-1 hidden sm:inline-flex items-center gap-1">
                         • Ver recibo <Eye className="h-3 w-3" />
                       </span>
@@ -1379,6 +1913,24 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                         </>
                       )}
                     </div>
+
+                    {/* AVULSO PROFIT BREAKDOWN CALLOUT */}
+                    {isAvulso && (
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] font-mono bg-zinc-950/70 border border-zinc-850 px-3 py-1.5 rounded-lg mt-1">
+                        <span className="text-zinc-400">
+                          Venda: <strong className="text-emerald-450">R$ {sale.total.toFixed(2)}</strong>
+                        </span>
+                        <span className="text-zinc-600">|</span>
+                        <span className="text-amber-400">
+                          Custo: <strong className="text-amber-400">R$ {saleCost.toFixed(2)}</strong>
+                          {hasExplicitItemCost && <span className="text-[9px] text-emerald-400 ml-1">(Informado)</span>}
+                        </span>
+                        <span className="text-zinc-600">|</span>
+                        <span className="text-brand-pink font-bold">
+                          Lucro Real: <strong>R$ {saleProfit.toFixed(2)}</strong> ({saleMargin.toFixed(1)}%)
+                        </span>
+                      </div>
+                    )}
 
                     {/* MODIFIED RECEIPT AUDIT LOG */}
                     {sale.foiAlterado && (
