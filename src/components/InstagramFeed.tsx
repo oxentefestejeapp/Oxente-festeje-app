@@ -18,7 +18,11 @@ import {
   CheckCircle,
   AlertCircle,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Copy,
+  Download,
+  Share2,
+  Check
 } from 'lucide-react';
 import { OptimizedImage, compressImageFile } from '../utils/imageOptimizer';
 import { dbSupabase } from '../lib/supabase';
@@ -279,6 +283,48 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     tag: "Papelaria de Festa",
     categoria: "Papelaria",
     link: "https://www.instagram.com/oxentefesteje/"
+  },
+  // Kit Presente
+  {
+    id: 25,
+    imageUrl: createComingSoonCard("Kit Presente", "🎁"),
+    likes: "0",
+    comments: 0,
+    caption: "Em breve mais fotos de Kits Presente Personalizados! Caixas, combos especiais e mimos inesquecíveis 🎁✨",
+    tag: "Kits Especiais",
+    categoria: "Kit Presente",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 26,
+    imageUrl: createComingSoonCard("Kit Presente", "🎀"),
+    likes: "0",
+    comments: 0,
+    caption: "Kits Presentes exclusivos para datas comemorativas, aniversários e homenagens 🎀✨",
+    tag: "Kits Presente",
+    categoria: "Kit Presente",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  // Promoções
+  {
+    id: 27,
+    imageUrl: createComingSoonCard("Promoções", "🔥"),
+    likes: "0",
+    comments: 0,
+    caption: "Aproveite nossas promoções exclusivas e combos com preços especiais de fábrica! 🔥🏷️",
+    tag: "Ofertas Especiais",
+    categoria: "Promoções",
+    link: "https://www.instagram.com/oxentefesteje/"
+  },
+  {
+    id: 28,
+    imageUrl: createComingSoonCard("Promoções", "🏷️"),
+    likes: "0",
+    comments: 0,
+    caption: "Super ofertas e descontos imperdíveis em copos, taças e brindes personalizados ✨🔥",
+    tag: "Super Promoção",
+    categoria: "Promoções",
+    link: "https://www.instagram.com/oxentefesteje/"
   }
 ];
 
@@ -508,6 +554,7 @@ export const InstagramFeed: React.FC = () => {
   // Feed posts state moved to the top of the component to prevent block-scoped variable hoisting issues
   
   const [loading, setLoading] = useState(true);
+  const [selectedPostModal, setSelectedPostModal] = useState<InstagramPost | null>(null);
   
   // Security/Admin state
   const [isAdminMode, setIsAdminMode] = useState(false);
@@ -515,9 +562,149 @@ export const InstagramFeed: React.FC = () => {
   const [passwordInput, setPasswordInput] = useState('');
   const [passwordError, setPasswordError] = useState(false);
 
+  // Helper to convert any image (data URL, SVG, remote URL) into a Blob
+  const imageSrcToBlob = async (src: string): Promise<Blob> => {
+    try {
+      if (src.startsWith('data:image/svg+xml')) {
+        const img = new Image();
+        img.src = src;
+        await new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; });
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 600;
+        canvas.height = img.naturalHeight || 600;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.fillStyle = '#18181b';
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.drawImage(img, 0, 0);
+        }
+        return await new Promise<Blob>((resolve) => {
+          canvas.toBlob((b) => resolve(b || new Blob()), 'image/png');
+        });
+      } else if (src.startsWith('data:')) {
+        const res = await fetch(src);
+        return await res.blob();
+      } else {
+        const res = await fetch(src, { mode: 'cors' }).catch(() => null);
+        if (res && res.ok) {
+          return await res.blob();
+        }
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        img.src = src;
+        await new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; });
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || 500;
+        canvas.height = img.naturalHeight || 500;
+        const ctx = canvas.getContext('2d');
+        if (ctx) ctx.drawImage(img, 0, 0);
+        return await new Promise<Blob>((resolve) => {
+          canvas.toBlob((b) => resolve(b || new Blob()), 'image/png');
+        });
+      }
+    } catch (err) {
+      console.warn('Erro ao converter imagem em blob:', err);
+      return new Blob();
+    }
+  };
+
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+
+  // Copy photo directly to clipboard
+  const handleCopyPhoto = async (post: InstagramPost) => {
+    try {
+      const blob = await imageSrcToBlob(post.imageUrl);
+      if (navigator.clipboard && window.ClipboardItem && blob.size > 0) {
+        await navigator.clipboard.write([
+          new ClipboardItem({ 'image/png': blob })
+        ]);
+        setCopyFeedback('Foto copiada! Cole (Ctrl+V) direto no WhatsApp!');
+        setTimeout(() => setCopyFeedback(null), 4000);
+        return true;
+      } else {
+        setCopyFeedback('Dica: Use o botão Baixar Foto para enviar.');
+        setTimeout(() => setCopyFeedback(null), 3000);
+      }
+    } catch (err) {
+      console.warn('Falha ao copiar foto para clipboard:', err);
+    }
+    return false;
+  };
+
+  // Download photo directly to device
+  const handleDownloadPhoto = async (post: InstagramPost) => {
+    try {
+      const blob = await imageSrcToBlob(post.imageUrl);
+      if (blob.size > 0) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeName = (post.tag || 'oxente-festeje-produto').toLowerCase().replace(/[^a-z0-9]/gi, '-');
+        a.download = `${safeName}.png`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        setCopyFeedback('Foto baixada no seu aparelho!');
+        setTimeout(() => setCopyFeedback(null), 3000);
+      }
+    } catch (err) {
+      console.error('Erro ao baixar foto:', err);
+    }
+  };
+
+  // Dispatch to WhatsApp or Native Share
+  const handleSendToWhatsApp = async (post: InstagramPost) => {
+    const phone = '5583988859302';
+    
+    let msg = `Olá, equipe Oxente Festeje! 👋\n`;
+    msg += `Gostaria de um orçamento sobre este modelo que vi no mural:\n\n`;
+    if (post.tag) msg += `🏷️ *Modelo:* ${post.tag}\n`;
+    if (post.categoria) msg += `✨ *Categoria:* ${post.categoria}\n`;
+    if (post.caption) msg += `📝 *Detalhes:* ${post.caption}\n`;
+    
+    // Auto-copy photo in background
+    handleCopyPhoto(post).catch(() => {});
+
+    // Try native share on mobile if supported
+    try {
+      const blob = await imageSrcToBlob(post.imageUrl);
+      if (blob.size > 0 && navigator.canShare) {
+        const safeName = (post.tag || 'produto').toLowerCase().replace(/[^a-z0-9]/gi, '-');
+        const file = new File([blob], `${safeName}.png`, { type: 'image/png' });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            title: `Orçamento Oxente Festeje - ${post.tag || 'Produto'}`,
+            text: msg,
+            files: [file]
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      console.log('Native share ignorado ou cancelado:', e);
+    }
+
+    // Direct WhatsApp Web / App redirect
+    const waUrl = `https://api.whatsapp.com/send/?phone=${phone}&text=${encodeURIComponent(msg)}&type=phone_number&app_absent=0`;
+    window.open(waUrl, '_blank');
+  };
+
+  // Keyboard navigation when modal is open
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedPostModal) return;
+      if (e.key === 'Escape') {
+        setSelectedPostModal(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedPostModal]);
+
   // Category filter state
-  const [activeCategory, setActiveCategory] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D' | 'Papelaria'>('Geral');
-  const [selectedCategoryForm, setSelectedCategoryForm] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D' | 'Papelaria'>('Geral');
+  const [activeCategory, setActiveCategory] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D' | 'Papelaria' | 'Kit Presente' | 'Promoções'>('Geral');
+  const [selectedCategoryForm, setSelectedCategoryForm] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D' | 'Papelaria' | 'Kit Presente' | 'Promoções'>('Geral');
 
   // New photo form state
   const [newImage, setNewImage] = useState<string | null>(null);
@@ -714,7 +901,7 @@ export const InstagramFeed: React.FC = () => {
   }).map(post => {
     const cat = post.categoria || 'Geral';
     if (post.imageUrl.includes('unsplash.com') || !post.imageUrl) {
-      const emoji = cat === 'ABC' ? '🎓' : cat === 'Formatura' ? '🥂' : cat === 'Corporativo' ? '💼' : cat === 'Laser' ? '⚡' : cat === 'Impressora 3D' ? '🖨️' : cat === 'Papelaria' ? '📝' : '✨';
+      const emoji = cat === 'ABC' ? '🎓' : cat === 'Formatura' ? '🥂' : cat === 'Corporativo' ? '💼' : cat === 'Laser' ? '⚡' : cat === 'Impressora 3D' ? '🖨️' : cat === 'Papelaria' ? '📝' : cat === 'Kit Presente' ? '🎁' : cat === 'Promoções' ? '🔥' : '✨';
       return {
         ...post,
         imageUrl: createComingSoonCard(cat, emoji)
@@ -799,7 +986,7 @@ export const InstagramFeed: React.FC = () => {
           onTouchEnd={handleCatTouchEnd}
           className="flex flex-nowrap items-center gap-1 min-[360px]:gap-1.5 sm:gap-2.5 overflow-x-auto no-scrollbar py-1 px-0.5 max-w-full select-none cursor-grab active:cursor-grabbing"
         >
-          {(['Geral', 'ABC', 'Formatura', 'Corporativo', 'Laser', 'Impressora 3D', 'Papelaria'] as const).map((cat) => {
+          {(['Geral', 'ABC', 'Formatura', 'Corporativo', 'Laser', 'Impressora 3D', 'Papelaria', 'Kit Presente', 'Promoções'] as const).map((cat) => {
             const isActive = activeCategory === cat;
             return (
               <button
@@ -886,18 +1073,25 @@ export const InstagramFeed: React.FC = () => {
             {/* Primeira metade */}
             <div className="flex gap-2.5 sm:gap-6 shrink-0 pr-2.5 sm:pr-6">
               {activePosts.map((post, idx) => (
-                <motion.a
+                <motion.div
                   key={`${post.id}-1-${idx}`}
-                  href={post.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="relative w-[128px] min-[375px]:w-[144px] min-[410px]:w-[162px] sm:w-[245px] h-[162px] min-[375px]:h-[187px] min-[410px]:h-[204px] sm:h-[326px] rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-md sm:shadow-lg block group"
+                  role="button"
+                  tabIndex={0}
+                  className="relative w-[128px] min-[375px]:w-[144px] min-[410px]:w-[162px] sm:w-[245px] h-[162px] min-[375px]:h-[187px] min-[410px]:h-[204px] sm:h-[326px] rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-md sm:shadow-lg block group cursor-pointer text-left select-none"
                   whileHover={{ scale: 1.02, y: -4 }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
                   onDragStart={(e) => e.preventDefault()}
                   onClick={(e) => {
+                    e.preventDefault();
                     if (draggedDistanceRef.current > 15) {
+                      return;
+                    }
+                    setSelectedPostModal(post);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
+                      setSelectedPostModal(post);
                     }
                   }}
                 >
@@ -934,35 +1128,44 @@ export const InstagramFeed: React.FC = () => {
                     </p>
 
                     {/* Direct link footer action */}
-                    <div className="flex items-center justify-between text-[10px] text-amber-400 font-bold uppercase tracking-wider border-t border-white/10 pt-2.5">
-                      <span className="flex items-center gap-1">
-                        Ver no Instagram <ExternalLink className="h-3 w-3" />
+                    <div className="flex items-center justify-between text-[10px] text-emerald-400 font-bold uppercase tracking-wider border-t border-white/10 pt-2.5">
+                      <span className="flex items-center gap-1 text-amber-300">
+                        <Sparkles className="h-3 w-3 text-amber-400" /> Ampliar & Orçar
                       </span>
-                      <span className="text-stone-400 lowercase">@oxentefesteje</span>
+                      <span className="text-emerald-400 font-mono text-[9px] flex items-center gap-0.5">
+                        WhatsApp 💬
+                      </span>
                     </div>
                   </div>
 
                   {/* Static subtle overlay for high image readability */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none md:group-hover:opacity-0 transition-opacity duration-300" />
-                </motion.a>
+                </motion.div>
               ))}
             </div>
 
             {/* Segunda metade (Sempre idêntica para o looping infinito sem sobressalto) */}
             <div className="flex gap-2.5 sm:gap-6 shrink-0 pr-2.5 sm:pr-6">
               {activePosts.map((post, idx) => (
-                <motion.a
+                <motion.div
                   key={`${post.id}-2-${idx}`}
-                  href={post.link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="relative w-[128px] min-[375px]:w-[144px] min-[410px]:w-[162px] sm:w-[245px] h-[162px] min-[375px]:h-[187px] min-[410px]:h-[204px] sm:h-[326px] rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-md sm:shadow-lg block group"
+                  role="button"
+                  tabIndex={0}
+                  className="relative w-[128px] min-[375px]:w-[144px] min-[410px]:w-[162px] sm:w-[245px] h-[162px] min-[375px]:h-[187px] min-[410px]:h-[204px] sm:h-[326px] rounded-xl sm:rounded-2xl overflow-hidden bg-zinc-900 border border-zinc-800/80 shadow-md sm:shadow-lg block group cursor-pointer text-left select-none"
                   whileHover={{ scale: 1.02, y: -4 }}
                   transition={{ duration: 0.3, ease: "easeOut" }}
                   onDragStart={(e) => e.preventDefault()}
                   onClick={(e) => {
+                    e.preventDefault();
                     if (draggedDistanceRef.current > 15) {
+                      return;
+                    }
+                    setSelectedPostModal(post);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
                       e.preventDefault();
+                      setSelectedPostModal(post);
                     }
                   }}
                 >
@@ -999,17 +1202,19 @@ export const InstagramFeed: React.FC = () => {
                     </p>
 
                     {/* Direct link footer action */}
-                    <div className="flex items-center justify-between text-[10px] text-amber-400 font-bold uppercase tracking-wider border-t border-white/10 pt-2.5">
-                      <span className="flex items-center gap-1">
-                        Ver no Instagram <ExternalLink className="h-3 w-3" />
+                    <div className="flex items-center justify-between text-[10px] text-emerald-400 font-bold uppercase tracking-wider border-t border-white/10 pt-2.5">
+                      <span className="flex items-center gap-1 text-amber-300">
+                        <Sparkles className="h-3 w-3 text-amber-400" /> Ampliar & Orçar
                       </span>
-                      <span className="text-stone-400 lowercase">@oxentefesteje</span>
+                      <span className="text-emerald-400 font-mono text-[9px] flex items-center gap-0.5">
+                        WhatsApp 💬
+                      </span>
                     </div>
                   </div>
 
                   {/* Static subtle overlay for high image readability */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent pointer-events-none md:group-hover:opacity-0 transition-opacity duration-300" />
-                </motion.a>
+                </motion.div>
               ))}
             </div>
           </div>
@@ -1191,6 +1396,8 @@ export const InstagramFeed: React.FC = () => {
                       <option value="Laser">Laser</option>
                       <option value="Impressora 3D">Impressora 3D</option>
                       <option value="Papelaria">Papelaria</option>
+                      <option value="Kit Presente">Kit Presente</option>
+                      <option value="Promoções">Promoções</option>
                     </select>
                   </div>
                   <div>
@@ -1322,6 +1529,179 @@ export const InstagramFeed: React.FC = () => {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Expanded Photo & WhatsApp Quote Modal */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {selectedPostModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-5 bg-stone-950/85 backdrop-blur-md overflow-y-auto"
+              onClick={() => setSelectedPostModal(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.9, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.9, opacity: 0, y: 20 }}
+                transition={{ type: "spring", stiffness: 320, damping: 26 }}
+                className="relative w-full max-w-lg bg-zinc-900 border border-amber-500/30 rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-[0_20px_60px_rgba(0,0,0,0.9)] overflow-hidden my-auto"
+                onClick={(e) => e.stopPropagation()}
+                id="modal-ampliar-foto"
+              >
+                {/* Header Bar */}
+                <div className="flex items-center justify-between gap-2 sm:gap-3 mb-3 sm:mb-4 border-b border-zinc-800 pb-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="bg-gradient-to-r from-amber-400 to-yellow-500 text-stone-950 font-black text-[10px] sm:text-xs uppercase px-2.5 py-1 rounded-full shadow-sm shrink-0">
+                      {selectedPostModal.categoria || 'Geral'}
+                    </span>
+                    <span className="text-xs sm:text-sm font-bold text-amber-200 truncate">
+                      {selectedPostModal.tag}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 shrink-0">
+                    {/* Navigation Buttons inside modal */}
+                    {activePosts.length > 1 && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const idx = activePosts.findIndex(p => p.id === selectedPostModal.id);
+                            if (idx > 0) setSelectedPostModal(activePosts[idx - 1]);
+                            else setSelectedPostModal(activePosts[activePosts.length - 1]);
+                          }}
+                          className="p-1.5 rounded-full bg-zinc-800 hover:bg-amber-400 text-stone-300 hover:text-stone-950 transition-colors cursor-pointer"
+                          title="Foto anterior"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const idx = activePosts.findIndex(p => p.id === selectedPostModal.id);
+                            if (idx >= 0 && idx < activePosts.length - 1) setSelectedPostModal(activePosts[idx + 1]);
+                            else setSelectedPostModal(activePosts[0]);
+                          }}
+                          className="p-1.5 rounded-full bg-zinc-800 hover:bg-amber-400 text-stone-300 hover:text-stone-950 transition-colors cursor-pointer"
+                          title="Próxima foto"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                        </button>
+                      </>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPostModal(null)}
+                      className="p-1.5 rounded-full bg-zinc-800/80 hover:bg-red-500 text-stone-300 hover:text-white transition-colors ml-1 cursor-pointer"
+                      title="Fechar"
+                    >
+                      <X className="h-5 w-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Big Image Preview */}
+                <div className="relative w-full aspect-square max-h-[46vh] sm:max-h-[52vh] rounded-xl sm:rounded-2xl overflow-hidden bg-black/70 border border-zinc-800 mb-3 sm:mb-4 flex items-center justify-center">
+                  <OptimizedImage
+                    src={selectedPostModal.imageUrl}
+                    alt={selectedPostModal.caption}
+                    width={700}
+                    quality={85}
+                    className="w-full h-full object-contain"
+                  />
+
+                  {/* Likes badge overlay */}
+                  <div className="absolute bottom-2.5 left-2.5 bg-black/80 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10 flex items-center gap-3 text-xs font-mono">
+                    <span className="flex items-center gap-1 text-rose-400 font-bold">
+                      <Heart className="h-3.5 w-3.5 fill-rose-500 text-rose-500" /> {selectedPostModal.likes}
+                    </span>
+                    <span className="flex items-center gap-1 text-sky-400 font-bold">
+                      <MessageCircle className="h-3.5 w-3.5 fill-sky-400/20 text-sky-400" /> {selectedPostModal.comments}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Caption / Description */}
+                {selectedPostModal.caption && (
+                  <p className="text-stone-200 text-xs sm:text-sm leading-relaxed mb-3.5 px-3 py-2.5 bg-zinc-950/60 rounded-xl border border-zinc-800/80 max-h-24 overflow-y-auto">
+                    {selectedPostModal.caption}
+                  </p>
+                )}
+
+                {/* Copy Feedback Notification */}
+                <AnimatePresence>
+                  {copyFeedback && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 5 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -5 }}
+                      className="mb-3 px-3 py-2 bg-emerald-950/90 border border-emerald-500/50 rounded-xl text-emerald-300 text-xs font-semibold flex items-center justify-center gap-2 text-center shadow-lg"
+                    >
+                      <Check className="h-4 w-4 text-emerald-400 shrink-0" />
+                      <span>{copyFeedback}</span>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Action Buttons */}
+                <div className="space-y-2 sm:space-y-2.5">
+                  {/* Button 1: WhatsApp Quote Button with Photo & Model pre-filled */}
+                  <button
+                    type="button"
+                    onClick={() => handleSendToWhatsApp(selectedPostModal)}
+                    className="w-full bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-400 hover:to-green-500 text-white font-display font-black text-xs sm:text-sm uppercase tracking-wide py-3 px-4 rounded-xl shadow-[0_4px_20px_rgba(16,185,129,0.35)] hover:shadow-[0_6px_25px_rgba(16,185,129,0.5)] transition-all flex items-center justify-center gap-2.5 text-center group active:scale-[0.98] cursor-pointer"
+                    id="btn-modal-whatsapp-orcamento"
+                  >
+                    <svg className="w-5 h-5 fill-current shrink-0" viewBox="0 0 24 24">
+                      <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+                    </svg>
+                    <span>Pedir Orçamento no WhatsApp</span>
+                  </button>
+
+                  {/* Photo tools: Copy & Download */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyPhoto(selectedPostModal)}
+                      className="bg-zinc-800/90 hover:bg-zinc-700 text-stone-200 hover:text-white text-xs font-semibold py-2 px-3 rounded-xl border border-zinc-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      title="Copiar imagem para colar no WhatsApp"
+                    >
+                      <Copy className="h-3.5 w-3.5 text-amber-400" />
+                      <span>Copiar Foto</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDownloadPhoto(selectedPostModal)}
+                      className="bg-zinc-800/90 hover:bg-zinc-700 text-stone-200 hover:text-white text-xs font-semibold py-2 px-3 rounded-xl border border-zinc-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                      title="Baixar imagem no aparelho"
+                    >
+                      <Download className="h-3.5 w-3.5 text-amber-400" />
+                      <span>Baixar Foto</span>
+                    </button>
+                  </div>
+
+                  {/* Button 2: Instagram Details Button */}
+                  <a
+                    href={selectedPostModal.link || 'https://www.instagram.com/oxentefesteje/'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full bg-gradient-to-r from-pink-600 via-purple-600 to-amber-600 hover:brightness-110 text-white font-display font-bold text-xs sm:text-sm uppercase tracking-wide py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 text-center shadow-md active:scale-[0.98]"
+                    id="btn-modal-ver-instagram"
+                  >
+                    <Instagram className="h-4 w-4" />
+                    <span>Ver mais fotos no Instagram</span>
+                    <ExternalLink className="h-3.5 w-3.5 ml-1 opacity-80" />
+                  </a>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </motion.div>
   );
 };
