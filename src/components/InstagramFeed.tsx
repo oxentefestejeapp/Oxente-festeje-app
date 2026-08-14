@@ -66,6 +66,15 @@ const createComingSoonCard = (categoryTitle: string, emoji: string) => {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
+// Generate default public website link for models
+export const getWebsiteProductLink = (categoria: string, tag?: string, id?: string | number) => {
+  const baseUrl = 'https://www.oxentefesteje.com.br';
+  const cleanCategory = (categoria || 'geral').toLowerCase().replace(/\s+/g, '-');
+  const cleanTag = (tag || 'modelo').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
+  const idParam = id ? `&foto=${id}` : '';
+  return `${baseUrl}/?mural=1&tema=${encodeURIComponent(cleanCategory)}&item=${encodeURIComponent(cleanTag)}${idParam}#mural`;
+};
+
 const INSTAGRAM_POSTS: InstagramPost[] = [
   // Geral
   {
@@ -73,30 +82,30 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     imageUrl: createComingSoonCard("Geral", "✨"),
     likes: "0",
     comments: 0,
-    caption: "Em breve mais fotos do nosso Mural Geral! Fique atento às novidades no nosso Instagram @oxentefesteje ✨",
+    caption: "Mural Geral Oxente Festeje - Copos e brindes exclusivos personalizados para sua festa! ✨",
     tag: "Mural Oxente",
     categoria: "Geral",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Geral", "Mural Oxente", 1)
   },
   {
     id: 2,
     imageUrl: createComingSoonCard("Geral", "🌵"),
     likes: "0",
     comments: 0,
-    caption: "Mural de fotos exclusivo Oxente Festeje. Em breve novos modelos de brindes disponíveis! 🌵🍻",
+    caption: "Mural de fotos exclusivo Oxente Festeje. Copos, tirantes e personalizações de alta qualidade! 🌵🍻",
     tag: "Oxente Festeje",
     categoria: "Geral",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Geral", "Oxente Festeje", 2)
   },
   {
     id: 3,
     imageUrl: createComingSoonCard("Geral", "🥂"),
     likes: "0",
     comments: 0,
-    caption: "Brindes e copos personalizados para todas as ocasiões. Novas fotos em breve! 🎉",
+    caption: "Brindes e copos personalizados para todas as ocasiões com acabamento premium. 🎉",
     tag: "Brindes Exclusivos",
     categoria: "Geral",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Geral", "Brindes Exclusivos", 3)
   },
   // ABC
   {
@@ -104,30 +113,30 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     imageUrl: createComingSoonCard("ABC", "🎓"),
     likes: "0",
     comments: 0,
-    caption: "Em breve mais fotos do Tema ABC por aqui! Fique atento às novidades no nosso Instagram @oxentefesteje ✨✏️🎒",
+    caption: "Lembrancinhas e copos personalizados para formatura de Doutores do ABC! ✨✏️🎒",
     tag: "Tema ABC",
     categoria: "ABC",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("ABC", "Tema ABC", 7)
   },
   {
     id: 8,
     imageUrl: createComingSoonCard("ABC", "✏️"),
     likes: "0",
     comments: 0,
-    caption: "Lembrancinhas e copos personalizados para Doutores do ABC! Em breve novos modelos disponíveis ✨🌟",
+    caption: "Lembrancinhas e copos personalizados para Doutores do ABC! Cores vivas e impressão duradoura ✨🌟",
     tag: "Brindes ABC",
     categoria: "ABC",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("ABC", "Brindes ABC", 8)
   },
   {
     id: 9,
     imageUrl: createComingSoonCard("ABC", "📘"),
     likes: "0",
     comments: 0,
-    caption: "Cores e estampas exclusivas para encantar na festa de ABC! Novas fotos em breve 🎉",
+    caption: "Cores e estampas exclusivas para encantar na festa de ABC! 🎉",
     tag: "Lembrancinhas ABC",
     categoria: "ABC",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("ABC", "Lembrancinhas ABC", 9)
   },
   // Formatura
   {
@@ -135,20 +144,20 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     imageUrl: createComingSoonCard("Formatura", "🎓"),
     likes: "0",
     comments: 0,
-    caption: "Em breve mais fotos de Formatura por aqui! Taças, tirantes e copos personalizados para o seu baile de formatura ✨🍾",
+    caption: "Taças, tirantes e copos personalizados para o seu baile de formatura ✨🍾",
     tag: "Formatura",
     categoria: "Formatura",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Formatura", "Formatura", 10)
   },
   {
     id: 11,
     imageUrl: createComingSoonCard("Formatura", "🥂"),
     likes: "0",
     comments: 0,
-    caption: "Taças de Gin e Canecas de Formatura personalizadas. Novas fotos da categoria em breve! 🎉🎓",
+    caption: "Taças de Gin e Canecas de Formatura personalizadas com tirantes exclusivos! 🎉🎓",
     tag: "Taças Formatura",
     categoria: "Formatura",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Formatura", "Taças Formatura", 11)
   },
   {
     id: 12,
@@ -158,7 +167,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Kits de formandos com tirantes e copos gravados a laser. Seu baile com identidade única! 🎓🔥",
     tag: "Kits Formandos",
     categoria: "Formatura",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Formatura", "Kits Formandos", 12)
   },
   // Corporativo
   {
@@ -166,10 +175,10 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     imageUrl: createComingSoonCard("Corporativo", "💼"),
     likes: "0",
     comments: 0,
-    caption: "Em breve mais fotos de Brindes Corporativos por aqui! Brindes elegantes para marcas, convenções e eventos ✨🏢",
+    caption: "Brindes corporativos elegantes para marcas, convenções e eventos empresariais ✨🏢",
     tag: "Corporativo",
     categoria: "Corporativo",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Corporativo", "Corporativo", 13)
   },
   {
     id: 14,
@@ -179,7 +188,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Canecas térmicas e squeezes gravados com a logomarca para presentear clientes VIP 🤝☕",
     tag: "Eventos Empresas",
     categoria: "Corporativo",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Corporativo", "Eventos Empresas", 14)
   },
   {
     id: 15,
@@ -189,7 +198,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Kits de integração e convenções corporativas com a qualidade Oxente Festeje 📈🎯",
     tag: "Kits Corporativos",
     categoria: "Corporativo",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Corporativo", "Kits Corporativos", 15)
   },
   // Laser
   {
@@ -197,10 +206,10 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     imageUrl: createComingSoonCard("Laser", "⚡"),
     likes: "0",
     comments: 0,
-    caption: "Em breve mais fotos de Copos e Brindes com Gravação a Laser! Acabamento impecável e alta durabilidade ✨⚡",
+    caption: "Copos e Brindes com Gravação a Laser! Acabamento impecável e alta durabilidade ✨⚡",
     tag: "Gravação a Laser",
     categoria: "Laser",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Laser", "Gravação a Laser", 16)
   },
   {
     id: 17,
@@ -210,7 +219,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Gravação a Laser em Copos Stanley, Kouda, Squeezes e Canecas Inox com sua marca 🎯⚡",
     tag: "Produtos Laser",
     categoria: "Laser",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Laser", "Produtos Laser", 17)
   },
   {
     id: 18,
@@ -220,7 +229,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Personalização a Laser com riqueza de detalhes para casamentos, formaturas e corporativo ⚡🔥",
     tag: "Gravação Exclusiva",
     categoria: "Laser",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Laser", "Gravação Exclusiva", 18)
   },
   // Impressora 3D
   {
@@ -228,10 +237,10 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     imageUrl: createComingSoonCard("Impressora 3D", "🖨️"),
     likes: "0",
     comments: 0,
-    caption: "Em breve mais fotos de Brindes e Troféus em Impressão 3D! Modelagens exclusivas e personalizadas 🖨️✨",
+    caption: "Brindes e Troféus em Impressão 3D! Modelagens exclusivas e personalizadas 🖨️✨",
     tag: "Impressora 3D",
     categoria: "Impressora 3D",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Impressora 3D", "Impressora 3D", 19)
   },
   {
     id: 20,
@@ -241,7 +250,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Peças decorativas, topos de bolo e chaveiros exclusivos produzidos em Impressão 3D 💡🖨️",
     tag: "Peças 3D",
     categoria: "Impressora 3D",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Impressora 3D", "Peças 3D", 20)
   },
   {
     id: 21,
@@ -251,7 +260,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Prototipagem e brindes corporativos tecnológicos em 3D com a marca Oxente Festeje 🚀🖨️",
     tag: "Brindes 3D",
     categoria: "Impressora 3D",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Impressora 3D", "Brindes 3D", 21)
   },
   // Papelaria
   {
@@ -259,10 +268,10 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     imageUrl: createComingSoonCard("Papelaria", "📝"),
     likes: "0",
     comments: 0,
-    caption: "Em breve mais fotos de Itens de Papelaria Personalizada! Cadernos, blocos e convites em alta qualidade 📝✨",
+    caption: "Itens de Papelaria Personalizada! Cadernos, blocos e convites em alta qualidade 📝✨",
     tag: "Papelaria Personalizada",
     categoria: "Papelaria",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Papelaria", "Papelaria Personalizada", 22)
   },
   {
     id: 23,
@@ -272,7 +281,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Agendas, planners e embalagens de papelaria exclusivas para suas festas e escritório 🏷️✏️",
     tag: "Kits de Papelaria",
     categoria: "Papelaria",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Papelaria", "Kits de Papelaria", 23)
   },
   {
     id: 24,
@@ -282,7 +291,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Convites e mimos especiais em papelaria refinada pela marca Oxente Festeje 💌🎉",
     tag: "Papelaria de Festa",
     categoria: "Papelaria",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Papelaria", "Papelaria de Festa", 24)
   },
   // Kit Presente
   {
@@ -290,10 +299,10 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     imageUrl: createComingSoonCard("Kit Presente", "🎁"),
     likes: "0",
     comments: 0,
-    caption: "Em breve mais fotos de Kits Presente Personalizados! Caixas, combos especiais e mimos inesquecíveis 🎁✨",
+    caption: "Kits Presente Personalizados! Caixas, combos especiais e mimos inesquecíveis 🎁✨",
     tag: "Kits Especiais",
     categoria: "Kit Presente",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Kit Presente", "Kits Especiais", 25)
   },
   {
     id: 26,
@@ -303,7 +312,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Kits Presentes exclusivos para datas comemorativas, aniversários e homenagens 🎀✨",
     tag: "Kits Presente",
     categoria: "Kit Presente",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Kit Presente", "Kits Presente", 26)
   },
   // Promoções
   {
@@ -314,7 +323,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Aproveite nossas promoções exclusivas e combos com preços especiais de fábrica! 🔥🏷️",
     tag: "Ofertas Especiais",
     categoria: "Promoções",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Promoções", "Ofertas Especiais", 27)
   },
   {
     id: 28,
@@ -324,7 +333,7 @@ const INSTAGRAM_POSTS: InstagramPost[] = [
     caption: "Super ofertas e descontos imperdíveis em copos, taças e brindes personalizados ✨🔥",
     tag: "Super Promoção",
     categoria: "Promoções",
-    link: "https://www.instagram.com/oxentefesteje/"
+    link: getWebsiteProductLink("Promoções", "Super Promoção", 28)
   }
 ];
 
@@ -660,20 +669,23 @@ export const InstagramFeed: React.FC = () => {
     // Auto-copy photo in background for desktop Ctrl+V paste convenience
     handleCopyPhoto(post).catch(() => {});
 
+    // Ensure link points to the official store domain (www.oxentefesteje.com.br) with specific photo & item parameters
+    const storeLink = (post.link && post.link.startsWith('http') && !post.link.includes('instagram.com') && (post.link.includes('foto=') || post.link.includes('item=')))
+      ? post.link
+      : getWebsiteProductLink(post.categoria || 'Geral', post.tag, post.id);
+
     let msg = `Olá, equipe Oxente Festeje! 👋\n`;
-    msg += `Gostaria de um orçamento sobre este produto:\n\n`;
+    msg += `Gostaria de um orçamento sobre este modelo do catálogo:\n\n`;
     if (post.tag) msg += `🏷️ *Modelo:* ${post.tag}\n`;
     if (post.categoria) msg += `✨ *Categoria:* ${post.categoria}\n`;
-    if (post.caption) msg += `📝 *Detalhes:* ${post.caption}\n`;
+    if (post.caption) msg += `📝 *Detalhes:* ${post.caption}\n\n`;
     
-    // Add direct photo URL if it's a web/supabase URL so WhatsApp generates thumbnail preview
+    // Direct public link from www.oxentefesteje.com.br or storage to generate thumbnail on WhatsApp
     if (post.imageUrl && !post.imageUrl.startsWith('data:')) {
-      msg += `\n📸 *Foto do Modelo:* ${post.imageUrl}\n`;
+      msg += `📸 *Foto/Amostra:* ${post.imageUrl}\n`;
     }
-
-    if (post.link && post.link !== 'https://www.instagram.com/oxentefesteje/') {
-      msg += `🔗 *Instagram:* ${post.link}\n`;
-    }
+    
+    msg += `🌐 *Ver Foto no Site:* ${storeLink}\n`;
 
     // Direct WhatsApp redirect to the store's phone number
     const waUrl = `https://api.whatsapp.com/send/?phone=${phone}&text=${encodeURIComponent(msg)}&type=phone_number&app_absent=0`;
@@ -697,6 +709,124 @@ export const InstagramFeed: React.FC = () => {
   // Category filter state
   const [activeCategory, setActiveCategory] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D' | 'Papelaria' | 'Kit Presente' | 'Promoções'>('Geral');
   const [selectedCategoryForm, setSelectedCategoryForm] = useState<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D' | 'Papelaria' | 'Kit Presente' | 'Promoções'>('Geral');
+
+  // URL Auto-Open Logic: Detects link received from WhatsApp and opens the exact photo modal immediately
+  useEffect(() => {
+    if (!posts || posts.length === 0) return;
+
+    const checkAndOpenFromUrl = () => {
+      try {
+        const searchParams = new URLSearchParams(window.location.search);
+        let fotoParam = searchParams.get('foto') || searchParams.get('id') || searchParams.get('photo') || '';
+        let itemParam = searchParams.get('item') || searchParams.get('tag') || searchParams.get('modelo') || '';
+        let temaParam = searchParams.get('tema') || searchParams.get('categoria') || searchParams.get('category') || '';
+        let hasMuralTrigger = searchParams.has('mural');
+
+        // Also check window.location.hash for links like #mural?tema=formatura&item=tacas-formatura&foto=11
+        const hash = window.location.hash || '';
+        if (hash) {
+          if (hash.includes('mural')) hasMuralTrigger = true;
+          const questionIdx = hash.indexOf('?');
+          if (questionIdx !== -1) {
+            const hashSearchParams = new URLSearchParams(hash.substring(questionIdx + 1));
+            if (!fotoParam) fotoParam = hashSearchParams.get('foto') || hashSearchParams.get('id') || hashSearchParams.get('photo') || '';
+            if (!itemParam) itemParam = hashSearchParams.get('item') || hashSearchParams.get('tag') || hashSearchParams.get('modelo') || '';
+            if (!temaParam) temaParam = hashSearchParams.get('tema') || hashSearchParams.get('categoria') || hashSearchParams.get('category') || '';
+          } else {
+            const match = hash.match(/#(?:foto|mural|item)-?([a-zA-Z0-9_-]+)/i);
+            if (match && match[1]) {
+              if (/^\d+$/.test(match[1])) {
+                if (!fotoParam) fotoParam = match[1];
+              } else {
+                if (!itemParam) itemParam = match[1];
+              }
+            }
+          }
+        }
+
+        if (!fotoParam && !itemParam && !temaParam && !hasMuralTrigger) {
+          return;
+        }
+
+        let foundPost: InstagramPost | undefined;
+
+        // 1. Try to find by specific Photo ID
+        if (fotoParam) {
+          foundPost = posts.find(p => String(p.id) === String(fotoParam)) || 
+                      INSTAGRAM_POSTS.find(p => String(p.id) === String(fotoParam));
+        }
+
+        // 2. Try to find by Item / Tag slug
+        if (!foundPost && itemParam) {
+          const cleanItem = itemParam.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+          foundPost = posts.find(p => {
+            const postTagClean = (p.tag || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+            const postCaptionClean = (p.caption || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+            return (postTagClean && (postTagClean.includes(cleanItem) || cleanItem.includes(postTagClean))) ||
+                   (postCaptionClean && postCaptionClean.includes(cleanItem));
+          }) || INSTAGRAM_POSTS.find(p => {
+            const postTagClean = (p.tag || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+            const postCaptionClean = (p.caption || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+            return (postTagClean && (postTagClean.includes(cleanItem) || cleanItem.includes(postTagClean))) ||
+                   (postCaptionClean && postCaptionClean.includes(cleanItem));
+          });
+        }
+
+        // 3. Match category theme if specified
+        if (temaParam) {
+          const cleanTema = temaParam.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+          const validCategories: Array<'Geral' | 'ABC' | 'Formatura' | 'Corporativo' | 'Laser' | 'Impressora 3D' | 'Papelaria' | 'Kit Presente' | 'Promoções'> = [
+            'Geral', 'ABC', 'Formatura', 'Corporativo', 'Laser', 'Impressora 3D', 'Papelaria', 'Kit Presente', 'Promoções'
+          ];
+          const matchedCat = validCategories.find(c => 
+            c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === cleanTema ||
+            cleanTema.includes(c.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+          );
+          if (matchedCat) {
+            setActiveCategory(matchedCat);
+            if (!foundPost) {
+              foundPost = posts.find(p => p.categoria === matchedCat) || INSTAGRAM_POSTS.find(p => p.categoria === matchedCat);
+            }
+          }
+        }
+
+        // If a matching post was found, open modal and scroll smoothly into view!
+        if (foundPost) {
+          if (foundPost.categoria) {
+            setActiveCategory(foundPost.categoria as any);
+          }
+          setSelectedPostModal(foundPost);
+          setIsPaused(true);
+
+          setTimeout(() => {
+            const headerElem = document.getElementById('whatsapp-profile-header') || document.getElementById('instagram-feed-section');
+            if (headerElem) {
+              headerElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }, 300);
+        } else if (hasMuralTrigger) {
+          setTimeout(() => {
+            const headerElem = document.getElementById('whatsapp-profile-header') || document.getElementById('instagram-feed-section');
+            if (headerElem) {
+              headerElem.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+          }, 300);
+        }
+      } catch (e) {
+        console.warn('Erro ao processar parâmetros da URL:', e);
+      }
+    };
+
+    const timer = setTimeout(checkAndOpenFromUrl, 200);
+    window.addEventListener('hashchange', checkAndOpenFromUrl);
+    window.addEventListener('popstate', checkAndOpenFromUrl);
+
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('hashchange', checkAndOpenFromUrl);
+      window.removeEventListener('popstate', checkAndOpenFromUrl);
+    };
+  }, [posts]);
 
   // New photo form state
   const [newImage, setNewImage] = useState<string | null>(null);
@@ -1430,10 +1560,10 @@ export const InstagramFeed: React.FC = () => {
 
                 <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   <div>
-                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Link Insta</label>
+                    <label className="block text-[10px] font-mono uppercase text-stone-400 mb-1">Link do Site / Insta</label>
                     <input
                       type="text"
-                      placeholder="URL do Instagram"
+                      placeholder="https://www.oxentefesteje.com.br/..."
                       value={link}
                       onChange={(e) => setLink(e.target.value)}
                       className="w-full bg-stone-950 border border-stone-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500/20 rounded-lg px-2.5 py-2 text-xs text-stone-200 outline-none transition-colors"
@@ -1699,17 +1829,16 @@ export const InstagramFeed: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Button 2: Instagram Details Button */}
+                  {/* Button 2: Store / Instagram Details Button */}
                   <a
-                    href={selectedPostModal.link || 'https://www.instagram.com/oxentefesteje/'}
+                    href={selectedPostModal.link && !selectedPostModal.link.includes('instagram.com') ? selectedPostModal.link : 'https://www.instagram.com/oxentefesteje/'}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="w-full bg-gradient-to-r from-pink-600 via-purple-600 to-amber-600 hover:brightness-110 text-white font-display font-bold text-xs sm:text-sm uppercase tracking-wide py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 text-center shadow-md active:scale-[0.98]"
+                    className="w-full bg-gradient-to-r from-amber-600 via-pink-600 to-purple-600 hover:brightness-110 text-white font-display font-bold text-xs sm:text-sm uppercase tracking-wide py-2.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 text-center shadow-md active:scale-[0.98]"
                     id="btn-modal-ver-instagram"
                   >
-                    <Instagram className="h-4 w-4" />
-                    <span>Ver mais fotos no Instagram</span>
-                    <ExternalLink className="h-3.5 w-3.5 ml-1 opacity-80" />
+                    <ExternalLink className="h-4 w-4 shrink-0" />
+                    <span>Ver no Catálogo / Instagram</span>
                   </a>
                 </div>
               </motion.div>

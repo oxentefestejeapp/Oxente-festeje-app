@@ -2316,7 +2316,18 @@ export default function App() {
     );
   }
 
-  if (!isLandingBypassed && userStatus !== 'approved') {
+  const isDirectMuralUrl = () => {
+    try {
+      const search = window.location.search || '';
+      const hash = window.location.hash || '';
+      return search.includes('mural') || search.includes('foto=') || search.includes('item=') || search.includes('tema=') ||
+             hash.includes('mural') || hash.includes('foto=') || hash.includes('item=') || hash.includes('tema=');
+    } catch {
+      return false;
+    }
+  };
+
+  if (isDirectMuralUrl() || (!isLandingBypassed && userStatus !== 'approved')) {
     return (
       <LandingPage 
         onUnlockSystem={() => {
