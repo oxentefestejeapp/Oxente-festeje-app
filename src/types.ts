@@ -108,6 +108,7 @@ export interface Sale {
   dataAvisoAtraso?: string; // Format YYYY-MM-DD when delayed reminder was sent
   pedidoVinculoNumero?: string;
   corSelecionada?: string;
+  custoUn?: number;
 }
 
 export interface StoreInfo {
@@ -302,4 +303,90 @@ export function calculateSaleItemUnitCost(
 
   // Fallback for avulso / uncataloged items if no custom cost was set
   return item.precoUn * 0.62;
+}
+
+export function isAvulsoItem(item: { produtoId?: string; produtoNome?: string; nome?: string; custoUn?: number }) {
+  if (!item) return false;
+  if (item.produtoId?.startsWith('avulso-') || item.produtoId === 'produto-avulso' || item.produtoId?.startsWith('custom-')) return true;
+  if (item.produtoNome?.toLowerCase().includes('avulso') || item.nome?.toLowerCase().includes('avulso')) return true;
+  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn)) return true;
+  return false;
+}
+
+export function isAvulsoSale(sale: Sale, products: Product[] = []) {
+  if (!sale) return false;
+  if (sale.produtoId?.startsWith('avulso-') || sale.produtoId === 'produto-avulso' || sale.produtoId?.startsWith('custom-')) {
+    return true;
+  }
+  if (sale.produtoNome?.toLowerCase().includes('avulso')) {
+    return true;
+  }
+  if (sale.itens && sale.itens.some(item => isAvulsoItem(item))) {
+    return true;
+  }
+  if (products.length > 0) {
+    if (sale.itens && sale.itens.length > 0) {
+      return sale.itens.some(it => {
+        const found = products.find(p => p.id === it.produtoId || p.nome?.toLowerCase() === it.produtoNome?.toLowerCase());
+        return !found && it.produtoId !== 'taxacartao-service' && !it.produtoId?.endsWith('-service');
+      });
+    } else {
+      const found = products.find(p => p.id === sale.produtoId || p.nome?.toLowerCase() === sale.produtoNome?.toLowerCase());
+      return !found && sale.produtoId !== 'taxacartao-service' && !sale.produtoId?.endsWith('-service');
+    }
+  }
+  return false;
+}
+
+export function getSaleAvulsoInfo(sale: Sale, products: Product[] = []) {
+  const isAvulso = isAvulsoSale(sale, products);
+  if (!isAvulso) {
+    return {
+      isAvulso: false,
+      hasExplicitCost: false,
+      totalCusto: 0,
+      lucro: 0,
+      avulsoItemsCount: 0
+    };
+  }
+
+  let totalCusto = 0;
+  let hasExplicitCost = false;
+  let avulsoItemsCount = 0;
+
+  if (sale.itens && sale.itens.length > 0) {
+    sale.itens.forEach(item => {
+      const isItemAvulso = isAvulsoItem(item) || (products.length > 0 && !products.some(p => p.id === item.produtoId || p.nome?.toLowerCase() === item.produtoNome?.toLowerCase()) && item.produtoId !== 'taxacartao-service' && !item.produtoId?.endsWith('-service'));
+      const unitCost = calculateSaleItemUnitCost(item, sale.data, products);
+      // @ts-ignore
+      const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
+      
+      if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
+        hasExplicitCost = true;
+      }
+      if (isItemAvulso) {
+        avulsoItemsCount += q;
+      }
+      totalCusto += unitCost * q;
+    });
+  } else {
+    if (sale.custoUn !== undefined && sale.custoUn !== null && !isNaN(sale.custoUn) && sale.custoUn >= 0) {
+      hasExplicitCost = true;
+    }
+    const unitCost = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0, custoUn: sale.custoUn }, sale.data, products);
+    totalCusto = unitCost * (sale.quantidade || 1);
+    avulsoItemsCount = sale.quantidade || 1;
+  }
+
+  const lucro = sale.total - totalCusto;
+  const margem = sale.total > 0 ? (lucro / sale.total) * 100 : 0;
+
+  return {
+    isAvulso: true,
+    hasExplicitCost,
+    totalCusto: Number(totalCusto.toFixed(2)),
+    lucro: Number(lucro.toFixed(2)),
+    margem: Number(margem.toFixed(1)),
+    avulsoItemsCount
+  };
 }
