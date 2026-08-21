@@ -968,6 +968,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         const itemCusto = item.customCusto !== undefined && !isNaN(item.customCusto)
           ? item.customCusto
           : (item.product.precoCusto !== undefined && item.product.precoCusto !== null && !isNaN(item.product.precoCusto) ? item.product.precoCusto : undefined);
+        const isItemAvulso = item.product.id === 'produto-avulso' || item.product.id?.startsWith('avulso-');
 
         itemsList.push({
           id: item.id,
@@ -977,7 +978,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
           quantidade: item.quantity,
           total: mainUnitPrice * item.quantity,
           corSelecionada: item.corSelecionada,
-          custoUn: itemCusto
+          custoUn: itemCusto,
+          isAvulso: isItemAvulso || undefined
         });
 
         // Adiciona os adicionais deste item do carrinho
@@ -1076,7 +1078,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
           quantidade: qtyNum,
           total: progressiveUnitPrice * qtyNum,
           corSelecionada: selectedColor || undefined,
-          custoUn: singleItemCusto
+          custoUn: singleItemCusto,
+          isAvulso: isAvulsoProduct ? true : undefined
         },
         ...addonItems
       ];
@@ -1221,7 +1224,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       cashbackGasto: appliedCashbackDiscount > 0 ? appliedCashbackDiscount : undefined,
       referralSended: false,
       pedidoVinculoNumero: pedidoVinculoNumero.trim() ? pedidoVinculoNumero.trim() : undefined,
-      corSelecionada: cart.length === 0 ? (selectedColor || undefined) : (cart.find(i => i.corSelecionada)?.corSelecionada || undefined)
+      corSelecionada: cart.length === 0 ? (selectedColor || undefined) : (cart.find(i => i.corSelecionada)?.corSelecionada || undefined),
+      isAvulso: isAvulsoProduct || finalItens.some(item => isAvulsoItem(item)) || undefined
     };
 
     // Salvar venda (que agora deduz o estoque de forma atômica no pai)
@@ -1406,7 +1410,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       const itemCost = calculateSaleItemUnitCost(item, editingSale.data || new Date().toISOString(), products);
       return {
         ...item,
-        custoUn: itemCost
+        custoUn: itemCost,
+        isAvulso: item.isAvulso !== undefined ? item.isAvulso : (isAvulsoItem(item) || undefined)
       };
     });
 
@@ -1435,6 +1440,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       dataRetirada: editDataRetirada || undefined,
       statusProducao: isBudget ? undefined : editStatusProducao,
       itens: finalItensToSave,
+      isAvulso: finalItensToSave.some(item => isAvulsoItem(item)) || editingSale.isAvulso || undefined,
       foiAlterado: hasStructuralChanges ? true : (editingSale.foiAlterado || false),
       editadoPorEmail: hasStructuralChanges ? currentUserEmail : (editingSale.editadoPorEmail || undefined),
       editadoEm: hasStructuralChanges ? new Date().toISOString() : (editingSale.editadoEm || undefined),

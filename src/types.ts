@@ -40,6 +40,7 @@ export interface SaleItem {
   total: number;
   corSelecionada?: string; // Optional track color chosen for this item
   custoUn?: number; // Historical unit cost snapshot
+  isAvulso?: boolean;
 }
 
 export interface SaleOriginalValues {
@@ -109,6 +110,7 @@ export interface Sale {
   pedidoVinculoNumero?: string;
   corSelecionada?: string;
   custoUn?: number;
+  isAvulso?: boolean;
 }
 
 export interface StoreInfo {
@@ -305,35 +307,25 @@ export function calculateSaleItemUnitCost(
   return item.precoUn * 0.62;
 }
 
-export function isAvulsoItem(item: { produtoId?: string; produtoNome?: string; nome?: string; custoUn?: number }) {
+export function isAvulsoItem(item: { id?: string; produtoId?: string; produtoNome?: string; nome?: string; isAvulso?: boolean }) {
   if (!item) return false;
-  if (item.produtoId?.startsWith('avulso-') || item.produtoId === 'produto-avulso' || item.produtoId?.startsWith('custom-')) return true;
-  if (item.produtoNome?.toLowerCase().includes('avulso') || item.nome?.toLowerCase().includes('avulso')) return true;
-  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn)) return true;
+  if (item.isAvulso === true) return true;
+  if (item.produtoId === 'produto-avulso' || item.produtoId?.startsWith('avulso-')) return true;
+  if (item.id?.startsWith('avulso-') || item.id?.startsWith('item-avulso-')) return true;
   return false;
 }
 
-export function isAvulsoSale(sale: Sale, products: Product[] = []) {
+export function isAvulsoSale(sale: Sale, _products?: Product[]) {
   if (!sale) return false;
-  if (sale.produtoId?.startsWith('avulso-') || sale.produtoId === 'produto-avulso' || sale.produtoId?.startsWith('custom-')) {
+  if (sale.isAvulso === true) return true;
+  if (sale.produtoId === 'produto-avulso' || sale.produtoId?.startsWith('avulso-')) {
     return true;
   }
-  if (sale.produtoNome?.toLowerCase().includes('avulso')) {
+  if (sale.id?.startsWith('avulso-') || sale.id?.startsWith('sale-avulso-')) {
     return true;
   }
-  if (sale.itens && sale.itens.some(item => isAvulsoItem(item))) {
-    return true;
-  }
-  if (products.length > 0) {
-    if (sale.itens && sale.itens.length > 0) {
-      return sale.itens.some(it => {
-        const found = products.find(p => p.id === it.produtoId || p.nome?.toLowerCase() === it.produtoNome?.toLowerCase());
-        return !found && it.produtoId !== 'taxacartao-service' && !it.produtoId?.endsWith('-service');
-      });
-    } else {
-      const found = products.find(p => p.id === sale.produtoId || p.nome?.toLowerCase() === sale.produtoNome?.toLowerCase());
-      return !found && sale.produtoId !== 'taxacartao-service' && !sale.produtoId?.endsWith('-service');
-    }
+  if (sale.itens && sale.itens.length > 0) {
+    return sale.itens.some(item => isAvulsoItem(item));
   }
   return false;
 }
@@ -346,6 +338,7 @@ export function getSaleAvulsoInfo(sale: Sale, products: Product[] = []) {
       hasExplicitCost: false,
       totalCusto: 0,
       lucro: 0,
+      margem: 0,
       avulsoItemsCount: 0
     };
   }
@@ -356,12 +349,12 @@ export function getSaleAvulsoInfo(sale: Sale, products: Product[] = []) {
 
   if (sale.itens && sale.itens.length > 0) {
     sale.itens.forEach(item => {
-      const isItemAvulso = isAvulsoItem(item) || (products.length > 0 && !products.some(p => p.id === item.produtoId || p.nome?.toLowerCase() === item.produtoNome?.toLowerCase()) && item.produtoId !== 'taxacartao-service' && !item.produtoId?.endsWith('-service'));
+      const isItemAvulso = isAvulsoItem(item);
       const unitCost = calculateSaleItemUnitCost(item, sale.data, products);
       // @ts-ignore
       const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
       
-      if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
+      if (isItemAvulso && item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
         hasExplicitCost = true;
       }
       if (isItemAvulso) {
