@@ -330,21 +330,33 @@ export function isAvulsoSale(sale: Sale, _products?: Product[]) {
   return false;
 }
 
-export function getSaleAvulsoInfo(sale: Sale, products: Product[] = []) {
-  const isAvulso = isAvulsoSale(sale, products);
-  if (!isAvulso) {
+export interface SaleCostInfo {
+  isAvulso: boolean;
+  hasExplicitCost: boolean;
+  totalCusto: number;
+  lucro: number;
+  margem: number;
+  itemsCount: number;
+  avulsoItemsCount: number;
+}
+
+export function getSaleCostInfo(sale: Sale, products: Product[] = []): SaleCostInfo {
+  if (!sale) {
     return {
       isAvulso: false,
       hasExplicitCost: false,
       totalCusto: 0,
       lucro: 0,
       margem: 0,
+      itemsCount: 0,
       avulsoItemsCount: 0
     };
   }
 
+  const isAvulso = isAvulsoSale(sale, products);
   let totalCusto = 0;
-  let hasExplicitCost = false;
+  let hasExplicitCost = true;
+  let itemsCount = 0;
   let avulsoItemsCount = 0;
 
   if (sale.itens && sale.itens.length > 0) {
@@ -354,32 +366,47 @@ export function getSaleAvulsoInfo(sale: Sale, products: Product[] = []) {
       // @ts-ignore
       const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
       
-      if (isItemAvulso && item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
-        hasExplicitCost = true;
+      const prod = products.find(p => p.id === item.produtoId || p.nome?.toLowerCase() === item.produtoNome?.toLowerCase());
+      const hasItemExplicitCost = (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0)
+        || (!isItemAvulso && prod && prod.precoCusto !== undefined && prod.precoCusto !== null && prod.precoCusto >= 0);
+
+      if (!hasItemExplicitCost) {
+        hasExplicitCost = false;
       }
+
       if (isItemAvulso) {
         avulsoItemsCount += q;
       }
+      itemsCount += q;
       totalCusto += unitCost * q;
     });
   } else {
-    if (sale.custoUn !== undefined && sale.custoUn !== null && !isNaN(sale.custoUn) && sale.custoUn >= 0) {
-      hasExplicitCost = true;
-    }
+    const prod = products.find(p => p.id === sale.produtoId || p.nome?.toLowerCase() === sale.produtoNome?.toLowerCase());
+    const hasItemExplicitCost = (sale.custoUn !== undefined && sale.custoUn !== null && !isNaN(sale.custoUn) && sale.custoUn >= 0)
+      || (!isAvulso && prod && prod.precoCusto !== undefined && prod.precoCusto !== null && prod.precoCusto >= 0);
+
+    hasExplicitCost = Boolean(hasItemExplicitCost);
     const unitCost = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0, custoUn: sale.custoUn }, sale.data, products);
-    totalCusto = unitCost * (sale.quantidade || 1);
-    avulsoItemsCount = sale.quantidade || 1;
+    const q = sale.quantidade || 1;
+    totalCusto = unitCost * q;
+    itemsCount = q;
+    if (isAvulso) {
+      avulsoItemsCount = q;
+    }
   }
 
   const lucro = sale.total - totalCusto;
   const margem = sale.total > 0 ? (lucro / sale.total) * 100 : 0;
 
   return {
-    isAvulso: true,
+    isAvulso,
     hasExplicitCost,
     totalCusto: Number(totalCusto.toFixed(2)),
     lucro: Number(lucro.toFixed(2)),
     margem: Number(margem.toFixed(1)),
+    itemsCount,
     avulsoItemsCount
   };
 }
+
+export const getSaleAvulsoInfo = getSaleCostInfo;

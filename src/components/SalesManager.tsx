@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check, CheckSquare, TrendingUp, TrendingDown, Sparkles, Activity, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost, calculateSaleItemUnitCost, findMatchingProduct, isAvulsoSale, isAvulsoItem, getSaleAvulsoInfo } from '../types';
+import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost, calculateSaleItemUnitCost, findMatchingProduct, isAvulsoSale, isAvulsoItem, getSaleAvulsoInfo, getSaleCostInfo } from '../types';
 import { Receipt } from './Receipt';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
@@ -3346,25 +3346,27 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   </div>
                 )}
 
-                {/* Avulso Orders Filter Button */}
-                <button
-                  type="button"
-                  onClick={() => setFilterOnlyAvulso(prev => !prev)}
-                  className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border sm:ml-auto ${
-                    filterOnlyAvulso
-                      ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-900/30 font-extrabold'
-                      : 'bg-purple-950/30 text-purple-300 border-purple-900/50 hover:bg-purple-900/40 hover:text-purple-100 hover:border-purple-600'
-                  }`}
-                  title="Filtrar e exibir apenas pedidos tirados como avulso para conferir custos e lucros"
-                >
-                  <Package className="h-3.5 w-3.5 text-purple-300" />
-                  <span>Pedidos Avulsos ({avulsoSalesCount})</span>
-                  {filterOnlyAvulso && (
-                    <span className="bg-white/20 text-white text-[9px] px-1.5 py-0.2 rounded-full font-mono">
-                      Ativo ✕
-                    </span>
-                  )}
-                </button>
+                {/* Avulso Orders Filter Button (Admin only) */}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setFilterOnlyAvulso(prev => !prev)}
+                    className={`px-3 py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 border sm:ml-auto ${
+                      filterOnlyAvulso
+                        ? 'bg-purple-600 text-white border-purple-400 shadow-md shadow-purple-900/30 font-extrabold'
+                        : 'bg-purple-950/30 text-purple-300 border-purple-900/50 hover:bg-purple-900/40 hover:text-purple-100 hover:border-purple-600'
+                    }`}
+                    title="Filtrar e exibir apenas pedidos tirados como avulso para conferir custos e lucros"
+                  >
+                    <Package className="h-3.5 w-3.5 text-purple-300" />
+                    <span>Pedidos Avulsos ({avulsoSalesCount})</span>
+                    {filterOnlyAvulso && (
+                      <span className="bg-white/20 text-white text-[9px] px-1.5 py-0.2 rounded-full font-mono">
+                        Ativo ✕
+                      </span>
+                    )}
+                  </button>
+                )}
               </div>
 
               {/* Optional Show Old Delivered Sales Toggle */}
@@ -3450,7 +3452,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                       .slice(0, visibleSalesCount)
                       .map((sale) => {
                       const isActive = viewedSale?.id === sale.id;
-                      const avulsoInfo = getSaleAvulsoInfo(sale, products);
+                      const costInfo = getSaleCostInfo(sale, products);
                       return (
                         <tr 
                           key={sale.id}
@@ -3514,35 +3516,54 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                               </span>
                             ) : null}
 
-                            {/* Badge Sinalizador de Pedido Avulso e Preço de Custo */}
-                            {avulsoInfo.isAvulso && (
+                            {/* Badge Sinalizador de Preço de Custo e Identificação (Visível apenas para Administrador) */}
+                            {isAdmin && (
                               <div className="mt-1 flex flex-wrap items-center gap-1">
-                                <span
-                                  className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border leading-tight ${
-                                    avulsoInfo.hasExplicitCost
-                                      ? 'bg-purple-950/80 text-purple-200 border-purple-800/80 shadow-[0_0_8px_rgba(168,85,247,0.15)]'
-                                      : 'bg-amber-950/80 text-amber-300 border-amber-700/80 animate-pulse'
-                                  }`}
-                                  title={
-                                    avulsoInfo.hasExplicitCost
-                                      ? `📦 Pedido Avulso\n• Custo total: R$ ${avulsoInfo.totalCusto.toFixed(2)}\n• Lucro líquido: R$ ${avulsoInfo.lucro.toFixed(2)} (${avulsoInfo.margem}%)\n• Status do custo: Informado manualmente (OK)`
-                                      : `📦 Pedido Avulso com Custo Estimado (R$ ${avulsoInfo.totalCusto.toFixed(2)})\n• Clique no botão "Editar Custo" ao lado para conferir ou ajustar o custo real se necessário!`
-                                  }
-                                >
-                                  <Package className="h-3 w-3 text-purple-400 shrink-0" />
-                                  <span>📦 Avulso</span>
-                                  <span className="text-zinc-500 font-sans">•</span>
-                                  <span className="text-amber-300/90 font-mono">Custo R$ {avulsoInfo.totalCusto.toFixed(2)}</span>
-                                  {avulsoInfo.hasExplicitCost ? (
-                                    <span className="text-emerald-400 text-[8px] bg-emerald-950/80 border border-emerald-800/60 px-1 py-0.2 rounded font-sans ml-0.5" title="Preço de custo conferido">
-                                      ✓ OK
-                                    </span>
-                                  ) : (
-                                    <span className="text-amber-300 text-[8px] bg-amber-950/80 border border-amber-700/60 px-1 py-0.2 rounded font-sans font-bold ml-0.5 underline" title="Recomenda-se conferir o preço de custo">
-                                      Revisar
-                                    </span>
-                                  )}
-                                </span>
+                                {costInfo.isAvulso ? (
+                                  <span
+                                    className={`inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border leading-tight ${
+                                      costInfo.hasExplicitCost
+                                        ? 'bg-purple-950/80 text-purple-200 border-purple-800/80 shadow-[0_0_8px_rgba(168,85,247,0.15)]'
+                                        : 'bg-amber-950/80 text-amber-300 border-amber-700/80 animate-pulse'
+                                    }`}
+                                    title={
+                                      costInfo.hasExplicitCost
+                                        ? `📦 Pedido Avulso\n• Custo total: R$ ${costInfo.totalCusto.toFixed(2)}\n• Lucro líquido: R$ ${costInfo.lucro.toFixed(2)} (${costInfo.margem}%)\n• Status do custo: Informado manualmente (OK)`
+                                        : `📦 Pedido Avulso com Custo Estimado (R$ ${costInfo.totalCusto.toFixed(2)})\n• Clique no botão "Editar Custo" ao lado para conferir ou ajustar o custo real se necessário!`
+                                    }
+                                  >
+                                    <Package className="h-3 w-3 text-purple-400 shrink-0" />
+                                    <span>📦 Avulso</span>
+                                    <span className="text-zinc-500 font-sans">•</span>
+                                    <span className="text-amber-300/90 font-mono">Custo R$ {costInfo.totalCusto.toFixed(2)}</span>
+                                    {costInfo.hasExplicitCost ? (
+                                      <span className="text-emerald-400 text-[8px] bg-emerald-950/80 border border-emerald-800/60 px-1 py-0.2 rounded font-sans ml-0.5" title="Preço de custo conferido">
+                                        ✓ OK
+                                      </span>
+                                    ) : (
+                                      <span className="text-amber-300 text-[8px] bg-amber-950/80 border border-amber-700/60 px-1 py-0.2 rounded font-sans font-bold ml-0.5 underline" title="Recomenda-se conferir o preço de custo">
+                                        Revisar
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="inline-flex items-center gap-1 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded border leading-tight bg-zinc-900/90 text-zinc-300 border-zinc-750/90 shadow-sm"
+                                    title={`🏷️ Pedido do Catálogo\n• Custo total: R$ ${costInfo.totalCusto.toFixed(2)}\n• Lucro líquido: R$ ${costInfo.lucro.toFixed(2)} (${costInfo.margem}%)\n• Baseado no cadastro de produtos`}
+                                  >
+                                    <span className="text-zinc-400 font-sans">Custo</span>
+                                    <span className="text-zinc-200 font-mono">R$ {costInfo.totalCusto.toFixed(2)}</span>
+                                    {costInfo.hasExplicitCost ? (
+                                      <span className="text-emerald-400 text-[8px] bg-emerald-950/80 border border-emerald-800/60 px-1 py-0.2 rounded font-sans ml-0.5" title="Preço de custo cadastrado no catálogo">
+                                        ✓ OK
+                                      </span>
+                                    ) : (
+                                      <span className="text-zinc-400 text-[8px] bg-zinc-800/80 border border-zinc-700 px-1 py-0.2 rounded font-sans ml-0.5" title="Custo calculado pelo catálogo (estimado)">
+                                        Catálogo
+                                      </span>
+                                    )}
+                                  </span>
+                                )}
                               </div>
                             )}
                           </td>
@@ -3562,14 +3583,16 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                                 Pago
                               </div>
                             )}
-                            {/* Destaque de Lucro para Pedido Avulso */}
-                            {avulsoInfo.isAvulso && (
+                            {/* Destaque de Lucro (Visível apenas para Administrador) */}
+                            {isAdmin && (
                               <div
-                                className="text-[9px] font-mono text-purple-300 font-bold mt-0.5 flex items-center justify-end gap-1"
-                                title={`Lucro líquido calculado do avulso: R$ ${avulsoInfo.lucro.toFixed(2)} (Margem: ${avulsoInfo.margem}%)`}
+                                className={`text-[9px] font-mono font-bold mt-0.5 flex items-center justify-end gap-1 ${
+                                  costInfo.isAvulso ? 'text-purple-300' : 'text-emerald-400/90'
+                                }`}
+                                title={`Lucro líquido calculado: R$ ${costInfo.lucro.toFixed(2)} (Margem: ${costInfo.margem}%)`}
                               >
                                 <span className="text-[8px] text-zinc-500 font-normal uppercase">Lucro:</span>
-                                <span className="text-purple-300 font-bold">R$ {avulsoInfo.lucro.toFixed(2)}</span>
+                                <span className="font-bold">R$ {costInfo.lucro.toFixed(2)}</span>
                               </div>
                             )}
                           </td>
@@ -3601,16 +3624,16 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                                   setEditingSale(sale);
                                 }}
                                 className={`px-2 py-1 border rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0 ${
-                                  avulsoInfo.isAvulso && !avulsoInfo.hasExplicitCost
+                                  isAdmin && costInfo.isAvulso && !costInfo.hasExplicitCost
                                     ? 'bg-amber-950/50 border-amber-500/60 text-amber-300 hover:bg-amber-900/60 hover:text-amber-100 hover:border-amber-400'
-                                    : avulsoInfo.isAvulso
+                                    : isAdmin && costInfo.isAvulso
                                     ? 'bg-purple-950/50 border-purple-700/60 text-purple-300 hover:border-purple-400 hover:text-purple-100'
                                     : 'bg-zinc-950 border-zinc-805 hover:border-brand-pink text-zinc-300 hover:text-brand-pink'
                                 }`}
-                                title={avulsoInfo.isAvulso ? "Editar pedido e conferir/corrigir preço de custo dos itens avulsos" : "Editar pedido"}
+                                title={isAdmin && costInfo.isAvulso ? "Editar pedido e conferir/corrigir preço de custo dos itens avulsos" : "Editar pedido"}
                               >
                                 <Pencil className="h-3 w-3" />
-                                <span>{avulsoInfo.isAvulso && !avulsoInfo.hasExplicitCost ? 'Editar Custo' : 'Editar'}</span>
+                                <span>{isAdmin && costInfo.isAvulso && !costInfo.hasExplicitCost ? 'Editar Custo' : 'Editar'}</span>
                               </button>
                               {sale.statusProducao === 'Pronto para Retirada' && sale.avisoProntoSended && (
                                 <button
@@ -3744,8 +3767,8 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               </div>
 
               <form onSubmit={handleSaveEdit} className="p-6 space-y-4">
-                {/* Avulso Sale Notice and Cost Helper Banner */}
-                {editingSale && isAvulsoSale(editingSale, products) && (
+                {/* Avulso Sale Notice and Cost Helper Banner (Admin only) */}
+                {isAdmin && editingSale && isAvulsoSale(editingSale, products) && (
                   <div className="p-3.5 bg-purple-950/40 border border-purple-800/70 rounded-xl flex items-start gap-3 text-xs text-purple-200 shadow-sm animate-fade-in">
                     <Package className="h-4 w-4 text-purple-400 shrink-0 mt-0.5" />
                     <div className="space-y-1">
