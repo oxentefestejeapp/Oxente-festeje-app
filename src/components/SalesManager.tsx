@@ -309,7 +309,6 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [editTemTaxaCartao, setEditTemTaxaCartao] = useState(false);
   const [editValorTaxaCartao, setEditValorTaxaCartao] = useState('');
   const [editShowServicosTaxas, setEditShowServicosTaxas] = useState(false);
-  const [editSelectedAddonIds, setEditSelectedAddonIds] = useState<string[]>([]);
   const [editShowAddons, setEditShowAddons] = useState(false);
 
   const editTotal = useMemo(() => {
@@ -318,18 +317,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     const urgVal = editTemTaxaUrgencia ? (parseFloat(editValorTaxaUrgencia) || 0) : 0;
     const cartaoVal = editTemTaxaCartao ? (parseFloat(editValorTaxaCartao) || 0) : 0;
 
-    const referenceQty = editItens.length > 0 ? editItens[0].quantidade : 1;
-    const addonsTotal = editSelectedAddonIds.reduce((sum, addonId) => {
-      const addon = products.find(p => p.id === addonId);
-      if (addon) {
-        const addonPrice = getProductUnitPrice(addon, referenceQty);
-        return sum + (addonPrice * referenceQty);
-      }
-      return sum;
-    }, 0);
-
-    return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0) + artVal + segundaArtVal + urgVal + cartaoVal + addonsTotal;
-  }, [editItens, editArteDesign, editSegundaArte, editTemTaxaUrgencia, editValorTaxaUrgencia, editTemTaxaCartao, editValorTaxaCartao, editSelectedAddonIds, products]);
+    return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0) + artVal + segundaArtVal + urgVal + cartaoVal;
+  }, [editItens, editArteDesign, editSegundaArte, editTemTaxaUrgencia, editValorTaxaUrgencia, editTemTaxaCartao, editValorTaxaCartao]);
 
   const editingSaleIdRef = React.useRef<string | null>(null);
 
@@ -362,7 +351,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
           produtoNome: editingSale.produtoNome || '',
           precoUn: editingSale.precoUn || 0,
           quantidade: editingSale.quantidade || 1,
-          total: (editingSale.precoUn || 0) * (editingSale.quantidade || 1)
+          total: (editingSale.precoUn || 0) * (editingSale.quantidade || 1),
+          custoUn: editingSale.custoUn
         }];
       }
 
@@ -389,22 +379,15 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
         setEditValorTaxaCartao('');
       }
 
-      // Initialize selected addon IDs from edit sale items!
-      const addonItems = rawItens.filter(item => {
-        return item.produtoNome.startsWith('Adicional:');
-      });
-      setEditSelectedAddonIds(addonItems.map(item => item.produtoId));
       setEditShowAddons(false);
 
-      // Filter out services and addon items from the main item list
+      // Filter out ONLY the 4 fixed service/tax items from the items list.
+      // Every product and every addon item is kept intact with its own name, price, quantity, and cost!
       const filteredItens = rawItens.filter(item => {
         if (item.produtoId === 'artedesign-service' || 
             item.produtoId === 'segundaarte-service' || 
             item.produtoId === 'taxaurgencia-service' || 
             item.produtoId === 'taxacartao-service') {
-          return false;
-        }
-        if (item.produtoNome.startsWith('Adicional:')) {
           return false;
         }
         return true;
@@ -1339,23 +1322,6 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     };
 
     let finalItensToSave = [...editItens];
-
-    // Append selected addons
-    const referenceQty = editItens.length > 0 ? editItens[0].quantidade : 1;
-    for (const addonId of editSelectedAddonIds) {
-      const addon = products.find(p => p.id === addonId);
-      if (addon) {
-        const addonPrice = getProductUnitPrice(addon, referenceQty);
-        finalItensToSave.push({
-          id: `item-${addon.id}-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-          produtoId: addon.id,
-          produtoNome: `Adicional: ${addon.nome}`,
-          precoUn: addonPrice,
-          quantidade: referenceQty,
-          total: addonPrice * referenceQty
-        });
-      }
-    }
 
     if (editArteDesign) {
       finalItensToSave.push({
@@ -3798,15 +3764,38 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   </div>
 
                   {/* List of current items */}
-                  <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
+                  <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
                     {editItens.map((item, idx) => {
-                      const isAvulso = item.produtoId.startsWith('avulso-') || item.produtoId === 'produto-avulso' || !products?.some(p => p.id === item.produtoId);
+                      const isAddon = item.produtoNome.startsWith('Adicional:') || products?.some(p => p.id === item.produtoId && p.adicional);
+                      const isAvulso = !isAddon && (item.produtoId.startsWith('avulso-') || item.produtoId === 'produto-avulso' || !products?.some(p => p.id === item.produtoId));
 
                       return (
                         <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2 bg-zinc-900 border border-zinc-800 rounded-lg text-xs">
                           {/* Product selection/name */}
                           <div className="flex-1 min-w-0 font-medium">
-                            {isAvulso ? (
+                            {isAddon ? (
+                              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5">
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <span className="px-1.5 py-0.5 bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 rounded text-[10px] font-bold flex items-center gap-1">
+                                    ✨ Adicional
+                                  </span>
+                                </div>
+                                <input
+                                  type="text"
+                                  value={item.produtoNome}
+                                  onChange={(e) => {
+                                    const newName = e.target.value;
+                                    const updated = editItens.map((it, i) => i === idx ? {
+                                      ...it,
+                                      produtoNome: newName
+                                    } : it);
+                                    setEditItens(updated);
+                                  }}
+                                  placeholder="Nome do adicional..."
+                                  className="w-full bg-black border border-emerald-900 focus:border-emerald-500 rounded-lg px-2 py-1 text-emerald-200 text-xs focus:outline-none font-medium"
+                                />
+                              </div>
+                            ) : isAvulso ? (
                               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-1.5">
                                 <div className="flex items-center gap-1 shrink-0">
                                   <span className="px-1.5 py-0.5 bg-purple-950/80 border border-purple-500/40 text-purple-300 rounded text-[10px] font-bold flex items-center gap-1">
@@ -3822,7 +3811,8 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                                           produtoId: firstProd.id,
                                           produtoNome: firstProd.nome,
                                           precoUn: firstProd.preco,
-                                          total: firstProd.preco * it.quantidade
+                                          total: firstProd.preco * it.quantidade,
+                                          custoUn: firstProd.precoCusto
                                         } : it);
                                         setEditItens(updated);
                                       }}
@@ -3864,21 +3854,33 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                                     }
                                     const dbProd = products.find(p => p.id === selectedId);
                                     if (dbProd) {
+                                      const isProdAddon = dbProd.adicional;
+                                      const updatedName = isProdAddon && !dbProd.nome.startsWith('Adicional:') ? `Adicional: ${dbProd.nome}` : dbProd.nome;
                                       const updated = editItens.map((it, i) => i === idx ? {
                                         ...it,
                                         produtoId: dbProd.id,
-                                        produtoNome: dbProd.nome,
+                                        produtoNome: updatedName,
                                         precoUn: dbProd.preco,
-                                        total: dbProd.preco * it.quantidade
+                                        total: dbProd.preco * it.quantidade,
+                                        custoUn: dbProd.precoCusto
                                       } : it);
                                       setEditItens(updated);
                                     }
                                   }}
                                   className="w-full bg-black border border-zinc-805 rounded-lg px-2 py-1 text-zinc-200 text-xs focus:outline-none focus:border-brand-pink font-medium cursor-pointer"
                                 >
-                                  {products.map(p => (
-                                    <option key={p.id} value={p.id}>{p.nome} - R$ {p.preco.toFixed(2)}</option>
-                                  ))}
+                                  <optgroup label="🛍️ Produtos">
+                                    {products.filter(p => !p.adicional).map(p => (
+                                      <option key={p.id} value={p.id}>{p.nome} - R$ {p.preco.toFixed(2)}</option>
+                                    ))}
+                                  </optgroup>
+                                  {products.some(p => p.adicional) && (
+                                    <optgroup label="✨ Adicionais">
+                                      {products.filter(p => p.adicional).map(p => (
+                                        <option key={p.id} value={p.id}>✨ {p.nome} - R$ {p.preco.toFixed(2)}</option>
+                                      ))}
+                                    </optgroup>
+                                  )}
                                   <option value="convert-to-avulso">📦 + Converter para Produto Avulso...</option>
                                 </select>
                               ) : (
@@ -4011,13 +4013,26 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                         }}
                         className="flex-1 bg-black border border-zinc-800 rounded-lg px-2.5 py-1.5 text-xs text-zinc-350 focus:outline-none focus:border-brand-pink cursor-pointer font-medium"
                       >
-                        <option value="">➕ Selecione um produto para acrescentar...</option>
+                        <option value="">➕ Selecione um produto ou adicional para acrescentar...</option>
                         <option value="produto-avulso">📦 + Produto Avulso (Não cadastrado)</option>
-                        {products && products.map(p => (
-                          <option key={p.id} value={p.id}>
-                            {p.nome} - R$ {p.preco.toFixed(2)}
-                          </option>
-                        ))}
+                        {availableProducts.length > 0 && (
+                          <optgroup label="🛍️ Produtos do Catálogo">
+                            {availableProducts.map(p => (
+                              <option key={p.id} value={p.id}>
+                                {p.nome} - R$ {p.preco.toFixed(2)}
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
+                        {availableAddons.length > 0 && (
+                          <optgroup label="✨ Adicionais e Opcionais">
+                            {availableAddons.map(p => (
+                              <option key={p.id} value={p.id}>
+                                ✨ {p.nome} - R$ {p.preco.toFixed(2)} /un
+                              </option>
+                            ))}
+                          </optgroup>
+                        )}
                       </select>
                       
                       <button
@@ -4058,7 +4073,8 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                           const dbProd = products.find(p => p.id === selectedAddProductId);
                           if (dbProd) {
                             const isLiso = dbProd.nome.toLowerCase().includes('liso') || dbProd.nome.toLowerCase().includes('produtos lisos') || dbProd.nome.toLowerCase().includes('produto liso');
-                            let finalName = dbProd.nome;
+                            const isAddonProd = dbProd.adicional;
+                            let finalName = isAddonProd && !dbProd.nome.startsWith('Adicional:') ? `Adicional: ${dbProd.nome}` : dbProd.nome;
                             let finalPrice = dbProd.preco;
 
                             if (isLiso) {
@@ -4375,86 +4391,141 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 })()}
 
                 {/* Seleção de Adicionais Opcionais na Edição */}
-                {availableAddons.length > 0 && (
-                  <div className="bg-zinc-950/40 border border-zinc-850 p-4 rounded-xl space-y-3 text-left">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setEditShowAddons(prev => !prev);
-                        playSound('add');
-                      }}
-                      className="w-full flex items-center justify-between text-left focus:outline-none select-none group"
-                    >
-                      <span className="block text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-sans">
-                        <span>✨ Brinde Adicional / Opcionais do Pedido na Edição:</span>
-                        {editSelectedAddonIds.length > 0 && (
-                          <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[9px] font-extrabold animate-pulse">
-                            {editSelectedAddonIds.length} selecionado{editSelectedAddonIds.length > 1 ? 's' : ''}
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-[10.5px] font-bold text-zinc-400 group-hover:text-zinc-200 transition-colors flex items-center gap-1 bg-zinc-850/60 hover:bg-zinc-800/80 px-2 py-1 rounded-lg">
-                        {editShowAddons ? (
-                          <>Ocultar <span className="font-mono text-[9px]">▲</span></>
-                        ) : (
-                          <>Ver opcionais ({availableAddons.length}) <span className="font-mono text-[9px]">▼</span></>
-                        )}
-                      </span>
-                    </button>
+                {availableAddons.length > 0 && (() => {
+                  const currentAddonItemsCount = editItens.filter(it => it.produtoNome.startsWith('Adicional:') || products?.some(p => p.id === it.produtoId && p.adicional)).length;
 
-                    {editShowAddons && (
-                      <div className="pt-3 border-t border-zinc-850/50 mt-1 animate-fade-in space-y-3">
-                        <p className="text-[10px] text-zinc-500 leading-normal">
-                          A quantidade dos adicionais marcados acompanhará automaticamente a quantidade do produto principal ({editItens.length > 0 ? editItens[0].quantidade : 1} un.).
-                        </p>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
-                          {availableAddons.map(addon => {
-                            const isChecked = editSelectedAddonIds.includes(addon.id);
-                            return (
-                              <label
-                                key={addon.id}
-                                className={`flex items-center gap-2.5 px-3 py-2 border rounded-xl cursor-pointer select-none transition-all ${
-                                  isChecked
-                                    ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.04)]'
-                                    : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
-                                }`}
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => {
-                                    setEditSelectedAddonIds(prev =>
-                                      prev.includes(addon.id)
-                                        ? prev.filter(id => id !== addon.id)
-                                        : [...prev, addon.id]
-                                    );
-                                    playSound(isChecked ? 'remove' : 'add');
-                                  }}
-                                  className="rounded border-zinc-800 text-emerald-500 focus:ring-0 accent-emerald-500 h-4 w-4 cursor-pointer bg-black"
-                                />
-                                <div className="flex flex-col min-w-0">
-                                  <span className="text-xs font-semibold truncate text-zinc-200">
-                                    {addon.nome}
-                                  </span>
-                                  <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-[10px] font-mono text-emerald-450 font-bold">
-                                      + R$ {addon.preco.toFixed(2)} /un
-                                    </span>
-                                    {!addon.estoqueInfinito && addon.estoque <= 0 && (
-                                      <span className="text-[8px] leading-none bg-red-500/10 border border-red-500/30 text-red-400 font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
-                                        {addon.estoque < 0 ? 'Crítico' : 'Sem Estoque'}
+                  return (
+                    <div className="bg-zinc-950/40 border border-zinc-850 p-4 rounded-xl space-y-3 text-left">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditShowAddons(prev => !prev);
+                          playSound('add');
+                        }}
+                        className="w-full flex items-center justify-between text-left focus:outline-none select-none group"
+                      >
+                        <span className="block text-[10px] font-bold text-emerald-400 uppercase tracking-wider flex items-center gap-1.5 select-none font-sans">
+                          <span>✨ Adicionais / Opcionais do Pedido na Edição:</span>
+                          {currentAddonItemsCount > 0 && (
+                            <span className="bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full text-[9px] font-extrabold animate-pulse">
+                              {currentAddonItemsCount} no pedido
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-[10.5px] font-bold text-zinc-400 group-hover:text-zinc-200 transition-colors flex items-center gap-1 bg-zinc-850/60 hover:bg-zinc-800/80 px-2 py-1 rounded-lg">
+                          {editShowAddons ? (
+                            <>Ocultar <span className="font-mono text-[9px]">▲</span></>
+                          ) : (
+                            <>Ver opcionais ({availableAddons.length}) <span className="font-mono text-[9px]">▼</span></>
+                          )}
+                        </span>
+                      </button>
+
+                      {editShowAddons && (
+                        <div className="pt-3 border-t border-zinc-850/50 mt-1 animate-fade-in space-y-3">
+                          <p className="text-[10px] text-zinc-500 leading-normal">
+                            Marque os adicionais que deseja incluir no pedido. Cada adicional é adicionado como um item separado na lista de produtos acima, mantendo seus valores e quantidades independentes.
+                          </p>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-1.5">
+                            {availableAddons.map(addon => {
+                              const matchingItems = editItens.filter(it => it.produtoId === addon.id || it.produtoNome === `Adicional: ${addon.nome}` || it.produtoNome === addon.nome);
+                              const isChecked = matchingItems.length > 0;
+                              const totalQty = matchingItems.reduce((acc, it) => acc + it.quantidade, 0);
+
+                              return (
+                                <div
+                                  key={addon.id}
+                                  className={`flex items-center justify-between gap-2.5 px-3 py-2 border rounded-xl select-none transition-all ${
+                                    isChecked
+                                      ? 'bg-emerald-950/20 border-emerald-500/40 text-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.04)]'
+                                      : 'bg-black/30 border-zinc-850 text-zinc-400 hover:border-zinc-700/80 hover:bg-black/40'
+                                  }`}
+                                >
+                                  <label className="flex items-center gap-2.5 min-w-0 flex-1 cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      checked={isChecked}
+                                      onChange={() => {
+                                        if (isChecked) {
+                                          setEditItens(prev => prev.filter(it => it.produtoId !== addon.id && it.produtoNome !== `Adicional: ${addon.nome}` && it.produtoNome !== addon.nome));
+                                          playSound('remove');
+                                        } else {
+                                          const uniqueIdSuffix = Math.random().toString(36).substring(2, 7);
+                                          const addonName = !addon.nome.startsWith('Adicional:') ? `Adicional: ${addon.nome}` : addon.nome;
+                                          setEditItens(prev => [
+                                            ...prev,
+                                            {
+                                              id: `item-${addon.id}-${Date.now()}-${uniqueIdSuffix}`,
+                                              produtoId: addon.id,
+                                              produtoNome: addonName,
+                                              precoUn: addon.preco,
+                                              quantidade: 1,
+                                              total: addon.preco,
+                                              custoUn: addon.precoCusto
+                                            }
+                                          ]);
+                                          playSound('add');
+                                        }
+                                      }}
+                                      className="rounded border-zinc-800 text-emerald-500 focus:ring-0 accent-emerald-500 h-4 w-4 cursor-pointer bg-black"
+                                    />
+                                    <div className="flex flex-col min-w-0">
+                                      <span className="text-xs font-semibold truncate text-zinc-200">
+                                        {addon.nome}
                                       </span>
-                                    )}
-                                  </div>
+                                      <div className="flex items-center gap-1.5 flex-wrap">
+                                        <span className="text-[10px] font-mono text-emerald-450 font-bold">
+                                          + R$ {addon.preco.toFixed(2)} /un
+                                        </span>
+                                        {!addon.estoqueInfinito && addon.estoque <= 0 && (
+                                          <span className="text-[8px] leading-none bg-red-500/10 border border-red-500/30 text-red-400 font-black px-1.5 py-0.5 rounded uppercase tracking-wider">
+                                            {addon.estoque < 0 ? 'Crítico' : 'Sem Estoque'}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </label>
+
+                                  {isChecked && (
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-950/60 px-1.5 py-0.5 rounded border border-emerald-800 font-mono">
+                                        {totalQty} un.
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const uniqueIdSuffix = Math.random().toString(36).substring(2, 7);
+                                          const addonName = !addon.nome.startsWith('Adicional:') ? `Adicional: ${addon.nome}` : addon.nome;
+                                          setEditItens(prev => [
+                                            ...prev,
+                                            {
+                                              id: `item-${addon.id}-${Date.now()}-${uniqueIdSuffix}`,
+                                              produtoId: addon.id,
+                                              produtoNome: addonName,
+                                              precoUn: addon.preco,
+                                              quantidade: 1,
+                                              total: addon.preco,
+                                              custoUn: addon.precoCusto
+                                            }
+                                          ]);
+                                          playSound('add');
+                                        }}
+                                        className="text-[10px] font-bold text-emerald-300 hover:text-white bg-emerald-900/40 hover:bg-emerald-800/60 px-1.5 py-0.5 rounded border border-emerald-700/50 cursor-pointer"
+                                        title="Adicionar mais uma unidade deste adicional"
+                                      >
+                                        +1
+                                      </button>
+                                    </div>
+                                  )}
                                 </div>
-                              </label>
-                            );
-                          })}
+                              );
+                            })}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                )}
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {editingSale && editingSale.status === 'Orçamento' && (
                   <div className="p-3.5 bg-emerald-950/20 border border-emerald-900/40 rounded-xl flex items-center justify-between gap-3 select-none transition-all">
