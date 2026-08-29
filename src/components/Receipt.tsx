@@ -45,9 +45,9 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
   const [confirmForce, setConfirmForce] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
   
-  // Printing settings & states
-  const [receiptWidth, setReceiptWidth] = useState<'80mm' | '58mm'>(() => {
-    return (localStorage.getItem('oxente_receipt_width') as '80mm' | '58mm') || '80mm';
+  // Printing settings & states: 'a4' (Impressora Normal / Folha A4), '80mm' (Térmica 80mm), '58mm' (Térmica 58mm)
+  const [receiptFormat, setReceiptFormat] = useState<'a4' | '80mm' | '58mm'>(() => {
+    return (localStorage.getItem('oxente_receipt_format') as 'a4' | '80mm' | '58mm') || '80mm';
   });
   const [copiedReceiptText, setCopiedReceiptText] = useState(false);
   const [showPrinterHelp, setShowPrinterHelp] = useState(false);
@@ -74,9 +74,9 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
     );
   }, [sale.id, sale.status]);
 
-  const handleWidthChange = (width: '80mm' | '58mm') => {
-    setReceiptWidth(width);
-    localStorage.setItem('oxente_receipt_width', width);
+  const handleFormatChange = (format: 'a4' | '80mm' | '58mm') => {
+    setReceiptFormat(format);
+    localStorage.setItem('oxente_receipt_format', format);
     playAppSound('click');
   };
 
@@ -99,7 +99,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
     return [];
   };
 
-  // Generate isolated clean HTML for thermal printing
+  // Generate isolated clean HTML for thermal OR normal A4/A5 printer
   const generateCleanPrintHtml = () => {
     const formattedD = new Date(sale.data).toLocaleString('pt-BR', {
       day: '2-digit',
@@ -111,7 +111,297 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
     });
 
     const isOrcamento = sale.status === 'Orçamento';
-    const is58 = receiptWidth === '58mm';
+    const valorPagoCalc = sale.valorPago !== undefined ? sale.valorPago : sale.total;
+    const valorFaltanteCalc = sale.valorFaltante !== undefined ? sale.valorFaltante : 0;
+    const formattedRetirada = sale.dataRetirada ? new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR') : '';
+
+    // ==========================================
+    // 1. IMPRESSORA NORMAL (FOLHA A4 / A5)
+    // ==========================================
+    if (receiptFormat === 'a4') {
+      let a4ItemsRows = '';
+      if (sale.itens && sale.itens.length > 0) {
+        a4ItemsRows = sale.itens.map((item, idx) => `
+          <tr style="border-bottom: 1px solid #e2e8f0; background: ${idx % 2 === 0 ? '#ffffff' : '#f8fafc'};">
+            <td style="padding: 10px 14px; vertical-align: middle;">
+              <div style="font-weight: 700; color: #0f172a; font-size: 13px;">${item.produtoNome}</div>
+              ${item.corSelecionada ? `<div style="font-size: 11px; color: #64748b; margin-top: 2px;">Cor: <strong>${item.corSelecionada}</strong></div>` : ''}
+            </td>
+            <td style="padding: 10px 14px; text-align: center; font-size: 13px; color: #334155;">R$ ${item.precoUn.toFixed(2)}</td>
+            <td style="padding: 10px 14px; text-align: center; font-weight: 700; font-size: 13px; color: #0f172a;">${item.quantidade}</td>
+            <td style="padding: 10px 14px; text-align: right; font-weight: 700; font-size: 13px; color: #0f172a;">R$ ${item.total.toFixed(2)}</td>
+          </tr>
+        `).join('');
+      } else {
+        a4ItemsRows = `
+          <tr style="border-bottom: 1px solid #e2e8f0; background: #ffffff;">
+            <td style="padding: 10px 14px; vertical-align: middle;">
+              <div style="font-weight: 700; color: #0f172a; font-size: 13px;">${sale.produtoNome}</div>
+              ${sale.corSelecionada ? `<div style="font-size: 11px; color: #64748b; margin-top: 2px;">Cor: <strong>${sale.corSelecionada}</strong></div>` : ''}
+            </td>
+            <td style="padding: 10px 14px; text-align: center; font-size: 13px; color: #334155;">R$ ${sale.precoUn.toFixed(2)}</td>
+            <td style="padding: 10px 14px; text-align: center; font-weight: 700; font-size: 13px; color: #0f172a;">${sale.quantidade}</td>
+            <td style="padding: 10px 14px; text-align: right; font-weight: 700; font-size: 13px; color: #0f172a;">R$ ${sale.total.toFixed(2)}</td>
+          </tr>
+        `;
+      }
+
+      return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${isOrcamento ? 'Orcamento' : 'Recibo'}_${sale.numeroPedido || sale.id}</title>
+  <style>
+    @page {
+      size: A4 portrait;
+      margin: 15mm 15mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      color: #0f172a;
+      background: #ffffff !important;
+      font-size: 12px;
+      line-height: 1.5;
+      padding: 0;
+    }
+    .container {
+      max-width: 100%;
+      margin: 0 auto;
+      border: 1px solid #cbd5e1;
+      border-radius: 12px;
+      padding: 24px;
+      background: #ffffff;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      border-bottom: 2px solid #e2e8f0;
+      padding-bottom: 16px;
+      margin-bottom: 20px;
+    }
+    .company-title {
+      font-size: 20px;
+      font-weight: 800;
+      color: #0f172a;
+      text-transform: uppercase;
+      letter-spacing: -0.5px;
+    }
+    .badge-doc {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-weight: 800;
+      font-size: 13px;
+      text-transform: uppercase;
+      background: ${isOrcamento ? '#fef3c7' : '#ecfdf5'};
+      color: ${isOrcamento ? '#92400e' : '#065f46'};
+      border: 1px solid ${isOrcamento ? '#fde68a' : '#a7f3d0'};
+    }
+    .grid-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 14px 18px;
+      margin-bottom: 20px;
+    }
+    .info-item {
+      font-size: 12px;
+      color: #334155;
+    }
+    .info-item strong {
+      color: #0f172a;
+      font-weight: 700;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #e2e8f0;
+    }
+    th {
+      background: #f1f5f9;
+      color: #334155;
+      font-weight: 800;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: 0.5px;
+      padding: 10px 14px;
+      border-bottom: 1px solid #cbd5e1;
+    }
+    .totals-box {
+      display: flex;
+      justify-content: flex-end;
+      margin-bottom: 20px;
+    }
+    .totals-table {
+      width: 320px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 12px 16px;
+    }
+    .total-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      font-size: 12px;
+    }
+    .grand-total {
+      font-size: 15px;
+      font-weight: 800;
+      color: #0f172a;
+      border-top: 1px solid #cbd5e1;
+      padding-top: 6px;
+      margin-top: 4px;
+    }
+    .footer {
+      border-top: 1px solid #e2e8f0;
+      padding-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      color: #64748b;
+    }
+    .qr-side {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .qr-side img {
+      width: 65px;
+      height: 65px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      padding: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <div class="company-title">${storeInfo.nome || 'OXENTE FESTEJE'}</div>
+        <div style="font-size: 12px; color: #475569; font-weight: 600;">Brindes & Lembrancinhas Personalizadas</div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">CNPJ: 26.051.478/0001-34 • Tel/WhatsApp: (83) 98885-9302</div>
+        <div style="font-size: 11px; color: #64748b;">Instagram: ${storeInfo.instagram || '@oxentefesteje'}</div>
+      </div>
+      <div style="text-align: right;">
+        <div class="badge-doc">${isOrcamento ? '📄 ORÇAMENTO / PROPOSTA' : 'COMPROVANTE DE PEDIDO'}</div>
+        <div style="font-size: 16px; font-weight: 800; margin-top: 6px; color: #0f172a;">${sale.numeroPedido ? '#' + sale.numeroPedido : 'Orçamento'}</div>
+        <div style="font-size: 11px; color: #64748b; margin-top: 2px;">Emissão: ${formattedD}</div>
+      </div>
+    </div>
+
+    <div class="grid-info">
+      <div>
+        <div class="info-item"><strong>Cliente:</strong> ${sale.cliente}</div>
+        ${sale.telefoneCliente ? `<div class="info-item" style="margin-top: 4px;"><strong>Telefone:</strong> ${sale.telefoneCliente}</div>` : ''}
+      </div>
+      <div>
+        <div class="info-item"><strong>Forma de Pagamento:</strong> ${sale.formaPagamento}</div>
+        ${formattedRetirada ? `<div class="info-item" style="margin-top: 4px;"><strong>Data de Retirada/Entrega:</strong> ${formattedRetirada}</div>` : ''}
+      </div>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align: left;">Descrição do Item / Produto</th>
+          <th style="text-align: center; width: 100px;">Valor Un.</th>
+          <th style="text-align: center; width: 80px;">Qtd</th>
+          <th style="text-align: right; width: 110px;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${a4ItemsRows}
+      </tbody>
+    </table>
+
+    <div class="totals-box">
+      <div class="totals-table">
+        <div class="total-row">
+          <span>Subtotal:</span>
+          <strong>R$ ${sale.total.toFixed(2)}</strong>
+        </div>
+        ${sale.descontoReferral ? `
+          <div class="total-row" style="color: #059669;">
+            <span>Cupom Indicação:</span>
+            <strong>- R$ ${sale.descontoReferral.toFixed(2)}</strong>
+          </div>
+        ` : ''}
+        ${sale.cashbackGasto ? `
+          <div class="total-row" style="color: #059669;">
+            <span>Cashback Usado:</span>
+            <strong>- R$ ${sale.cashbackGasto.toFixed(2)}</strong>
+          </div>
+        ` : ''}
+        <div class="total-row grand-total">
+          <span>${isOrcamento ? 'VALOR ESTIMADO:' : 'TOTAL GERAL:'}</span>
+          <span>R$ ${sale.total.toFixed(2)}</span>
+        </div>
+        ${!isOrcamento ? `
+          <div class="total-row" style="margin-top: 4px;">
+            <span>Valor Pago / Entrada:</span>
+            <strong>R$ ${valorPagoCalc.toFixed(2)}</strong>
+          </div>
+          ${valorFaltanteCalc > 0 ? `
+            <div class="total-row" style="color: #dc2626; font-weight: 700;">
+              <span>Restante na Retirada:</span>
+              <span>R$ ${valorFaltanteCalc.toFixed(2)}</span>
+            </div>
+          ` : `
+            <div class="total-row" style="color: #059669; font-weight: 700;">
+              <span>Status Financeiro:</span>
+              <span>PAGO INTEGRALMENTE</span>
+            </div>
+          `}
+        ` : ''}
+      </div>
+    </div>
+
+    <div class="footer">
+      <div>
+        ${isOrcamento ? `
+          <div style="font-weight: 700; color: #92400e;">* Proposta válida por 15 dias. Valores sujeitos a confirmação de disponibilidade de estoque.</div>
+        ` : `
+          <div style="font-weight: 700; color: #0f172a;">Agradecemos pela preferência e confiança em nosso trabalho!</div>
+        `}
+        <div style="color: #64748b; margin-top: 2px;">Para dúvidas ou alterações, entre em contato pelo nosso WhatsApp comercial.</div>
+      </div>
+      ${!isOrcamento && qrCodeUrl ? `
+        <div class="qr-side">
+          <div style="text-align: right;">
+            <div style="font-weight: 700; font-size: 10px; color: #0f172a; text-transform: uppercase;">Acompanhe o Pedido</div>
+            <div style="font-size: 9px; color: #64748b;">Escaneie a câmera aqui</div>
+          </div>
+          <img src="${qrCodeUrl}" alt="QR Code" />
+        </div>
+      ` : ''}
+    </div>
+  </div>
+</body>
+</html>`;
+    }
+
+    // ==========================================
+    // 2. IMPRESSORA TÉRMICA (80mm ou 58mm)
+    // ==========================================
+    const is58 = receiptFormat === '58mm';
+    const thermalPaperWidth = is58 ? '58mm' : '80mm';
     const maxWidthCss = is58 ? '48mm' : '72mm';
     const fontSizeCss = is58 ? '10px' : '11.5px';
 
@@ -142,9 +432,6 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
       `;
     }
 
-    const valorPagoCalc = sale.valorPago !== undefined ? sale.valorPago : sale.total;
-    const valorFaltanteCalc = sale.valorFaltante !== undefined ? sale.valorFaltante : 0;
-
     return `<!DOCTYPE html>
 <html>
 <head>
@@ -153,7 +440,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
   <style>
     @page {
       margin: 0 !important;
-      size: ${receiptWidth} auto;
+      size: ${thermalPaperWidth} auto;
     }
     * {
       box-sizing: border-box;
@@ -492,48 +779,69 @@ Instagram: ${storeInfo.instagram || '@oxentefesteje'}
           {sale.status === 'Orçamento' ? 'Visualização do Orçamento' : 'Visualização do Recibo'}
         </h3>
         <p className="text-xs text-zinc-500 mb-3">
-          Pronto para impressão térmica direta ou compartilhamento.
+          Escolha o tipo de impressora e imprima diretamente ou compartilhe.
         </p>
 
-        {/* Paper format selector (80mm vs 58mm) */}
-        <div className="inline-flex items-center gap-1.5 p-1 bg-zinc-100 border border-zinc-200 rounded-xl text-xs">
-          <span className="text-[10px] font-bold text-zinc-600 px-2 uppercase flex items-center gap-1">
+        {/* Printer format selector (Impressora Normal A4 vs Térmica 80mm vs Térmica 58mm) */}
+        <div className="inline-flex flex-wrap items-center justify-center gap-1.5 p-1.5 bg-zinc-100 border border-zinc-200 rounded-xl text-xs">
+          <span className="text-[10px] font-bold text-zinc-600 px-1 uppercase flex items-center gap-1">
             <Sliders className="h-3 w-3" />
-            <span>Bobina:</span>
+            <span>Impressora:</span>
           </span>
           <button
             type="button"
-            onClick={() => handleWidthChange('80mm')}
-            className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
-              receiptWidth === '80mm'
+            onClick={() => handleFormatChange('a4')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
+              receiptFormat === 'a4'
                 ? 'bg-brand-pink text-white shadow-xs'
-                : 'text-zinc-600 hover:text-zinc-900'
+                : 'text-zinc-600 hover:text-zinc-900 bg-white/70'
             }`}
           >
-            80mm (Padrão)
+            <FileText className="h-3 w-3" />
+            <span>Normal (A4 / A5)</span>
           </button>
           <button
             type="button"
-            onClick={() => handleWidthChange('58mm')}
-            className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
-              receiptWidth === '58mm'
+            onClick={() => handleFormatChange('80mm')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
+              receiptFormat === '80mm'
                 ? 'bg-brand-pink text-white shadow-xs'
-                : 'text-zinc-600 hover:text-zinc-900'
+                : 'text-zinc-600 hover:text-zinc-900 bg-white/70'
             }`}
           >
-            58mm (Mini)
+            <Printer className="h-3 w-3" />
+            <span>Térmica (80mm)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleFormatChange('58mm')}
+            className={`px-3 py-1.5 rounded-lg font-bold text-[11px] transition-all cursor-pointer flex items-center gap-1 ${
+              receiptFormat === '58mm'
+                ? 'bg-brand-pink text-white shadow-xs'
+                : 'text-zinc-600 hover:text-zinc-900 bg-white/70'
+            }`}
+          >
+            <Printer className="h-3 w-3" />
+            <span>Térmica (58mm)</span>
           </button>
         </div>
       </div>
 
-      {/* Styled Simulated Thermal Receipt Container */}
+      {/* Styled Simulated Receipt Container */}
       <div 
         id="printable-receipt"
         ref={receiptRef}
-        className={`printable-receipt border border-black bg-white shadow-none font-mono text-black relative select-text transition-all ${
-          receiptWidth === '58mm' ? 'p-4 max-w-[280px] text-[11px]' : 'p-6 max-w-sm text-xs'
+        className={`printable-receipt border bg-white shadow-none text-black relative select-text transition-all ${
+          receiptFormat === 'a4' 
+            ? 'p-6 max-w-xl text-xs rounded-xl border-zinc-300 font-sans' 
+            : receiptFormat === '58mm'
+              ? 'p-4 max-w-[280px] text-[11px] border-black font-mono'
+              : 'p-6 max-w-sm text-xs border-black font-mono'
         } w-full`}
-        style={{ fontFamily: "'JetBrains Mono', 'Courier New', Courier, monospace", color: '#000000' }}
+        style={{ 
+          fontFamily: receiptFormat === 'a4' ? "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" : "'JetBrains Mono', 'Courier New', Courier, monospace", 
+          color: '#000000' 
+        }}
       >
         {/* Receipt Header */}
         <div className="text-center space-y-1 mb-4 select-none">
@@ -542,7 +850,7 @@ Instagram: ${storeInfo.instagram || '@oxentefesteje'}
               📄 Orçamento / Cotação
             </div>
           )}
-          <h2 className={`font-extrabold tracking-tight text-black select-text ${receiptWidth === '58mm' ? 'text-lg' : 'text-xl'}`}>
+          <h2 className={`font-extrabold tracking-tight text-black select-text ${receiptFormat === '58mm' ? 'text-lg' : receiptFormat === 'a4' ? 'text-2xl' : 'text-xl'}`}>
             {storeInfo.nome || 'OXENTE FESTEJE'}
           </h2>
           <p className="text-[10px] uppercase tracking-wider text-black font-bold select-text">Brindes Personalizados</p>
@@ -928,7 +1236,9 @@ Instagram: ${storeInfo.instagram || '@oxentefesteje'}
             <span>
               {isPrinting 
                 ? 'Preparando Impressão...' 
-                : (sale.status === 'Orçamento' ? '🖨️ Imprimir Orçamento (Direto)' : '🖨️ Imprimir Recibo Térmico')}
+                : receiptFormat === 'a4'
+                  ? (sale.status === 'Orçamento' ? '🖨️ Imprimir Orçamento (Folha A4)' : '🖨️ Imprimir Recibo (Impressora Normal A4)')
+                  : (sale.status === 'Orçamento' ? `🖨️ Imprimir Orçamento (${receiptFormat})` : `🖨️ Imprimir Recibo Térmico (${receiptFormat})`)}
             </span>
           </button>
         )}
