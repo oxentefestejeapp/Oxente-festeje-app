@@ -3,9 +3,26 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
-import { Printer, Calendar, User, CreditCard, ShoppingBag, Eye, MessageSquare, Pencil, QrCode } from 'lucide-react';
-import { motion } from 'motion/react';
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Printer, 
+  Calendar, 
+  User, 
+  CreditCard, 
+  ShoppingBag, 
+  Eye, 
+  MessageSquare, 
+  Pencil, 
+  QrCode,
+  ExternalLink,
+  Copy,
+  Check,
+  HelpCircle,
+  Sliders,
+  FileText,
+  AlertTriangle
+} from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 import QRCode from 'qrcode';
 import { Sale, StoreInfo } from '../types';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
@@ -27,6 +44,15 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
   const [pickupDate, setPickupDate] = useState<string>(sale.dataRetirada || '');
   const [confirmForce, setConfirmForce] = useState(false);
   const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
+  
+  // Printing settings & states
+  const [receiptWidth, setReceiptWidth] = useState<'80mm' | '58mm'>(() => {
+    return (localStorage.getItem('oxente_receipt_width') as '80mm' | '58mm') || '80mm';
+  });
+  const [copiedReceiptText, setCopiedReceiptText] = useState(false);
+  const [showPrinterHelp, setShowPrinterHelp] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
+  const receiptRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!sale || sale.status === 'Orçamento') return;
@@ -48,6 +74,12 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
     );
   }, [sale.id, sale.status]);
 
+  const handleWidthChange = (width: '80mm' | '58mm') => {
+    setReceiptWidth(width);
+    localStorage.setItem('oxente_receipt_width', width);
+    playAppSound('click');
+  };
+
   // Helper to extract items from sale
   const getSaleItems = (s: Sale): { produtoId: string; quantidade: number; produtoNome: string }[] => {
     if (s.itens && s.itens.length > 0) {
@@ -67,8 +99,335 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
     return [];
   };
 
-  const handlePrint = () => {
-    window.print();
+  // Generate isolated clean HTML for thermal printing
+  const generateCleanPrintHtml = () => {
+    const formattedD = new Date(sale.data).toLocaleString('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+
+    const isOrcamento = sale.status === 'Orçamento';
+    const is58 = receiptWidth === '58mm';
+    const maxWidthCss = is58 ? '48mm' : '72mm';
+    const fontSizeCss = is58 ? '10px' : '11.5px';
+
+    let itemsRowsHtml = '';
+    if (sale.itens && sale.itens.length > 0) {
+      itemsRowsHtml = sale.itens.map(item => `
+        <tr style="border-bottom: 1px dashed #000;">
+          <td style="padding: 4px 0; vertical-align: top;">
+            <div style="font-weight: bold;">${item.produtoNome}</div>
+            ${item.corSelecionada ? `<div style="font-size: 8.5px;">Cor: ${item.corSelecionada}</div>` : ''}
+            <div style="font-size: 8.5px;">Un: R$ ${item.precoUn.toFixed(2)}</div>
+          </td>
+          <td style="padding: 4px 0; text-align: center; vertical-align: top; font-weight: bold;">${item.quantidade}</td>
+          <td style="padding: 4px 0; text-align: right; vertical-align: top; font-weight: bold;">R$ ${item.total.toFixed(2)}</td>
+        </tr>
+      `).join('');
+    } else {
+      itemsRowsHtml = `
+        <tr style="border-bottom: 1px dashed #000;">
+          <td style="padding: 4px 0; vertical-align: top;">
+            <div style="font-weight: bold;">${sale.produtoNome}</div>
+            ${sale.corSelecionada ? `<div style="font-size: 8.5px;">Cor: ${sale.corSelecionada}</div>` : ''}
+            <div style="font-size: 8.5px;">Un: R$ ${sale.precoUn.toFixed(2)}</div>
+          </td>
+          <td style="padding: 4px 0; text-align: center; vertical-align: top; font-weight: bold;">${sale.quantidade}</td>
+          <td style="padding: 4px 0; text-align: right; vertical-align: top; font-weight: bold;">R$ ${sale.total.toFixed(2)}</td>
+        </tr>
+      `;
+    }
+
+    const valorPagoCalc = sale.valorPago !== undefined ? sale.valorPago : sale.total;
+    const valorFaltanteCalc = sale.valorFaltante !== undefined ? sale.valorFaltante : 0;
+
+    return `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>${isOrcamento ? 'Orcamento' : 'Recibo'}_${sale.numeroPedido || sale.id}</title>
+  <style>
+    @page {
+      margin: 0 !important;
+      size: ${receiptWidth} auto;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      color: #000000 !important;
+      background: transparent !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+    }
+    body {
+      font-family: 'JetBrains Mono', 'Courier New', Courier, monospace;
+      font-size: ${fontSizeCss};
+      line-height: 1.35;
+      background-color: #ffffff !important;
+      padding: 6px 8px;
+      width: ${maxWidthCss};
+      margin: 0 auto;
+    }
+    .text-center { text-align: center; }
+    .text-right { text-align: right; }
+    .font-bold { font-weight: bold; }
+    .divider { border-top: 1.5px dashed #000; margin: 6px 0; }
+    .row { display: flex; justify-content: space-between; margin-bottom: 2px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 4px; font-size: ${fontSizeCss}; }
+    th { border-top: 1.5px dashed #000; border-bottom: 1.5px dashed #000; padding: 4px 0; font-weight: bold; text-align: left; }
+    .qr-container { text-align: center; margin-top: 8px; padding-top: 6px; border-top: 1.5px dashed #000; }
+    .qr-img { width: ${is58 ? '85px' : '110px'}; height: ${is58 ? '85px' : '110px'}; margin: 4px auto 0 auto; display: block; }
+  </style>
+</head>
+<body>
+  ${isOrcamento ? '<div class="text-center font-bold" style="border: 1.5px solid #000; padding: 2px; margin-bottom: 6px; font-size: 10px;">PROPOSTA / ORÇAMENTO</div>' : ''}
+  <div class="text-center">
+    <div style="font-size: 14px; font-weight: 900; text-transform: uppercase;">${storeInfo.nome || 'OXENTE FESTEJE'}</div>
+    <div style="font-size: 9px; font-weight: bold; text-transform: uppercase;">Brindes Personalizados</div>
+    <div style="font-size: 9px;">CNPJ: 26.051.478/0001-34</div>
+    <div style="font-size: 9px;">Tel: (83) 98885-9302</div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="row">
+    <span>${sale.numeroPedido ? 'Nº Pedido:' : 'Doc:'}</span>
+    <span class="font-bold">${sale.numeroPedido ? '#' + sale.numeroPedido : 'Orçamento'}</span>
+  </div>
+  <div class="row">
+    <span>Data:</span>
+    <span>${formattedD}</span>
+  </div>
+  <div class="row">
+    <span>Cliente:</span>
+    <span class="font-bold">${sale.cliente}</span>
+  </div>
+  ${sale.telefoneCliente ? `<div class="row"><span>Telefone:</span><span>${sale.telefoneCliente}</span></div>` : ''}
+  <div class="row">
+    <span>Pagamento:</span>
+    <span class="font-bold">${sale.formaPagamento}</span>
+  </div>
+  ${sale.dataRetirada ? `
+    <div class="row">
+      <span>Retirada:</span>
+      <span class="font-bold" style="border-bottom: 1px solid #000;">${new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+    </div>
+  ` : ''}
+
+  <table>
+    <thead>
+      <tr>
+        <th>Item</th>
+        <th style="text-align: center;">Qtd</th>
+        <th style="text-align: right;">Total</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${itemsRowsHtml}
+    </tbody>
+  </table>
+
+  <div class="divider"></div>
+
+  <div class="row">
+    <span>${isOrcamento ? 'VALOR ESTIMADO:' : 'TOTAL GERAL:'}</span>
+    <span class="font-bold" style="font-size: 13px;">R$ ${sale.total.toFixed(2)}</span>
+  </div>
+
+  ${sale.descontoReferral ? `
+    <div class="row">
+      <span>Cupom Amigo:</span>
+      <span class="font-bold">- R$ ${sale.descontoReferral.toFixed(2)}</span>
+    </div>
+  ` : ''}
+
+  ${sale.cashbackGasto ? `
+    <div class="row">
+      <span>Cashback Usado:</span>
+      <span class="font-bold">- R$ ${sale.cashbackGasto.toFixed(2)}</span>
+    </div>
+  ` : ''}
+
+  ${!isOrcamento ? `
+    <div class="row">
+      <span>Valor Pago:</span>
+      <span class="font-bold">R$ ${valorPagoCalc.toFixed(2)}</span>
+    </div>
+    ${valorFaltanteCalc > 0 ? `
+      <div class="row" style="border-top: 1px dashed #000; padding-top: 3px; margin-top: 2px;">
+        <span class="font-bold">RESTANTE A PAGAR:</span>
+        <span class="font-bold" style="font-size: 13px;">R$ ${valorFaltanteCalc.toFixed(2)}</span>
+      </div>
+    ` : `
+      <div class="row" style="border-top: 1px dashed #000; padding-top: 3px; margin-top: 2px;">
+        <span>Status:</span>
+        <span class="font-bold">Pago Integralmente</span>
+      </div>
+    `}
+  ` : ''}
+
+  <div class="divider"></div>
+
+  <div class="text-center" style="margin-top: 6px;">
+    ${isOrcamento ? `
+      <div style="font-size: 9px; font-weight: bold; border: 1px solid #000; padding: 3px; margin-bottom: 4px;">
+        Proposta válida por 15 dias.<br/>Sujeito a alteração de estoque.
+      </div>
+    ` : `
+      <div class="font-bold" style="font-size: 11px;">Muito obrigado pela preferência!</div>
+    `}
+    <div style="font-size: 9px; margin-top: 2px;">Instagram: ${storeInfo.instagram || '@oxentefesteje'}</div>
+  </div>
+
+  ${!isOrcamento && qrCodeUrl ? `
+    <div class="qr-container">
+      <div style="font-size: 9px; font-weight: bold; text-transform: uppercase;">Acompanhe seu Pedido</div>
+      <img src="${qrCodeUrl}" class="qr-img" alt="QR Code Rastreio" />
+    </div>
+  ` : ''}
+</body>
+</html>`;
+  };
+
+  // 1. Direct Isolated Iframe Printing Engine (Works seamlessly without page css interference)
+  const handleDirectPrint = () => {
+    try {
+      setIsPrinting(true);
+      playAppSound('click');
+
+      const printHtml = generateCleanPrintHtml();
+
+      // Remove any existing print iframe
+      const oldFrame = document.getElementById('oxente_print_iframe');
+      if (oldFrame) {
+        oldFrame.remove();
+      }
+
+      const iframe = document.createElement('iframe');
+      iframe.id = 'oxente_print_iframe';
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      iframe.style.visibility = 'hidden';
+      document.body.appendChild(iframe);
+
+      const frameDoc = iframe.contentWindow?.document || iframe.contentDocument;
+      if (!frameDoc) {
+        throw new Error('Não foi possível acessar o contexto de impressão.');
+      }
+
+      frameDoc.open();
+      frameDoc.write(printHtml);
+      frameDoc.close();
+
+      // Wait for QR code image and fonts to load inside iframe before triggering print
+      const triggerPrint = () => {
+        try {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        } catch (err) {
+          console.warn('Iframe print failed, falling back to window.print():', err);
+          window.print();
+        } finally {
+          setIsPrinting(false);
+          setTimeout(() => {
+            iframe.remove();
+          }, 3000);
+        }
+      };
+
+      if (iframe.contentWindow) {
+        iframe.contentWindow.onload = () => {
+          setTimeout(triggerPrint, 350);
+        };
+      } else {
+        setTimeout(triggerPrint, 500);
+      }
+    } catch (e) {
+      console.error('Erro na impressão direta:', e);
+      setIsPrinting(false);
+      window.print();
+    }
+  };
+
+  // 2. Open in New Tab Printing Fallback (For browsers or webviews where iframes are sandboxed)
+  const handleOpenInNewTabPrint = () => {
+    try {
+      playAppSound('click');
+      const printHtml = generateCleanPrintHtml();
+      const newWin = window.open('', '_blank', 'width=460,height=750,toolbar=no,location=no,status=no,menubar=no,scrollbars=yes,resizable=yes');
+      if (newWin) {
+        newWin.document.open();
+        newWin.document.write(printHtml);
+        newWin.document.close();
+        newWin.onload = () => {
+          setTimeout(() => {
+            newWin.focus();
+            newWin.print();
+          }, 400);
+        };
+      } else {
+        alert('O navegador bloqueou a abertura da nova janela. Permita pop-ups para este site ou utilize o botão "Imprimir Recibo".');
+      }
+    } catch (err) {
+      console.error('Erro ao abrir nova aba para impressão:', err);
+      handleDirectPrint();
+    }
+  };
+
+  // 3. Copy Plain Text Receipt (for Bluetooth thermal printer apps like RawBT or WhatsApp)
+  const handleCopyTextReceipt = () => {
+    const isOrcamento = sale.status === 'Orçamento';
+    const numPed = sale.numeroPedido || sale.id.substring(0, 5);
+    const tel = sale.telefoneCliente || 'Não informado';
+    const pagou = (sale.valorPago !== undefined ? sale.valorPago : sale.total).toFixed(2);
+    const falta = (sale.valorFaltante !== undefined ? sale.valorFaltante : 0).toFixed(2);
+    const entrega = sale.dataRetirada 
+      ? new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR') 
+      : 'Não cadastrada';
+
+    let produtosTexto = '';
+    if (sale.itens && sale.itens.length > 0) {
+      produtosTexto = sale.itens.map(item => `• ${item.produtoNome} (x${item.quantidade}) - R$ ${item.total.toFixed(2)}`).join('\n');
+    } else {
+      produtosTexto = `• ${sale.produtoNome} (x${sale.quantidade}) - R$ ${sale.total.toFixed(2)}`;
+    }
+
+    const receiptText = `================================
+${storeInfo.nome || 'OXENTE FESTEJE'}
+Brindes Personalizados
+CNPJ: 26.051.478/0001-34
+Tel: (83) 98885-9302
+================================
+${isOrcamento ? '📄 ORÇAMENTO / COTAÇÃO' : `RECIBO DE PEDIDO #${numPed}`}
+Data: ${new Date(sale.data).toLocaleString('pt-BR')}
+Cliente: ${sale.cliente}
+Telefone: ${tel}
+Pagamento: ${sale.formaPagamento}
+Retirada: ${entrega}
+--------------------------------
+ITENS:
+${produtosTexto}
+--------------------------------
+TOTAL GERAL: R$ ${sale.total.toFixed(2)}
+${!isOrcamento ? `Valor Pago: R$ ${pagou}\nRestante a Pagar: R$ ${falta}` : ''}
+================================
+Muito obrigado pela preferência!
+Instagram: ${storeInfo.instagram || '@oxentefesteje'}
+================================`;
+
+    navigator.clipboard.writeText(receiptText);
+    playAppSound('success');
+    setCopiedReceiptText(true);
+    setTimeout(() => setCopiedReceiptText(false), 2500);
   };
 
   const handleSendWhatsAppOrcamento = () => {
@@ -127,20 +486,53 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
       className="bg-white rounded-2xl border border-pink-100 p-6 shadow-xs flex flex-col items-center w-full"
     >
       
-      {/* Title with printable warning info */}
-      <div className="no-print text-center mb-6 w-full">
+      {/* Title with printable warning info and Width Toggle */}
+      <div className="no-print text-center mb-5 w-full">
         <h3 className="font-display font-semibold text-lg text-brand-dark mb-1">
           {sale.status === 'Orçamento' ? 'Visualização do Orçamento' : 'Visualização do Recibo'}
         </h3>
-        <p className="text-xs text-zinc-500">
-          Você pode imprimir o documento abaixo diretamente.
+        <p className="text-xs text-zinc-500 mb-3">
+          Pronto para impressão térmica direta ou compartilhamento.
         </p>
+
+        {/* Paper format selector (80mm vs 58mm) */}
+        <div className="inline-flex items-center gap-1.5 p-1 bg-zinc-100 border border-zinc-200 rounded-xl text-xs">
+          <span className="text-[10px] font-bold text-zinc-600 px-2 uppercase flex items-center gap-1">
+            <Sliders className="h-3 w-3" />
+            <span>Bobina:</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => handleWidthChange('80mm')}
+            className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+              receiptWidth === '80mm'
+                ? 'bg-brand-pink text-white shadow-xs'
+                : 'text-zinc-600 hover:text-zinc-900'
+            }`}
+          >
+            80mm (Padrão)
+          </button>
+          <button
+            type="button"
+            onClick={() => handleWidthChange('58mm')}
+            className={`px-3 py-1 rounded-lg font-bold text-[11px] transition-all cursor-pointer ${
+              receiptWidth === '58mm'
+                ? 'bg-brand-pink text-white shadow-xs'
+                : 'text-zinc-600 hover:text-zinc-900'
+            }`}
+          >
+            58mm (Mini)
+          </button>
+        </div>
       </div>
 
       {/* Styled Simulated Thermal Receipt Container */}
       <div 
         id="printable-receipt"
-        className="printable-receipt border border-black bg-white p-6 shadow-none font-mono text-black w-full max-w-sm relative select-text"
+        ref={receiptRef}
+        className={`printable-receipt border border-black bg-white shadow-none font-mono text-black relative select-text transition-all ${
+          receiptWidth === '58mm' ? 'p-4 max-w-[280px] text-[11px]' : 'p-6 max-w-sm text-xs'
+        } w-full`}
         style={{ fontFamily: "'JetBrains Mono', 'Courier New', Courier, monospace", color: '#000000' }}
       >
         {/* Receipt Header */}
@@ -150,7 +542,9 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
               📄 Orçamento / Cotação
             </div>
           )}
-          <h2 className="text-xl font-extrabold tracking-tight text-black select-text">{storeInfo.nome}</h2>
+          <h2 className={`font-extrabold tracking-tight text-black select-text ${receiptWidth === '58mm' ? 'text-lg' : 'text-xl'}`}>
+            {storeInfo.nome || 'OXENTE FESTEJE'}
+          </h2>
           <p className="text-[10px] uppercase tracking-wider text-black font-bold select-text">Brindes Personalizados</p>
           <p className="text-[10px] text-black font-bold select-text">CNPJ: 26.051.478/0001-34</p>
           <p className="text-[10px] text-black font-bold select-text">Telefone: (83) 98885-9302</p>
@@ -158,7 +552,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
         </div>
 
         {/* Sales Meta Information */}
-        <div className="text-xs space-y-1.5 mb-4 leading-relaxed text-black">
+        <div className="space-y-1.5 mb-4 leading-relaxed text-black">
           {sale.numeroPedido ? (
             <div className="flex justify-between">
               <span className="text-black font-bold uppercase select-none">Nº Pedido:</span>
@@ -203,7 +597,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
         </div>
 
         {/* Items Breakdown Table */}
-        <table className="w-full text-xs border-collapse text-black">
+        <table className="w-full border-collapse text-black">
           <thead>
             <tr className="border-y-2 border-dashed border-black text-black uppercase font-extrabold text-left select-none">
               <th className="py-2 animate-none">Item</th>
@@ -214,7 +608,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
           <tbody>
             {sale.itens && sale.itens.length > 0 ? (
               sale.itens.map((item, idx) => (
-                <tr key={idx} className="border-b border-dashed border-black/60 text-xs">
+                <tr key={idx} className="border-b border-dashed border-black/60">
                   <td className="py-2 max-w-[150px] break-words align-top select-text">
                     <span className="font-bold text-black">{item.produtoNome}</span>
                     {item.corSelecionada && (
@@ -227,7 +621,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
                 </tr>
               ))
             ) : (
-              <tr className="border-b border-dashed border-black/60 text-xs">
+              <tr className="border-b border-dashed border-black/60">
                 <td className="py-2.5 max-w-[150px] break-words align-top select-text">
                   <span className="font-bold text-black">{sale.produtoNome}</span>
                   {sale.corSelecionada && (
@@ -243,7 +637,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
         </table>
 
         {/* Pricing Subtotal & Payment Breakdown */}
-        <div className="border-t-2 border-dashed border-black mt-4 pt-3 space-y-1 bg-white select-text text-xs text-black">
+        <div className="border-t-2 border-dashed border-black mt-4 pt-3 space-y-1 bg-white select-text text-black">
           <div className="flex justify-between items-center text-black font-bold">
             <span className="select-none uppercase text-[10px]">
               {sale.status === 'Orçamento' ? 'Valor Estimado:' : 'Total Geral:'}
@@ -292,7 +686,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
           ) : (
             <p className="text-xs font-bold text-black select-text">Muito obrigado pela preferência!</p>
           )}
-          <p className="text-[10px] text-black font-bold select-text">Siga no Instagram: {storeInfo.instagram}</p>
+          <p className="text-[10px] text-black font-bold select-text">Siga no Instagram: {storeInfo.instagram || '@oxentefesteje'}</p>
           
           {/* QR Code de Controle no Recibo */}
           {sale.status !== 'Orçamento' && qrCodeUrl && (
@@ -523,15 +917,105 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
           </button>
         )}
 
+        {/* PRIMARY DIRECT PRINT BUTTON */}
         {!showConvertForm && (
           <button
-            onClick={handlePrint}
-            className="w-full flex items-center justify-center gap-2 py-3 px-4 bg-brand-pink hover:bg-brand-pink-hover text-white font-bold rounded-xl text-sm shadow-md transition-all transform active:scale-98 cursor-pointer select-none"
+            onClick={handleDirectPrint}
+            disabled={isPrinting}
+            className="w-full flex items-center justify-center gap-2 py-3.5 px-4 bg-brand-pink hover:bg-brand-pink-hover text-white font-black rounded-xl text-sm shadow-md transition-all transform active:scale-98 cursor-pointer select-none disabled:opacity-50"
           >
-            <Printer className="h-4.5 w-4.5" />
-            <span>{sale.status === 'Orçamento' ? 'Imprimir Orçamento' : 'Imprimir Recibo'}</span>
+            <Printer className="h-5 w-5" />
+            <span>
+              {isPrinting 
+                ? 'Preparando Impressão...' 
+                : (sale.status === 'Orçamento' ? '🖨️ Imprimir Orçamento (Direto)' : '🖨️ Imprimir Recibo Térmico')}
+            </span>
           </button>
         )}
+
+        {/* SECONDARY PRINT & SHARING TOOLS */}
+        {!showConvertForm && (
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={handleOpenInNewTabPrint}
+              className="py-2.5 px-3 bg-zinc-100 hover:bg-zinc-200 border border-zinc-300 text-zinc-800 font-bold rounded-xl text-xs transition-colors flex items-center justify-center gap-1.5 cursor-pointer select-none"
+              title="Abre o recibo formatado em uma nova aba do navegador e dispara a impressão"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+              <span>Abrir p/ Imprimir</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCopyTextReceipt}
+              className={`py-2.5 px-3 border font-bold rounded-xl text-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer select-none ${
+                copiedReceiptText
+                  ? 'bg-emerald-100 border-emerald-400 text-emerald-800'
+                  : 'bg-zinc-100 hover:bg-zinc-200 border-zinc-300 text-zinc-800'
+              }`}
+              title="Copiar texto puro do recibo para colar no WhatsApp ou em aplicativo de impressora Bluetooth (ex: RawBT)"
+            >
+              {copiedReceiptText ? (
+                <>
+                  <Check className="h-3.5 w-3.5 text-emerald-600" />
+                  <span>Texto Copiado!</span>
+                </>
+              ) : (
+                <>
+                  <Copy className="h-3.5 w-3.5" />
+                  <span>Copiar Texto</span>
+                </>
+              )}
+            </button>
+          </div>
+        )}
+
+        {/* PRINTER TROUBLESHOOTING TOGGLE */}
+        {!showConvertForm && (
+          <button
+            type="button"
+            onClick={() => setShowPrinterHelp(!showPrinterHelp)}
+            className="text-[11px] text-zinc-500 hover:text-brand-pink transition-colors flex items-center justify-center gap-1 py-1 cursor-pointer select-none"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            <span>Não está imprimindo na sua impressora? Clique para ver dicas</span>
+          </button>
+        )}
+
+        {/* TROUBLESHOOTING HELP ACCORDION */}
+        <AnimatePresence>
+          {showPrinterHelp && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-amber-50 border border-amber-200 rounded-xl p-3.5 text-zinc-800 text-xs space-y-2 overflow-hidden"
+            >
+              <div className="flex items-center gap-1.5 font-bold text-amber-900 border-b border-amber-200 pb-1.5">
+                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0" />
+                <span>Como resolver problemas de comunicação com a impressora:</span>
+              </div>
+              <ul className="space-y-1.5 text-[11px] leading-relaxed list-decimal pl-4 text-zinc-700">
+                <li>
+                  <strong>Selecione a impressora certa:</strong> Na janela de impressão que abre, verifique se no campo <em>"Destino"</em> está selecionada a sua impressora térmica (ex: POS-80, Bematech, Elgin, Epson) e não "Salvar como PDF".
+                </li>
+                <li>
+                  <strong>Tente o botão "Abrir p/ Imprimir":</strong> Se você estiver usando o aplicativo no celular ou em aba restrita, o botão cinza <em>"Abrir p/ Imprimir"</em> abre uma página limpa independente que se comunica diretamente com o driver da impressora.
+                </li>
+                <li>
+                  <strong>Ajuste as margens:</strong> Nas configurações da janela de impressão, defina <em>Margens</em> como <strong>"Nenhuma"</strong> e marque a opção <strong>"Gráficos de plano de fundo"</strong>.
+                </li>
+                <li>
+                  <strong>Impressora Bluetooth no Celular:</strong> Se usar impressora térmica bluetooth portátil no celular, use o botão <strong>"Copiar Texto"</strong> e abra no app <em>RawBT</em> ou aplicativo da sua impressora.
+                </li>
+                <li>
+                  <strong>Cabo USB / Papel:</strong> Certifique-se de que a impressora está ligada, conectada ao USB/Wi-Fi e com a bobina de papel térmico virada para o lado correto.
+                </li>
+              </ul>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       <WhatsAppNotifier
@@ -545,3 +1029,4 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
     </motion.div>
   );
 }
+
