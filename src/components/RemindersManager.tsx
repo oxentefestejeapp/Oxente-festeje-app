@@ -72,6 +72,16 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
   // Predictive recurrence engine states
   const [activeSubTab, setActiveSubTab] = useState<'lembretes' | 'recorrencia' | 'indicacao'>('lembretes');
 
+  // Override / Unlock state for linked orders that are pending/unready
+  const [unlockedLinkedOrderIds, setUnlockedLinkedOrderIds] = useState<string[]>([]);
+
+  const toggleUnlockLinkedOrder = (saleId: string) => {
+    playAppSound('click');
+    setUnlockedLinkedOrderIds(prev => 
+      prev.includes(saleId) ? prev.filter(id => id !== saleId) : [...prev, saleId]
+    );
+  };
+
   // Safeguard: Reset activeSubTab to 'lembretes' if the user is not an admin
   useEffect(() => {
     if (!isAdmin && activeSubTab !== 'lembretes') {
@@ -744,7 +754,8 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
               const isReadyForPickup = sale.statusProducao === 'Pronto para Retirada';
               const linkedSales = getLinkedSales(sale, sales);
               const unreadyLinkedSales = linkedSales.filter(s => s.statusProducao === 'Agendado' || s.statusProducao === 'Em Produção');
-              const hasUnreadyLinkedSale = unreadyLinkedSales.length > 0;
+              const isLinkedBlocked = unreadyLinkedSales.length > 0 && !unlockedLinkedOrderIds.includes(sale.id);
+              const isManuallyUnlocked = unreadyLinkedSales.length > 0 && unlockedLinkedOrderIds.includes(sale.id);
               
               return (
                 <motion.div 
@@ -756,13 +767,15 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                   className={`border rounded-2xl p-5 transition-all duration-300 relative overflow-hidden flex flex-col md:flex-row items-start md:items-center justify-between gap-5 ${
                     sale.bloqueadoLembrete
                       ? 'border-red-500/35 bg-red-955/15 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.06)]'
-                      : hasUnreadyLinkedSale
+                      : isLinkedBlocked
                         ? 'border-sky-550/30 bg-sky-955/5 hover:border-sky-500/45 shadow-[0_0_15px_rgba(56,189,248,0.04)]'
-                        : isReadyForPickup
-                          ? 'border-emerald-500/35 bg-emerald-950/15 hover:border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.06)]'
-                          : isPending 
-                            ? 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-750' 
-                            : 'border-zinc-900 bg-zinc-950/30 opacity-65'
+                        : isManuallyUnlocked
+                          ? 'border-amber-500/35 bg-amber-955/10 hover:border-amber-500/50 shadow-[0_0_15px_rgba(245,158,11,0.06)]'
+                          : isReadyForPickup
+                            ? 'border-emerald-500/35 bg-emerald-950/15 hover:border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.06)]'
+                            : isPending 
+                              ? 'border-zinc-800 bg-zinc-900/40 hover:border-zinc-750' 
+                              : 'border-zinc-900 bg-zinc-950/30 opacity-65'
                   }`}
                 >
                   {/* Absolute Green Overlay celebration when readyId is active */}
@@ -910,21 +923,50 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                       </button>
 
                       {linkedSales.length > 0 && (
-                        <span className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 border ${
-                          hasUnreadyLinkedSale
-                            ? 'bg-sky-500/25 text-sky-455 border-sky-500/35'
-                            : 'bg-emerald-500/20 text-emerald-450 border-emerald-500/35'
-                        }`}
-                        title={hasUnreadyLinkedSale 
-                          ? `Pedido Conjunto! Vinculado ao Pedido #${linkedSales.map(s => s.numeroPedido).join(', ')}. Depende do outro pedido ficar pronto!`
-                          : `Pedido Conjunto! Vinculado ao Pedido #${linkedSales.map(s => s.numeroPedido).join(', ')}. Ambos estão prontos!`
-                        }
-                        >
-                          <Link className="h-3 w-3 shrink-0" />
-                          <span>
-                            Conjunto: {linkedSales.map(s => `#${s.numeroPedido} (${s.statusProducao === 'Pronto para Retirada' ? '✨ Pronto' : s.statusProducao || 'Pendente'})`).join(', ')}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className={`text-[9.5px] font-extrabold px-2 py-0.5 rounded-md flex items-center gap-1 border ${
+                            unreadyLinkedSales.length > 0
+                              ? isManuallyUnlocked 
+                                ? 'bg-amber-500/20 text-amber-400 border-amber-500/35'
+                                : 'bg-sky-500/25 text-sky-455 border-sky-500/35'
+                              : 'bg-emerald-500/20 text-emerald-450 border-emerald-500/35'
+                          }`}
+                          title={unreadyLinkedSales.length > 0 
+                            ? `Pedido Conjunto! Vinculado ao Pedido #${linkedSales.map(s => s.numeroPedido).join(', ')}. Depende do outro pedido ficar pronto!`
+                            : `Pedido Conjunto! Vinculado ao Pedido #${linkedSales.map(s => s.numeroPedido).join(', ')}. Ambos estão prontos!`
+                          }
+                          >
+                            <Link className="h-3 w-3 shrink-0" />
+                            <span>
+                              Conjunto: {linkedSales.map(s => `#${s.numeroPedido} (${s.statusProducao === 'Pronto para Retirada' ? '✨ Pronto' : s.statusProducao || 'Pendente'})`).join(', ')}
+                            </span>
                           </span>
-                        </span>
+
+                          {unreadyLinkedSales.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => toggleUnlockLinkedOrder(sale.id)}
+                              className={`text-[9.5px] font-black px-2 py-0.5 rounded-md flex items-center gap-1 cursor-pointer transition-all border ${
+                                isManuallyUnlocked
+                                  ? 'bg-amber-500/25 hover:bg-amber-500/35 text-amber-300 border-amber-500/40'
+                                  : 'bg-sky-950 hover:bg-sky-900 text-sky-300 hover:text-white border-sky-800/60'
+                              }`}
+                              title={isManuallyUnlocked ? "Clique para reativar o bloqueio de segurança conjunto" : "Clique para liberar o aviso deste pedido mesmo com o pedido vinculado pendente"}
+                            >
+                              {isManuallyUnlocked ? (
+                                <>
+                                  <Unlock className="h-3 w-3 text-amber-400" />
+                                  <span>Desbloqueado p/ Avisar 🔓</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Unlock className="h-3 w-3 text-sky-400" />
+                                  <span>Liberar Envio 🔓</span>
+                                </>
+                              )}
+                            </button>
+                          )}
+                        </div>
                       )}
                     </div>
 
@@ -987,26 +1029,62 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                     </div>
 
                     {linkedSales.length > 0 && (
-                      <div className={`p-2.5 rounded-xl text-xs flex gap-2 border ${
-                        hasUnreadyLinkedSale
-                          ? 'bg-sky-955/20 border-sky-900/40 text-sky-300'
+                      <div className={`p-2.5 rounded-xl text-xs flex gap-2 border items-start justify-between ${
+                        unreadyLinkedSales.length > 0
+                          ? isManuallyUnlocked
+                            ? 'bg-amber-955/20 border-amber-900/40 text-amber-300'
+                            : 'bg-sky-955/20 border-sky-900/40 text-sky-300'
                           : 'bg-emerald-955/20 border-emerald-950/40 text-emerald-300'
                       }`}>
-                        <span className="text-sm">⚠️</span>
-                        <div>
-                          <strong className="block font-bold">Pedido Conjunto!</strong>
-                          <span className="text-[10.5px] leading-relaxed block mt-0.5">
-                            {hasUnreadyLinkedSale ? (
+                        <div className="flex gap-2">
+                          <span className="text-sm">⚠️</span>
+                          <div>
+                            <strong className="block font-bold">
+                              Pedido Conjunto! {isManuallyUnlocked && <span className="text-[10px] text-amber-400 bg-amber-950/80 px-1.5 py-0.5 rounded border border-amber-800/50 font-black ml-1 uppercase">Liberado Manualmente</span>}
+                            </strong>
+                            <span className="text-[10.5px] leading-relaxed block mt-0.5">
+                              {unreadyLinkedSales.length > 0 ? (
+                                isManuallyUnlocked ? (
+                                  <>
+                                    Você <strong>desbloqueou</strong> este pedido vinculado a <strong>#{unreadyLinkedSales.map(u => u.numeroPedido).join(', ')}</strong>. Agora você já pode avisar o cliente ou marcar como pronto!
+                                  </>
+                                ) : (
+                                  <>
+                                    Este pedido está vinculado ao <strong>Pedido #{unreadyLinkedSales.map(u => u.numeroPedido).join(', ')}</strong>. Os avisos estão <strong>BLOQUEADOS</strong> até ambos os pedidos ficarem prontos.
+                                  </>
+                                )
+                              ) : (
+                                <>
+                                  Ambos os pedidos vinculados <strong>estão prontos</strong>! Agora você pode compartilhar o aviso de retirada unificado de forma segura.
+                                </>
+                              )}
+                            </span>
+                          </div>
+                        </div>
+
+                        {unreadyLinkedSales.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => toggleUnlockLinkedOrder(sale.id)}
+                            className={`shrink-0 text-[10px] font-black px-2.5 py-1 rounded-lg border transition-all cursor-pointer flex items-center gap-1 self-center ${
+                              isManuallyUnlocked
+                                ? 'bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/40'
+                                : 'bg-sky-500/20 hover:bg-sky-500/30 text-sky-300 border-sky-500/40'
+                            }`}
+                          >
+                            {isManuallyUnlocked ? (
                               <>
-                                Este pedido está vinculado ao <strong>Pedido #{unreadyLinkedSales.map(u => u.numeroPedido).join(', ')}</strong>. Os avisos estão <strong>BLOQUEADOS</strong> até ambos os pedidos ficarem prontos.
+                                <Lock className="h-3 w-3 text-amber-400" />
+                                <span>Bloquear</span>
                               </>
                             ) : (
                               <>
-                                Ambos os pedidos vinculados <strong>estão prontos</strong>! Agora você pode compartilhar o aviso de retirada unificado de forma segura.
+                                <Unlock className="h-3 w-3 text-sky-400" />
+                                <span>Desbloquear</span>
                               </>
                             )}
-                          </span>
-                        </div>
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -1054,19 +1132,30 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                             <Lock className="h-4 w-4 shrink-0 text-red-400" />
                             <span>Aviso Bloqueado (Atraso)</span>
                           </button>
-                        ) : hasUnreadyLinkedSale ? (
-                          <button
-                            type="button"
-                            disabled
-                            className="flex-1 py-2.5 px-4 font-extrabold rounded-xl text-[11px] bg-sky-955/35 text-sky-400 border border-sky-900/40 cursor-not-allowed flex items-center justify-center flex-col gap-1 shadow-none select-none"
-                            title={`Esse aviso está bloqueado pois o pedido conjunto #${unreadyLinkedSales[0].numeroPedido} (${unreadyLinkedSales[0].produtoNome}) não está pronto!`}
-                          >
-                            <div className="flex items-center gap-1">
-                              <Link className="h-4 w-4 shrink-0 text-sky-400" />
-                              <span>Aviso Bloqueado 🔗</span>
-                            </div>
-                            <span className="text-[9px] font-normal opacity-85">Aguardando #{unreadyLinkedSales[0].numeroPedido}</span>
-                          </button>
+                        ) : isLinkedBlocked ? (
+                          <div className="flex flex-col gap-1.5 w-full">
+                            <button
+                              type="button"
+                              disabled
+                              className="flex-1 py-2.5 px-4 font-extrabold rounded-xl text-[11px] bg-sky-955/35 text-sky-400 border border-sky-900/40 cursor-not-allowed flex items-center justify-center flex-col gap-1 shadow-none select-none"
+                              title={`Esse aviso está bloqueado pois o pedido conjunto #${unreadyLinkedSales[0].numeroPedido} (${unreadyLinkedSales[0].produtoNome}) não está pronto!`}
+                            >
+                              <div className="flex items-center gap-1">
+                                <Link className="h-4 w-4 shrink-0 text-sky-400" />
+                                <span>Aviso Bloqueado 🔗</span>
+                              </div>
+                              <span className="text-[9px] font-normal opacity-85">Aguardando #{unreadyLinkedSales[0].numeroPedido}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => toggleUnlockLinkedOrder(sale.id)}
+                              className="py-1.5 px-3 bg-sky-950/80 hover:bg-sky-900/90 text-sky-300 hover:text-white border border-sky-700/50 font-black rounded-lg text-[10px] transition-all cursor-pointer flex items-center justify-center gap-1 shadow-sm active:scale-95"
+                              title="Desbloquear para avisar mesmo com pedido conjunto pendente"
+                            >
+                              <Unlock className="h-3.5 w-3.5 shrink-0 text-sky-400" />
+                              <span>Desbloquear Aviso 🔓</span>
+                            </button>
+                          </div>
                         ) : (
                           <button
                             type="button"
@@ -1339,7 +1428,8 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
               const isPending = sale.statusProducao !== 'Entregue';
               const linkedSales = getLinkedSales(sale, sales);
               const unreadyLinkedSales = linkedSales.filter(s => s.statusProducao === 'Agendado' || s.statusProducao === 'Em Produção');
-              const hasUnreadyLinkedSale = unreadyLinkedSales.length > 0;
+              const isLinkedBlocked = unreadyLinkedSales.length > 0 && !unlockedLinkedOrderIds.includes(sale.id);
+              const isManuallyUnlocked = unreadyLinkedSales.length > 0 && unlockedLinkedOrderIds.includes(sale.id);
               
               return (
                 <div 
@@ -1347,11 +1437,13 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                   className={`border rounded-xl p-4 space-y-3.5 transition-all ${
                     sale.bloqueadoLembrete
                       ? 'border-red-500/35 bg-red-955/10 hover:border-red-500/50 shadow-[0_0_12px_rgba(239,68,68,0.04)]'
-                      : hasUnreadyLinkedSale
+                      : isLinkedBlocked
                         ? 'border-sky-550/25 bg-sky-955/5 hover:border-sky-500/40 shadow-[0_0_12px_rgba(58,191,248,0.03)]'
-                        : 'bg-black/35 border-zinc-850 hover:border-zinc-800'
+                        : isManuallyUnlocked
+                          ? 'border-amber-500/35 bg-amber-955/10 hover:border-amber-500/40 shadow-[0_0_12px_rgba(245,158,11,0.04)]'
+                          : 'bg-black/35 border-zinc-850 hover:border-zinc-800'
                   } ${
-                    !isPending && !sale.bloqueadoLembrete && !hasUnreadyLinkedSale ? 'opacity-55' : ''
+                    !isPending && !sale.bloqueadoLembrete && !isLinkedBlocked ? 'opacity-55' : ''
                   }`}
                 >
                   <div className="space-y-1">
@@ -1406,20 +1498,51 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                     )}
 
                     {linkedSales.length > 0 && (
-                      <div className={`p-1.5 rounded-lg text-[9.5px] border mt-1.5 flex flex-col gap-0.5 ${
-                        hasUnreadyLinkedSale
-                          ? 'bg-sky-955/10 border-sky-900/30 text-sky-450'
+                      <div className={`p-1.5 rounded-lg text-[9.5px] border mt-1.5 flex items-start justify-between gap-1.5 ${
+                        unreadyLinkedSales.length > 0
+                          ? isManuallyUnlocked
+                            ? 'bg-amber-955/15 border-amber-900/30 text-amber-300'
+                            : 'bg-sky-955/10 border-sky-900/30 text-sky-450'
                           : 'bg-emerald-955/10 border-emerald-900/10 text-emerald-450'
                       }`}>
-                        <div className="flex items-center gap-1 font-bold">
-                          <span>⚠️ Conjunto:</span>
-                          <span>Pedido #{linkedSales.map(s => s.numeroPedido).join(', ')}</span>
+                        <div className="space-y-0.5">
+                          <div className="flex items-center gap-1 font-bold">
+                            <span>⚠️ Conjunto:</span>
+                            <span>Pedido #{linkedSales.map(s => s.numeroPedido).join(', ')}</span>
+                          </div>
+                          <span className="opacity-80 leading-normal block">
+                            {unreadyLinkedSales.length > 0
+                              ? isManuallyUnlocked
+                                ? 'Desbloqueado manualmente para envio!'
+                                : 'Avisos BLOQUEADOS até que ambos fiquem prontos.'
+                              : 'Ambos os pedidos estão prontos para envio!'}
+                          </span>
                         </div>
-                        <span className="opacity-80 leading-normal">
-                          {hasUnreadyLinkedSale
-                            ? 'Avisos BLOQUEADOS até que ambos os pedidos fiquem prontos!'
-                            : 'Ambos os pedidos estão prontos para envio de aviso!'}
-                        </span>
+
+                        {unreadyLinkedSales.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => toggleUnlockLinkedOrder(sale.id)}
+                            className={`shrink-0 text-[8.5px] font-black px-1.5 py-0.5 rounded border transition-all cursor-pointer flex items-center gap-0.5 ${
+                              isManuallyUnlocked
+                                ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                                : 'bg-sky-500/20 text-sky-300 border-sky-500/40'
+                            }`}
+                            title={isManuallyUnlocked ? "Reativar bloqueio de segurança conjunto" : "Desbloquear para avisar"}
+                          >
+                            {isManuallyUnlocked ? (
+                              <>
+                                <Lock className="h-2.5 w-2.5 text-amber-400" />
+                                <span>Bloquear</span>
+                              </>
+                            ) : (
+                              <>
+                                <Unlock className="h-2.5 w-2.5 text-sky-400" />
+                                <span>Liberar 🔓</span>
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1475,16 +1598,26 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
                           <Lock className="h-3 w-3 text-red-400" />
                           <span>Bloqueado 🔒</span>
                         </button>
-                      ) : hasUnreadyLinkedSale ? (
-                        <button
-                          type="button"
-                          disabled
-                          className="py-1 px-2.5 bg-sky-955/35 text-sky-400 border border-sky-900/40 text-[9px] font-black rounded-md flex items-center gap-1 cursor-not-allowed select-none"
-                          title={`Esse aviso está bloqueado pois o pedido conjunto #${unreadyLinkedSales[0].numeroPedido} (${unreadyLinkedSales[0].produtoNome}) não está pronto!`}
-                        >
-                          <Link className="h-3 w-3 text-sky-405" />
-                          <span>Bloqueado 🔗</span>
-                        </button>
+                      ) : isLinkedBlocked ? (
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            disabled
+                            className="py-1 px-2 bg-sky-955/35 text-sky-400 border border-sky-900/40 text-[9px] font-black rounded-md flex items-center gap-1 cursor-not-allowed select-none"
+                            title={`Esse aviso está bloqueado pois o pedido conjunto #${unreadyLinkedSales[0].numeroPedido} (${unreadyLinkedSales[0].produtoNome}) não está pronto!`}
+                          >
+                            <Link className="h-3 w-3 text-sky-405" />
+                            <span>Bloqueado 🔗</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => toggleUnlockLinkedOrder(sale.id)}
+                            className="py-1 px-1.5 bg-sky-950 text-sky-300 hover:text-white border border-sky-800 rounded-md text-[9px] font-black cursor-pointer"
+                            title="Desbloquear para avisar"
+                          >
+                            <Unlock className="h-3 w-3" />
+                          </button>
+                        </div>
                       ) : (
                         <button
                           type="button"
