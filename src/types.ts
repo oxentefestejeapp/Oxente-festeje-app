@@ -111,6 +111,8 @@ export interface Sale {
   corSelecionada?: string;
   custoUn?: number;
   isAvulso?: boolean;
+  descontoPercent?: number;
+  descontoValor?: number;
 }
 
 export interface StoreInfo {

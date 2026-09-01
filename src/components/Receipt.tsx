@@ -343,6 +343,12 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
             <strong>- R$ ${sale.descontoReferral.toFixed(2)}</strong>
           </div>
         ` : ''}
+        ${sale.descontoValor ? `
+          <div class="total-row" style="color: #059669;">
+            <span>Desconto Especial${sale.descontoPercent ? ` (${sale.descontoPercent}%)` : ''}:</span>
+            <strong>- R$ ${sale.descontoValor.toFixed(2)}</strong>
+          </div>
+        ` : ''}
         ${sale.cashbackGasto ? `
           <div class="total-row" style="color: #059669;">
             <span>Cashback Usado:</span>
@@ -530,6 +536,13 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
     <div class="row">
       <span>Cupom Amigo:</span>
       <span class="font-bold">- R$ ${sale.descontoReferral.toFixed(2)}</span>
+    </div>
+  ` : ''}
+
+  ${sale.descontoValor ? `
+    <div class="row">
+      <span>Desconto Especial${sale.descontoPercent ? ` (${sale.descontoPercent}%)` : ''}:</span>
+      <span class="font-bold">- R$ ${sale.descontoValor.toFixed(2)}</span>
     </div>
   ` : ''}
 
@@ -956,6 +969,12 @@ Instagram: ${storeInfo.instagram || '@oxentefesteje'}
             <div className="flex justify-between items-center text-black font-bold border-t border-dashed border-black/45 pt-1">
               <span className="select-none uppercase text-[10px]">Cupom Amigo:</span>
               <span className="font-extrabold">- R$ {sale.descontoReferral.toFixed(2)}</span>
+            </div>
+          )}
+          {sale.descontoValor && (
+            <div className="flex justify-between items-center text-black font-bold border-t border-dashed border-black/45 pt-1">
+              <span className="select-none uppercase text-[10px]">Desconto{sale.descontoPercent ? ` (${sale.descontoPercent}%)` : ''}:</span>
+              <span className="font-extrabold">- R$ {sale.descontoValor.toFixed(2)}</span>
             </div>
           )}
           {sale.cashbackGasto && (

@@ -310,8 +310,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [editValorTaxaCartao, setEditValorTaxaCartao] = useState('');
   const [editShowServicosTaxas, setEditShowServicosTaxas] = useState(false);
   const [editShowAddons, setEditShowAddons] = useState(false);
+  const [editDescontoPercent, setEditDescontoPercent] = useState(0);
+  const [editCustomPctInput, setEditCustomPctInput] = useState('');
+  const [editCustomValInput, setEditCustomValInput] = useState('');
 
-  const editTotal = useMemo(() => {
+  const editTotalSemDesconto = useMemo(() => {
     const artVal = editArteDesign ? 5 : 0;
     const segundaArtVal = editSegundaArte ? 5 : 0;
     const urgVal = editTemTaxaUrgencia ? (parseFloat(editValorTaxaUrgencia) || 0) : 0;
@@ -319,6 +322,22 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
     return editItens.reduce((sum, item) => sum + (item.precoUn * item.quantidade), 0) + artVal + segundaArtVal + urgVal + cartaoVal;
   }, [editItens, editArteDesign, editSegundaArte, editTemTaxaUrgencia, editValorTaxaUrgencia, editTemTaxaCartao, editValorTaxaCartao]);
+
+  // Sincronizar o desconto calculado na edição quando o valor total sem desconto mudar e houver valor em R$ digitado
+  useEffect(() => {
+    if (editCustomValInput !== '' && editTotalSemDesconto > 0) {
+      const parsed = parseFloat(editCustomValInput);
+      if (!isNaN(parsed)) {
+        const equivPct = (parsed / editTotalSemDesconto) * 100;
+        setEditDescontoPercent(Math.min(100, Math.max(0, equivPct)));
+      }
+    }
+  }, [editTotalSemDesconto, editCustomValInput]);
+
+  const editTotal = useMemo(() => {
+    const finalVal = editTotalSemDesconto * (1 - editDescontoPercent / 100);
+    return Number(Math.max(0, finalVal).toFixed(2));
+  }, [editTotalSemDesconto, editDescontoPercent]);
 
   const editingSaleIdRef = React.useRef<string | null>(null);
 
@@ -394,6 +413,20 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       });
 
       setEditItens(filteredItens);
+
+      // Initialize edit discount if the sale had one or if there is a difference
+      if (editingSale.descontoPercent !== undefined && editingSale.descontoPercent > 0) {
+        setEditDescontoPercent(editingSale.descontoPercent);
+        setEditCustomPctInput(editingSale.descontoPercent.toString());
+        setEditCustomValInput('');
+      } else if (editingSale.descontoValor !== undefined && editingSale.descontoValor > 0) {
+        setEditCustomValInput(editingSale.descontoValor.toString());
+        setEditCustomPctInput('');
+      } else {
+        setEditDescontoPercent(0);
+        setEditCustomPctInput('');
+        setEditCustomValInput('');
+      }
     } else {
       editingSaleIdRef.current = null;
     }
@@ -1407,6 +1440,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       statusProducao: isBudget ? undefined : editStatusProducao,
       itens: finalItensToSave,
       isAvulso: finalItensToSave.some(item => isAvulsoItem(item)) || editingSale.isAvulso || undefined,
+      descontoPercent: editDescontoPercent > 0 ? editDescontoPercent : undefined,
+      descontoValor: editCustomValInput.trim() ? parseFloat(editCustomValInput) : (editDescontoPercent > 0 ? Number((editTotalSemDesconto * (editDescontoPercent / 100)).toFixed(2)) : undefined),
       foiAlterado: hasStructuralChanges ? true : (editingSale.foiAlterado || false),
       editadoPorEmail: hasStructuralChanges ? currentUserEmail : (editingSale.editadoPorEmail || undefined),
       editadoEm: hasStructuralChanges ? new Date().toISOString() : (editingSale.editadoEm || undefined),
@@ -3758,9 +3793,16 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                       <ShoppingBag className="h-3.5 w-3.5 text-brand-pink" />
                       Produtos no Pedido:
                     </span>
-                    <span className="text-xs font-bold font-mono text-brand-pink">
-                      Total: R$ {editTotal.toFixed(2)}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      {editDescontoPercent > 0 && (
+                        <span className="text-[11px] font-mono text-zinc-500 line-through">
+                          R$ {editTotalSemDesconto.toFixed(2)}
+                        </span>
+                      )}
+                      <span className="text-xs font-bold font-mono text-brand-pink">
+                        Total: R$ {editTotal.toFixed(2)}
+                      </span>
+                    </div>
                   </div>
 
                   {/* List of current items */}
@@ -4694,6 +4736,120 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     </div>
                   </div>
                 )}
+
+                {/* Discount Preset Buttons & Custom Input Panel for Edit Sale */}
+                <div className="bg-zinc-950/40 border border-zinc-800 p-4 rounded-xl space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="block text-xs font-bold text-zinc-350 uppercase select-none flex items-center gap-1.5 font-sans">
+                      🏷️ Aplicar Desconto no Pedido
+                    </span>
+                    {editDescontoPercent > 0 && (
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full font-mono">
+                        Economia: R$ {(editTotalSemDesconto * (editDescontoPercent / 100)).toFixed(2)} ({editDescontoPercent.toFixed(editDescontoPercent % 1 === 0 ? 0 : 1)}%)
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-wrap gap-1.5 select-none text-xs">
+                    {[0, 5, 10, 15, 20].map((pct) => (
+                      <button
+                        key={pct}
+                        type="button"
+                        onClick={() => {
+                          setEditDescontoPercent(pct);
+                          setEditCustomPctInput('');
+                          setEditCustomValInput('');
+                          playSound('add');
+                        }}
+                        className={`px-3 py-1.5 rounded-lg border font-semibold transition-all cursor-pointer ${
+                          editDescontoPercent === pct && editCustomPctInput === '' && editCustomValInput === ''
+                            ? 'bg-brand-pink/15 text-brand-pink border-brand-pink/35 shadow-xs'
+                            : 'bg-black text-zinc-400 border-zinc-850 hover:text-zinc-200'
+                        }`}
+                      >
+                        {pct === 0 ? 'Sem Desconto' : `${pct}% Off`}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Opção de desconto personalizado no modal de edição */}
+                  <div className="grid grid-cols-2 gap-2.5 pt-2 border-t border-zinc-850/60 mt-1">
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">
+                        % no Teclado
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Ex: 12"
+                          value={editCustomPctInput}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(',', '.').replace(/[^0-9.]/g, '');
+                            setEditCustomPctInput(val);
+                            setEditCustomValInput(''); // limpa o outro
+                            
+                            if (val === '') {
+                              setEditDescontoPercent(0);
+                              return;
+                            }
+                            
+                            const parsed = parseFloat(val);
+                            if (!isNaN(parsed)) {
+                              setEditDescontoPercent(Math.min(100, Math.max(0, parsed)));
+                            } else {
+                              setEditDescontoPercent(0);
+                            }
+                          }}
+                          className={`w-full pl-3 pr-7 py-1.5 bg-black border rounded-lg text-xs font-semibold text-zinc-200 font-mono focus:outline-none transition-all ${
+                            editCustomPctInput !== '' 
+                              ? 'border-brand-pink/60 ring-1 ring-brand-pink/20' 
+                              : 'border-zinc-850 focus:border-brand-pink/40'
+                          }`}
+                        />
+                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 text-xs font-bold font-mono select-none">%</span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-bold text-zinc-400 uppercase tracking-widest mb-1">
+                        Valor Fixo (R$)
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 text-[10px] font-bold font-mono select-none">R$</span>
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="Ex: 15.00"
+                          value={editCustomValInput}
+                          onChange={(e) => {
+                            const val = e.target.value.replace(',', '.').replace(/[^0-9.]/g, '');
+                            setEditCustomValInput(val);
+                            setEditCustomPctInput(''); // limpa o outro
+                            
+                            if (val === '' || editTotalSemDesconto <= 0) {
+                              setEditDescontoPercent(0);
+                              return;
+                            }
+                            
+                            const parsed = parseFloat(val);
+                            if (!isNaN(parsed)) {
+                              const equivPct = (parsed / editTotalSemDesconto) * 100;
+                              setEditDescontoPercent(Math.min(100, Math.max(0, equivPct)));
+                            } else {
+                              setEditDescontoPercent(0);
+                            }
+                          }}
+                          className={`w-full pl-8 pr-3 py-1.5 bg-black border rounded-lg text-xs font-semibold text-zinc-200 font-mono focus:outline-none transition-all ${
+                            editCustomValInput !== '' 
+                              ? 'border-brand-pink/60 ring-1 ring-brand-pink/20' 
+                              : 'border-zinc-850 focus:border-brand-pink/40'
+                          }`}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
 
                 {/* Paid amount & automatic recalculation */}
                 {!isBudget ? (
