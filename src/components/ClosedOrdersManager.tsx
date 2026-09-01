@@ -379,24 +379,77 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
     }));
   }, [urgentArtOrders]);
 
-  const [showUrgentArtOverlay, setShowUrgentArtOverlay] = useState(false);
-  const prevUrgentCountRef = useRef(0);
+  // Helper to get today's date in YYYY-MM-DD
+  const getTodayStr = () => {
+    const d = new Date();
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
 
-  // 🔔 Dispara alerta sempre que o usuário entra na aba de Pedidos Fechados (ao montar o componente)
-  useEffect(() => {
-    if (urgentArtOrders.length > 0) {
-      setShowUrgentArtOverlay(true);
+  // Helper to filter out orders already alerted today
+  const getOrdersNeedingDailyAlert = (orders: UrgentArtOrderInfo[]) => {
+    if (orders.length === 0) return [];
+    const today = getTodayStr();
+    let history: Record<string, string> = {};
+    try {
+      const raw = localStorage.getItem('urgent_art_alert_daily_history');
+      if (raw) history = JSON.parse(raw);
+    } catch {
+      history = {};
     }
-    prevUrgentCountRef.current = urgentArtOrders.length;
+    return orders.filter(o => history[o.id] !== today);
+  };
+
+  // Helper to mark orders as alerted today
+  const markOrdersAlertedToday = (orders: UrgentArtOrderInfo[]) => {
+    if (orders.length === 0) return;
+    const today = getTodayStr();
+    let history: Record<string, string> = {};
+    try {
+      const raw = localStorage.getItem('urgent_art_alert_daily_history');
+      if (raw) history = JSON.parse(raw);
+    } catch {
+      history = {};
+    }
+    orders.forEach(o => {
+      history[o.id] = today;
+    });
+    try {
+      localStorage.setItem('urgent_art_alert_daily_history', JSON.stringify(history));
+    } catch (e) {
+      console.warn('Failed to save urgent art alert history to localStorage', e);
+    }
+  };
+
+  const [showUrgentArtOverlay, setShowUrgentArtOverlay] = useState(false);
+  const knownUrgentIdsRef = useRef<Set<string>>(new Set());
+
+  // 🔔 Dispara alerta ao entrar na aba SE houver pedidos urgentes que ainda NÃO foram alertados hoje
+  useEffect(() => {
+    const unnotified = getOrdersNeedingDailyAlert(urgentOrdersInfoList);
+    if (unnotified.length > 0) {
+      setShowUrgentArtOverlay(true);
+      markOrdersAlertedToday(unnotified);
+    }
+    knownUrgentIdsRef.current = new Set(urgentArtOrders.map(s => s.id));
   }, []);
 
-  // Também avisa em tempo real se novos pedidos urgentes chegarem enquanto ele já estiver na aba
+  // 🔔 Também avisa se um NOVO pedido urgente entrar enquanto o usuário estiver navegando
   useEffect(() => {
-    if (urgentArtOrders.length > prevUrgentCountRef.current && urgentArtOrders.length > 0) {
-      setShowUrgentArtOverlay(true);
+    const currentIds = new Set(urgentArtOrders.map(s => s.id));
+    const newOrders = urgentOrdersInfoList.filter(o => !knownUrgentIdsRef.current.has(o.id));
+    
+    if (newOrders.length > 0) {
+      const unnotifiedNew = getOrdersNeedingDailyAlert(newOrders);
+      if (unnotifiedNew.length > 0) {
+        setShowUrgentArtOverlay(true);
+        markOrdersAlertedToday(unnotifiedNew);
+      }
     }
-    prevUrgentCountRef.current = urgentArtOrders.length;
-  }, [urgentArtOrders.length]);
+    knownUrgentIdsRef.current = currentIds;
+  }, [urgentArtOrders, urgentOrdersInfoList]);
 
   const getUrgentText = (dataRetirada?: string) => {
     if (!dataRetirada) return '';
