@@ -781,19 +781,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
           if (dataMap[dateStr] !== undefined) {
              dataMap[dateStr].value += sale.total;
 
-             // Calculate estimated cost and profit for this sale
-             let saleCost = 0;
-             if (sale.itens && sale.itens.length > 0) {
-               sale.itens.forEach(item => {
-                 const costPrice = calculateSaleItemUnitCost(item, sale.data, products);
-                 // @ts-ignore
-                 const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
-                 saleCost += costPrice * q;
-               });
-             } else {
-               const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0 }, sale.data, products);
-               saleCost += costPrice * sale.quantidade;
-             }
+             // Calculate cost and profit for this sale
+             const costInfo = getSaleCostInfo(sale, products);
+             const saleCost = costInfo.totalCusto;
              const saleProfit = Math.max(0, sale.total - saleCost);
              dataMap[dateStr].profit += saleProfit;
           }
@@ -1622,19 +1612,8 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
       totalRevenue += sale.total;
       salesCount += 1;
       
-      let saleCost = 0;
-      if (sale.itens && sale.itens.length > 0) {
-        sale.itens.forEach(item => {
-          const costPrice = calculateSaleItemUnitCost(item, sale.data, products);
-          // @ts-ignore
-          const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
-          saleCost += costPrice * q;
-        });
-      } else {
-        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0 }, sale.data, products);
-        saleCost += costPrice * sale.quantidade;
-      }
-      totalEstimatedCost += saleCost;
+      const costInfo = getSaleCostInfo(sale, products);
+      totalEstimatedCost += costInfo.totalCusto;
     });
 
     const totalNetProfit = Math.max(0, totalRevenue - totalEstimatedCost);

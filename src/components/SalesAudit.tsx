@@ -43,40 +43,9 @@ import {
   ComposedChart,
   Line
 } from 'recharts';
-import { Sale, StoreInfo, Product, getProductUnitCost, calculateSaleItemUnitCost } from '../types';
+import { Sale, StoreInfo, Product, getProductUnitCost, calculateSaleItemUnitCost, isAvulsoItem, isAvulsoSale, findMatchingProduct, getSaleCostInfo } from '../types';
 import { Receipt } from './Receipt';
-
-export const isAvulsoItem = (item: { produtoId?: string; produtoNome?: string; nome?: string; custoUn?: number }) => {
-  if (!item) return false;
-  if (item.produtoId?.startsWith('avulso-') || item.produtoId === 'produto-avulso' || item.produtoId?.startsWith('custom-')) return true;
-  if (item.produtoNome?.toLowerCase().includes('avulso') || item.nome?.toLowerCase().includes('avulso')) return true;
-  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn)) return true;
-  return false;
-};
-
-export const isAvulsoSale = (sale: Sale, products: Product[] = []) => {
-  if (sale.produtoId?.startsWith('avulso-') || sale.produtoId === 'produto-avulso' || sale.produtoId?.startsWith('custom-')) {
-    return true;
-  }
-  if (sale.produtoNome?.toLowerCase().includes('avulso')) {
-    return true;
-  }
-  if (sale.itens && sale.itens.some(item => isAvulsoItem(item))) {
-    return true;
-  }
-  if (products.length > 0) {
-    if (sale.itens && sale.itens.length > 0) {
-      return sale.itens.some(it => {
-        const found = products.find(p => p.id === it.produtoId || p.nome?.toLowerCase() === it.produtoNome?.toLowerCase());
-        return !found && it.produtoId !== 'taxacartao-service' && !it.produtoId?.endsWith('-service');
-      });
-    } else {
-      const found = products.find(p => p.id === sale.produtoId || p.nome?.toLowerCase() === sale.produtoNome?.toLowerCase());
-      return !found && sale.produtoId !== 'taxacartao-service' && !sale.produtoId?.endsWith('-service');
-    }
-  }
-  return false;
-};
+import { OptimizedImage } from '../utils/imageOptimizer';
 
 const formatAuditDate = (dateStr?: string) => {
   if (!dateStr) return '';
@@ -252,8 +221,10 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
   const [specialFilter, setSpecialFilter] = useState<'all' | 'avulso' | 'edited' | 'has_designer' | 'finished_art'>('all');
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
   const [showCharts, setShowCharts] = useState(true);
-  const [auditChartTab, setAuditChartTab] = useState<'daily' | 'monthly' | 'avulso'>('daily');
+  const [auditChartTab, setAuditChartTab] = useState<'daily' | 'monthly' | 'avulso' | 'products'>('daily');
   const [avulsoSortBy, setAvulsoSortBy] = useState<'recent' | 'profit_desc' | 'profit_asc' | 'margin_desc' | 'sales_desc'>('recent');
+  const [productSortBy, setProductSortBy] = useState<'profit_desc' | 'sales_desc' | 'qty_desc' | 'margin_desc' | 'cost_desc'>('profit_desc');
+  const [productSearchTerm, setProductSearchTerm] = useState('');
 
   // User Comparison specific filters
   const [compDateFilter, setCompDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('all');
@@ -503,20 +474,9 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
       if (sale.foiAlterado) editedCount++;
       if (sale.statusArte === 'Arte Finalizada') artworkFinishedCount++;
 
-      // Cost calculation
-      let saleCost = 0;
-      if (sale.itens && sale.itens.length > 0) {
-        sale.itens.forEach(item => {
-          const costPrice = calculateSaleItemUnitCost(item, sale.data, products);
-          // @ts-ignore
-          const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
-          saleCost += costPrice * q;
-        });
-      } else {
-        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0 }, sale.data, products);
-        saleCost += costPrice * sale.quantidade;
-      }
-      totalEstimatedCost += saleCost;
+      // Cost calculation with current product costs (preserving avulsos)
+      const costInfo = getSaleCostInfo(sale, products);
+      totalEstimatedCost += costInfo.totalCusto;
     });
 
     const totalNetProfit = Math.max(0, totalValue - totalEstimatedCost);
@@ -543,18 +503,8 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
 
     auditLogs.forEach(sale => {
       // Cost calculation
-      let saleCost = 0;
-      if (sale.itens && sale.itens.length > 0) {
-        sale.itens.forEach(item => {
-          const costPrice = calculateSaleItemUnitCost(item, sale.data, products);
-          // @ts-ignore
-          const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
-          saleCost += costPrice * q;
-        });
-      } else {
-        const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0 }, sale.data, products);
-        saleCost += costPrice * sale.quantidade;
-      }
+      const costInfo = getSaleCostInfo(sale, products);
+      const saleCost = costInfo.totalCusto;
       const saleProfit = Math.max(0, sale.total - saleCost);
 
       // Income & Profit over time
@@ -626,20 +576,8 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
         const saleDate = parseSaleDate(sale.data);
         if (saleDate.getFullYear() === currentYear) {
           const monthIndex = saleDate.getMonth();
-          
-          let saleCost = 0;
-          if (sale.itens && sale.itens.length > 0) {
-            sale.itens.forEach(item => {
-              const costPrice = calculateSaleItemUnitCost(item, sale.data, products);
-              // @ts-ignore
-              const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
-              saleCost += costPrice * q;
-            });
-          } else {
-            const costPrice = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0 }, sale.data, products);
-            saleCost += costPrice * sale.quantidade;
-          }
-
+          const costInfo = getSaleCostInfo(sale, products);
+          const saleCost = costInfo.totalCusto;
           const saleProfit = Math.max(0, sale.total - saleCost);
 
           monthlyStats[monthIndex].faturamento += sale.total;
@@ -836,6 +774,163 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
       countExplicitCost
     };
   }, [auditLogs, products, avulsoSortBy]);
+
+  // Memoized Analytics for Products Profit Breakdown with Updated Costs
+  const productsAnalytics = useMemo(() => {
+    const map: Record<string, {
+      id: string;
+      nome: string;
+      categoria?: string;
+      precoCustoAtual: number;
+      precoVendaBase: number;
+      quantidadeVendida: number;
+      faturamentoTotal: number;
+      custoTotal: number;
+      lucroTotal: number;
+      margem: number;
+      isAvulso: boolean;
+      imagem?: string;
+      salesCount: number;
+    }> = {};
+
+    auditLogs.forEach(sale => {
+      if (sale.status === 'Orçamento') return;
+
+      if (sale.itens && sale.itens.length > 0) {
+        sale.itens.forEach(item => {
+          if (item.produtoId === 'taxacartao-service' || item.produtoId?.endsWith('-service')) return;
+          const isItemAvulso = isAvulsoItem(item);
+          // @ts-ignore
+          const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
+          const unitCost = calculateSaleItemUnitCost(item, sale.data, products);
+          const unitPrice = item.precoUn || 0;
+          const totalVenda = item.total !== undefined ? item.total : (unitPrice * q);
+          const totalCost = unitCost * q;
+
+          const prodKey = isItemAvulso
+            ? `avulso_${(item.produtoNome || item.nome || 'Avulso').toLowerCase().trim()}`
+            : (item.produtoId || (item.produtoNome || 'Outro').toLowerCase().trim());
+
+          if (!map[prodKey]) {
+            const matchedProd = !isItemAvulso ? findMatchingProduct(item.produtoId, item.produtoNome || item.nome, products) : undefined;
+            map[prodKey] = {
+              id: prodKey,
+              nome: item.produtoNome || item.nome || (isItemAvulso ? 'Produto Avulso' : 'Produto'),
+              categoria: matchedProd?.categoria || (isItemAvulso ? 'Avulso' : 'Catálogo'),
+              precoCustoAtual: isItemAvulso ? unitCost : (matchedProd?.precoCusto !== undefined && matchedProd.precoCusto !== null ? matchedProd.precoCusto : unitCost),
+              precoVendaBase: matchedProd?.preco || unitPrice,
+              quantidadeVendida: 0,
+              faturamentoTotal: 0,
+              custoTotal: 0,
+              lucroTotal: 0,
+              margem: 0,
+              isAvulso: isItemAvulso,
+              imagem: matchedProd?.imagemBase64 || matchedProd?.imagem,
+              salesCount: 0
+            };
+          }
+
+          map[prodKey].quantidadeVendida += q;
+          map[prodKey].faturamentoTotal += totalVenda;
+          map[prodKey].custoTotal += totalCost;
+          map[prodKey].salesCount += 1;
+        });
+      } else {
+        if (sale.produtoId === 'taxacartao-service' || sale.produtoId?.endsWith('-service')) return;
+        const isSaleAvulso = isAvulsoSale(sale, products);
+        const q = sale.quantidade || 1;
+        const unitCost = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0, custoUn: sale.custoUn, isAvulso: sale.isAvulso }, sale.data, products);
+        const totalCost = unitCost * q;
+        const totalVenda = sale.total || 0;
+
+        const prodKey = isSaleAvulso
+          ? `avulso_${(sale.produtoNome || 'Avulso').toLowerCase().trim()}`
+          : (sale.produtoId || (sale.produtoNome || 'Outro').toLowerCase().trim());
+
+        if (!map[prodKey]) {
+          const matchedProd = !isSaleAvulso ? findMatchingProduct(sale.produtoId, sale.produtoNome, products) : undefined;
+          map[prodKey] = {
+            id: prodKey,
+            nome: sale.produtoNome || (isSaleAvulso ? 'Produto Avulso' : 'Produto'),
+            categoria: matchedProd?.categoria || (isSaleAvulso ? 'Avulso' : 'Catálogo'),
+            precoCustoAtual: isSaleAvulso ? unitCost : (matchedProd?.precoCusto !== undefined && matchedProd.precoCusto !== null ? matchedProd.precoCusto : unitCost),
+            precoVendaBase: matchedProd?.preco || (sale.precoUn || (sale.total / q)),
+            quantidadeVendida: 0,
+            faturamentoTotal: 0,
+            custoTotal: 0,
+            lucroTotal: 0,
+            margem: 0,
+            isAvulso: isSaleAvulso,
+            imagem: matchedProd?.imagemBase64 || matchedProd?.imagem,
+            salesCount: 0
+          };
+        }
+
+        map[prodKey].quantidadeVendida += q;
+        map[prodKey].faturamentoTotal += totalVenda;
+        map[prodKey].custoTotal += totalCost;
+        map[prodKey].salesCount += 1;
+      }
+    });
+
+    const rawList = Object.values(map).map(p => {
+      const lucro = p.faturamentoTotal - p.custoTotal;
+      const margem = p.faturamentoTotal > 0 ? (lucro / p.faturamentoTotal) * 100 : 0;
+      return {
+        ...p,
+        faturamentoTotal: Number(p.faturamentoTotal.toFixed(2)),
+        custoTotal: Number(p.custoTotal.toFixed(2)),
+        lucroTotal: Number(lucro.toFixed(2)),
+        margem: Number(margem.toFixed(1))
+      };
+    });
+
+    const sortedList = [...rawList].sort((a, b) => {
+      if (productSortBy === 'profit_desc') return b.lucroTotal - a.lucroTotal;
+      if (productSortBy === 'sales_desc') return b.faturamentoTotal - a.faturamentoTotal;
+      if (productSortBy === 'qty_desc') return b.quantidadeVendida - a.quantidadeVendida;
+      if (productSortBy === 'margin_desc') return b.margem - a.margem;
+      if (productSortBy === 'cost_desc') return b.custoTotal - a.custoTotal;
+      return b.lucroTotal - a.lucroTotal;
+    });
+
+    const filteredList = productSearchTerm.trim()
+      ? sortedList.filter(p => p.nome.toLowerCase().includes(productSearchTerm.toLowerCase()) || (p.categoria && p.categoria.toLowerCase().includes(productSearchTerm.toLowerCase())))
+      : sortedList;
+
+    const totalFaturado = rawList.reduce((acc, p) => acc + p.faturamentoTotal, 0);
+    const totalCusto = rawList.reduce((acc, p) => acc + p.custoTotal, 0);
+    const totalLucro = rawList.reduce((acc, p) => acc + p.lucroTotal, 0);
+    const totalQtd = rawList.reduce((acc, p) => acc + p.quantidadeVendida, 0);
+    const margemGeral = totalFaturado > 0 ? (totalLucro / totalFaturado) * 100 : 0;
+
+    // Top products for chart
+    const topProductsChart = [...rawList]
+      .sort((a, b) => b.lucroTotal - a.lucroTotal)
+      .slice(0, 8)
+      .map(p => ({
+        name: p.nome.length > 18 ? p.nome.substring(0, 18) + '...' : p.nome,
+        fullName: p.nome,
+        venda: p.faturamentoTotal,
+        custo: p.custoTotal,
+        lucro: p.lucroTotal,
+        margem: p.margem,
+        qtd: p.quantidadeVendida,
+        precoCustoAtual: p.precoCustoAtual,
+        isAvulso: p.isAvulso
+      }));
+
+    return {
+      list: filteredList,
+      allList: sortedList,
+      topProductsChart,
+      totalFaturado: Number(totalFaturado.toFixed(2)),
+      totalCusto: Number(totalCusto.toFixed(2)),
+      totalLucro: Number(totalLucro.toFixed(2)),
+      totalQtd,
+      margemGeral: Number(margemGeral.toFixed(1))
+    };
+  }, [auditLogs, products, productSortBy, productSearchTerm]);
 
   const totalArtworkFinishedEver = useMemo(() => {
     return sales.filter(s => s.statusArte === 'Arte Finalizada').length;
@@ -1052,6 +1147,24 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                     )}
                     📦 Pedidos Avulsos ({avulsoAnalytics.totalOrders})
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => setAuditChartTab('products')}
+                    className={`px-3 py-1.5 text-center text-[11px] font-black rounded-lg transition-all border cursor-pointer relative z-10 ${
+                      auditChartTab === 'products'
+                        ? 'text-black border-transparent'
+                        : 'bg-transparent text-zinc-400 border-transparent hover:text-zinc-200'
+                    }`}
+                  >
+                    {auditChartTab === 'products' && (
+                      <motion.div
+                        layoutId="auditChartTabIndicator"
+                        className="absolute inset-0 bg-brand-pink rounded-lg -z-10 shadow-xs"
+                        transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      />
+                    )}
+                    🏷️ Lucro por Produto ({productsAnalytics.allList.length})
+                  </button>
                 </div>
 
                 {auditChartTab === 'daily' ? (
@@ -1198,7 +1311,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                       </div>
                     </div>
                   </div>
-                ) : (
+                ) : auditChartTab === 'avulso' ? (
                   // AVULSO (UNCATALOGED) DETAILED ANALYTICS AND PROFIT CHART
                   <div className="space-y-6 animate-fadeIn">
                     {/* KPI Cards: Avulso Profit Summary */}
@@ -1468,6 +1581,278 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                         </div>
                       </div>
                     )}
+                  </div>
+                ) : (
+                  // PRODUCTS DETAILED PROFIT RECALCULATION BREAKDOWN
+                  <div className="space-y-6 animate-fadeIn">
+                    {/* KPI Cards: Products Profit Summary */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 select-none">
+                      {/* Card 1: Unidades Vendidas */}
+                      <div className="bg-zinc-950/70 p-4 border border-zinc-850 rounded-xl shadow-xs">
+                        <div className="flex items-center justify-between text-zinc-500 mb-1.5">
+                          <span className="text-[9px] font-black uppercase tracking-wider">Unidades Vendidas</span>
+                          <Package className="h-4 w-4 text-sky-400" />
+                        </div>
+                        <div className="text-2xl font-black font-mono text-zinc-100">{productsAnalytics.totalQtd}</div>
+                        <p className="text-[10px] text-zinc-450 mt-1">
+                          {productsAnalytics.allList.length} produtos/itens distintos vendidos
+                        </p>
+                      </div>
+
+                      {/* Card 2: Faturamento Total */}
+                      <div className="bg-zinc-950/70 p-4 border border-zinc-850 rounded-xl shadow-xs">
+                        <div className="flex items-center justify-between text-zinc-500 mb-1.5">
+                          <span className="text-[9px] font-black uppercase tracking-wider">Faturamento Total</span>
+                          <TrendingUp className="h-4 w-4 text-emerald-450" />
+                        </div>
+                        <div className="text-2xl font-black font-mono text-emerald-450">
+                          R$ {productsAnalytics.totalFaturado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <p className="text-[10px] text-zinc-450 mt-1">Total bruto faturado dos produtos no período</p>
+                      </div>
+
+                      {/* Card 3: Custo Total Recalculado */}
+                      <div className="bg-zinc-950/70 p-4 border border-amber-900/30 rounded-xl shadow-xs border-l-amber-500/60 border-l-2">
+                        <div className="flex items-center justify-between text-zinc-500 mb-1.5">
+                          <span className="text-[9px] font-black uppercase tracking-wider text-amber-400">Custo Total (Novos Custos)</span>
+                          <Calculator className="h-4 w-4 text-amber-400" />
+                        </div>
+                        <div className="text-2xl font-black font-mono text-amber-400">
+                          R$ {productsAnalytics.totalCusto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <p className="text-[10px] text-zinc-450 mt-1">Calculado com os novos custos cadastrados</p>
+                      </div>
+
+                      {/* Card 4: Lucro Real Recalculado */}
+                      <div className="bg-zinc-950/70 p-4 border border-brand-pink/30 rounded-xl shadow-xs border-l-brand-pink border-l-2">
+                        <div className="flex items-center justify-between text-zinc-500 mb-1.5">
+                          <span className="text-[9px] font-black uppercase tracking-wider text-brand-pink">Lucro Real Recalculado</span>
+                          <DollarSign className="h-4 w-4 text-brand-pink" />
+                        </div>
+                        <div className="text-2xl font-black font-mono text-brand-pink">
+                          R$ {productsAnalytics.totalLucro.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </div>
+                        <p className="text-[10px] text-zinc-400 mt-1 flex items-center gap-1.5">
+                          <span className="px-1.5 py-0.2 bg-brand-pink/15 text-brand-pink rounded font-bold text-[9px] font-mono">
+                            Margem Real: {productsAnalytics.margemGeral}%
+                          </span>
+                          <span>(Faturamento - Novos Custos)</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Chart: Top 8 Produtos mais Lucrativos */}
+                    {productsAnalytics.topProductsChart.length > 0 && (
+                      <div className="bg-zinc-950/50 p-5 border border-zinc-850/70 rounded-xl space-y-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div>
+                            <h4 className="text-xs font-bold text-zinc-200 uppercase tracking-wide flex items-center gap-2">
+                              <span>Gráfico Comparativo: Faturamento vs Custo vs Lucro Real por Produto</span>
+                              <span className="text-[9px] px-2 py-0.5 bg-emerald-950/40 text-emerald-400 border border-emerald-900/40 rounded font-bold">
+                                Baseado nos Novos Custos
+                              </span>
+                            </h4>
+                            <p className="text-[10px] text-zinc-500 font-medium font-sans">
+                              Demonstrativo dos produtos que mais geraram retorno financeiro real líquido
+                            </p>
+                          </div>
+                          
+                          <div className="flex items-center gap-3 text-[9px] font-bold select-none">
+                            <span className="flex items-center gap-1 text-emerald-450">
+                              <span className="w-2 h-2 rounded-sm bg-emerald-500"></span> Venda Total (R$)
+                            </span>
+                            <span className="flex items-center gap-1 text-amber-400">
+                              <span className="w-2 h-2 rounded-sm bg-amber-500"></span> Custo Total (R$)
+                            </span>
+                            <span className="flex items-center gap-1 text-brand-pink">
+                              <span className="w-2 h-2 rounded-sm bg-brand-pink"></span> Lucro Real (R$)
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="h-[280px] w-full text-[9px] font-mono leading-none">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={productsAnalytics.topProductsChart} margin={{ top: 15, right: 10, left: -15, bottom: 25 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e1e24" />
+                              <XAxis 
+                                dataKey="name" 
+                                stroke="#71717a" 
+                                tickLine={false} 
+                                angle={-25}
+                                textAnchor="end"
+                                height={40}
+                                interval={0}
+                              />
+                              <YAxis stroke="#71717a" tickLine={false} />
+                              <Tooltip
+                                content={({ active, payload }) => {
+                                  if (active && payload && payload.length) {
+                                    const data = payload[0].payload;
+                                    return (
+                                      <div className="bg-zinc-950 border border-zinc-800 p-3 rounded-xl shadow-2xl text-xs space-y-1.5 max-w-xs">
+                                        <div className="border-b border-zinc-800 pb-1 font-bold text-zinc-100">
+                                          {data.fullName}
+                                        </div>
+                                        <div className="text-[11px] text-zinc-400 flex items-center justify-between">
+                                          <span>Total Vendido:</span>
+                                          <strong className="text-zinc-200 font-mono">{data.qtd} un.</strong>
+                                        </div>
+                                        <div className="text-[11px] text-zinc-400 flex items-center justify-between">
+                                          <span>Custo Unitário Atual:</span>
+                                          <strong className="text-amber-400 font-mono">R$ {data.precoCustoAtual.toFixed(2)}</strong>
+                                        </div>
+                                        <div className="space-y-1 pt-1 border-t border-zinc-850 font-mono text-[11px]">
+                                          <div className="flex justify-between text-emerald-450">
+                                            <span>Faturamento Total:</span>
+                                            <strong>R$ {data.venda.toFixed(2)}</strong>
+                                          </div>
+                                          <div className="flex justify-between text-amber-400">
+                                            <span>Custo Total:</span>
+                                            <strong>- R$ {data.custo.toFixed(2)}</strong>
+                                          </div>
+                                          <div className="flex justify-between text-brand-pink font-bold border-t border-zinc-800 pt-1">
+                                            <span>Lucro Líquido Real:</span>
+                                            <span>R$ {data.lucro.toFixed(2)} ({data.margem}%)</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  }
+                                  return null;
+                                }}
+                              />
+                              <Bar dataKey="venda" fill="#10b981" radius={[4, 4, 0, 0]} name="Faturamento (R$)" />
+                              <Bar dataKey="custo" fill="#f59e0b" radius={[4, 4, 0, 0]} name="Custo Total (R$)" />
+                              <Bar dataKey="lucro" fill="#ec4899" radius={[4, 4, 0, 0]} name="Lucro Real (R$)" />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Product Ranking & Detailed Profit Table */}
+                    <div className="space-y-3 bg-zinc-950/40 p-4 border border-zinc-850/80 rounded-xl">
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-850 pb-3">
+                        <div className="flex items-center gap-2">
+                          <Package className="h-4 w-4 text-brand-pink" />
+                          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-200">
+                            Detalhamento de Lucro Real por Produto ({productsAnalytics.list.length} de {productsAnalytics.allList.length})
+                          </h4>
+                        </div>
+
+                        {/* Search & Sort Controls */}
+                        <div className="flex flex-wrap items-center gap-2 select-none">
+                          <div className="relative">
+                            <Search className="h-3.5 w-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                            <input
+                              type="text"
+                              placeholder="Buscar produto..."
+                              value={productSearchTerm}
+                              onChange={(e) => setProductSearchTerm(e.target.value)}
+                              className="bg-black border border-zinc-800 rounded-lg pl-8 pr-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-pink w-44"
+                            />
+                            {productSearchTerm && (
+                              <button
+                                onClick={() => setProductSearchTerm('')}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                              >
+                                <X className="h-3 w-3" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-1.5">
+                            <span className="text-[10px] text-zinc-500 font-extrabold uppercase flex items-center gap-1">
+                              <ArrowUpDown className="h-3 w-3 text-zinc-400" />
+                            </span>
+                            <select
+                              value={productSortBy}
+                              onChange={(e) => setProductSortBy(e.target.value as any)}
+                              className="bg-black border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-200 font-bold focus:outline-none focus:border-brand-pink"
+                            >
+                              <option value="profit_desc">💰 Maior Lucro (R$)</option>
+                              <option value="sales_desc">💎 Maior Faturamento (R$)</option>
+                              <option value="qty_desc">📦 Mais Vendidos (Qtd)</option>
+                              <option value="margin_desc">📈 Maior Margem (%)</option>
+                              <option value="cost_desc">🏷️ Maior Custo Total (R$)</option>
+                            </select>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Products List Cards */}
+                      {productsAnalytics.list.length === 0 ? (
+                        <div className="py-8 text-center text-zinc-550 border border-dashed border-zinc-850 rounded-xl">
+                          <Package className="h-8 w-8 mx-auto mb-2 text-zinc-650" />
+                          <p className="text-xs font-bold">Nenhum produto encontrado com os filtros atuais.</p>
+                        </div>
+                      ) : (
+                        <div className="divide-y divide-zinc-850/50 max-h-[420px] overflow-y-auto pr-1 space-y-2">
+                          {productsAnalytics.list.map((prod, idx) => (
+                            <div 
+                              key={prod.id || idx}
+                              className="pt-2.5 pb-2.5 px-3 hover:bg-zinc-900/60 rounded-xl transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-transparent hover:border-zinc-800"
+                            >
+                              {/* Left: Product Info */}
+                              <div className="flex items-center gap-3 min-w-0 flex-1">
+                                <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
+                                  {prod.imagem ? (
+                                    <OptimizedImage
+                                      src={prod.imagem}
+                                      alt={prod.nome}
+                                      width={80}
+                                      quality={70}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <Package className="h-5 w-5 text-zinc-600" />
+                                  )}
+                                </div>
+
+                                <div className="space-y-0.5 min-w-0 flex-1">
+                                  <div className="flex flex-wrap items-center gap-1.5">
+                                    <span className="text-xs font-bold text-zinc-100 truncate" title={prod.nome}>
+                                      {prod.nome}
+                                    </span>
+                                    {prod.isAvulso ? (
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-950/40 text-purple-400 border border-purple-900/40">
+                                        📦 Avulso (Custo na Venda)
+                                      </span>
+                                    ) : (
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/40">
+                                        🏷️ Catálogo (Custo Atual: R$ {prod.precoCustoAtual.toFixed(2)})
+                                      </span>
+                                    )}
+                                  </div>
+
+                                  <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-3 font-mono">
+                                    <span>Qtd Vendida: <strong className="text-zinc-200">{prod.quantidadeVendida} un.</strong></span>
+                                    <span className="text-zinc-650">•</span>
+                                    <span>Custo Un Atual: <strong className="text-amber-400">R$ {prod.precoCustoAtual.toFixed(2)}</strong></span>
+                                    <span className="text-zinc-650">•</span>
+                                    <span>Venda Base: <strong className="text-zinc-300">R$ {prod.precoVendaBase.toFixed(2)}</strong></span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Right: Totals and Profit */}
+                              <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-1 border-t border-dashed border-zinc-850 sm:border-0 pt-1.5 sm:pt-0 shrink-0">
+                                <div className="text-[10.5px] font-mono text-zinc-400 flex items-center gap-2">
+                                  <span>Faturamento: <strong className="text-emerald-450">R$ {prod.faturamentoTotal.toFixed(2)}</strong></span>
+                                  <span className="text-zinc-650">|</span>
+                                  <span>Custo: <strong className="text-amber-400">- R$ {prod.custoTotal.toFixed(2)}</strong></span>
+                                </div>
+                                <div>
+                                  <span className="text-xs font-black font-mono text-brand-pink bg-brand-pink/10 border border-brand-pink/25 px-2.5 py-0.5 rounded-lg">
+                                    Lucro Real: R$ {prod.lucroTotal.toFixed(2)} ({prod.margem}%)
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

@@ -20,6 +20,8 @@ export interface Product {
   estoque: number;
   cores?: ProductColor[]; // Supports individual stock counts per color
   imagemBase64?: string; // Stored as data URL (base64) for robust local storage persistence
+  imagem?: string;
+  categoria?: string;
   estoqueInfinito?: boolean;
   precoCusto?: number;
   faixasPreco?: PricingTier[];
@@ -35,6 +37,7 @@ export interface SaleItem {
   id: string; // unique identifier or product ID
   produtoId: string;
   produtoNome: string;
+  nome?: string;
   precoUn: number;
   quantidade: number;
   total: number;
@@ -274,7 +277,7 @@ function parseToBrazilDateString(dateVal: any): string {
 }
 
 export function calculateSaleItemUnitCost(
-  item: { produtoId?: string; produtoNome?: string; nome?: string; precoUn: number; custoUn?: number },
+  item: { produtoId?: string; produtoNome?: string; nome?: string; precoUn: number; custoUn?: number; isAvulso?: boolean },
   saleDateStr: string,
   products: Product[]
 ): number {
@@ -286,28 +289,40 @@ export function calculateSaleItemUnitCost(
     return 0;
   }
 
-  // 1. If item has a custom/historical custoUn explicitly saved on it (e.g. custom avulso cost or specific product cost)
-  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
-    return item.custoUn;
+  const isAvulso = isAvulsoItem(item);
+
+  // 1. If item is an AVULSO product, strictly preserve the custom cost defined at creation time
+  if (isAvulso) {
+    if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
+      return item.custoUn;
+    }
+    return item.precoUn * 0.62;
   }
 
+  // 2. For registered catalog products: find the matching product in the catalog
   const nameToMatch = item.produtoNome || item.nome;
   const matchingProduct = findMatchingProduct(item.produtoId, nameToMatch, products);
 
   if (matchingProduct) {
-    // 2. If matching product in catalog has an explicit precoCusto configured:
-    if (matchingProduct.precoCusto !== undefined && matchingProduct.precoCusto !== null && !isNaN(matchingProduct.precoCusto)) {
+    // ALWAYS prioritize the updated configured precoCusto from the catalog (recalculates historical sales with new real costs!)
+    if (matchingProduct.precoCusto !== undefined && matchingProduct.precoCusto !== null && !isNaN(matchingProduct.precoCusto) && matchingProduct.precoCusto >= 0) {
       return matchingProduct.precoCusto;
     }
-    // 3. If matching product in catalog has a base catalog price, estimate unit cost from the CATALOG base price
-    // (so that discounts or edited sale prices do not distort physical product unit cost)
+    // If no precoCusto was configured in the catalog, check if item had a custom custoUn or fallback to base price estimate
+    if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
+      return item.custoUn;
+    }
     const baseCatalogPrice = matchingProduct.preco || (matchingProduct.faixasPreco && matchingProduct.faixasPreco.length > 0 ? matchingProduct.faixasPreco[0].preco : 0);
     if (baseCatalogPrice > 0) {
       return baseCatalogPrice * 0.62;
     }
   }
 
-  // Fallback for avulso / uncataloged items if no custom cost was set
+  // 3. Fallback for uncataloged items: use saved custom cost or 62% estimate
+  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
+    return item.custoUn;
+  }
+
   return item.precoUn * 0.62;
 }
 
@@ -370,9 +385,11 @@ export function getSaleCostInfo(sale: Sale, products: Product[] = []): SaleCostI
       // @ts-ignore
       const q = typeof item.quantidade === 'number' ? item.quantidade : (typeof item.quantity === 'number' ? item.quantity : 1);
       
-      const prod = products.find(p => p.id === item.produtoId || p.nome?.toLowerCase() === item.produtoNome?.toLowerCase());
-      const hasItemExplicitCost = (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0)
-        || (!isItemAvulso && prod && prod.precoCusto !== undefined && prod.precoCusto !== null && prod.precoCusto >= 0);
+      const nameToMatch = item.produtoNome || item.nome;
+      const prod = findMatchingProduct(item.produtoId, nameToMatch, products);
+      const hasItemExplicitCost = (isItemAvulso && item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0)
+        || (!isItemAvulso && prod && prod.precoCusto !== undefined && prod.precoCusto !== null && prod.precoCusto >= 0)
+        || (!isItemAvulso && !prod && item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0);
 
       if (!hasItemExplicitCost) {
         hasExplicitCost = false;
@@ -385,12 +402,13 @@ export function getSaleCostInfo(sale: Sale, products: Product[] = []): SaleCostI
       totalCusto += unitCost * q;
     });
   } else {
-    const prod = products.find(p => p.id === sale.produtoId || p.nome?.toLowerCase() === sale.produtoNome?.toLowerCase());
-    const hasItemExplicitCost = (sale.custoUn !== undefined && sale.custoUn !== null && !isNaN(sale.custoUn) && sale.custoUn >= 0)
-      || (!isAvulso && prod && prod.precoCusto !== undefined && prod.precoCusto !== null && prod.precoCusto >= 0);
+    const prod = findMatchingProduct(sale.produtoId, sale.produtoNome, products);
+    const hasItemExplicitCost = (isAvulso && sale.custoUn !== undefined && sale.custoUn !== null && !isNaN(sale.custoUn) && sale.custoUn >= 0)
+      || (!isAvulso && prod && prod.precoCusto !== undefined && prod.precoCusto !== null && prod.precoCusto >= 0)
+      || (!isAvulso && !prod && sale.custoUn !== undefined && sale.custoUn !== null && !isNaN(sale.custoUn) && sale.custoUn >= 0);
 
     hasExplicitCost = Boolean(hasItemExplicitCost);
-    const unitCost = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0, custoUn: sale.custoUn }, sale.data, products);
+    const unitCost = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0, custoUn: sale.custoUn, isAvulso: sale.isAvulso }, sale.data, products);
     const q = sale.quantidade || 1;
     totalCusto = unitCost * q;
     itemsCount = q;
