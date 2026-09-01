@@ -1,14 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sparkles, Trophy, Star, X, Rocket, Zap, Flame, Bot, Cpu, Palette, Brain, Sun, Coffee, Heart, Truck, Gift, CheckCircle2, Calendar, Clock, AlertTriangle, AlertOctagon, Award, Crown } from 'lucide-react';
+import { Sparkles, Trophy, Star, X, Rocket, Zap, Flame, Bot, Cpu, Palette, Paintbrush, Brain, Sun, Coffee, Heart, Truck, Gift, CheckCircle2, Calendar, Clock, AlertTriangle, AlertOctagon, Award, Crown } from 'lucide-react';
 import { playAppSound } from '../lib/audio';
+
+export interface UrgentArtOrderInfo {
+  id: string;
+  cliente: string;
+  numeroPedido?: string;
+  produtoNome: string;
+  dataRetirada?: string;
+  turnoEntrega?: 'Manhã' | 'Tarde';
+  temTaxaUrgencia?: boolean;
+  designerId?: 'designer1' | 'designer2' | null;
+  statusArte?: string;
+}
 
 interface CelebrationOverlayProps {
   onClose: () => void;
-  type?: 'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'critical_stock' | 'weekly_50_orders';
+  type?: 'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'critical_stock' | 'weekly_50_orders' | 'urgent_art_alert';
   userName?: string;
   productName?: string;
   productStock?: number;
+  urgentOrders?: UrgentArtOrderInfo[];
+  onActionClick?: () => void;
 }
 
 interface Balloon {
@@ -44,7 +58,15 @@ interface CosmicStar {
   rotation: number;
 }
 
-export function CelebrationOverlay({ onClose, type = 'goal', userName, productName, productStock }: CelebrationOverlayProps) {
+export function CelebrationOverlay({ 
+  onClose, 
+  type = 'goal', 
+  userName, 
+  productName, 
+  productStock,
+  urgentOrders,
+  onActionClick 
+}: CelebrationOverlayProps) {
   const [balloons, setBalloons] = useState<Balloon[]>([]);
   const [fireworks, setFireworks] = useState<FireworkCluster[]>([]);
   const [cosmicStars, setCosmicStars] = useState<CosmicStar[]>([]);
@@ -206,6 +228,32 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName, productNa
       }, 15000); // slightly more time to read the gorgeous morning greeting
 
       return () => {
+        clearTimeout(autoCloseTimer);
+      };
+    } else if (type === 'urgent_art_alert') {
+      // Setup alarming red, amber and vibrant glowing cosmic alert stars
+      const generatedStars = Array.from({ length: 24 }).map((_, i) => ({
+        id: i,
+        x: Math.random() * 100,
+        y: Math.random() * 60 + 30,
+        scale: Math.random() * 0.75 + 0.5,
+        delay: Math.random() * 1.5,
+        speed: Math.random() * 3.5 + 2.5,
+        rotation: Math.random() * 40 - 20
+      }));
+      setCosmicStars(generatedStars);
+
+      playAppSound('alert');
+      const secondBeep = setTimeout(() => {
+        playAppSound('alert');
+      }, 450);
+
+      const autoCloseTimer = setTimeout(() => {
+        onClose();
+      }, 18000);
+
+      return () => {
+        clearTimeout(secondBeep);
         clearTimeout(autoCloseTimer);
       };
     } else if (type === 'critical_stock') {
@@ -892,6 +940,115 @@ export function CelebrationOverlay({ onClose, type = 'goal', userName, productNa
               className="w-full py-2.5 px-5 bg-gradient-to-r from-amber-500 via-purple-500 to-pink-550 hover:brightness-110 active:scale-[0.98] transition-all text-white font-extrabold text-xs rounded-xl shadow-lg shadow-amber-500/15 cursor-pointer"
             >
               Iniciar Dia de Sucesso 🚀
+            </button>
+          </motion.div>
+        ) : type === 'urgent_art_alert' ? (
+          // URGENT ARTWORK ALERT CARD FOR DESIGNERS
+          <motion.div
+            key="urgent-art-alert-card"
+            initial={{ scale: 0.8, opacity: 0, y: 50 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            exit={{ scale: 0.8, opacity: 0, y: 50 }}
+            transition={{ type: 'spring', damping: 14, stiffness: 100, delay: 0.1 }}
+            className="relative z-10 w-full max-w-md mx-4 bg-zinc-950 border-2 border-red-500/40 rounded-3xl shadow-[0_0_60px_rgba(239,68,68,0.35)] p-6 sm:p-7 text-center pointer-events-auto no-print overflow-hidden"
+          >
+            {/* Sparkly corner highlights */}
+            <div className="absolute top-4 left-4 text-red-500 animate-pulse">
+              <Flame className="h-5 w-5" />
+            </div>
+            <div className="absolute bottom-4 right-4 text-amber-500 animate-pulse delay-75">
+              <Palette className="h-5 w-5" />
+            </div>
+
+            {/* Close Button */}
+            <button 
+              onClick={onClose}
+              className="absolute top-4 right-4 text-zinc-500 hover:text-zinc-200 transition-colors p-1.5 hover:bg-zinc-900 rounded-xl cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            {/* Glowing bouncing warning icon with Paintbrush */}
+            <motion.div 
+              animate={{ 
+                scale: [1, 1.15, 1],
+                rotate: [0, 6, -6, 0]
+              }}
+              transition={{
+                duration: 1.6,
+                repeat: Infinity,
+                repeatType: 'reverse',
+                ease: 'easeInOut'
+              }}
+              className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-tr from-red-600 via-rose-500 to-amber-500 text-white shadow-xl shadow-red-500/30 mb-4"
+            >
+              <Paintbrush className="h-8 w-8 stroke-[2.2] animate-bounce" />
+            </motion.div>
+
+            {/* Badge */}
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 bg-red-500/15 border border-red-500/30 rounded-full text-[10px] font-black text-red-400 uppercase tracking-widest mb-2.5">
+              <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+              🚨 ATENÇÃO DESIGNERS: PEDIDO URGENTE!
+            </div>
+
+            {/* Title */}
+            <h1 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-red-400 via-rose-400 to-amber-400 tracking-tight leading-tight mb-2">
+              Arte Pendente para Fazer! 🎨⚠️
+            </h1>
+
+            {/* Subtitle */}
+            <p className="text-xs text-zinc-350 font-medium px-2 mb-4 leading-relaxed">
+              Constam <strong className="text-red-400 font-bold">{urgentOrders && urgentOrders.length > 0 ? urgentOrders.length : 1} {urgentOrders && urgentOrders.length === 1 ? 'pedido urgente' : 'pedidos urgentes'}</strong> aguardando criação ou aprovação da arte antes da produção/entrega!
+            </p>
+
+            {/* List of Urgent Orders preview */}
+            <div className="space-y-2 mb-5 max-h-48 overflow-y-auto pr-1 text-left custom-scrollbar">
+              {(urgentOrders || []).slice(0, 3).map((item) => (
+                <div key={item.id} className="bg-zinc-900/90 border border-red-500/25 p-3 rounded-xl shadow-inner">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-xs font-black text-zinc-100 truncate">
+                      {item.cliente} {item.numeroPedido ? `(#${item.numeroPedido})` : ''}
+                    </span>
+                    {item.temTaxaUrgencia ? (
+                      <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-black rounded uppercase shrink-0">
+                        ⚡ Urgência
+                      </span>
+                    ) : (
+                      <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[9px] font-black rounded uppercase shrink-0">
+                        📅 Prazo Próximo
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-400 truncate mb-1">
+                    {item.produtoNome}
+                  </p>
+                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium">
+                    <span>
+                      {item.dataRetirada ? `📅 Retirada: ${new Date(item.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}${item.turnoEntrega ? ` (${item.turnoEntrega})` : ''}` : 'Prazo Imediato'}
+                    </span>
+                    <span className="text-amber-400 font-bold font-mono">
+                      {item.designerId === 'designer1' ? 'Na Fila D1' : item.designerId === 'designer2' ? 'Na Fila D2' : 'Fila de Triagem'}
+                    </span>
+                  </div>
+                </div>
+              ))}
+              {urgentOrders && urgentOrders.length > 3 && (
+                <p className="text-[10px] text-center text-zinc-500 font-semibold py-0.5">
+                  + {urgentOrders.length - 3} outros pedidos urgentes na fila
+                </p>
+              )}
+            </div>
+
+            {/* CTA Button */}
+            <button
+              onClick={() => {
+                if (onActionClick) onActionClick();
+                onClose();
+              }}
+              className="w-full py-3 px-5 bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:brightness-110 active:scale-[0.98] transition-all text-white font-black text-xs rounded-xl shadow-lg shadow-red-500/25 cursor-pointer animate-pulse flex items-center justify-center gap-2 font-sans"
+            >
+              <Paintbrush className="h-4 w-4" />
+              <span>Priorizar Artes Urgentes Agora! 🚀</span>
             </button>
           </motion.div>
         ) : type === 'critical_stock' ? (

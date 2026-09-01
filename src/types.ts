@@ -58,6 +58,7 @@ export interface SaleOriginalValues {
   turnoEntrega?: 'Manhã' | 'Tarde';
   pedidoVinculoNumero?: string;
   corSelecionada?: string;
+  temTaxaUrgencia?: boolean;
 }
 
 export interface Sale {
@@ -113,6 +114,7 @@ export interface Sale {
   isAvulso?: boolean;
   descontoPercent?: number;
   descontoValor?: number;
+  temTaxaUrgencia?: boolean;
 }
 
 export interface StoreInfo {

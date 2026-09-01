@@ -26,11 +26,13 @@ import {
   Smartphone,
   Trophy,
   Filter,
-  EyeOff
+  EyeOff,
+  Flame
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sale, StoreInfo, Product, SaleItem } from '../types';
 import { Receipt } from './Receipt';
+import { CelebrationOverlay, UrgentArtOrderInfo } from './CelebrationOverlay';
 import { playAppSound } from '../lib/audio';
 import QRCode from 'qrcode';
 
@@ -320,6 +322,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
 
   // Split into columns
   const isUrgent = (sale: Sale) => {
+    if (sale.temTaxaUrgencia) return true;
     if (!sale.dataRetirada) return false;
     try {
       let limitDays = 3; // Default warning timeframe of 3 days
@@ -351,6 +354,49 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
       return false;
     }
   };
+
+  // Urgent orders that still have pending artwork
+  const urgentArtOrders = useMemo(() => {
+    return sales.filter(s => {
+      if (s.status === 'Orçamento') return false;
+      if (s.removerDoDesign) return false;
+      if (s.statusArte === 'Arte Finalizada') return false;
+      return isUrgent(s);
+    });
+  }, [sales, products]);
+
+  const urgentOrdersInfoList: UrgentArtOrderInfo[] = useMemo(() => {
+    return urgentArtOrders.map(s => ({
+      id: s.id,
+      cliente: s.cliente,
+      numeroPedido: s.numeroPedido,
+      produtoNome: s.produtoNome,
+      dataRetirada: s.dataRetirada,
+      turnoEntrega: s.turnoEntrega,
+      temTaxaUrgencia: s.temTaxaUrgencia,
+      designerId: s.designerId,
+      statusArte: s.statusArte
+    }));
+  }, [urgentArtOrders]);
+
+  const [showUrgentArtOverlay, setShowUrgentArtOverlay] = useState(false);
+  const prevUrgentCountRef = useRef(0);
+
+  // 🔔 Dispara alerta sempre que o usuário entra na aba de Pedidos Fechados (ao montar o componente)
+  useEffect(() => {
+    if (urgentArtOrders.length > 0) {
+      setShowUrgentArtOverlay(true);
+    }
+    prevUrgentCountRef.current = urgentArtOrders.length;
+  }, []);
+
+  // Também avisa em tempo real se novos pedidos urgentes chegarem enquanto ele já estiver na aba
+  useEffect(() => {
+    if (urgentArtOrders.length > prevUrgentCountRef.current && urgentArtOrders.length > 0) {
+      setShowUrgentArtOverlay(true);
+    }
+    prevUrgentCountRef.current = urgentArtOrders.length;
+  }, [urgentArtOrders.length]);
 
   const getUrgentText = (dataRetirada?: string) => {
     if (!dataRetirada) return '';
@@ -540,6 +586,84 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   return (
     <div className="space-y-6">
       
+      {/* 🚨 ALERTA VISUAL ANIMADO DE PEDIDOS URGENTES PENDENTES DE ARTE */}
+      {urgentArtOrders.length > 0 && (
+        <div className="bg-gradient-to-r from-red-950/60 via-red-900/30 to-amber-950/40 border-2 border-red-500/50 rounded-2xl p-4 sm:p-5 shadow-[0_0_30px_rgba(239,68,68,0.25)] space-y-3 relative overflow-hidden animate-fade-in">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-red-500/10 rounded-full filter blur-3xl pointer-events-none" />
+          
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 relative z-10">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-red-500/20 border border-red-500/40 text-red-400 rounded-2xl flex items-center justify-center shrink-0 shadow-inner animate-pulse">
+                <Flame className="h-6 w-6 text-red-400 fill-red-400/40 animate-bounce" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-red-300 bg-red-500/20 px-2 py-0.5 rounded-full border border-red-500/30">
+                    🚨 Atenção Designers
+                  </span>
+                  <span className="text-[11px] font-extrabold text-amber-400 font-mono">
+                    {urgentArtOrders.length} {urgentArtOrders.length === 1 ? 'pedido urgente pendente' : 'pedidos urgentes pendentes'}
+                  </span>
+                </div>
+                <h3 className="text-sm sm:text-base font-black text-zinc-100 mt-1">
+                  Existem pedidos urgentes com arte pendente de finalização!
+                </h3>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <button
+                type="button"
+                onClick={() => setFilterUrgentOnly(prev => !prev)}
+                className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 font-sans border shadow-sm ${
+                  filterUrgentOnly
+                    ? 'bg-brand-pink text-white border-brand-pink ring-2 ring-brand-pink/30'
+                    : 'bg-red-500/20 text-red-200 border-red-500/30 hover:bg-red-500/30'
+                }`}
+              >
+                <Filter className="h-3.5 w-3.5" />
+                <span>{filterUrgentOnly ? 'Ver Todos os Pedidos' : 'Filtrar Urgentes'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowUrgentArtOverlay(true);
+                  playAppSound('alert');
+                }}
+                className="px-3.5 py-2 bg-zinc-900/90 hover:bg-zinc-800 text-zinc-200 border border-zinc-700/70 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-sm"
+                title="Abrir Alerta em Tela Cheia"
+              >
+                <Paintbrush className="h-3.5 w-3.5 text-red-400 animate-pulse" />
+                <span className="hidden sm:inline">Ver Alerta</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Chips interativos de pedidos urgentes */}
+          <div className="flex flex-wrap gap-2 pt-2 border-t border-red-500/20 relative z-10">
+            {urgentArtOrders.map((sale) => (
+              <button
+                key={sale.id}
+                type="button"
+                onClick={() => setViewedSale(sale)}
+                className="group flex items-center gap-2 px-3 py-1.5 bg-zinc-950/80 hover:bg-zinc-900 border border-red-500/30 hover:border-red-400 rounded-xl text-xs font-mono transition-all cursor-pointer text-left shadow-sm"
+              >
+                <span className="font-extrabold text-zinc-200 group-hover:text-white">
+                  {sale.cliente} {sale.numeroPedido ? `(#${sale.numeroPedido})` : ''}
+                </span>
+                <span className="text-[10.5px] text-zinc-400 font-sans truncate max-w-[150px]">
+                  {sale.produtoNome}
+                </span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 font-bold border border-red-500/30">
+                  {sale.temTaxaUrgencia ? '⚡ Taxa Urgência' : getUrgentText(sale.dataRetirada)}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 1. Dashboard Metrics Summary Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         
@@ -2186,6 +2310,19 @@ ${produtosTexto}`;
           </div>
         )}
       </AnimatePresence>
+
+      {/* 🚀 MODAL / OVERLAY DE ALERTA DE PEDIDOS URGENTES DE ARTE */}
+      {showUrgentArtOverlay && urgentArtOrders.length > 0 && (
+        <CelebrationOverlay
+          type="urgent_art_alert"
+          urgentOrders={urgentOrdersInfoList}
+          onClose={() => setShowUrgentArtOverlay(false)}
+          onActionClick={() => {
+            setFilterUrgentOnly(true);
+            setShowUrgentArtOverlay(false);
+          }}
+        />
+      )}
 
     </div>
   );

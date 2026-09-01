@@ -222,7 +222,7 @@ export default function App() {
 
   const [isForceUpdating, setIsForceUpdating] = useState(false);
   const [globalMuted, setGlobalMuted] = useState(() => getIsAudioMuted());
-  const [showCelebration, setShowCelebration] = useState<'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'critical_stock' | 'weekly_50_orders' | null>(null);
+  const [showCelebration, setShowCelebration] = useState<'halfway' | 'goal' | 'designer_goal' | 'welcome' | 'designer_halfway' | 'order_delivered' | 'critical_stock' | 'weekly_50_orders' | 'urgent_art_alert' | null>(null);
   const [criticalStockProduct, setCriticalStockProduct] = useState<Product | null>(null);
   const [shortFeedback, setShortFeedback] = useState<ShortFeedback | null>(null);
   const [hasCheckedCritical, setHasCheckedCritical] = useState(false);
