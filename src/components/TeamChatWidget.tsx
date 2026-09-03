@@ -1,38 +1,41 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  MessageSquare, 
-  Send, 
-  X, 
-  Minus, 
-  Trash2, 
-  Clock, 
-  Users, 
+import {
+  MessageSquare,
+  Send,
+  X,
+  Minus,
+  Trash2,
+  Clock,
+  Users,
   Check,
   Bell,
   BellRing,
   Crown,
   Car,
   ClipboardList,
-  AlarmClock
+  AlarmClock,
+  Lock,
+  Pencil,
+  Repeat
 } from 'lucide-react';
 import { UberAlertOverlay, UberAlertData } from './UberAlertOverlay';
 import { OrderAlertOverlay, OrderAlertData } from './OrderAlertOverlay';
 import { ReminderAlertOverlay, ReminderAlertData } from './ReminderAlertOverlay';
-import { SetReminderModal } from './SetReminderModal';
-import { 
-  sendDesktopAlert, 
-  flashDocumentTitle, 
-  getNotificationPermission, 
-  requestNotificationPermission 
+import { SetReminderModal, ReminderRepeatConfig } from './SetReminderModal';
+import {
+  sendDesktopAlert,
+  flashDocumentTitle,
+  getNotificationPermission,
+  requestNotificationPermission
 } from '../lib/desktopNotification';
-import { 
-  collection, 
+import {
+  collection,
   setDoc,
-  query, 
-  orderBy, 
-  limit, 
-  onSnapshot, 
+  query,
+  orderBy,
+  limit,
+  onSnapshot,
   serverTimestamp,
   getDocs,
   deleteDoc,
@@ -50,6 +53,8 @@ export interface TeamChatMessage {
   text: string;
   timestamp: number;
   createdAt?: string;
+  edited?: boolean;
+  editedAt?: number;
 }
 
 export interface ChatReminder {
@@ -62,7 +67,32 @@ export interface ChatReminder {
   scheduledAt: number;
   triggerAt: number;
   triggered?: boolean;
+  target?: 'private' | 'all';
+  creatorId?: string;
+  creatorName?: string;
+  repeatWeekly?: boolean;
+  repeatDayOfWeek?: number;
+  repeatDayLabel?: string;
+  repeatTime?: string;
 }
+
+export const calculateNextWeekdayTrigger = (dayOfWeek: number, timeStr: string): number => {
+  const [hours, minutes] = (timeStr || '18:00').split(':').map(Number);
+  const now = new Date();
+  const target = new Date(now);
+  target.setHours(hours || 0, minutes || 0, 0, 0);
+
+  const currentDay = now.getDay();
+  let daysDiff = (dayOfWeek - currentDay + 7) % 7;
+
+  // If today is that day, but the time has already passed today, advance 7 days
+  if (daysDiff === 0 && target.getTime() <= now.getTime()) {
+    daysDiff = 7;
+  }
+
+  target.setDate(target.getDate() + daysDiff);
+  return target.getTime();
+};
 
 interface TeamChatWidgetProps {
   currentUser: {
@@ -126,11 +156,11 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
 
   // Determine if current logged in user is Abraão / Administrator
   const isUserAdmin = Boolean(
-    isAdmin || 
-    currentUser?.role === 'admin' || 
+    isAdmin ||
+    currentUser?.role === 'admin' ||
     currentUser?.id === 'abraaoapp' ||
-    currentUser?.email === 'oxentefesteje@gmail.com' || 
-    currentUser?.email === 'abraaoapp@oxente.com' || 
+    currentUser?.email === 'oxentefesteje@gmail.com' ||
+    currentUser?.email === 'abraaoapp@oxente.com' ||
     (currentUser?.name && (currentUser.name.toLowerCase().includes('abra') || currentUser.name.toLowerCase().includes('admin'))) ||
     (currentUser?.displayName && (currentUser.displayName.toLowerCase().includes('abra') || currentUser.displayName.toLowerCase().includes('admin')))
   );
@@ -221,6 +251,8 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     }
   });
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingText, setEditingText] = useState<string>('');
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => getNotificationPermission());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -256,8 +288,8 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     if (isOpen) return;
 
     // Check if message is authored by the current user (don't alert own messages)
-    const isSelf = 
-      msg.senderId === currentUserId || 
+    const isSelf =
+      msg.senderId === currentUserId ||
       (isUserAdmin && isMessageFromAdmin(msg.senderName, msg.senderRole, msg.senderId));
     if (isSelf) return;
 
@@ -304,8 +336,8 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
 
   // Helper to trigger Uber high-urgency fullscreen alert for staff/collaborators
   const triggerUberAlert = (msg: TeamChatMessage) => {
-    const isSelf = 
-      msg.senderId === currentUserId || 
+    const isSelf =
+      msg.senderId === currentUserId ||
       (isUserAdmin && isMessageFromAdmin(msg.senderName, msg.senderRole, msg.senderId));
     if (isSelf) return;
 
@@ -339,8 +371,8 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
 
   // Helper to trigger Orders fullscreen alert for staff/collaborators
   const triggerOrderAlert = (msg: TeamChatMessage) => {
-    const isSelf = 
-      msg.senderId === currentUserId || 
+    const isSelf =
+      msg.senderId === currentUserId ||
       (isUserAdmin && isMessageFromAdmin(msg.senderName, msg.senderRole, msg.senderId));
     if (isSelf) return;
 
@@ -372,14 +404,21 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     flashDocumentTitle('📝 ANOTA OS PEDIDOS! - Oxente Festeje', 35000);
   };
 
-  // Periodic check for scheduled message reminders / alarms (every 4 seconds)
+  // Periodic check for scheduled message reminders / alarms (every 3.5 seconds)
   useEffect(() => {
     const checkReminders = () => {
       const now = Date.now();
       let updated = false;
       const newReminders = reminders.map((rem) => {
-        if (!rem.triggered && rem.triggerAt <= now) {
+        // Only trigger if it is for the current user: team-wide OR user's own private reminder
+        const isForMe = 
+          rem.target === 'all' || 
+          rem.creatorId === currentUserId || 
+          !rem.creatorId;
+
+        if (isForMe && !rem.triggered && rem.triggerAt <= now) {
           updated = true;
+          const isTeam = rem.target === 'all';
 
           // 1. Fullscreen Animated Alert Overlay
           setReminderAlertData({
@@ -390,7 +429,14 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
             text: rem.text,
             timestamp: rem.timestamp,
             scheduledAt: rem.scheduledAt,
-            triggerAt: rem.triggerAt
+            triggerAt: rem.triggerAt,
+            target: rem.target || 'private',
+            creatorName: rem.creatorName,
+            creatorId: rem.creatorId,
+            repeatWeekly: rem.repeatWeekly,
+            repeatDayOfWeek: rem.repeatDayOfWeek,
+            repeatDayLabel: rem.repeatDayLabel,
+            repeatTime: rem.repeatTime
           });
 
           // 2. High-volume alarm chime sound
@@ -398,8 +444,10 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
 
           // 3. Pop native OS desktop notification over WhatsApp/other applications
           sendDesktopAlert({
-            title: '⏰ ALARME: HORA DE FINALIZAR! ⏰',
-            body: `${rem.senderName}: "${rem.text}"\nClique para abrir o sistema na hora!`,
+            title: rem.repeatWeekly
+              ? (isTeam ? `🔁 ALARME SEMANAL (TODA ${rem.repeatDayLabel?.toUpperCase() || 'SEMANA'}): HORA DA TAREFA!` : `🔁 SEU ALARME SEMANAL (TODA ${rem.repeatDayLabel?.toUpperCase() || 'SEMANA'})`)
+              : (isTeam ? '⏰ ALARME DA EQUIPE: HORA DE FINALIZAR! ⏰' : '⏰ SEU ALARME: HORA DE FINALIZAR! ⏰'),
+            body: `${rem.senderName}: "${rem.text}"\n${rem.repeatWeekly ? `(Alarme repetitivo toda ${rem.repeatDayLabel || 'semana'})` : (isTeam ? `(Alarme da equipe criado por ${rem.creatorName || 'Colega'})` : '(Alarme privado do seu login)')}\nClique para abrir o sistema na hora!`,
             tag: `oxente_rem_${rem.id}`,
             requireInteraction: true,
             onClick: () => {
@@ -409,7 +457,30 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
           });
 
           // 4. Flash document tab title
-          flashDocumentTitle(`⏰ ALARME: ${rem.text.substring(0, 20)}... - Oxente Festeje`, 35000);
+          const prefix = rem.repeatWeekly 
+            ? `🔁 [ALARME ${rem.repeatDayLabel?.toUpperCase() || 'SEMANAL'}]`
+            : (isTeam ? '⏰ [ALARME EQUIPE]' : '⏰ [SEU ALARME]');
+          flashDocumentTitle(`${prefix} ${rem.text.substring(0, 20)}... - Oxente Festeje`, 35000);
+
+          if (rem.repeatWeekly && rem.repeatDayOfWeek !== undefined) {
+            // Advance to next week's occurrence
+            const nextTriggerAt = rem.repeatTime 
+              ? calculateNextWeekdayTrigger(rem.repeatDayOfWeek, rem.repeatTime)
+              : rem.triggerAt + 7 * 24 * 60 * 60 * 1000;
+
+            const updatedRem = {
+              ...rem,
+              triggerAt: nextTriggerAt,
+              triggered: false
+            };
+
+            // Sync updated reminder to Firestore
+            if (db) {
+              setDoc(doc(db, 'oxente_chat_reminders', rem.id), updatedRem, { merge: true }).catch(() => {});
+            }
+
+            return updatedRem;
+          }
 
           return { ...rem, triggered: true };
         }
@@ -424,11 +495,11 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       }
     };
 
-    const interval = setInterval(checkReminders, 4000);
+    const interval = setInterval(checkReminders, 3500);
     checkReminders();
 
     return () => clearInterval(interval);
-  }, [reminders]);
+  }, [reminders, currentUserId]);
 
   const handleOpenReminderModal = (msg: TeamChatMessage, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -436,7 +507,12 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     setIsReminderModalOpen(true);
   };
 
-  const handleSetReminder = (message: TeamChatMessage, triggerAt: number) => {
+  const handleSetReminder = async (
+    message: TeamChatMessage,
+    triggerAt: number,
+    target: 'private' | 'all',
+    repeatConfig?: ReminderRepeatConfig
+  ) => {
     const displayName = getSenderDisplayName(message.senderName, message.senderRole, message.senderId);
     const newReminder: ChatReminder = {
       id: `rem_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -447,40 +523,112 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       timestamp: message.timestamp,
       scheduledAt: Date.now(),
       triggerAt,
-      triggered: false
+      triggered: false,
+      target,
+      creatorId: currentUserId,
+      creatorName: currentUserName,
+      repeatWeekly: Boolean(repeatConfig?.repeatWeekly),
+      repeatDayOfWeek: repeatConfig?.repeatDayOfWeek,
+      repeatDayLabel: repeatConfig?.repeatDayLabel,
+      repeatTime: repeatConfig?.repeatTime
     };
 
-    const updated = [...reminders.filter(r => r.messageId !== message.id), newReminder];
+    // Filter out previous reminder for this message depending on target
+    const updated = [
+      ...reminders.filter(r => {
+        if (r.messageId !== message.id) return true;
+        if (target === 'private') {
+          return !(r.target === 'private' && (r.creatorId === currentUserId || !r.creatorId));
+        } else {
+          return r.target !== 'all';
+        }
+      }),
+      newReminder
+    ];
+
     setReminders(updated);
     try {
       localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
     } catch {}
 
+    // Synchronize to Firestore
+    try {
+      if (db) {
+        await setDoc(doc(db, 'oxente_chat_reminders', newReminder.id), newReminder);
+      }
+    } catch (err) {
+      console.warn('Erro ao salvar lembrete no Firestore:', err);
+    }
+
+    // Broadcast across devices / tabs via Supabase & BroadcastChannel
+    try {
+      supabaseChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'new_reminder',
+        payload: newReminder
+      });
+    } catch {}
+
+    try {
+      broadcastRef.current?.postMessage({
+        type: 'NEW_REMINDER',
+        payload: newReminder
+      });
+    } catch {}
+
     playAppSound('success');
   };
 
-  const handleCancelReminder = (reminderId: string, e?: React.MouseEvent) => {
+  const handleCancelReminder = async (reminderId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
     const updated = reminders.filter(r => r.id !== reminderId);
     setReminders(updated);
     try {
       localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
     } catch {}
+
+    // Remove from Firestore
+    try {
+      if (db) {
+        await deleteDoc(doc(db, 'oxente_chat_reminders', reminderId));
+      }
+    } catch (err) {
+      console.warn('Erro ao deletar lembrete no Firestore:', err);
+    }
+
+    // Broadcast cancellation
+    try {
+      supabaseChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'cancel_reminder',
+        payload: { id: reminderId }
+      });
+    } catch {}
+
+    try {
+      broadcastRef.current?.postMessage({
+        type: 'CANCEL_REMINDER',
+        payload: { id: reminderId }
+      });
+    } catch {}
+
     playAppSound('pop');
   };
 
-  const handleSnoozeReminder = (minutes: number) => {
+  const handleSnoozeReminder = async (minutes: number) => {
     if (!reminderAlertData) return;
     const targetId = reminderAlertData.id;
     const newTriggerAt = Date.now() + minutes * 60 * 1000;
 
+    let snoozedItem: ChatReminder | null = null;
     const updated = reminders.map(r => {
       if (r.id === targetId) {
-        return {
+        snoozedItem = {
           ...r,
           triggerAt: newTriggerAt,
           triggered: false
         };
+        return snoozedItem;
       }
       return r;
     });
@@ -490,27 +638,98 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
     } catch {}
 
+    if (snoozedItem) {
+      try {
+        if (db) {
+          await setDoc(doc(db, 'oxente_chat_reminders', targetId), snoozedItem, { merge: true });
+        }
+      } catch {}
+
+      try {
+        supabaseChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'snooze_reminder',
+          payload: snoozedItem
+        });
+      } catch {}
+
+      try {
+        broadcastRef.current?.postMessage({
+          type: 'SNOOZE_REMINDER',
+          payload: snoozedItem
+        });
+      } catch {}
+    }
+
     setReminderAlertData(null);
     playAppSound('success');
   };
 
   const getReminderStatus = (messageId: string) => {
-    const rem = reminders.find(r => r.messageId === messageId && !r.triggered);
+    // 1. Look for current user's own private reminder for this specific message
+    const myPrivate = reminders.find(r => 
+      r.messageId === messageId && 
+      !r.triggered && 
+      r.target === 'private' && 
+      (r.creatorId === currentUserId || !r.creatorId)
+    );
+
+    // 2. Look for team-wide reminder for this specific message
+    const teamRem = reminders.find(r => 
+      r.messageId === messageId && 
+      !r.triggered && 
+      r.target === 'all'
+    );
+
+    const rem = myPrivate || teamRem;
     if (!rem) return null;
+
     const diffMs = rem.triggerAt - Date.now();
-    if (diffMs <= 0) return { active: true, text: 'Disparando agora!', rem };
+    const isTeam = rem.target === 'all';
+    const isMyReminder = rem.creatorId === currentUserId;
+    const timeStr = new Date(rem.triggerAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    if (diffMs <= 0) {
+      return { 
+        active: true, 
+        text: isTeam ? '👥 Alarme Equipe: Disparando agora!' : '🔒 Seu Alarme: Disparando agora!', 
+        rem, 
+        isTeam, 
+        isMyReminder 
+      };
+    }
 
     const minsTotal = Math.round(diffMs / 60000);
     const hours = Math.floor(minsTotal / 60);
     const mins = minsTotal % 60;
-    const timeStr = new Date(rem.triggerAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
     let inText = '';
     if (hours > 0 && mins > 0) inText = `em ${hours}h ${mins}m`;
     else if (hours > 0) inText = `em ${hours}h`;
     else inText = `em ${mins}m`;
 
-    return { active: true, text: `Alarme: ${timeStr} (${inText})`, rem };
+    const isWeekly = Boolean(rem.repeatWeekly);
+    const weekdayShort = rem.repeatDayLabel ? rem.repeatDayLabel.split('-')[0] : 'Semanal';
+
+    let label = '';
+    if (isWeekly) {
+      label = isTeam
+        ? `🔁 Equipe: Toda ${weekdayShort} às ${rem.repeatTime || timeStr} (${inText})`
+        : `🔁 Seu Alarme: Toda ${weekdayShort} às ${rem.repeatTime || timeStr} (${inText})`;
+    } else {
+      label = isTeam 
+        ? `👥 Equipe${rem.creatorName ? ` (${rem.creatorName.split(' ')[0]})` : ''}: ${timeStr} (${inText})` 
+        : `🔒 Seu Alarme: ${timeStr} (${inText})`;
+    }
+
+    return { 
+      active: true, 
+      text: label, 
+      rem, 
+      isTeam, 
+      isMyReminder,
+      isWeekly
+    };
   };
 
   // Helper to merge and strictly deduplicate messages
@@ -538,10 +757,12 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
           hasNew = true;
           newItemsToAlert.push(inc);
         } else {
-          // If match found, update with any more complete id (e.g. from database)
-          if (inc.id && !inc.id.startsWith('msg_local_')) {
-            uniqueList[matchIdx] = { ...uniqueList[matchIdx], ...inc };
+          // If match found, update with any more complete id (e.g. from database) or edited text
+          const existing = uniqueList[matchIdx];
+          if (inc.text !== existing.text || inc.edited !== existing.edited) {
+            hasNew = true;
           }
+          uniqueList[matchIdx] = { ...existing, ...inc };
         }
       }
 
@@ -579,11 +800,36 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
           if (newMsg && newMsg.id !== lastSentMsgIdRef.current) {
             mergeMessages([newMsg], true);
           }
+        } else if (event.data?.type === 'EDIT_MESSAGE') {
+          const { id, text, editedAt } = event.data.payload || {};
+          if (id && text) {
+            setMessages(prev => prev.map(m => m.id === id ? { ...m, text, edited: true, editedAt: editedAt || Date.now() } : m));
+            setReminders(prev => prev.map(r => r.messageId === id ? { ...r, text } : r));
+          }
         } else if (event.data?.type === 'CLEAR_HISTORY') {
           setMessages([]);
           setUnreadCount(0);
           setIncomingAlert(null);
           localStorage.removeItem(STORAGE_CACHE_KEY);
+        } else if (event.data?.type === 'NEW_REMINDER') {
+          const newRem = event.data.payload as ChatReminder;
+          if (newRem && (newRem.target === 'all' || newRem.creatorId === currentUserId)) {
+            setReminders(prev => {
+              const exists = prev.some(r => r.id === newRem.id);
+              if (exists) return prev.map(r => r.id === newRem.id ? newRem : r);
+              return [...prev, newRem];
+            });
+          }
+        } else if (event.data?.type === 'CANCEL_REMINDER') {
+          const remId = event.data.payload?.id;
+          if (remId) {
+            setReminders(prev => prev.filter(r => r.id !== remId));
+          }
+        } else if (event.data?.type === 'SNOOZE_REMINDER') {
+          const snoozed = event.data.payload as ChatReminder;
+          if (snoozed) {
+            setReminders(prev => prev.map(r => r.id === snoozed.id ? snoozed : r));
+          }
         }
       };
       return () => {
@@ -615,7 +861,9 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
             senderRole: row.sender_role || row.senderRole,
             text: row.text,
             timestamp: Number(row.timestamp),
-            createdAt: row.created_at || row.createdAt
+            createdAt: row.created_at || row.createdAt,
+            edited: Boolean(row.edited || row.edited_at),
+            editedAt: row.edited_at ? new Date(row.edited_at).getTime() : undefined
           }));
           mergeMessages(mapped, false);
           return;
@@ -665,11 +913,39 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
           if (incomingMsg.id === lastSentMsgIdRef.current) return;
           mergeMessages([incomingMsg], true);
         })
+        .on('broadcast', { event: 'edit_message' }, ({ payload }) => {
+          if (!payload || !payload.id) return;
+          const { id, text, editedAt } = payload;
+          setMessages(prev => prev.map(m => m.id === id ? { ...m, text, edited: true, editedAt: editedAt || Date.now() } : m));
+          setReminders(prev => prev.map(r => r.messageId === id ? { ...r, text } : r));
+        })
         .on('broadcast', { event: 'clear_chat' }, () => {
           setMessages([]);
           localStorage.removeItem(STORAGE_CACHE_KEY);
           setUnreadCount(0);
           setIncomingAlert(null);
+        })
+        .on('broadcast', { event: 'new_reminder' }, ({ payload }) => {
+          if (!payload || !payload.id) return;
+          const rem = payload as ChatReminder;
+          if (rem.target === 'all' || rem.creatorId === currentUserId) {
+            setReminders(prev => {
+              const exists = prev.some(r => r.id === rem.id);
+              if (exists) return prev.map(r => r.id === rem.id ? rem : r);
+              return [...prev, rem];
+            });
+          }
+        })
+        .on('broadcast', { event: 'cancel_reminder' }, ({ payload }) => {
+          if (payload?.id) {
+            setReminders(prev => prev.filter(r => r.id !== payload.id));
+          }
+        })
+        .on('broadcast', { event: 'snooze_reminder' }, ({ payload }) => {
+          if (payload?.id) {
+            const snoozed = payload as ChatReminder;
+            setReminders(prev => prev.map(r => r.id === snoozed.id ? snoozed : r));
+          }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_store_info', filter: 'key=eq.team_chat_history' }, (changePayload: any) => {
           const raw = changePayload.new?.whatsapp_template;
@@ -699,11 +975,25 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
               senderRole: row.sender_role || row.senderRole,
               text: row.text,
               timestamp: Number(row.timestamp),
-              createdAt: row.created_at || row.createdAt
+              createdAt: row.created_at || row.createdAt,
+              edited: Boolean(row.edited || row.edited_at),
+              editedAt: row.edited_at ? new Date(row.edited_at).getTime() : undefined
             };
             if (incoming.id !== lastSentMsgIdRef.current) {
               mergeMessages([incoming], true);
             }
+          }
+        })
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'oxente_team_messages' }, (changePayload: any) => {
+          const row = changePayload.new;
+          if (row && row.id) {
+            setMessages(prev => prev.map(m => m.id === row.id ? {
+              ...m,
+              text: row.text,
+              edited: true,
+              editedAt: row.edited_at ? new Date(row.edited_at).getTime() : Date.now()
+            } : m));
+            setReminders(prev => prev.map(r => r.messageId === row.id ? { ...r, text: row.text } : r));
           }
         })
         .subscribe((status: string) => {
@@ -752,7 +1042,9 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                 senderRole: data.senderRole || 'colaborador',
                 text: data.text || '',
                 timestamp: data.timestamp || Date.now(),
-                createdAt: data.createdAt || new Date().toISOString()
+                createdAt: data.createdAt || new Date().toISOString(),
+                edited: Boolean(data.edited),
+                editedAt: data.editedAt
               });
             });
 
@@ -776,6 +1068,46 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       console.warn('Falha no listener Firestore:', err);
     }
 
+    return () => unsubscribe();
+  }, [currentUserId]);
+
+  // 4. Synchronize scheduled reminders with Firestore
+  useEffect(() => {
+    let unsubscribe = () => {};
+    try {
+      if (db) {
+        const remindersRef = collection(db, 'oxente_chat_reminders');
+        unsubscribe = onSnapshot(
+          remindersRef,
+          (snapshot) => {
+            snapshot.docChanges().forEach((change) => {
+              const data = change.doc.data() as ChatReminder;
+              if (!data || !data.id) return;
+              const isRelevant = data.target === 'all' || data.creatorId === currentUserId;
+
+              if (change.type === 'removed') {
+                setReminders(prev => prev.filter(r => r.id !== data.id));
+              } else if (change.type === 'added' || change.type === 'modified') {
+                if (isRelevant) {
+                  setReminders(prev => {
+                    const exists = prev.some(r => r.id === data.id);
+                    if (exists) {
+                      return prev.map(r => r.id === data.id ? { ...r, ...data } : r);
+                    }
+                    return [...prev, data];
+                  });
+                }
+              }
+            });
+          },
+          (err) => {
+            console.warn('Firestore reminders note:', err.message);
+          }
+        );
+      }
+    } catch (err) {
+      console.warn('Falha no listener Firestore de lembretes:', err);
+    }
     return () => unsubscribe();
   }, [currentUserId]);
 
@@ -960,6 +1292,95 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     }
   };
 
+  const handleStartEdit = (msg: TeamChatMessage) => {
+    setEditingMessageId(msg.id);
+    setEditingText(msg.text);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditingText('');
+  };
+
+  const handleSaveEdit = async (messageId: string) => {
+    const trimmed = editingText.trim();
+    if (!trimmed) return;
+
+    const now = Date.now();
+    const updatedMessages = messages.map(m =>
+      m.id === messageId ? { ...m, text: trimmed, edited: true, editedAt: now } : m
+    );
+
+    setMessages(updatedMessages);
+    setEditingMessageId(null);
+    setEditingText('');
+
+    try {
+      localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(updatedMessages));
+    } catch {}
+
+    // Update reminder text if any for this message
+    setReminders(prev => {
+      const updated = prev.map(r => r.messageId === messageId ? { ...r, text: trimmed } : r);
+      try {
+        localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+
+    playAppSound('pop');
+
+    // 1. Broadcast to local tabs
+    try {
+      broadcastRef.current?.postMessage({
+        type: 'EDIT_MESSAGE',
+        payload: { id: messageId, text: trimmed, editedAt: now }
+      });
+    } catch {}
+
+    // 2. Broadcast to all users via Supabase Realtime
+    try {
+      await supabaseChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'edit_message',
+        payload: { id: messageId, text: trimmed, editedAt: now }
+      });
+    } catch {}
+
+    // 3. Persist to Supabase oxente_team_messages
+    try {
+      await supabase
+        .from('oxente_team_messages')
+        .update({
+          text: trimmed,
+          edited: true,
+          edited_at: new Date(now).toISOString()
+        })
+        .eq('id', messageId);
+    } catch {}
+
+    // 4. Persist to Supabase oxente_store_info backup history
+    try {
+      await supabase.from('oxente_store_info').upsert({
+        key: 'team_chat_history',
+        nome: 'Chat Equipe',
+        whatsapp_template: JSON.stringify(updatedMessages.slice(-100)),
+        updated_at: new Date().toISOString()
+      });
+    } catch {}
+
+    // 5. Persist to Firestore
+    try {
+      if (db) {
+        await setDoc(doc(db, 'oxente_team_messages', messageId), {
+          text: trimmed,
+          edited: true,
+          editedAt: now
+        }, { merge: true });
+      }
+    } catch {}
+  };
+
   const formatMessageTime = (timestamp: number) => {
     try {
       const date = new Date(timestamp);
@@ -1016,6 +1437,8 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       <SetReminderModal
         isOpen={isReminderModalOpen}
         message={selectedMessageForReminder}
+        existingReminder={selectedMessageForReminder ? getReminderStatus(selectedMessageForReminder.id)?.rem : null}
+        currentUserName={currentUserName}
         onClose={() => {
           setIsReminderModalOpen(false);
           setSelectedMessageForReminder(null);
@@ -1120,7 +1543,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                     </span>
                   </div>
                   <div className="text-[11px] text-zinc-400 truncate flex items-center gap-1">
-                    <span>Você:</span> 
+                    <span>Você:</span>
                     <strong className="text-zinc-100 font-bold">{currentUserName}</strong>
                     {isUserAdmin && (
                       <span className="text-[9px] bg-amber-950/90 text-amber-300 border border-amber-800/60 px-1.5 py-0.2 rounded-full font-semibold inline-flex items-center gap-0.5">
@@ -1227,8 +1650,8 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                 </div>
               ) : (
                 messages.map((msg, idx) => {
-                  const isSelf = 
-                    msg.senderId === currentUserId || 
+                  const isSelf =
+                    msg.senderId === currentUserId ||
                     (isUserAdmin && isMessageFromAdmin(msg.senderName, msg.senderRole, msg.senderId));
                   const senderName = getSenderDisplayName(msg.senderName, msg.senderRole, msg.senderId);
                   const msgIsAdmin = isMessageFromAdmin(msg.senderName, msg.senderRole, msg.senderId);
@@ -1285,20 +1708,76 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                             <span>Alerta Anotação de Pedidos</span>
                           </div>
                         )}
-                        <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+                        {editingMessageId === msg.id ? (
+                          <div className="space-y-2 my-1">
+                            <textarea
+                              value={editingText}
+                              onChange={(e) => setEditingText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                  e.preventDefault();
+                                  handleSaveEdit(msg.id);
+                                } else if (e.key === 'Escape') {
+                                  e.preventDefault();
+                                  handleCancelEdit();
+                                }
+                              }}
+                              className="w-full bg-zinc-950/90 text-white rounded-xl p-2 text-xs border border-orange-500/70 focus:outline-none focus:ring-1 focus:ring-orange-500 resize-none min-h-[60px]"
+                              placeholder="Corrigir mensagem..."
+                              autoFocus
+                            />
+                            <div className="flex items-center justify-end gap-1.5">
+                              <button
+                                type="button"
+                                onClick={handleCancelEdit}
+                                className="px-2 py-1 rounded-lg text-[10px] bg-zinc-800 hover:bg-zinc-700 text-zinc-300 transition-colors cursor-pointer"
+                              >
+                                Cancelar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleSaveEdit(msg.id)}
+                                disabled={!editingText.trim()}
+                                className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-orange-500 hover:bg-orange-600 disabled:opacity-50 text-white transition-colors cursor-pointer shadow-xs flex items-center gap-1"
+                              >
+                                <Check className="h-3 w-3" />
+                                <span>Salvar</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="leading-relaxed whitespace-pre-wrap">
+                            <span>{msg.text}</span>
+                            {msg.edited && (
+                              <span className="inline-block text-[9px] opacity-75 italic ml-1.5 font-normal">
+                                (editada)
+                              </span>
+                            )}
+                          </div>
+                        )}
 
                         {/* Active Reminder Badge */}
                         {reminderStatus && (
-                          <div className="mt-2 flex items-center justify-between gap-1.5 px-2 py-1 bg-teal-950/90 border border-teal-400/60 rounded-xl text-[10px] text-teal-200 shadow-sm animate-pulse">
+                          <div className={`mt-2 flex items-center justify-between gap-1.5 px-2 py-1 ${
+                            reminderStatus.isTeam 
+                              ? 'bg-indigo-950/90 border-indigo-500/60 text-indigo-200 shadow-indigo-500/10' 
+                              : 'bg-teal-950/90 border-teal-400/60 text-teal-200 shadow-teal-500/10'
+                          } border rounded-xl text-[10px] shadow-sm animate-pulse`}>
                             <div className="flex items-center gap-1.5 font-bold min-w-0 truncate">
-                              <AlarmClock className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                              {reminderStatus.isWeekly ? (
+                                <Repeat className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                              ) : reminderStatus.isTeam ? (
+                                <Users className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                              ) : (
+                                <Lock className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                              )}
                               <span className="truncate">{reminderStatus.text}</span>
                             </div>
                             <button
                               type="button"
                               onClick={(e) => handleCancelReminder(reminderStatus.rem.id, e)}
                               title="Cancelar este alarme"
-                              className="p-1 text-teal-400 hover:text-rose-400 rounded-md transition-colors cursor-pointer shrink-0"
+                              className="p-1 text-zinc-400 hover:text-rose-400 rounded-md transition-colors cursor-pointer shrink-0"
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -1308,26 +1787,58 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                         {/* Message Footer: Time + Alarm Button */}
                         <div
                           className={`flex items-center justify-between gap-2 mt-1.5 pt-0.5 text-[9px] ${
-                            isSelf 
-                              ? (isUberMsg ? 'text-amber-100' : isOrderMsg ? 'text-indigo-100' : 'text-orange-100/80') 
+                            isSelf
+                              ? (isUberMsg ? 'text-amber-100' : isOrderMsg ? 'text-indigo-100' : 'text-orange-100/80')
                               : (isUberMsg ? 'text-amber-400/80' : isOrderMsg ? 'text-indigo-300/80' : 'text-zinc-500')
                           }`}
                         >
-                          <button
-                            type="button"
-                            onClick={(e) => handleOpenReminderModal(msg, e)}
-                            title={reminderStatus ? 'Editar/Reconfigurar Alarme' : '⏰ Agendar Alarme / Lembrete para esta mensagem'}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-all cursor-pointer font-bold ${
-                              reminderStatus
-                                ? 'bg-teal-500/30 text-teal-200 hover:bg-teal-500/40'
-                                : isSelf
-                                ? 'text-orange-100/70 hover:text-white hover:bg-white/10'
-                                : 'text-zinc-400 hover:text-teal-300 hover:bg-zinc-800'
-                            }`}
-                          >
-                            <AlarmClock className="h-3 w-3" />
-                            <span>{reminderStatus ? 'Alarme Ativo' : 'Lembrar'}</span>
-                          </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => handleOpenReminderModal(msg, e)}
+                              title={
+                                reminderStatus 
+                                  ? 'Editar/Reconfigurar Alarme desta mensagem' 
+                                  : '⏰ Agendar Alarme / Lembrete para esta mensagem'
+                              }
+                              className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-all cursor-pointer font-bold ${
+                                reminderStatus
+                                  ? reminderStatus.isTeam
+                                    ? 'bg-indigo-500/30 text-indigo-200 hover:bg-indigo-500/40'
+                                    : 'bg-teal-500/30 text-teal-200 hover:bg-teal-500/40'
+                                  : isSelf
+                                  ? 'text-orange-100/70 hover:text-white hover:bg-white/10'
+                                  : 'text-zinc-400 hover:text-teal-300 hover:bg-zinc-800'
+                              }`}
+                            >
+                              {reminderStatus?.isWeekly ? (
+                                <Repeat className="h-3 w-3" />
+                              ) : (
+                                <AlarmClock className="h-3 w-3" />
+                              )}
+                              <span>
+                                {reminderStatus 
+                                  ? (reminderStatus.isWeekly ? 'Alarme Semanal' : reminderStatus.isTeam ? 'Alarme Equipe' : 'Seu Alarme') 
+                                  : 'Lembrar'}
+                              </span>
+                            </button>
+
+                            {(isSelf || isUserAdmin) && editingMessageId !== msg.id && (
+                              <button
+                                type="button"
+                                onClick={() => handleStartEdit(msg)}
+                                title="Editar mensagem (corrigir erro de digitação)"
+                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-all cursor-pointer font-medium ${
+                                  isSelf
+                                    ? 'text-orange-100/70 hover:text-white hover:bg-white/10'
+                                    : 'text-zinc-400 hover:text-orange-300 hover:bg-zinc-800'
+                                }`}
+                              >
+                                <Pencil className="h-2.5 w-2.5" />
+                                <span>Editar</span>
+                              </button>
+                            )}
+                          </div>
 
                           <div className="flex items-center gap-1">
                             <span>{formatMessageTime(msg.timestamp)}</span>

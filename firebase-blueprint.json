@@ -115,6 +115,26 @@
         }
       },
       "required": ["id", "senderId", "senderName", "text", "timestamp"]
+    },
+    "ChatReminder": {
+      "title": "Chat Message Reminder & Alarm",
+      "description": "Scheduled reminder and alarm linked to a chat message, either private to the creator or team-wide",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "messageId": { "type": "string" },
+        "senderName": { "type": "string" },
+        "senderRole": { "type": "string" },
+        "text": { "type": "string" },
+        "timestamp": { "type": "number" },
+        "scheduledAt": { "type": "number" },
+        "triggerAt": { "type": "number" },
+        "target": { "type": "string", "enum": ["private", "all"] },
+        "creatorId": { "type": "string" },
+        "creatorName": { "type": "string" },
+        "triggered": { "type": "boolean" }
+      },
+      "required": ["id", "messageId", "text", "triggerAt", "target", "creatorId"]
     }
   },
   "firestore": {
@@ -129,6 +149,10 @@
     "oxente_team_messages/{messageId}": {
       "schema": "TeamMessage",
       "description": "Collection of real-time internal team chat messages"
+    },
+    "oxente_chat_reminders/{reminderId}": {
+      "schema": "ChatReminder",
+      "description": "Collection of scheduled reminders and alarms for chat messages"
     }
   }
 }
