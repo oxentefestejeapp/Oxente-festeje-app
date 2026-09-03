@@ -49,6 +49,12 @@ import { SalesAudit } from './components/SalesAudit';
 import { RemindersManager } from './components/RemindersManager';
 import { ClosedOrdersManager } from './components/ClosedOrdersManager';
 import { dispatchNewOrderNotification, dispatchOrderEditedNotification } from './lib/notifications';
+import { 
+  incrementMobileOrderBadge, 
+  clearMobileAppBadge, 
+  setupMobilePushSubscription, 
+  isMobileDevice 
+} from './lib/mobileBadgeNotification';
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { ShortFeedbackToast, ShortFeedback } from './components/ShortFeedbackToast';
@@ -858,10 +864,35 @@ export default function App() {
     syncDataWithSupabase();
   }, []);
 
-  // Persist active tab selection to localStorage
+  // Persist active tab selection to localStorage & clear badge when viewing orders
   useEffect(() => {
     localStorage.setItem('oxente_active_tab', activeTab);
+    if (activeTab === 'vendas') {
+      clearMobileAppBadge();
+    }
   }, [activeTab]);
+
+  // Mobile App Badge auto-clearing when returning to the app on orders tab
+  useEffect(() => {
+    const handleFocus = () => {
+      if (!document.hidden && activeTab === 'vendas') {
+        clearMobileAppBadge();
+      }
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleFocus);
+    return () => {
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleFocus);
+    };
+  }, [activeTab]);
+
+  // Mobile Push & App Badge registration on login (exclusivo para dispositivos móveis)
+  useEffect(() => {
+    if (firebaseUser && isMobileDevice()) {
+      setupMobilePushSubscription(firebaseUser.email);
+    }
+  }, [firebaseUser]);
 
   // Real-time Supabase Database Synchronisation for all users in real-time
   useEffect(() => {
@@ -964,15 +995,19 @@ export default function App() {
           // Notificar sobre novos pedidos em tempo real no celular se veio de outro usuário e o usuário logado é administrador
           const isMySale = sale.criadoPorEmail === currentUserEmailRef.current;
           const isBudget = sale.status === 'Orçamento';
-          if (!isMySale && isAdminRef.current && !isBudget) {
-            dispatchNewOrderNotification(
-              sale.cliente,
-              sale.total,
-              sale.numeroPedido,
-              () => {
-                setActiveTab('vendas');
-              }
-            );
+          if (!isMySale && !isBudget) {
+            if (isAdminRef.current) {
+              dispatchNewOrderNotification(
+                sale.cliente,
+                sale.total,
+                sale.numeroPedido,
+                () => {
+                  setActiveTab('vendas');
+                }
+              );
+            }
+            // Exclusivo Mobile: incrementa o selo/contador no ícone do app
+            incrementMobileOrderBadge(1);
           }
 
           return updated;

@@ -3,32 +3,17 @@ import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 
-// Auto-cleanup Service Workers and stale caches to force instant updates and bypass cache lockups
+// Register Service Worker for Mobile App Badging & Web Push Notifications
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then((registrations) => {
-    if (registrations.length > 0) {
-      let unregisteredAny = false;
-      const promises = registrations.map(reg => 
-        reg.unregister().then((success) => {
-          if (success) unregisteredAny = true;
-        })
-      );
-      
-      Promise.all(promises).then(() => {
-        if (unregisteredAny) {
-          if (typeof caches !== 'undefined') {
-            caches.keys().then((keys) => {
-              Promise.all(keys.map(key => caches.delete(key))).then(() => {
-                console.log('Oxente Festeje: Service Worker and caches cleared. Reloading page...');
-                (window as any).location.reload();
-              });
-            });
-          } else {
-            (window as any).location.reload();
-          }
-        }
+  window.addEventListener('load', () => {
+    navigator.serviceWorker
+      .register('/sw.js', { scope: '/' })
+      .then((reg) => {
+        console.log('Oxente Festeje: Service Worker ativo para Mobile Push & App Badging');
+      })
+      .catch((err) => {
+        console.debug('Falha ao registrar Service Worker:', err);
       });
-    }
   });
 }
 
