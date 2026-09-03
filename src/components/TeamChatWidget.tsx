@@ -11,9 +11,11 @@ import {
   Check,
   Bell,
   Crown,
-  Car
+  Car,
+  ClipboardList
 } from 'lucide-react';
 import { UberAlertOverlay, UberAlertData } from './UberAlertOverlay';
+import { OrderAlertOverlay, OrderAlertData } from './OrderAlertOverlay';
 import { 
   collection, 
   setDoc,
@@ -70,6 +72,20 @@ export const isUberAlertText = (text: string): boolean => {
     clean.includes('uber a caminho') ||
     clean.includes('uber a caminho!') ||
     (clean.includes('uber') && (clean.includes('caminho') || clean.includes('chegando') || clean.includes('porta') || clean.includes('espera') || clean.includes('retirar')))
+  );
+};
+
+export const isOrderAlertText = (text: string): boolean => {
+  if (!text) return false;
+  const clean = text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  return (
+    clean.includes('anota os pedidos') ||
+    clean.includes('anotar os pedidos') ||
+    clean.includes('anotar pedidos') ||
+    clean.includes('anota pedidos') ||
+    clean.includes('anotem os pedidos') ||
+    clean.includes('anotar pedido') ||
+    clean.includes('anota o pedido')
   );
 };
 
@@ -170,6 +186,8 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
   const [isConnected, setIsConnected] = useState(true);
   const [incomingAlert, setIncomingAlert] = useState<MessageAlert | null>(null);
   const [uberAlertData, setUberAlertData] = useState<UberAlertData | null>(null);
+  const [orderAlertData, setOrderAlertData] = useState<OrderAlertData | null>(null);
+  const [isConfirmingClear, setIsConfirmingClear] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -253,14 +271,20 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     });
   };
 
-  // Test trigger for Uber alert animation
-  const handleTestUberAlert = () => {
-    setUberAlertData({
-      id: `test_${Date.now()}`,
-      senderName: currentUserName,
-      senderRole: currentUserRole,
-      text: '🚗 Uber a caminho! Favor agilizar a embalagem e conferência dos balões!',
-      timestamp: Date.now()
+  // Helper to trigger Orders fullscreen alert for staff/collaborators
+  const triggerOrderAlert = (msg: TeamChatMessage) => {
+    const isSelf = 
+      msg.senderId === currentUserId || 
+      (isUserAdmin && isMessageFromAdmin(msg.senderName, msg.senderRole, msg.senderId));
+    if (isSelf) return;
+
+    const displayName = getSenderDisplayName(msg.senderName, msg.senderRole, msg.senderId);
+    setOrderAlertData({
+      id: msg.id,
+      senderName: displayName,
+      senderRole: msg.senderRole,
+      text: msg.text,
+      timestamp: msg.timestamp
     });
   };
 
@@ -305,6 +329,8 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         const latest = newItemsToAlert[newItemsToAlert.length - 1];
         if (isUberAlertText(latest.text)) {
           triggerUberAlert(latest);
+        } else if (isOrderAlertText(latest.text)) {
+          triggerOrderAlert(latest);
         }
         triggerIncomingMessageAlert(latest);
       }
@@ -398,7 +424,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         try { supabase.removeChannel(supabaseChannelRef.current); } catch {}
       }
 
-      const channelId = `oxente_team_chat_room_${Math.random().toString(36).substring(2, 8)}`;
+      const channelId = 'oxente_team_chat_global_room';
       const channel = supabase.channel(channelId, {
         config: {
           broadcast: { ack: true }
@@ -426,7 +452,14 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
             try {
               const list = JSON.parse(raw);
               if (Array.isArray(list)) {
-                mergeMessages(list, true);
+                if (list.length === 0) {
+                  setMessages([]);
+                  localStorage.removeItem(STORAGE_CACHE_KEY);
+                  setUnreadCount(0);
+                  setIncomingAlert(null);
+                } else {
+                  mergeMessages(list, true);
+                }
               }
             } catch {}
           }
@@ -503,6 +536,10 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
               const lastRead = Number(localStorage.getItem(STORAGE_LAST_READ_KEY) || '0');
               const hasNewer = loaded.some(m => m.timestamp > lastRead && m.senderId !== currentUserId);
               mergeMessages(loaded, hasNewer);
+            } else if (snapshot.empty) {
+              setMessages([]);
+              localStorage.removeItem(STORAGE_CACHE_KEY);
+              setUnreadCount(0);
             }
           },
           (error) => {
@@ -635,14 +672,26 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
   };
 
   const handleClearHistory = async () => {
-    if (!isAdmin) return;
-    if (!window.confirm('Deseja realmente limpar as mensagens do chat da equipe?')) return;
+    if (!isUserAdmin) return;
+    setIsConfirmingClear(false);
 
     try {
+      // 1. Instantly clear local state for instantaneous user feedback
       setMessages([]);
+      setUnreadCount(0);
+      setIncomingAlert(null);
       localStorage.removeItem(STORAGE_CACHE_KEY);
+      localStorage.setItem('oxente_team_chat_cleared_at', Date.now().toString());
 
-      // 1. Broadcast clear event to all staff in real time
+      // 2. Play sound feedback
+      playAppSound('trash');
+
+      // 3. Multi-tab local broadcast
+      try {
+        broadcastRef.current?.postMessage({ type: 'CLEAR_HISTORY' });
+      } catch {}
+
+      // 4. Supabase broadcast to all connected team members
       if (supabaseChannelRef.current) {
         try {
           await supabaseChannelRef.current.send({
@@ -652,26 +701,35 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         } catch {}
       }
 
-      broadcastRef.current?.postMessage({ type: 'CLEAR_HISTORY' });
-
-      // 2. Clear from Supabase
-      await supabase.from('oxente_store_info').upsert({
-        key: 'team_chat_history',
-        nome: 'Chat Equipe',
-        whatsapp_template: '[]',
-        updated_at: new Date().toISOString()
-      });
-      await supabase.from('oxente_team_messages').delete().neq('id', '00000000');
-
-      // 3. Clear from Firestore
-      if (db) {
-        const messagesRef = collection(db, 'oxente_team_messages');
-        const snap = await getDocs(messagesRef);
-        const deletePromises = snap.docs.map((docSnap) => deleteDoc(doc(db, 'oxente_team_messages', docSnap.id)));
-        await Promise.all(deletePromises);
+      // 5. Clear Supabase persistent store
+      try {
+        await supabase.from('oxente_store_info').upsert({
+          key: 'team_chat_history',
+          nome: 'Chat Equipe',
+          whatsapp_template: '[]',
+          updated_at: new Date().toISOString()
+        });
+      } catch (err) {
+        console.warn('Erro ao atualizar store_info:', err);
       }
 
-      playAppSound('trash');
+      try {
+        await supabase.from('oxente_team_messages').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      } catch (err) {
+        console.warn('Erro ao deletar da tabela oxente_team_messages:', err);
+      }
+
+      // 6. Clear from Firestore
+      if (db) {
+        try {
+          const messagesRef = collection(db, 'oxente_team_messages');
+          const snap = await getDocs(messagesRef);
+          const deletePromises = snap.docs.map((docSnap) => deleteDoc(doc(db, 'oxente_team_messages', docSnap.id)));
+          await Promise.all(deletePromises);
+        } catch (err) {
+          console.warn('Erro ao deletar do Firestore:', err);
+        }
+      }
     } catch (e) {
       console.error('Erro ao limpar histórico do chat:', e);
     }
@@ -704,6 +762,16 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         onClose={() => setUberAlertData(null)}
         onOpenChat={() => {
           setUberAlertData(null);
+          setIsOpen(true);
+        }}
+      />
+
+      {/* Fullscreen Attention Anota os Pedidos Overlay */}
+      <OrderAlertOverlay
+        alert={orderAlertData}
+        onClose={() => setOrderAlertData(null)}
+        onOpenChat={() => {
+          setOrderAlertData(null);
           setIsOpen(true);
         }}
       />
@@ -817,25 +885,37 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
               </div>
 
               <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  onClick={handleTestUberAlert}
-                  title="Testar Animação Uber a Caminho"
-                  className="px-2 py-1 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 rounded-lg transition-colors flex items-center gap-1 text-[11px] font-bold cursor-pointer"
-                >
-                  <Car className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Testar Uber</span>
-                </button>
-
                 {isUserAdmin && messages.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={handleClearHistory}
-                    title="Limpar histórico (Admin)"
-                    className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+                  isConfirmingClear ? (
+                    <div className="flex items-center gap-1 bg-red-950/90 border border-red-800/80 px-2 py-0.5 rounded-lg text-xs animate-in fade-in">
+                      <span className="text-[10px] text-red-200 font-bold whitespace-nowrap">Limpar?</span>
+                      <button
+                        type="button"
+                        onClick={handleClearHistory}
+                        title="Confirmar limpeza das mensagens"
+                        className="px-1.5 py-0.5 bg-red-600 hover:bg-red-500 text-white rounded text-[10px] font-bold cursor-pointer transition-colors shadow-xs"
+                      >
+                        Sim
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsConfirmingClear(false)}
+                        title="Cancelar"
+                        className="px-1.5 py-0.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[10px] cursor-pointer transition-colors"
+                      >
+                        Não
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsConfirmingClear(true)}
+                      title="Limpar mensagens do chat (Admin)"
+                      className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-zinc-800 rounded-lg transition-colors cursor-pointer"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )
                 )}
                 <button
                   type="button"
@@ -868,6 +948,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                   const senderName = getSenderDisplayName(msg.senderName, msg.senderRole, msg.senderId);
                   const msgIsAdmin = isMessageFromAdmin(msg.senderName, msg.senderRole, msg.senderId);
                   const isUberMsg = isUberAlertText(msg.text);
+                  const isOrderMsg = isOrderAlertText(msg.text);
 
                   return (
                     <div
@@ -893,6 +974,10 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                             ? isSelf
                               ? 'bg-gradient-to-r from-amber-600 to-orange-600 border-2 border-amber-300 text-white rounded-tr-none shadow-amber-500/30 shadow-lg'
                               : 'bg-gradient-to-b from-amber-950/90 to-zinc-900 border-2 border-amber-500 text-amber-100 rounded-tl-none shadow-amber-500/30 shadow-lg'
+                            : isOrderMsg
+                            ? isSelf
+                              ? 'bg-gradient-to-r from-indigo-600 to-violet-600 border-2 border-indigo-300 text-white rounded-tr-none shadow-indigo-500/30 shadow-lg'
+                              : 'bg-gradient-to-b from-indigo-950/90 to-zinc-900 border-2 border-indigo-500 text-indigo-100 rounded-tl-none shadow-indigo-500/30 shadow-lg'
                             : isSelf
                             ? 'bg-orange-500 text-white rounded-tr-none font-medium'
                             : 'bg-zinc-850 border border-zinc-750 text-zinc-100 rounded-tl-none'
@@ -904,10 +989,18 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                             <span>Alerta Expedição Urgente</span>
                           </div>
                         )}
+                        {isOrderMsg && (
+                          <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-wider text-indigo-300 mb-1.5 pb-1 border-b border-indigo-500/30">
+                            <ClipboardList className="h-3.5 w-3.5 animate-bounce" />
+                            <span>Alerta Anotação de Pedidos</span>
+                          </div>
+                        )}
                         <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
                         <div
                           className={`flex items-center justify-end gap-1 mt-1 text-[9px] ${
-                            isSelf ? (isUberMsg ? 'text-amber-100' : 'text-orange-100/80') : (isUberMsg ? 'text-amber-400/80' : 'text-zinc-500')
+                            isSelf 
+                              ? (isUberMsg ? 'text-amber-100' : isOrderMsg ? 'text-indigo-100' : 'text-orange-100/80') 
+                              : (isUberMsg ? 'text-amber-400/80' : isOrderMsg ? 'text-indigo-300/80' : 'text-zinc-500')
                           }`}
                         >
                           <span>{formatMessageTime(msg.timestamp)}</span>

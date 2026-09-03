@@ -89,16 +89,22 @@ export function UberAlertOverlay({ alert, onClose, onOpenChat }: UberAlertOverla
           </motion.div>
         </div>
 
-        {/* Speeding Car Animation Crossing Above Modal */}
+        {/* Speeding Car Animation Crossing Above Modal (Right to Left, Smooth & Slower) */}
         <motion.div
-          initial={{ x: '-120vw' }}
-          animate={{ x: '120vw' }}
-          transition={{ duration: 4.5, ease: 'easeInOut', delay: 0.2 }}
+          initial={{ x: '120vw' }}
+          animate={{ x: '-120vw' }}
+          transition={{ duration: 7.5, ease: 'linear', delay: 0.3 }}
           className="absolute top-16 sm:top-20 left-0 pointer-events-none z-10 flex items-center gap-2"
         >
           <div className="relative flex items-center bg-zinc-900/90 border-2 border-amber-400 px-4 py-2 rounded-2xl shadow-2xl shadow-amber-500/50 backdrop-blur-sm">
-            <span className="text-3xl mr-2 animate-pulse">🚗💨</span>
-            <div className="text-left">
+            {/* Car facing left with exhaust smoke trailing directly behind it (to its right) */}
+            <div className="flex items-center mr-2.5">
+              <span className="text-3xl transform scale-x-[-1] inline-block animate-pulse">
+                🚗
+              </span>
+              <span className="text-xl -ml-1 opacity-90 animate-pulse">💨</span>
+            </div>
+            <div className="text-left mr-1">
               <span className="text-[11px] font-black text-amber-400 uppercase tracking-wider block">
                 Motorista em Trânsito
               </span>
@@ -106,10 +112,10 @@ export function UberAlertOverlay({ alert, onClose, onOpenChat }: UberAlertOverla
                 Chegando na loja!
               </span>
             </div>
-            {/* Speed lines */}
-            <div className="absolute -left-12 flex flex-col gap-1 opacity-70">
-              <span className="w-10 h-1 bg-amber-400 rounded-full animate-ping"></span>
-              <span className="w-6 h-0.5 bg-white rounded-full"></span>
+            {/* Speed lines on the right side trailing the car */}
+            <div className="absolute -right-8 flex flex-col gap-1 opacity-70 pointer-events-none">
+              <span className="w-7 h-1 bg-amber-400 rounded-full animate-pulse"></span>
+              <span className="w-4 h-0.5 bg-white rounded-full"></span>
             </div>
           </div>
         </motion.div>
@@ -178,20 +184,20 @@ export function UberAlertOverlay({ alert, onClose, onOpenChat }: UberAlertOverla
           <div className="mt-4 text-left p-3.5 bg-amber-950/20 border border-amber-800/40 rounded-2xl">
             <div className="text-xs font-bold text-amber-300 flex items-center gap-1.5 mb-2">
               <PackageCheck className="h-4 w-4 text-amber-400" />
-              <span>Instruções imediatas para a equipe:</span>
+              <span>Checklist Rápido da Loja:</span>
             </div>
             <ul className="text-xs text-zinc-300 space-y-1.5 font-medium pl-1">
               <li className="flex items-start gap-2">
                 <span className="text-amber-400 font-bold">1.</span>
-                <span>Conferir se o pedido e os balões estão inflados e finalizados.</span>
+                <span>Conferir se o pedido tem mais de um item.</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-amber-400 font-bold">2.</span>
-                <span>Colocar o pacote imediatamente no balcão de saída/expedição.</span>
+                <span>Conferir se tem mais de uma sacola e se o pedido tem tampa.</span>
               </li>
               <li className="flex items-start gap-2">
                 <span className="text-amber-400 font-bold">3.</span>
-                <span>Conferir o nome do cliente antes de entregar ao motorista.</span>
+                <span>Conferir o nome do destinatário antes de entregar ao motorista.</span>
               </li>
             </ul>
           </div>

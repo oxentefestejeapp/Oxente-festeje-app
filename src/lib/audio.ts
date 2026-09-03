@@ -3,7 +3,7 @@
  * It features clean procedural synthesis models (no heavy external mp3s to download).
  */
 
-type SoundType = 'success' | 'click' | 'alert' | 'complete' | 'trash' | 'pop' | 'uber_alert';
+type SoundType = 'success' | 'click' | 'alert' | 'complete' | 'trash' | 'pop' | 'uber_alert' | 'order_alert';
 
 // Storage Key
 const MUTED_STORAGE_KEY = 'oxente_festeje_audio_muted';
@@ -208,6 +208,29 @@ export function playAppSound(type: SoundType) {
         pingGain.connect(ctx.destination);
         pingOsc.start(now + 0.38);
         pingOsc.stop(now + 0.75);
+        break;
+      }
+      case 'order_alert': {
+        // Crisp energetic 3-tone attention chime for new order recording (C5 -> E5 -> G5)
+        const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+        notes.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const startTime = now + idx * 0.11;
+          const duration = 0.35;
+
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, startTime);
+          
+          gain.gain.setValueAtTime(0.045, startTime);
+          gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+
+          osc.start(startTime);
+          osc.stop(startTime + duration);
+        });
         break;
       }
     }
