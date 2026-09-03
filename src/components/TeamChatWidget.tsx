@@ -10,12 +10,19 @@ import {
   Users, 
   Check,
   Bell,
+  BellRing,
   Crown,
   Car,
   ClipboardList
 } from 'lucide-react';
 import { UberAlertOverlay, UberAlertData } from './UberAlertOverlay';
 import { OrderAlertOverlay, OrderAlertData } from './OrderAlertOverlay';
+import { 
+  sendDesktopAlert, 
+  flashDocumentTitle, 
+  getNotificationPermission, 
+  requestNotificationPermission 
+} from '../lib/desktopNotification';
 import { 
   collection, 
   setDoc,
@@ -188,6 +195,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
   const [uberAlertData, setUberAlertData] = useState<UberAlertData | null>(null);
   const [orderAlertData, setOrderAlertData] = useState<OrderAlertData | null>(null);
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => getNotificationPermission());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -199,6 +207,21 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
   // Auto-scroll to latest message
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  // Request notification permission handler
+  const handleEnableNotifications = async () => {
+    const perm = await requestNotificationPermission();
+    setNotifPermission(perm);
+    if (perm === 'granted') {
+      sendDesktopAlert({
+        title: '🔔 Alertas na Área de Trabalho Ativos!',
+        body: 'Você receberá os avisos do Uber e de Novos Pedidos na tela mesmo usando WhatsApp ou outros programas.',
+        tag: 'oxente_notif_welcome',
+        requireInteraction: false
+      });
+      playAppSound('success');
+    }
   };
 
   // Helper to trigger alert when a new message arrives with chat minimized
@@ -237,20 +260,19 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       setIncomingAlert(null);
     }, 8500);
 
-    // Flash browser tab title to alert the user even if they are in another tab
-    if (typeof document !== 'undefined') {
-      const originalTitle = document.title;
-      let count = 0;
-      const interval = setInterval(() => {
-        count++;
-        document.title = count % 2 === 1 
-          ? `💬 [Nova Mensagem] ${displayName}` 
-          : originalTitle;
-        if (count >= 10 || isOpen) {
-          clearInterval(interval);
-          document.title = originalTitle;
+    // Native desktop alert if user is outside this window / multitasking
+    if (typeof document !== 'undefined' && document.hidden) {
+      sendDesktopAlert({
+        title: `💬 ${displayName} (Chat Equipe)`,
+        body: msg.text,
+        tag: 'oxente_chat_msg',
+        requireInteraction: false,
+        onClick: () => {
+          try { window.focus(); } catch {}
+          setIsOpen(true);
         }
-      }, 1200);
+      });
+      flashDocumentTitle(`💬 [Chat] ${displayName}: ${msg.text.substring(0, 25)}...`, 15000);
     }
   };
 
@@ -269,6 +291,24 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       text: msg.text,
       timestamp: msg.timestamp
     });
+
+    // 1. Play high-urgency horn sound immediately
+    playAppSound('uber_alert');
+
+    // 2. Pop native OS desktop notification over WhatsApp / other applications
+    sendDesktopAlert({
+      title: '🚨 UBER A CAMINHO! 🚗',
+      body: `${displayName}: "${msg.text}"\nClique para abrir o sistema na hora e conferir a expedição!`,
+      tag: 'oxente_uber_alert',
+      requireInteraction: true, // Remains on screen until clicked or closed
+      onClick: () => {
+        try { window.focus(); } catch {}
+        setIsOpen(true);
+      }
+    });
+
+    // 3. Flash browser tab title to alert the user even if they are in another tab
+    flashDocumentTitle('🚨 UBER A CAMINHO! 🚗 - Oxente Festeje', 35000);
   };
 
   // Helper to trigger Orders fullscreen alert for staff/collaborators
@@ -286,6 +326,24 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       text: msg.text,
       timestamp: msg.timestamp
     });
+
+    // 1. Play order attention chime immediately
+    playAppSound('order_alert');
+
+    // 2. Pop native OS desktop notification over WhatsApp / other applications
+    sendDesktopAlert({
+      title: '📝 ANOTA OS PEDIDOS! 📋',
+      body: `${displayName}: "${msg.text}"\nClique para abrir o sistema na hora e registrar no balcão!`,
+      tag: 'oxente_order_alert',
+      requireInteraction: true, // Remains on screen until clicked or closed
+      onClick: () => {
+        try { window.focus(); } catch {}
+        setIsOpen(true);
+      }
+    });
+
+    // 3. Flash browser tab title
+    flashDocumentTitle('📝 ANOTA OS PEDIDOS! - Oxente Festeje', 35000);
   };
 
   // Helper to merge and strictly deduplicate messages
@@ -885,6 +943,27 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
               </div>
 
               <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={handleEnableNotifications}
+                  title={
+                    notifPermission === 'granted'
+                      ? 'Notificações na tela ativas (Windows, Mac e celular)'
+                      : 'Clique para ativar notificações na área de trabalho'
+                  }
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    notifPermission === 'granted'
+                      ? 'text-emerald-400 hover:bg-zinc-800'
+                      : 'text-amber-400 hover:bg-amber-950/40 animate-pulse'
+                  }`}
+                >
+                  {notifPermission === 'granted' ? (
+                    <Bell className="h-3.5 w-3.5" />
+                  ) : (
+                    <BellRing className="h-3.5 w-3.5" />
+                  )}
+                </button>
+
                 {isUserAdmin && messages.length > 0 && (
                   isConfirmingClear ? (
                     <div className="flex items-center gap-1 bg-red-950/90 border border-red-800/80 px-2 py-0.5 rounded-lg text-xs animate-in fade-in">
@@ -927,6 +1006,23 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                 </button>
               </div>
             </div>
+
+            {/* Notification Permission Banner */}
+            {notifPermission !== 'granted' && (
+              <div className="bg-amber-950/50 border-b border-amber-800/40 px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] text-amber-200 shrink-0">
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <BellRing className="h-3.5 w-3.5 text-amber-400 shrink-0 animate-bounce" />
+                  <span className="truncate font-medium">Ver avisos com WhatsApp na frente:</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleEnableNotifications}
+                  className="px-2.5 py-0.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black rounded-md text-[10px] cursor-pointer whitespace-nowrap shadow-xs transition-colors shrink-0"
+                >
+                  Ativar
+                </button>
+              </div>
+            )}
 
             {/* Messages Body */}
             <div className="flex-1 p-3.5 overflow-y-auto space-y-3 bg-zinc-950/60">

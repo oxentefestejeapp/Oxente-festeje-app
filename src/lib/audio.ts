@@ -31,6 +31,9 @@ export function playAppSound(type: SoundType) {
     if (!AudioContextClass) return;
 
     const ctx = new AudioContextClass();
+    if (ctx.state === 'suspended') {
+      ctx.resume().catch(() => {});
+    }
     const now = ctx.currentTime;
 
     switch (type) {
@@ -164,14 +167,14 @@ export function playAppSound(type: SoundType) {
       }
 
       case 'uber_alert': {
-        // High urgency transit alert: dual-tone friendly car horn (beep-beep) followed by an attention chime
+        // High urgency transit alert: powerful dual-tone car horn (beep-beep) + high-clarity attention chime
         const playHonk = (startOffset: number, duration: number) => {
           // Low note (approx F4 / 349Hz)
           const osc1 = ctx.createOscillator();
           const gain1 = ctx.createGain();
           osc1.type = 'sawtooth';
           osc1.frequency.setValueAtTime(349.23, now + startOffset);
-          gain1.gain.setValueAtTime(0.04, now + startOffset);
+          gain1.gain.setValueAtTime(0.16, now + startOffset);
           gain1.gain.exponentialRampToValueAtTime(0.001, now + startOffset + duration);
           osc1.connect(gain1);
           gain1.connect(ctx.destination);
@@ -183,7 +186,7 @@ export function playAppSound(type: SoundType) {
           const gain2 = ctx.createGain();
           osc2.type = 'sawtooth';
           osc2.frequency.setValueAtTime(440, now + startOffset);
-          gain2.gain.setValueAtTime(0.035, now + startOffset);
+          gain2.gain.setValueAtTime(0.14, now + startOffset);
           gain2.gain.exponentialRampToValueAtTime(0.001, now + startOffset + duration);
           osc2.connect(gain2);
           gain2.connect(ctx.destination);
@@ -192,37 +195,37 @@ export function playAppSound(type: SoundType) {
         };
 
         // Honk 1
-        playHonk(0, 0.12);
+        playHonk(0, 0.14);
         // Honk 2
-        playHonk(0.16, 0.18);
+        playHonk(0.18, 0.22);
 
-        // Rising attention ping
+        // Rising attention ping (high presence and clarity)
         const pingOsc = ctx.createOscillator();
         const pingGain = ctx.createGain();
         pingOsc.type = 'sine';
-        pingOsc.frequency.setValueAtTime(880, now + 0.38);
-        pingOsc.frequency.exponentialRampToValueAtTime(1174.66, now + 0.55); // D6
-        pingGain.gain.setValueAtTime(0.045, now + 0.38);
-        pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+        pingOsc.frequency.setValueAtTime(880, now + 0.42);
+        pingOsc.frequency.exponentialRampToValueAtTime(1174.66, now + 0.62); // D6
+        pingGain.gain.setValueAtTime(0.18, now + 0.42);
+        pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
         pingOsc.connect(pingGain);
         pingGain.connect(ctx.destination);
-        pingOsc.start(now + 0.38);
-        pingOsc.stop(now + 0.75);
+        pingOsc.start(now + 0.42);
+        pingOsc.stop(now + 0.95);
         break;
       }
       case 'order_alert': {
-        // Crisp energetic 3-tone attention chime for new order recording (C5 -> E5 -> G5)
+        // High urgency energetic attention chime chord for new orders (C5 -> E5 -> G5 -> C6)
         const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
         notes.forEach((freq, idx) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
-          const startTime = now + idx * 0.11;
-          const duration = 0.35;
+          const startTime = now + idx * 0.12;
+          const duration = 0.45;
 
-          osc.type = 'sine';
+          osc.type = 'triangle';
           osc.frequency.setValueAtTime(freq, startTime);
           
-          gain.gain.setValueAtTime(0.045, startTime);
+          gain.gain.setValueAtTime(0.16, startTime);
           gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
 
           osc.connect(gain);
