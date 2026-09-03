@@ -13,10 +13,13 @@ import {
   BellRing,
   Crown,
   Car,
-  ClipboardList
+  ClipboardList,
+  AlarmClock
 } from 'lucide-react';
 import { UberAlertOverlay, UberAlertData } from './UberAlertOverlay';
 import { OrderAlertOverlay, OrderAlertData } from './OrderAlertOverlay';
+import { ReminderAlertOverlay, ReminderAlertData } from './ReminderAlertOverlay';
+import { SetReminderModal } from './SetReminderModal';
 import { 
   sendDesktopAlert, 
   flashDocumentTitle, 
@@ -47,6 +50,18 @@ export interface TeamChatMessage {
   text: string;
   timestamp: number;
   createdAt?: string;
+}
+
+export interface ChatReminder {
+  id: string;
+  messageId: string;
+  senderName: string;
+  senderRole?: string;
+  text: string;
+  timestamp: number;
+  scheduledAt: number;
+  triggerAt: number;
+  triggered?: boolean;
 }
 
 interface TeamChatWidgetProps {
@@ -194,6 +209,17 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
   const [incomingAlert, setIncomingAlert] = useState<MessageAlert | null>(null);
   const [uberAlertData, setUberAlertData] = useState<UberAlertData | null>(null);
   const [orderAlertData, setOrderAlertData] = useState<OrderAlertData | null>(null);
+  const [reminderAlertData, setReminderAlertData] = useState<ReminderAlertData | null>(null);
+  const [selectedMessageForReminder, setSelectedMessageForReminder] = useState<TeamChatMessage | null>(null);
+  const [isReminderModalOpen, setIsReminderModalOpen] = useState(false);
+  const [reminders, setReminders] = useState<ChatReminder[]>(() => {
+    try {
+      const saved = localStorage.getItem('oxente_chat_reminders');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => getNotificationPermission());
 
@@ -344,6 +370,147 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
 
     // 3. Flash browser tab title
     flashDocumentTitle('📝 ANOTA OS PEDIDOS! - Oxente Festeje', 35000);
+  };
+
+  // Periodic check for scheduled message reminders / alarms (every 4 seconds)
+  useEffect(() => {
+    const checkReminders = () => {
+      const now = Date.now();
+      let updated = false;
+      const newReminders = reminders.map((rem) => {
+        if (!rem.triggered && rem.triggerAt <= now) {
+          updated = true;
+
+          // 1. Fullscreen Animated Alert Overlay
+          setReminderAlertData({
+            id: rem.id,
+            messageId: rem.messageId,
+            senderName: rem.senderName,
+            senderRole: rem.senderRole,
+            text: rem.text,
+            timestamp: rem.timestamp,
+            scheduledAt: rem.scheduledAt,
+            triggerAt: rem.triggerAt
+          });
+
+          // 2. High-volume alarm chime sound
+          playAppSound('reminder_alert');
+
+          // 3. Pop native OS desktop notification over WhatsApp/other applications
+          sendDesktopAlert({
+            title: '⏰ ALARME: HORA DE FINALIZAR! ⏰',
+            body: `${rem.senderName}: "${rem.text}"\nClique para abrir o sistema na hora!`,
+            tag: `oxente_rem_${rem.id}`,
+            requireInteraction: true,
+            onClick: () => {
+              try { window.focus(); } catch {}
+              setIsOpen(true);
+            }
+          });
+
+          // 4. Flash document tab title
+          flashDocumentTitle(`⏰ ALARME: ${rem.text.substring(0, 20)}... - Oxente Festeje`, 35000);
+
+          return { ...rem, triggered: true };
+        }
+        return rem;
+      });
+
+      if (updated) {
+        setReminders(newReminders);
+        try {
+          localStorage.setItem('oxente_chat_reminders', JSON.stringify(newReminders));
+        } catch {}
+      }
+    };
+
+    const interval = setInterval(checkReminders, 4000);
+    checkReminders();
+
+    return () => clearInterval(interval);
+  }, [reminders]);
+
+  const handleOpenReminderModal = (msg: TeamChatMessage, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedMessageForReminder(msg);
+    setIsReminderModalOpen(true);
+  };
+
+  const handleSetReminder = (message: TeamChatMessage, triggerAt: number) => {
+    const displayName = getSenderDisplayName(message.senderName, message.senderRole, message.senderId);
+    const newReminder: ChatReminder = {
+      id: `rem_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      messageId: message.id,
+      senderName: displayName,
+      senderRole: message.senderRole,
+      text: message.text,
+      timestamp: message.timestamp,
+      scheduledAt: Date.now(),
+      triggerAt,
+      triggered: false
+    };
+
+    const updated = [...reminders.filter(r => r.messageId !== message.id), newReminder];
+    setReminders(updated);
+    try {
+      localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
+    } catch {}
+
+    playAppSound('success');
+  };
+
+  const handleCancelReminder = (reminderId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const updated = reminders.filter(r => r.id !== reminderId);
+    setReminders(updated);
+    try {
+      localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
+    } catch {}
+    playAppSound('pop');
+  };
+
+  const handleSnoozeReminder = (minutes: number) => {
+    if (!reminderAlertData) return;
+    const targetId = reminderAlertData.id;
+    const newTriggerAt = Date.now() + minutes * 60 * 1000;
+
+    const updated = reminders.map(r => {
+      if (r.id === targetId) {
+        return {
+          ...r,
+          triggerAt: newTriggerAt,
+          triggered: false
+        };
+      }
+      return r;
+    });
+
+    setReminders(updated);
+    try {
+      localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
+    } catch {}
+
+    setReminderAlertData(null);
+    playAppSound('success');
+  };
+
+  const getReminderStatus = (messageId: string) => {
+    const rem = reminders.find(r => r.messageId === messageId && !r.triggered);
+    if (!rem) return null;
+    const diffMs = rem.triggerAt - Date.now();
+    if (diffMs <= 0) return { active: true, text: 'Disparando agora!', rem };
+
+    const minsTotal = Math.round(diffMs / 60000);
+    const hours = Math.floor(minsTotal / 60);
+    const mins = minsTotal % 60;
+    const timeStr = new Date(rem.triggerAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    let inText = '';
+    if (hours > 0 && mins > 0) inText = `em ${hours}h ${mins}m`;
+    else if (hours > 0) inText = `em ${hours}h`;
+    else inText = `em ${mins}m`;
+
+    return { active: true, text: `Alarme: ${timeStr} (${inText})`, rem };
   };
 
   // Helper to merge and strictly deduplicate messages
@@ -834,6 +1001,28 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         }}
       />
 
+      {/* Fullscreen Scheduled Alarm & Reminder Overlay */}
+      <ReminderAlertOverlay
+        alert={reminderAlertData}
+        onClose={() => setReminderAlertData(null)}
+        onOpenChat={() => {
+          setReminderAlertData(null);
+          setIsOpen(true);
+        }}
+        onSnooze={handleSnoozeReminder}
+      />
+
+      {/* Modal to configure Reminder / Alarm for a clicked message */}
+      <SetReminderModal
+        isOpen={isReminderModalOpen}
+        message={selectedMessageForReminder}
+        onClose={() => {
+          setIsReminderModalOpen(false);
+          setSelectedMessageForReminder(null);
+        }}
+        onSetReminder={handleSetReminder}
+      />
+
       <div className="no-print fixed bottom-5 right-5 z-50 flex flex-col items-end pointer-events-auto">
       {/* Toast Flutuante de Notificação quando minimizado */}
       <AnimatePresence>
@@ -1045,6 +1234,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                   const msgIsAdmin = isMessageFromAdmin(msg.senderName, msg.senderRole, msg.senderId);
                   const isUberMsg = isUberAlertText(msg.text);
                   const isOrderMsg = isOrderAlertText(msg.text);
+                  const reminderStatus = getReminderStatus(msg.id);
 
                   return (
                     <div
@@ -1065,7 +1255,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                       )}
 
                       <div
-                        className={`max-w-[86%] px-3.5 py-2.5 rounded-2xl text-xs break-words shadow-sm transition-all ${
+                        className={`max-w-[86%] px-3.5 py-2.5 rounded-2xl text-xs break-words shadow-sm transition-all group/msg relative ${
                           isUberMsg
                             ? isSelf
                               ? 'bg-gradient-to-r from-amber-600 to-orange-600 border-2 border-amber-300 text-white rounded-tr-none shadow-amber-500/30 shadow-lg'
@@ -1074,6 +1264,10 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                             ? isSelf
                               ? 'bg-gradient-to-r from-indigo-600 to-violet-600 border-2 border-indigo-300 text-white rounded-tr-none shadow-indigo-500/30 shadow-lg'
                               : 'bg-gradient-to-b from-indigo-950/90 to-zinc-900 border-2 border-indigo-500 text-indigo-100 rounded-tl-none shadow-indigo-500/30 shadow-lg'
+                            : reminderStatus
+                            ? isSelf
+                              ? 'bg-orange-500 text-white rounded-tr-none font-medium border-2 border-teal-300 shadow-teal-500/20 shadow-md'
+                              : 'bg-zinc-850 border-2 border-teal-500/80 text-zinc-100 rounded-tl-none shadow-teal-500/20 shadow-md'
                             : isSelf
                             ? 'bg-orange-500 text-white rounded-tr-none font-medium'
                             : 'bg-zinc-850 border border-zinc-750 text-zinc-100 rounded-tl-none'
@@ -1092,15 +1286,53 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                           </div>
                         )}
                         <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>
+
+                        {/* Active Reminder Badge */}
+                        {reminderStatus && (
+                          <div className="mt-2 flex items-center justify-between gap-1.5 px-2 py-1 bg-teal-950/90 border border-teal-400/60 rounded-xl text-[10px] text-teal-200 shadow-sm animate-pulse">
+                            <div className="flex items-center gap-1.5 font-bold min-w-0 truncate">
+                              <AlarmClock className="h-3.5 w-3.5 text-teal-400 shrink-0" />
+                              <span className="truncate">{reminderStatus.text}</span>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => handleCancelReminder(reminderStatus.rem.id, e)}
+                              title="Cancelar este alarme"
+                              className="p-1 text-teal-400 hover:text-rose-400 rounded-md transition-colors cursor-pointer shrink-0"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+
+                        {/* Message Footer: Time + Alarm Button */}
                         <div
-                          className={`flex items-center justify-end gap-1 mt-1 text-[9px] ${
+                          className={`flex items-center justify-between gap-2 mt-1.5 pt-0.5 text-[9px] ${
                             isSelf 
                               ? (isUberMsg ? 'text-amber-100' : isOrderMsg ? 'text-indigo-100' : 'text-orange-100/80') 
                               : (isUberMsg ? 'text-amber-400/80' : isOrderMsg ? 'text-indigo-300/80' : 'text-zinc-500')
                           }`}
                         >
-                          <span>{formatMessageTime(msg.timestamp)}</span>
-                          {isSelf && <Check className="h-2.5 w-2.5 opacity-90" />}
+                          <button
+                            type="button"
+                            onClick={(e) => handleOpenReminderModal(msg, e)}
+                            title={reminderStatus ? 'Editar/Reconfigurar Alarme' : '⏰ Agendar Alarme / Lembrete para esta mensagem'}
+                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-all cursor-pointer font-bold ${
+                              reminderStatus
+                                ? 'bg-teal-500/30 text-teal-200 hover:bg-teal-500/40'
+                                : isSelf
+                                ? 'text-orange-100/70 hover:text-white hover:bg-white/10'
+                                : 'text-zinc-400 hover:text-teal-300 hover:bg-zinc-800'
+                            }`}
+                          >
+                            <AlarmClock className="h-3 w-3" />
+                            <span>{reminderStatus ? 'Alarme Ativo' : 'Lembrar'}</span>
+                          </button>
+
+                          <div className="flex items-center gap-1">
+                            <span>{formatMessageTime(msg.timestamp)}</span>
+                            {isSelf && <Check className="h-2.5 w-2.5 opacity-90" />}
+                          </div>
                         </div>
                       </div>
                     </div>

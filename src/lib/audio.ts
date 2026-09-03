@@ -3,7 +3,7 @@
  * It features clean procedural synthesis models (no heavy external mp3s to download).
  */
 
-type SoundType = 'success' | 'click' | 'alert' | 'complete' | 'trash' | 'pop' | 'uber_alert' | 'order_alert';
+type SoundType = 'success' | 'click' | 'alert' | 'complete' | 'trash' | 'pop' | 'uber_alert' | 'order_alert' | 'reminder_alert';
 
 // Storage Key
 const MUTED_STORAGE_KEY = 'oxente_festeje_audio_muted';
@@ -233,6 +233,34 @@ export function playAppSound(type: SoundType) {
 
           osc.start(startTime);
           osc.stop(startTime + duration);
+        });
+        break;
+      }
+      case 'reminder_alert': {
+        // Vibrant energetic digital alarm clock ringing (pulsing dual ring tones)
+        const ringPulses = [0, 0.16, 0.32, 0.60, 0.76, 0.92];
+        ringPulses.forEach((pulseOffset) => {
+          const osc1 = ctx.createOscillator();
+          const osc2 = ctx.createOscillator();
+          const gainNode = ctx.createGain();
+
+          osc1.type = 'square';
+          osc1.frequency.setValueAtTime(880, now + pulseOffset); // A5
+
+          osc2.type = 'sine';
+          osc2.frequency.setValueAtTime(1760, now + pulseOffset); // A6 octave shimmer
+
+          gainNode.gain.setValueAtTime(0.14, now + pulseOffset);
+          gainNode.gain.exponentialRampToValueAtTime(0.001, now + pulseOffset + 0.11);
+
+          osc1.connect(gainNode);
+          osc2.connect(gainNode);
+          gainNode.connect(ctx.destination);
+
+          osc1.start(now + pulseOffset);
+          osc1.stop(now + pulseOffset + 0.11);
+          osc2.start(now + pulseOffset);
+          osc2.stop(now + pulseOffset + 0.11);
         });
         break;
       }
