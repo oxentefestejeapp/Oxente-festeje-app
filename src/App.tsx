@@ -58,6 +58,7 @@ import QrScannerTab from './components/QrScannerTab';
 import { OrderTrackingPage } from './components/OrderTrackingPage';
 import { LandingPage } from './components/LandingPage';
 import { SystemProductPhotoModal } from './components/SystemProductPhotoModal';
+import { TeamChatWidget } from './components/TeamChatWidget';
 import { disableGoogleAds } from './lib/analytics';
 
 import { Product, Sale, StoreInfo } from './types';
@@ -3008,6 +3009,12 @@ export default function App() {
 
       {/* WhatsApp / Mural Product Photo Quick Inspector for logged-in System */}
       <SystemProductPhotoModal />
+
+      {/* Internal Team Chat Widget (available strictly in the management area) */}
+      <TeamChatWidget 
+        currentUser={firebaseUser} 
+        isAdmin={isAdmin} 
+      />
 
     </div>
   );

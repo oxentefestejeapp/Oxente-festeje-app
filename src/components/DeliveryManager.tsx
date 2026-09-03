@@ -5,10 +5,11 @@
 
 import React, { useState, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { Search, Phone, CheckCircle2, Clock, DollarSign, Truck, FileText, Check, ShieldAlert, ArrowRight, User, Calendar } from 'lucide-react';
+import { Search, Phone, CheckCircle2, Clock, DollarSign, Truck, FileText, Check, ShieldAlert, ArrowRight, User, Calendar, Mic, MicOff, X, Sparkles } from 'lucide-react';
 import { Sale, PaymentMethod, StoreInfo, Product } from '../types';
 import { Receipt } from './Receipt';
 import { playAppSound } from '../lib/audio';
+import { isSpeechRecognitionSupported, cleanVoiceSearchTranscript } from '../utils/voiceSearch';
 
 interface DeliveryManagerProps {
   products: Product[];
@@ -32,6 +33,97 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
   const [selectedSaleId, setSelectedSaleId] = useState<string | null>(null);
   const [productionStatusFilter, setProductionStatusFilter] = useState<'All' | 'Agendado' | 'Em Produção' | 'Pronto para Retirada'>('All');
   const [filterForgottenOnly, setFilterForgottenOnly] = useState(false);
+
+  // Voice Search states
+  const [isListening, setIsListening] = useState(false);
+  const [voiceFeedback, setVoiceFeedback] = useState<string | null>(null);
+  const recognitionInstanceRef = React.useRef<any>(null);
+
+  const startVoiceSearch = () => {
+    if (!isSpeechRecognitionSupported()) {
+      setVoiceFeedback('Pesquisa por voz não suportada pelo seu navegador. Utilize o Google Chrome ou Edge.');
+      playAppSound('alert');
+      setTimeout(() => setVoiceFeedback(null), 4000);
+      return;
+    }
+
+    try {
+      if (recognitionInstanceRef.current) {
+        try { recognitionInstanceRef.current.abort(); } catch {}
+      }
+
+      const SpeechRecognitionClass = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      const recognition = new SpeechRecognitionClass();
+      recognitionInstanceRef.current = recognition;
+
+      recognition.lang = 'pt-BR';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        setVoiceFeedback('🎙️ Ouvindo... Fale o número do pedido, telefone ou cliente.');
+        playAppSound('pop');
+      };
+
+      recognition.onresult = (event: any) => {
+        const transcript = event.results?.[0]?.[0]?.transcript || '';
+        const cleanedQuery = cleanVoiceSearchTranscript(transcript);
+
+        if (cleanedQuery) {
+          setDeliverySearchTerm(cleanedQuery);
+          setVoiceFeedback(`Buscando por: "${cleanedQuery}"`);
+          playAppSound('success');
+        } else {
+          setVoiceFeedback('Não foi possível entender. Tente falar novamente.');
+          playAppSound('alert');
+        }
+        setTimeout(() => setVoiceFeedback(null), 3500);
+      };
+
+      recognition.onerror = (event: any) => {
+        setIsListening(false);
+        if (event.error === 'not-allowed') {
+          setVoiceFeedback('Permissão do microfone negada. Ative o microfone nas configurações do navegador.');
+        } else if (event.error !== 'no-speech') {
+          setVoiceFeedback('Não foi possível capturar o áudio. Tente novamente.');
+        } else {
+          setVoiceFeedback(null);
+        }
+        playAppSound('alert');
+        setTimeout(() => setVoiceFeedback(null), 4000);
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognition.start();
+    } catch (err) {
+      console.warn('Erro ao inicializar reconhecimento de voz:', err);
+      setIsListening(false);
+      setVoiceFeedback('Erro ao iniciar microfone. Verifique as permissões.');
+      setTimeout(() => setVoiceFeedback(null), 3000);
+    }
+  };
+
+  const stopVoiceSearch = () => {
+    if (recognitionInstanceRef.current) {
+      try {
+        recognitionInstanceRef.current.stop();
+      } catch {}
+    }
+    setIsListening(false);
+    setVoiceFeedback(null);
+  };
+
+  React.useEffect(() => {
+    return () => {
+      if (recognitionInstanceRef.current) {
+        try { recognitionInstanceRef.current.abort(); } catch {}
+      }
+    };
+  }, []);
 
   const actualSales = useMemo(() => {
     return sales.filter(s => s.status !== 'Orçamento');
@@ -174,7 +266,13 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
     
     return list.filter((sale) => {
       const matchName = sale.cliente.toLowerCase().includes(term);
-      const matchOrderNum = sale.numeroPedido ? sale.numeroPedido.toLowerCase().includes(term) : false;
+      const cleanTerm = term.replace(/\D/g, '');
+      const cleanOrder = sale.numeroPedido ? sale.numeroPedido.replace(/\D/g, '') : '';
+      const matchOrderNum = Boolean(
+        (sale.numeroPedido && sale.numeroPedido.toLowerCase().includes(term)) ||
+        (cleanTerm.length > 0 && cleanOrder === cleanTerm) ||
+        (sale.id && sale.id.toLowerCase().includes(term))
+      );
       const matchPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '').includes(term.replace(/\D/g, '')) : false;
       return matchName || matchOrderNum || matchPhone;
     });
@@ -441,10 +539,10 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
           </button>
         </div>
 
-        {/* Dynamic Search bar optimized for Pedidos/Telefones */}
-        <div className="bg-zinc-900 rounded-2xl border border-zinc-800/80 p-5 space-y-4 shadow-xs">
-          <div className="relative">
-            <span className="absolute left-3.5 top-3 text-zinc-450">
+        {/* Dynamic Search bar optimized for Pedidos/Telefones with Voice Search */}
+        <div className="bg-zinc-900 rounded-2xl border border-zinc-800/80 p-5 space-y-3 shadow-xs">
+          <div className="relative flex items-center">
+            <span className="absolute left-3.5 top-3 text-zinc-450 pointer-events-none">
               <Search className="h-4 w-4" />
             </span>
             <input
@@ -452,9 +550,72 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
               placeholder="Pesquisar por número do pedido (#), telefone ou cliente..."
               value={deliverySearchTerm}
               onChange={(e) => setDeliverySearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 placeholder-zinc-600 text-xs font-sans transition-colors"
+              className="w-full pl-10 pr-24 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 placeholder-zinc-600 text-xs font-sans transition-colors"
             />
+            <div className="absolute right-2 flex items-center gap-1.5">
+              {deliverySearchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setDeliverySearchTerm('')}
+                  className="p-1.5 text-zinc-500 hover:text-zinc-300 transition-colors rounded-lg hover:bg-zinc-800"
+                  title="Limpar pesquisa"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={isListening ? stopVoiceSearch : startVoiceSearch}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  isListening
+                    ? 'bg-rose-500 text-white animate-pulse shadow-sm shadow-rose-500/40 ring-2 ring-rose-400'
+                    : 'bg-zinc-800 hover:bg-zinc-750 text-zinc-300 hover:text-white border border-zinc-700/60'
+                }`}
+                title={isListening ? 'Parar de ouvir' : 'Pesquisar por voz (fale o número do pedido, telefone ou nome)'}
+              >
+                {isListening ? (
+                  <>
+                    <MicOff className="h-3.5 w-3.5" />
+                    <span className="text-[11px] hidden sm:inline font-semibold">Ouvindo...</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="h-3.5 w-3.5 text-brand-pink" />
+                    <span className="text-[11px] hidden sm:inline text-zinc-300">Voz</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
+
+          {/* Voice Search Live Feedback Banner */}
+          {voiceFeedback && (
+            <motion.div
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className={`text-xs px-3 py-2 rounded-xl flex items-center justify-between gap-2 border transition-all ${
+                isListening
+                  ? 'bg-brand-pink/15 text-pink-200 border-brand-pink/40'
+                  : 'bg-zinc-850 text-zinc-200 border-zinc-750'
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="relative flex h-2 w-2">
+                  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isListening ? 'bg-rose-400' : 'bg-emerald-400'}`}></span>
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${isListening ? 'bg-rose-500' : 'bg-emerald-500'}`}></span>
+                </span>
+                <span className="font-medium">{voiceFeedback}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVoiceFeedback(null)}
+                className="text-zinc-400 hover:text-zinc-200 transition-colors"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </motion.div>
+          )}
 
           {/* List display */}
           <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-1">

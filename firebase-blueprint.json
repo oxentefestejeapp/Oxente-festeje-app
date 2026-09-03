@@ -79,6 +79,42 @@
         }
       },
       "required": ["id", "imageUrl", "likes", "comments", "caption", "tag", "link", "createdAt"]
+    },
+    "TeamMessage": {
+      "title": "Team Message",
+      "description": "Real-time communication message sent between staff members in the internal management portal",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique message identifier"
+        },
+        "senderId": {
+          "type": "string",
+          "description": "Identifier of the sender user"
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Display name of the sender"
+        },
+        "senderRole": {
+          "type": "string",
+          "description": "Role of the sender (admin or colaborador)"
+        },
+        "text": {
+          "type": "string",
+          "description": "Content of the message"
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Unix timestamp in milliseconds"
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "Formatted ISO date string"
+        }
+      },
+      "required": ["id", "senderId", "senderName", "text", "timestamp"]
     }
   },
   "firestore": {
@@ -89,6 +125,10 @@
     "oxente_instagram_posts/{postId}": {
       "schema": "InstagramPost",
       "description": "Collection of compressed Instagram posts for the dynamic landing page feed"
+    },
+    "oxente_team_messages/{messageId}": {
+      "schema": "TeamMessage",
+      "description": "Collection of real-time internal team chat messages"
     }
   }
 }
