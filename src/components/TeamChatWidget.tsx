@@ -5,14 +5,10 @@ import {
   Send, 
   X, 
   Minus, 
-  Sparkles, 
   Trash2, 
   Clock, 
   Users, 
-  Check, 
-  Smile, 
-  ShieldCheck,
-  ChevronDown
+  Check
 } from 'lucide-react';
 import { 
   collection, 
@@ -27,6 +23,7 @@ import {
   doc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { supabase } from '../lib/supabase';
 import { playAppSound } from '../lib/audio';
 
 export interface TeamChatMessage {
@@ -76,10 +73,12 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [isConnected, setIsConnected] = useState(true);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const broadcastRef = useRef<BroadcastChannel | null>(null);
+  const supabaseChannelRef = useRef<any>(null);
 
   const currentUserId = currentUser?.id || 'colaborador';
   const currentUserName = currentUser?.name || currentUser?.displayName || 'Colaborador';
@@ -90,7 +89,22 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
-  // Broadcast channel for multi-tab sync
+  // Helper to merge and deduplicate messages
+  const mergeMessages = (incoming: TeamChatMessage[]) => {
+    setMessages((prev) => {
+      const existingIds = new Set(prev.map((m) => m.id));
+      const newItems = incoming.filter((m) => !existingIds.has(m.id));
+      if (newItems.length === 0) return prev;
+      const combined = [...prev, ...newItems].sort((a, b) => a.timestamp - b.timestamp);
+      const trimmed = combined.slice(-120);
+      try {
+        localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(trimmed));
+      } catch {}
+      return trimmed;
+    });
+  };
+
+  // 1. Multi-tab local sync via BroadcastChannel
   useEffect(() => {
     if (typeof window !== 'undefined' && 'BroadcastChannel' in window) {
       const channel = new BroadcastChannel('oxente_team_chat_channel');
@@ -98,12 +112,10 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       channel.onmessage = (event) => {
         if (event.data?.type === 'NEW_MESSAGE') {
           const newMsg = event.data.payload as TeamChatMessage;
-          setMessages((prev) => {
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-            const updated = [...prev, newMsg];
-            localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(updated.slice(-100)));
-            return updated;
-          });
+          mergeMessages([newMsg]);
+        } else if (event.data?.type === 'CLEAR_HISTORY') {
+          setMessages([]);
+          localStorage.removeItem(STORAGE_CACHE_KEY);
         }
       };
       return () => {
@@ -112,65 +124,179 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     }
   }, []);
 
-  // Listen to Firestore real-time messages
+  // 2. Supabase Realtime synchronization (Works between all devices, networks, and browsers)
+  useEffect(() => {
+    let active = true;
+    let reconnectTimer: any = null;
+
+    // Load initial message history from Supabase
+    const loadSupabaseHistory = async () => {
+      try {
+        // First check dedicated table oxente_team_messages
+        const { data: tableData, error: tableErr } = await supabase
+          .from('oxente_team_messages')
+          .select('*')
+          .order('timestamp', { ascending: true })
+          .limit(100);
+
+        if (!tableErr && tableData && tableData.length > 0) {
+          const mapped: TeamChatMessage[] = tableData.map((row: any) => ({
+            id: row.id,
+            senderId: row.sender_id || row.senderId,
+            senderName: row.sender_name || row.senderName,
+            senderRole: row.sender_role || row.senderRole,
+            text: row.text,
+            timestamp: Number(row.timestamp),
+            createdAt: row.created_at || row.createdAt
+          }));
+          mergeMessages(mapped);
+          return;
+        }
+
+        // Fallback to oxente_store_info record 'team_chat_history' (works out-of-the-box in Supabase)
+        const { data: storeData } = await supabase
+          .from('oxente_store_info')
+          .select('whatsapp_template')
+          .eq('key', 'team_chat_history')
+          .maybeSingle();
+
+        if (storeData?.whatsapp_template) {
+          try {
+            const parsed = JSON.parse(storeData.whatsapp_template);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              mergeMessages(parsed);
+            }
+          } catch {}
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar histórico do chat no Supabase:', err);
+      }
+    };
+
+    loadSupabaseHistory();
+
+    const connectSupabaseChannel = () => {
+      if (!active) return;
+      if (supabaseChannelRef.current) {
+        try { supabase.removeChannel(supabaseChannelRef.current); } catch {}
+      }
+
+      const channelId = `oxente_team_chat_room_${Math.random().toString(36).substring(2, 8)}`;
+      const channel = supabase.channel(channelId, {
+        config: {
+          broadcast: { ack: true }
+        }
+      });
+      supabaseChannelRef.current = channel;
+
+      channel
+        .on('broadcast', { event: 'new_message' }, ({ payload }) => {
+          if (!payload || !payload.id) return;
+          const incomingMsg = payload as TeamChatMessage;
+          mergeMessages([incomingMsg]);
+
+          const lastRead = Number(localStorage.getItem(STORAGE_LAST_READ_KEY) || '0');
+          if (!isOpen && incomingMsg.senderId !== currentUserId && incomingMsg.timestamp > lastRead) {
+            setUnreadCount((c) => c + 1);
+            playAppSound('alert');
+          }
+        })
+        .on('broadcast', { event: 'clear_chat' }, () => {
+          setMessages([]);
+          localStorage.removeItem(STORAGE_CACHE_KEY);
+          setUnreadCount(0);
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_store_info', filter: 'key=eq.team_chat_history' }, (changePayload: any) => {
+          const raw = changePayload.new?.whatsapp_template;
+          if (raw) {
+            try {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                mergeMessages(list);
+              }
+            } catch {}
+          }
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'oxente_team_messages' }, (changePayload: any) => {
+          const row = changePayload.new;
+          if (row) {
+            const incoming: TeamChatMessage = {
+              id: row.id,
+              senderId: row.sender_id || row.senderId,
+              senderName: row.sender_name || row.senderName,
+              senderRole: row.sender_role || row.senderRole,
+              text: row.text,
+              timestamp: Number(row.timestamp),
+              createdAt: row.created_at || row.createdAt
+            };
+            mergeMessages([incoming]);
+          }
+        })
+        .subscribe((status: string) => {
+          if (status === 'SUBSCRIBED') {
+            setIsConnected(true);
+          } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            setIsConnected(false);
+            clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(() => {
+              if (active) connectSupabaseChannel();
+            }, 3000);
+          }
+        });
+    };
+
+    connectSupabaseChannel();
+
+    return () => {
+      active = false;
+      clearTimeout(reconnectTimer);
+      if (supabaseChannelRef.current) {
+        try { supabase.removeChannel(supabaseChannelRef.current); } catch {}
+      }
+    };
+  }, [currentUserId, isOpen]);
+
+  // 3. Fallback/Redundancy: Listen to Firestore real-time messages if active
   useEffect(() => {
     let unsubscribe = () => {};
 
     try {
-      const messagesRef = collection(db, 'oxente_team_messages');
-      const q = query(messagesRef, orderBy('timestamp', 'asc'), limit(80));
+      if (db) {
+        const messagesRef = collection(db, 'oxente_team_messages');
+        const q = query(messagesRef, orderBy('timestamp', 'asc'), limit(80));
 
-      unsubscribe = onSnapshot(
-        q,
-        (snapshot) => {
-          const loaded: TeamChatMessage[] = [];
-          snapshot.forEach((docSnap) => {
-            const data = docSnap.data();
-            loaded.push({
-              id: docSnap.id,
-              senderId: data.senderId || 'desconhecido',
-              senderName: data.senderName || 'Colaborador',
-              senderRole: data.senderRole || 'colaborador',
-              text: data.text || '',
-              timestamp: data.timestamp || Date.now(),
-              createdAt: data.createdAt || new Date().toISOString()
+        unsubscribe = onSnapshot(
+          q,
+          (snapshot) => {
+            const loaded: TeamChatMessage[] = [];
+            snapshot.forEach((docSnap) => {
+              const data = docSnap.data();
+              loaded.push({
+                id: docSnap.id,
+                senderId: data.senderId || 'desconhecido',
+                senderName: data.senderName || 'Colaborador',
+                senderRole: data.senderRole || 'colaborador',
+                text: data.text || '',
+                timestamp: data.timestamp || Date.now(),
+                createdAt: data.createdAt || new Date().toISOString()
+              });
             });
-          });
 
-          if (loaded.length > 0) {
-            setMessages(loaded);
-            try {
-              localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(loaded));
-            } catch (e) {
-              console.warn('Falha ao salvar mensagens no cache local:', e);
+            if (loaded.length > 0) {
+              mergeMessages(loaded);
             }
-
-            // Calculate unread count based on last read timestamp
-            const lastRead = Number(localStorage.getItem(STORAGE_LAST_READ_KEY) || '0');
-            const newUnread = loaded.filter(
-              (m) => m.timestamp > lastRead && m.senderId !== currentUserId
-            );
-
-            if (!isOpen && newUnread.length > 0) {
-              setUnreadCount(newUnread.length);
-              // Play gentle notification chime if the latest message was not sent by the current user
-              const latest = loaded[loaded.length - 1];
-              if (latest && latest.timestamp > lastRead && latest.senderId !== currentUserId) {
-                playAppSound('alert');
-              }
-            }
+          },
+          (error) => {
+            console.warn('Firestore fallback chat note:', error.message);
           }
-        },
-        (error) => {
-          console.warn('Erro ao conectar ao Firestore Chat da Equipe:', error);
-        }
-      );
+        );
+      }
     } catch (err) {
-      console.warn('Falha na inicialização do listener do chat:', err);
+      console.warn('Falha no listener Firestore:', err);
     }
 
     return () => unsubscribe();
-  }, [currentUserId, isOpen]);
+  }, []);
 
   // When opening the chat, clear unread count and record last read
   useEffect(() => {
@@ -212,14 +338,16 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       createdAt: new Date().toISOString()
     };
 
-    // Optimistic UI update
+    // 1. Optimistic UI update
     setMessages((prev) => {
       const updated = [...prev, newMsg];
-      localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(updated.slice(-100)));
+      try {
+        localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(updated.slice(-120)));
+      } catch {}
       return updated;
     });
 
-    // Notify other open tabs in the same browser
+    // 2. Broadcast immediately to same-machine browser tabs
     broadcastRef.current?.postMessage({
       type: 'NEW_MESSAGE',
       payload: newMsg
@@ -228,19 +356,60 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     playAppSound('pop');
     localStorage.setItem(STORAGE_LAST_READ_KEY, String(now));
 
+    // 3. Send Supabase Realtime Broadcast across all employee computers and phones!
+    if (supabaseChannelRef.current) {
+      try {
+        await supabaseChannelRef.current.send({
+          type: 'broadcast',
+          event: 'new_message',
+          payload: newMsg
+        });
+      } catch (e) {
+        console.warn('Aviso: falha ao enviar broadcast Supabase:', e);
+      }
+    }
+
+    // 4. Persist to Supabase Database (First try oxente_team_messages, always update oxente_store_info)
     try {
-      const messagesRef = collection(db, 'oxente_team_messages');
-      await addDoc(messagesRef, {
-        senderId: currentUserId,
-        senderName: currentUserName,
-        senderRole: currentUserRole,
-        text,
-        timestamp: now,
-        createdAt: new Date().toISOString(),
-        serverTime: serverTimestamp()
+      // Background attempt into dedicated table
+      supabase.from('oxente_team_messages').insert({
+        id: newMsg.id,
+        sender_id: newMsg.senderId,
+        sender_name: newMsg.senderName,
+        sender_role: newMsg.senderRole,
+        text: newMsg.text,
+        timestamp: newMsg.timestamp,
+        created_at: newMsg.createdAt
+      }).then(() => {}).catch(() => {});
+
+      // Guaranteed fallback storage in oxente_store_info
+      const currentList = [...messages, newMsg].slice(-100);
+      await supabase.from('oxente_store_info').upsert({
+        key: 'team_chat_history',
+        nome: 'Chat Equipe',
+        whatsapp_template: JSON.stringify(currentList),
+        updated_at: new Date().toISOString()
       });
-    } catch (error) {
-      console.error('Erro ao gravar mensagem no Firestore:', error);
+    } catch (supaErr) {
+      console.warn('Aviso de persistência Supabase:', supaErr);
+    }
+
+    // 5. Redundant backup write to Firestore
+    try {
+      if (db) {
+        const messagesRef = collection(db, 'oxente_team_messages');
+        await addDoc(messagesRef, {
+          senderId: currentUserId,
+          senderName: currentUserName,
+          senderRole: currentUserRole,
+          text,
+          timestamp: now,
+          createdAt: new Date().toISOString(),
+          serverTime: serverTimestamp()
+        });
+      }
+    } catch (fbErr) {
+      // Non-blocking Firestore error
     } finally {
       setIsSending(false);
       setTimeout(() => {
@@ -257,10 +426,35 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       setMessages([]);
       localStorage.removeItem(STORAGE_CACHE_KEY);
 
-      const messagesRef = collection(db, 'oxente_team_messages');
-      const snap = await getDocs(messagesRef);
-      const deletePromises = snap.docs.map((docSnap) => deleteDoc(doc(db, 'oxente_team_messages', docSnap.id)));
-      await Promise.all(deletePromises);
+      // 1. Broadcast clear event to all staff in real time
+      if (supabaseChannelRef.current) {
+        try {
+          await supabaseChannelRef.current.send({
+            type: 'broadcast',
+            event: 'clear_chat'
+          });
+        } catch {}
+      }
+
+      broadcastRef.current?.postMessage({ type: 'CLEAR_HISTORY' });
+
+      // 2. Clear from Supabase
+      await supabase.from('oxente_store_info').upsert({
+        key: 'team_chat_history',
+        nome: 'Chat Equipe',
+        whatsapp_template: '[]',
+        updated_at: new Date().toISOString()
+      });
+      await supabase.from('oxente_team_messages').delete().neq('id', '00000000');
+
+      // 3. Clear from Firestore
+      if (db) {
+        const messagesRef = collection(db, 'oxente_team_messages');
+        const snap = await getDocs(messagesRef);
+        const deletePromises = snap.docs.map((docSnap) => deleteDoc(doc(db, 'oxente_team_messages', docSnap.id)));
+        await Promise.all(deletePromises);
+      }
+
       playAppSound('trash');
     } catch (e) {
       console.error('Erro ao limpar histórico do chat:', e);
