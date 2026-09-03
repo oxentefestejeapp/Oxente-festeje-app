@@ -205,7 +205,7 @@ export function SetReminderModal({
 
   return (
     <AnimatePresence>
-      <div className="no-print fixed inset-0 z-[100000] flex items-center justify-center p-4 sm:p-6 overflow-hidden pointer-events-auto">
+      <div className="no-print fixed inset-0 z-[100000] flex items-center justify-center p-2.5 sm:p-4 overflow-y-auto pointer-events-auto">
         {/* Backdrop */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -220,46 +220,50 @@ export function SetReminderModal({
           initial={{ scale: 0.9, opacity: 0, y: 20 }}
           animate={{ scale: 1, opacity: 1, y: 0 }}
           exit={{ scale: 0.92, opacity: 0, y: 10 }}
-          className="relative w-full max-w-md bg-zinc-900 border border-teal-500/50 rounded-3xl p-5 sm:p-6 shadow-2xl shadow-teal-500/20 z-10 overflow-hidden"
+          className="relative w-full max-w-md max-h-[92vh] sm:max-h-[88vh] bg-zinc-900 border border-teal-500/50 rounded-3xl shadow-2xl shadow-teal-500/20 z-10 flex flex-col overflow-hidden"
         >
           {/* Ambient light */}
           <div className={`absolute -top-16 left-1/2 -translate-x-1/2 w-48 h-48 ${target === 'all' ? 'bg-indigo-500/20' : 'bg-teal-500/15'} rounded-full blur-2xl pointer-events-none transition-all duration-300`} />
 
-          {/* Close button */}
-          <button
-            type="button"
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 text-zinc-400 hover:text-white bg-zinc-800/80 hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer"
-          >
-            <X className="h-4 w-4" />
-          </button>
-
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-4">
-            <div className={`w-12 h-12 rounded-2xl bg-gradient-to-tr ${target === 'all' ? 'from-indigo-600 to-violet-500 shadow-indigo-500/30' : 'from-teal-600 to-emerald-500 shadow-teal-500/30'} flex items-center justify-center text-white shadow-lg shrink-0 transition-all`}>
-              <AlarmClock className="h-6 w-6 animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-1.5 text-xs font-bold text-teal-400 uppercase tracking-wider">
-                <Sparkles className="h-3 w-3" />
-                <span>Alarme de Mensagem</span>
+          {/* Fixed Header */}
+          <div className="p-4 sm:p-5 pb-3 border-b border-zinc-800/80 relative shrink-0 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-11 h-11 rounded-2xl bg-gradient-to-tr ${target === 'all' ? 'from-indigo-600 to-violet-500 shadow-indigo-500/30' : 'from-teal-600 to-emerald-500 shadow-teal-500/30'} flex items-center justify-center text-white shadow-lg shrink-0 transition-all`}>
+                <AlarmClock className="h-5 w-5 animate-pulse" />
               </div>
-              <h3 className="text-lg font-black text-white leading-tight">
-                Agendar Lembrete
-              </h3>
+              <div>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-teal-400 uppercase tracking-wider">
+                  <Sparkles className="h-3 w-3" />
+                  <span>Alarme de Mensagem</span>
+                </div>
+                <h3 className="text-base sm:text-lg font-black text-white leading-tight">
+                  Agendar Lembrete
+                </h3>
+              </div>
             </div>
+
+            {/* Close button */}
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-2 text-zinc-400 hover:text-white bg-zinc-800/80 hover:bg-zinc-800 rounded-xl transition-colors cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
 
-          {/* Message Preview */}
-          <div className="p-3 bg-zinc-950/80 border border-zinc-800 rounded-2xl mb-4">
-            <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 mb-1">
-              <AlertCircle className="h-3 w-3 text-teal-400" />
-              <span>Mensagem de {message.senderName}:</span>
+          {/* Scrollable Body Content */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4 text-left">
+            {/* Message Preview */}
+            <div className="p-3 bg-zinc-950/80 border border-zinc-800 rounded-2xl">
+              <div className="flex items-center gap-1.5 text-[11px] text-zinc-400 mb-1">
+                <AlertCircle className="h-3 w-3 text-teal-400" />
+                <span>Mensagem de {message.senderName}:</span>
+              </div>
+              <p className="text-xs text-zinc-200 font-medium line-clamp-3 italic">
+                "{message.text}"
+              </p>
             </div>
-            <p className="text-xs text-zinc-200 font-medium line-clamp-3 italic">
-              "{message.text}"
-            </p>
-          </div>
 
           {/* Target Audience Selector: Privado vs Para Todos */}
           <div className="mb-4">
@@ -522,9 +526,10 @@ export function SetReminderModal({
               </div>
             </div>
           </div>
+        </div>
 
-          {/* Action Buttons */}
-          <div className="mt-5 flex gap-2.5">
+          {/* Sticky Action Footer */}
+          <div className="p-4 sm:p-5 pt-3 bg-zinc-900/95 border-t border-zinc-800/90 backdrop-blur-md shrink-0 flex gap-2.5 z-10">
             <button
               type="button"
               onClick={onClose}

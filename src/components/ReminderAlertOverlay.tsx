@@ -78,7 +78,7 @@ export function ReminderAlertOverlay({ alert, onClose, onOpenChat, onSnooze }: R
 
   return (
     <AnimatePresence>
-      <div className="no-print fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 overflow-hidden pointer-events-auto">
+      <div className="no-print fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-6 overflow-y-auto pointer-events-auto">
         {/* Darkened backdrop with pulsating glow - does NOT dismiss on backdrop click */}
         <motion.div
           initial={{ opacity: 0 }}
@@ -152,7 +152,7 @@ export function ReminderAlertOverlay({ alert, onClose, onOpenChat, onSnooze }: R
           animate={{ scale: 1, y: 0, opacity: 1 }}
           exit={{ scale: 0.85, y: 20, opacity: 0 }}
           transition={{ type: 'spring', damping: 22, stiffness: 320 }}
-          className={`relative w-full max-w-lg bg-gradient-to-b from-zinc-900 to-zinc-950 border-2 ${isTeamAlarm ? 'border-indigo-500 shadow-indigo-500/30' : 'border-teal-500 shadow-teal-500/30'} rounded-3xl p-6 sm:p-7 shadow-2xl overflow-hidden text-center z-20`}
+          className={`relative w-full max-w-lg max-h-[92vh] bg-gradient-to-b from-zinc-900 to-zinc-950 border-2 ${isTeamAlarm ? 'border-indigo-500 shadow-indigo-500/30' : 'border-teal-500 shadow-teal-500/30'} rounded-3xl p-5 sm:p-7 shadow-2xl overflow-y-auto text-center z-20`}
         >
           {/* Subtle Ambient Radial Glow */}
           <div className={`absolute -top-24 left-1/2 -translate-x-1/2 w-72 h-72 ${isTeamAlarm ? 'bg-indigo-500/20' : 'bg-teal-500/20'} rounded-full blur-3xl pointer-events-none`} />
