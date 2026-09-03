@@ -41,9 +41,21 @@ import {
   Sun,
   Palette,
   Truck,
-  Crown
+  Crown,
+  Zap,
+  BellRing,
+  AlertTriangle
 } from 'lucide-react';
 import { Product, Sale, StoreInfo } from '../types';
+import { 
+  getBadgeDiagnosticInfo, 
+  testLocalMobileBadgeAndNotification, 
+  sendFakeTestOrderViaSupabase, 
+  deleteFakeTestOrderViaSupabase, 
+  clearMobileAppBadge, 
+  requestMobileNotificationPermission 
+} from '../lib/mobileBadgeNotification';
+import { playAppSound } from '../lib/audio';
 import { 
   initAuth, 
   googleSignIn, 
@@ -153,6 +165,76 @@ export function SettingsManager({
       setTestNotificationStatus('Alerta enviado com sucesso! Verifique seu celular.');
       setTimeout(() => setTestNotificationStatus(null), 4000);
     }, 800);
+  };
+
+  // Diagnostics and mobile badge testing state
+  const [diagInfo, setDiagInfo] = useState<any>(null);
+  const [badgeTestMsg, setBadgeTestMsg] = useState<string | null>(null);
+  const [lastTestOrderId, setLastTestOrderId] = useState<string | null>(null);
+  const [isTestingLocalBadge, setIsTestingLocalBadge] = useState(false);
+  const [isTestingSupabaseOrder, setIsTestingSupabaseOrder] = useState(false);
+
+  const refreshDiagnostics = () => {
+    setDiagInfo(getBadgeDiagnosticInfo());
+  };
+
+  useEffect(() => {
+    refreshDiagnostics();
+  }, []);
+
+  const handleTestLocalBadgeAndNotification = async () => {
+    setIsTestingLocalBadge(true);
+    setBadgeTestMsg(null);
+    try {
+      const result = await testLocalMobileBadgeAndNotification(1);
+      setBadgeTestMsg(result.message);
+      refreshDiagnostics();
+      setPermissionStatus(getNotificationPermissionStatus());
+    } catch (err: any) {
+      setBadgeTestMsg(`Erro ao testar: ${err.message || String(err)}`);
+    } finally {
+      setIsTestingLocalBadge(false);
+    }
+  };
+
+  const handleTestSupabaseOrder = async () => {
+    setIsTestingSupabaseOrder(true);
+    setBadgeTestMsg('Enviando pedido de teste para o Supabase...');
+    try {
+      const res = await sendFakeTestOrderViaSupabase();
+      if (res.success && res.saleId) {
+        setLastTestOrderId(res.saleId);
+        setBadgeTestMsg(`✅ Pedido ${res.orderNumber} gravado no Supabase com sucesso! O Webhook e o canal Realtime foram acionados. Verifique seu celular.`);
+        playAppSound('success');
+      } else {
+        setBadgeTestMsg(`⚠️ Falha ao salvar no Supabase: ${res.error}`);
+        playAppSound('alert');
+      }
+    } catch (err: any) {
+      setBadgeTestMsg(`Erro: ${err.message || String(err)}`);
+    } finally {
+      setIsTestingSupabaseOrder(false);
+      refreshDiagnostics();
+    }
+  };
+
+  const handleDeleteTestOrder = async () => {
+    if (!lastTestOrderId) return;
+    try {
+      await deleteFakeTestOrderViaSupabase(lastTestOrderId);
+      setLastTestOrderId(null);
+      setBadgeTestMsg('🧹 Pedido de teste excluído do banco com sucesso.');
+      playAppSound('trash');
+    } catch (err: any) {
+      setBadgeTestMsg(`Erro ao excluir: ${err.message || String(err)}`);
+    }
+  };
+
+  const handleClearBadge = async () => {
+    await clearMobileAppBadge(true);
+    setBadgeTestMsg('🧹 Selo do ícone zerado.');
+    playAppSound('trash');
+    refreshDiagnostics();
   };
 
   useEffect(() => {
@@ -879,10 +961,10 @@ export function SettingsManager({
 
           </div>
 
-          {/* Tester trigger button */}
-          <div className="pt-2 border-t border-zinc-850 flex flex-col sm:flex-row items-center justify-between gap-4">
+          {/* Tester trigger button and Voice TTS */}
+          <div className="pt-3 border-t border-zinc-850 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="text-[11px] text-zinc-400 font-medium text-center sm:text-left">
-              🚀 Quer experimentar a mágica de voz em tempo real agora mesmo? Clique ao lado para testar:
+              🚀 Quer experimentar a chamada de voz em tempo real agora mesmo?
             </div>
             <div className="w-full sm:w-auto shrink-0 flex flex-col items-center">
               <button
@@ -890,7 +972,7 @@ export function SettingsManager({
                 type="button"
                 className="w-full sm:w-auto flex items-center justify-center gap-2 py-2 px-5 bg-zinc-800 hover:bg-zinc-750 text-brand-pink border border-brand-pink/30 hover:border-brand-pink text-xs font-bold rounded-xl shadow transition-all active:scale-95 cursor-pointer"
               >
-                <span>Despertar Alerta de Teste 🧪</span>
+                <span>Ouvir Alerta de Voz (TTS) 📢</span>
               </button>
             </div>
           </div>
@@ -900,6 +982,160 @@ export function SettingsManager({
               {testNotificationStatus}
             </div>
           )}
+
+          {/* Central de Testes de Selo (Badge) no Celular & Webhook do Supabase */}
+          <div className="mt-4 pt-4 border-t border-zinc-800/80 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-brand-pink/15 border border-brand-pink/30 rounded-lg text-brand-pink">
+                  <BellRing className="h-4.5 w-4.5" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-zinc-100 text-xs sm:text-sm flex items-center gap-2">
+                    Central de Testes de Notificação & Webhook
+                    <span className="text-[9px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold">
+                      Ativo
+                    </span>
+                  </h4>
+                  <p className="text-[11px] text-zinc-400">
+                    Teste o selo numérico no ícone do celular, vibração, som e o disparo de pedido pelo Supabase.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={refreshDiagnostics}
+                className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-200 bg-zinc-800/80 hover:bg-zinc-800 px-2.5 py-1 rounded-lg border border-zinc-750 transition-colors self-start sm:self-auto"
+                title="Atualizar status"
+              >
+                <RefreshCw className="h-3 w-3" />
+                <span>Atualizar</span>
+              </button>
+            </div>
+
+            {/* Diagnostics grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <div className="bg-black/40 border border-zinc-850 p-2.5 rounded-xl">
+                <span className="text-[9px] text-zinc-400 uppercase font-bold block">Dispositivo</span>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${diagInfo?.isMobile ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                  <span className="text-xs font-semibold text-zinc-200">
+                    {diagInfo?.isMobile ? 'Celular / Tablet' : 'Computador'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-black/40 border border-zinc-850 p-2.5 rounded-xl">
+                <span className="text-[9px] text-zinc-400 uppercase font-bold block">Permissão de Notificação</span>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${
+                    diagInfo?.permission === 'granted' ? 'bg-emerald-400' : 
+                    diagInfo?.permission === 'denied' ? 'bg-red-400' : 'bg-amber-400'
+                  }`} />
+                  <span className="text-xs font-semibold text-zinc-200 capitalize">
+                    {diagInfo?.permission === 'granted' ? 'Autorizada' : 
+                     diagInfo?.permission === 'denied' ? 'Bloqueada' : 'Pendente'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-black/40 border border-zinc-850 p-2.5 rounded-xl">
+                <span className="text-[9px] text-zinc-400 uppercase font-bold block">Selo no Ícone (Badge)</span>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${diagInfo?.badgeSupported ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
+                  <span className="text-xs font-semibold text-zinc-200">
+                    {diagInfo?.badgeSupported ? 'Compatível' : 'Requer PWA'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-black/40 border border-zinc-850 p-2.5 rounded-xl">
+                <span className="text-[9px] text-zinc-400 uppercase font-bold block">Service Worker</span>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className={`w-2 h-2 rounded-full ${diagInfo?.serviceWorkerActive ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+                  <span className="text-xs font-semibold text-zinc-200">
+                    {diagInfo?.serviceWorkerActive ? 'Ativo' : 'Carregando'}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Permission Alert Banner */}
+            {diagInfo?.permission !== 'granted' && (
+              <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2.5">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-xs">
+                    <strong className="text-amber-300 font-semibold block text-[11px]">Permissão de Notificações Necessária</strong>
+                    <span className="text-zinc-300 text-[11px]">
+                      O navegador do celular precisa de autorização expressa para mostrar o aviso e o selo no ícone.
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await requestMobileNotificationPermission();
+                    refreshDiagnostics();
+                    setPermissionStatus(getNotificationPermissionStatus());
+                  }}
+                  className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-lg transition-colors shrink-0 shadow-sm"
+                >
+                  Autorizar Notificações
+                </button>
+              </div>
+            )}
+
+            {/* Action Buttons Row */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
+              <button
+                type="button"
+                onClick={handleTestLocalBadgeAndNotification}
+                disabled={isTestingLocalBadge}
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-brand-pink hover:from-pink-500 hover:to-pink-500 text-white font-bold text-xs py-2.5 px-3.5 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Bell className="h-3.5 w-3.5" />
+                <span>{isTestingLocalBadge ? 'Disparando...' : '1. Testar Notificação & Selo (Local)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTestSupabaseOrder}
+                disabled={isTestingSupabaseOrder}
+                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold text-xs py-2.5 px-3.5 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+              >
+                <Zap className="h-3.5 w-3.5" />
+                <span>{isTestingSupabaseOrder ? 'Gravando no Supabase...' : '2. Simular Pedido Fake no Supabase'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleClearBadge}
+                className="flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 font-semibold text-xs py-2.5 px-3 rounded-xl border border-zinc-700/80 transition-colors"
+                title="Limpar número do ícone"
+              >
+                <Trash className="h-3.5 w-3.5" />
+                <span>Zerar Selo</span>
+              </button>
+            </div>
+
+            {/* Status message */}
+            {badgeTestMsg && (
+              <div className="bg-black/50 border border-zinc-800 p-3 rounded-xl flex items-start justify-between gap-2.5 animate-fade-in text-xs">
+                <span className="text-zinc-200 leading-relaxed text-[11px]">{badgeTestMsg}</span>
+                {lastTestOrderId && (
+                  <button
+                    type="button"
+                    onClick={handleDeleteTestOrder}
+                    className="text-[11px] text-red-400 hover:text-red-300 font-bold shrink-0 underline ml-2 cursor-pointer"
+                  >
+                    Excluir Pedido Fake
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
 
         </div>
       </div>

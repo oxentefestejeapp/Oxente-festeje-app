@@ -2833,24 +2833,22 @@ export default function App() {
             </button>
           )}
  
-          {/* Install Mobile App Tab (Hidden for Admins, visible ONLY for Ana Clara) */}
-          {!isAdmin && isAnaClara && (
-            <button
-              onClick={() => changeTab('instalar_app')}
-              className={getTabClass('instalar_app')}
+          {/* Install Mobile App Tab */}
+          <button
+            onClick={() => changeTab('instalar_app')}
+            className={getTabClass('instalar_app')}
+          >
+            <motion.div
+              animate={activeTab === 'instalar_app' ? { scale: [1, 1.3, 1], rotate: [0, 8, -8, 0] } : { scale: 1, rotate: 0 }}
+              whileHover={{ scale: 1.25 }}
+              whileTap={{ scale: 0.9 }}
+              transition={{ duration: 0.3 }}
             >
-              <motion.div
-                animate={activeTab === 'instalar_app' ? { scale: [1, 1.3, 1], rotate: [0, 8, -8, 0] } : { scale: 1, rotate: 0 }}
-                whileHover={{ scale: 1.25 }}
-                whileTap={{ scale: 0.9 }}
-                transition={{ duration: 0.3 }}
-              >
-                <Smartphone className="h-4 w-4 text-brand-pink" />
-              </motion.div>
-              <span className="hidden sm:inline">Instalar no Celular</span>
-              <span className="sm:hidden">Instalar</span>
-            </button>
-          )}
+              <Smartphone className="h-4 w-4 text-brand-pink" />
+            </motion.div>
+            <span className="hidden sm:inline">Instalar no Celular</span>
+            <span className="sm:hidden">Instalar App</span>
+          </button>
 
           {/* Quick Sign Out Action Trigger */}
           <button
@@ -3020,7 +3018,7 @@ export default function App() {
               <SalesAudit sales={sales} products={products} storeInfo={storeInfo} onUpdateSale={handleUpdateSale} />
             )}
 
-            {activeTab === 'instalar_app' && !isAdmin && isAnaClara && (
+            {activeTab === 'instalar_app' && (
               <InstallAppTab />
             )}
           </motion.div>
