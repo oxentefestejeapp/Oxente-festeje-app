@@ -9,6 +9,8 @@
  */
 
 import { supabase } from './supabase';
+import { playAppSound } from './audio';
+import { Sale } from '../types';
 
 const MOBILE_BADGE_STORAGE_KEY = 'oxente_mobile_unread_orders';
 const PUSH_SUBSCRIBED_KEY = 'oxente_push_subscribed_endpoint';
@@ -35,39 +37,57 @@ export function isBadgingSupported(): boolean {
 }
 
 /**
+ * Requests Notification permission if not already granted (required by iOS/Android for badges and push)
+ */
+export async function requestMobileNotificationPermission(): Promise<NotificationPermission> {
+  if (typeof window === 'undefined' || typeof Notification === 'undefined') return 'denied';
+  try {
+    if (Notification.permission === 'default') {
+      return await Notification.requestPermission();
+    }
+    return Notification.permission;
+  } catch (err) {
+    return 'denied';
+  }
+}
+
+/**
  * Sets the badge on the installed mobile app icon
  */
-export async function setMobileAppBadge(count?: number): Promise<void> {
-  // STRICT RULE: Only run on mobile devices as requested by the user
-  if (!isMobileDevice()) return;
+export async function setMobileAppBadge(count?: number, force = false): Promise<boolean> {
+  // STRICT RULE: Only run on mobile devices as requested by the user, unless force is true (for testing)
+  if (!force && !isMobileDevice()) return false;
 
   try {
     const finalCount = count !== undefined ? count : getMobileUnreadOrdersCount();
     
     if (finalCount <= 0) {
-      await clearMobileAppBadge();
-      return;
+      await clearMobileAppBadge(force);
+      return true;
     }
 
     if (typeof navigator !== 'undefined') {
       if ('setAppBadge' in navigator) {
         await (navigator as any).setAppBadge(finalCount);
+        return true;
       } else if ('setExperimentalAppBadge' in (navigator as any)) {
         await (navigator as any).setExperimentalAppBadge(finalCount);
+        return true;
       }
     }
   } catch (err) {
     // Badging API can fail silently if user did not install PWA or OS restricted it
     console.debug('Badge API not available or restricted on this device:', err);
   }
+  return false;
 }
 
 /**
  * Clears the badge from the installed mobile app icon
  */
-export async function clearMobileAppBadge(): Promise<void> {
-  // STRICT RULE: Only run on mobile devices
-  if (!isMobileDevice()) return;
+export async function clearMobileAppBadge(force = false): Promise<void> {
+  // STRICT RULE: Only run on mobile devices unless force is true
+  if (!force && !isMobileDevice()) return;
 
   try {
     // Reset stored unread count
@@ -126,6 +146,9 @@ export async function setupMobilePushSubscription(userEmail?: string): Promise<b
   }
 
   try {
+    // Request permission if not already granted
+    await requestMobileNotificationPermission();
+
     // Register or get active service worker registration
     const registration = await navigator.serviceWorker.ready;
     if (!registration) return false;
@@ -211,4 +234,143 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
+}
+
+export interface BadgeDiagnosticInfo {
+  isMobile: boolean;
+  permission: NotificationPermission | 'unsupported';
+  badgeSupported: boolean;
+  serviceWorkerActive: boolean;
+  currentBadgeCount: number;
+}
+
+/**
+ * Returns current diagnostics of the mobile notification and badging system
+ */
+export function getBadgeDiagnosticInfo(): BadgeDiagnosticInfo {
+  const isMobile = isMobileDevice();
+  let permission: NotificationPermission | 'unsupported' = 'unsupported';
+  if (typeof window !== 'undefined' && 'Notification' in window) {
+    permission = Notification.permission;
+  }
+  const badgeSupported = isBadgingSupported();
+  const serviceWorkerActive = typeof navigator !== 'undefined' && 'serviceWorker' in navigator && !!navigator.serviceWorker.controller;
+  const currentBadgeCount = getMobileUnreadOrdersCount();
+
+  return {
+    isMobile,
+    permission,
+    badgeSupported,
+    serviceWorkerActive,
+    currentBadgeCount
+  };
+}
+
+/**
+ * Directly tests the notification and icon badging on this device
+ */
+export async function testLocalMobileBadgeAndNotification(badgeNumber = 1): Promise<{
+  success: boolean;
+  permission: string;
+  badgeSet: boolean;
+  notificationShown: boolean;
+  message: string;
+}> {
+  playAppSound('success');
+
+  // 1. Request notification permission (user gesture context)
+  const perm = await requestMobileNotificationPermission();
+
+  // 2. Set the badge directly
+  localStorage.setItem(MOBILE_BADGE_STORAGE_KEY, String(badgeNumber));
+  const badgeSet = await setMobileAppBadge(badgeNumber, true);
+
+  // 3. Show native push/system notification
+  let notificationShown = false;
+  try {
+    const title = '🛍️ NOVO PEDIDO #TESTE-999';
+    const body = 'Cliente: Maria Silva (R$ 150,00) - Teste de Notificação Oxente Festeje!';
+    const options: any = {
+      body,
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+      tag: 'test-order-badge-alert',
+      vibrate: [250, 100, 250],
+      requireInteraction: false
+    };
+
+    if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator) {
+      const reg = await navigator.serviceWorker.ready;
+      if (reg && 'showNotification' in reg) {
+        await reg.showNotification(title, options);
+        notificationShown = true;
+      }
+    }
+
+    if (!notificationShown && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      new Notification(title, options);
+      notificationShown = true;
+    }
+  } catch (err) {
+    console.warn('Falha ao emitir notificação nativa de teste:', err);
+  }
+
+  return {
+    success: badgeSet || notificationShown || perm === 'granted',
+    permission: perm,
+    badgeSet,
+    notificationShown,
+    message: perm === 'granted'
+      ? 'Notificação e selo disparados! Minimize o app ou vá para a tela inicial do celular para ver o ícone atualizado.'
+      : 'Atenção: A permissão de notificações do navegador precisa ser permitida para exibir o banner e o selo no celular.'
+  };
+}
+
+/**
+ * Sends a real test order into Supabase, triggering both Database Webhook and Realtime Postgres sync
+ */
+export async function sendFakeTestOrderViaSupabase(): Promise<{
+  success: boolean;
+  saleId?: string;
+  orderNumber?: string;
+  error?: string;
+}> {
+  const fakeId = `teste_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const fakeOrderNumber = `TESTE-${Math.floor(Math.random() * 900 + 100)}`;
+
+  const testSale: any = {
+    id: fakeId,
+    cliente: '🧪 Teste Notificação Webhook',
+    telefone_cliente: '(00) 99999-9999',
+    total: 89.90,
+    forma_pagamento: 'Pix',
+    data: new Date().toISOString(),
+    numero_pedido: fakeOrderNumber,
+    status: 'Confirmado',
+    criado_por_email: 'teste_webhook@oxente.com',
+    notas_internas: 'Pedido simulado para teste de Webhook e Notificação Mobile',
+    updated_at: new Date().toISOString()
+  };
+
+  try {
+    const { error } = await supabase.from('oxente_sales').upsert(testSale);
+    if (error) {
+      return { success: false, error: error.message };
+    }
+    return { success: true, saleId: fakeId, orderNumber: fakeOrderNumber };
+  } catch (err: any) {
+    return { success: false, error: err.message || String(err) };
+  }
+}
+
+/**
+ * Deletes a fake test order created for testing from Supabase
+ */
+export async function deleteFakeTestOrderViaSupabase(saleId: string): Promise<boolean> {
+  try {
+    const { error } = await supabase.from('oxente_sales').delete().eq('id', saleId);
+    return !error;
+  } catch {
+    return false;
+  }
 }

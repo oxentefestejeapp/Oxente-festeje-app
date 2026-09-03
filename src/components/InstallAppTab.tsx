@@ -7,9 +7,23 @@ import {
   CheckSquare, 
   Copy, 
   Check,
-  Info
+  Info,
+  Bell,
+  BellRing,
+  Zap,
+  RefreshCw,
+  Trash2,
+  AlertTriangle
 } from 'lucide-react';
 import { playAppSound } from '../lib/audio';
+import { 
+  getBadgeDiagnosticInfo, 
+  testLocalMobileBadgeAndNotification, 
+  sendFakeTestOrderViaSupabase, 
+  deleteFakeTestOrderViaSupabase, 
+  clearMobileAppBadge, 
+  requestMobileNotificationPermission 
+} from '../lib/mobileBadgeNotification';
 
 export default function InstallAppTab() {
   const [installPrompt, setInstallPrompt] = useState<any>(null);
@@ -17,6 +31,22 @@ export default function InstallAppTab() {
   const [showInstructions, setShowInstructions] = useState(false);
   const [copied, setCopied] = useState(false);
   const [currentUrl, setCurrentUrl] = useState('');
+
+  // Diagnostic and test state
+  const [diagInfo, setDiagInfo] = useState<any>(null);
+  const [testStatusMsg, setTestStatusMsg] = useState<string | null>(null);
+  const [lastTestOrderId, setLastTestOrderId] = useState<string | null>(null);
+  const [isTestingLocal, setIsTestingLocal] = useState(false);
+  const [isTestingSupabase, setIsTestingSupabase] = useState(false);
+
+  const refreshDiagnostics = () => {
+    const info = getBadgeDiagnosticInfo();
+    setDiagInfo(info);
+  };
+
+  useEffect(() => {
+    refreshDiagnostics();
+  }, []);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -81,6 +111,65 @@ export default function InstallAppTab() {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleTestLocalNotification = async () => {
+    setIsTestingLocal(true);
+    setTestStatusMsg(null);
+    try {
+      const result = await testLocalMobileBadgeAndNotification(1);
+      setTestStatusMsg(result.message);
+      refreshDiagnostics();
+    } catch (err: any) {
+      setTestStatusMsg(`Erro ao testar: ${err.message || String(err)}`);
+    } finally {
+      setIsTestingLocal(false);
+    }
+  };
+
+  const handleTestSupabaseOrder = async () => {
+    setIsTestingSupabase(true);
+    setTestStatusMsg('Enviando pedido de teste para o Supabase...');
+    try {
+      const res = await sendFakeTestOrderViaSupabase();
+      if (res.success && res.saleId) {
+        setLastTestOrderId(res.saleId);
+        setTestStatusMsg(`✅ Pedido ${res.orderNumber} gravado no Supabase com sucesso! O Webhook e o canal Realtime foram acionados. Verifique seu celular.`);
+        playAppSound('success');
+      } else {
+        setTestStatusMsg(`⚠️ Falha ao salvar no Supabase: ${res.error}`);
+        playAppSound('alert');
+      }
+    } catch (err: any) {
+      setTestStatusMsg(`Erro: ${err.message || String(err)}`);
+    } finally {
+      setIsTestingSupabase(false);
+      refreshDiagnostics();
+    }
+  };
+
+  const handleDeleteTestOrder = async () => {
+    if (!lastTestOrderId) return;
+    try {
+      await deleteFakeTestOrderViaSupabase(lastTestOrderId);
+      setLastTestOrderId(null);
+      setTestStatusMsg('🧹 Pedido de teste excluído do banco com sucesso.');
+      playAppSound('trash');
+    } catch (err: any) {
+      setTestStatusMsg(`Erro ao excluir: ${err.message || String(err)}`);
+    }
+  };
+
+  const handleClearBadge = async () => {
+    await clearMobileAppBadge(true);
+    setTestStatusMsg('🧹 Selo do ícone zerado.');
+    playAppSound('trash');
+    refreshDiagnostics();
+  };
+
+  const handleRequestPermission = async () => {
+    await requestMobileNotificationPermission();
+    refreshDiagnostics();
+  };
+
   // Pink themed custom QR code endpoint
   const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=250x250&color=ec4899&bgcolor=18181b&data=${encodeURIComponent(currentUrl)}`;
 
@@ -106,6 +195,153 @@ export default function InstallAppTab() {
             ★ Versão Staff Otimizada
           </span>
         </div>
+      </div>
+
+      {/* Central de Testes de Notificação e Webhook */}
+      <div className="bg-zinc-900 rounded-2xl border border-zinc-800/80 p-5 sm:p-6 space-y-5 shadow-md">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800/80 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-brand-pink/15 border border-brand-pink/30 rounded-xl text-brand-pink shrink-0">
+              <BellRing className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-display font-bold text-sm sm:text-base text-zinc-100 flex items-center gap-2">
+                Central de Testes de Notificação & Webhook
+                <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold">
+                  Ativo
+                </span>
+              </h3>
+              <p className="text-xs text-zinc-400 mt-0.5">
+                Teste o selo no ícone do celular, som de novo pedido e o disparo pelo Supabase.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={refreshDiagnostics}
+            className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-zinc-200 bg-zinc-800/70 hover:bg-zinc-800 px-3 py-1.5 rounded-lg border border-zinc-750 transition-colors self-start sm:self-auto"
+            title="Atualizar status do sistema"
+          >
+            <RefreshCw className="h-3.5 w-3.5" />
+            <span>Atualizar Status</span>
+          </button>
+        </div>
+
+        {/* Diagnostics Badges */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          <div className="bg-black/30 border border-zinc-850 p-3 rounded-xl">
+            <span className="text-[10px] text-zinc-400 uppercase font-bold block">Dispositivo</span>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${diagInfo?.isMobile ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              <span className="text-xs font-semibold text-zinc-200">
+                {diagInfo?.isMobile ? 'Celular / Tablet' : 'Computador'}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-black/30 border border-zinc-850 p-3 rounded-xl">
+            <span className="text-[10px] text-zinc-400 uppercase font-bold block">Permissão de Notificação</span>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${
+                diagInfo?.permission === 'granted' ? 'bg-emerald-400' : 
+                diagInfo?.permission === 'denied' ? 'bg-red-400' : 'bg-amber-400'
+              }`} />
+              <span className="text-xs font-semibold text-zinc-200 capitalize">
+                {diagInfo?.permission === 'granted' ? 'Autorizada' : 
+                 diagInfo?.permission === 'denied' ? 'Bloqueada' : 'Pendente'}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-black/30 border border-zinc-850 p-3 rounded-xl">
+            <span className="text-[10px] text-zinc-400 uppercase font-bold block">Selo no Ícone (Badge)</span>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${diagInfo?.badgeSupported ? 'bg-emerald-400' : 'bg-zinc-500'}`} />
+              <span className="text-xs font-semibold text-zinc-200">
+                {diagInfo?.badgeSupported ? 'Compatível' : 'Requer PWA'}
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-black/30 border border-zinc-850 p-3 rounded-xl">
+            <span className="text-[10px] text-zinc-400 uppercase font-bold block">Service Worker</span>
+            <div className="mt-1 flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${diagInfo?.serviceWorkerActive ? 'bg-emerald-400' : 'bg-amber-400'}`} />
+              <span className="text-xs font-semibold text-zinc-200">
+                {diagInfo?.serviceWorkerActive ? 'Ativo' : 'Carregando'}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Permission Request Alert if not granted */}
+        {diagInfo?.permission !== 'granted' && (
+          <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3.5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <strong className="text-amber-300 font-semibold block">Permissão de Notificações Necessária</strong>
+                <span className="text-zinc-300">
+                  O Android e iOS exigem autorização expressa para mostrar o banner de pedido e atualizar o número no ícone.
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={handleRequestPermission}
+              className="px-3.5 py-1.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs rounded-lg transition-colors shrink-0 shadow-sm"
+            >
+              Autorizar Notificações
+            </button>
+          </div>
+        )}
+
+        {/* Test Buttons Row */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+          {/* Button 1: Local Test */}
+          <button
+            onClick={handleTestLocalNotification}
+            disabled={isTestingLocal}
+            className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-brand-pink hover:from-pink-500 hover:to-pink-500 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+          >
+            <Bell className="h-4 w-4" />
+            <span>{isTestingLocal ? 'Disparando...' : '1. Testar Notificação & Selo (Local)'}</span>
+          </button>
+
+          {/* Button 2: Supabase Realtime / Webhook Test */}
+          <button
+            onClick={handleTestSupabaseOrder}
+            disabled={isTestingSupabase}
+            className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+          >
+            <Zap className="h-4 w-4" />
+            <span>{isTestingSupabase ? 'Gravando no Supabase...' : '2. Simular Pedido Fake via Supabase'}</span>
+          </button>
+
+          {/* Button 3: Clear Badge */}
+          <button
+            onClick={handleClearBadge}
+            className="flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 font-semibold text-xs py-3 px-3.5 rounded-xl border border-zinc-700/80 transition-colors"
+            title="Limpar número do ícone"
+          >
+            <Trash2 className="h-4 w-4" />
+            <span>Zerar Selo</span>
+          </button>
+        </div>
+
+        {/* Status Message / Output */}
+        {testStatusMsg && (
+          <div className="bg-black/40 border border-zinc-800 p-3.5 rounded-xl flex items-start justify-between gap-3 animate-fade-in text-xs">
+            <span className="text-zinc-200 leading-relaxed">{testStatusMsg}</span>
+            {lastTestOrderId && (
+              <button
+                onClick={handleDeleteTestOrder}
+                className="text-[11px] text-red-400 hover:text-red-300 font-bold shrink-0 underline ml-2"
+              >
+                Excluir Pedido Fake
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Main Interactive Interactive Installation Methods Card */}

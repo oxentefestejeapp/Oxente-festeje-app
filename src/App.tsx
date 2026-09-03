@@ -184,6 +184,7 @@ export default function App() {
   const productsRef = useRef<Product[]>([]);
   const salesRef = useRef<Sale[]>([]);
   const currentUserEmailRef = useRef<string>('');
+  const localCreatedOrderIdsRef = useRef<Set<string>>(new Set());
   const userChannelRef = useRef<any>(null);
 
   useEffect(() => {
@@ -992,10 +993,10 @@ export default function App() {
             setTimeout(() => setShowCelebration('halfway'), 50);
           }
 
-          // Notificar sobre novos pedidos em tempo real no celular se veio de outro usuário e o usuário logado é administrador
-          const isMySale = sale.criadoPorEmail === currentUserEmailRef.current;
+          // Notificar sobre novos pedidos em tempo real no celular se não foi criado nesta janela
+          const isCreatedInThisWindow = localCreatedOrderIdsRef.current.has(sale.id);
           const isBudget = sale.status === 'Orçamento';
-          if (!isMySale && !isBudget) {
+          if (!isBudget && !isCreatedInThisWindow) {
             if (isAdminRef.current) {
               dispatchNewOrderNotification(
                 sale.cliente,
@@ -1678,6 +1679,9 @@ export default function App() {
       updatedAt: new Date().toISOString(),
       pendingSync: true
     };
+    if (stampedSale.id) {
+      localCreatedOrderIdsRef.current.add(stampedSale.id);
+    }
     const currentSales = salesRef.current;
     const currentProducts = productsRef.current;
 

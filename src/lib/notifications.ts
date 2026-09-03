@@ -223,8 +223,8 @@ export function triggerSystemNotification(title: string, body: string, onClick?:
   try {
     const options: any = {
       body,
-      icon: '/favicon.ico', // standard web icon
-      badge: '/favicon.ico',
+      icon: '/icon.svg',
+      badge: '/icon.svg',
       tag: 'new-sale-alert',
       vibrate: [200, 100, 200], // vibration rhythm for mobile devices
       requireInteraction: false
