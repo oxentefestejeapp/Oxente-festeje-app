@@ -3,7 +3,7 @@
  * It features clean procedural synthesis models (no heavy external mp3s to download).
  */
 
-type SoundType = 'success' | 'click' | 'alert' | 'complete' | 'trash' | 'pop';
+type SoundType = 'success' | 'click' | 'alert' | 'complete' | 'trash' | 'pop' | 'uber_alert';
 
 // Storage Key
 const MUTED_STORAGE_KEY = 'oxente_festeje_audio_muted';
@@ -160,6 +160,54 @@ export function playAppSound(type: SoundType) {
         gain.connect(ctx.destination);
         osc.start(now);
         osc.stop(now + 0.25);
+        break;
+      }
+
+      case 'uber_alert': {
+        // High urgency transit alert: dual-tone friendly car horn (beep-beep) followed by an attention chime
+        const playHonk = (startOffset: number, duration: number) => {
+          // Low note (approx F4 / 349Hz)
+          const osc1 = ctx.createOscillator();
+          const gain1 = ctx.createGain();
+          osc1.type = 'sawtooth';
+          osc1.frequency.setValueAtTime(349.23, now + startOffset);
+          gain1.gain.setValueAtTime(0.04, now + startOffset);
+          gain1.gain.exponentialRampToValueAtTime(0.001, now + startOffset + duration);
+          osc1.connect(gain1);
+          gain1.connect(ctx.destination);
+          osc1.start(now + startOffset);
+          osc1.stop(now + startOffset + duration);
+
+          // High note (approx A4 / 440Hz)
+          const osc2 = ctx.createOscillator();
+          const gain2 = ctx.createGain();
+          osc2.type = 'sawtooth';
+          osc2.frequency.setValueAtTime(440, now + startOffset);
+          gain2.gain.setValueAtTime(0.035, now + startOffset);
+          gain2.gain.exponentialRampToValueAtTime(0.001, now + startOffset + duration);
+          osc2.connect(gain2);
+          gain2.connect(ctx.destination);
+          osc2.start(now + startOffset);
+          osc2.stop(now + startOffset + duration);
+        };
+
+        // Honk 1
+        playHonk(0, 0.12);
+        // Honk 2
+        playHonk(0.16, 0.18);
+
+        // Rising attention ping
+        const pingOsc = ctx.createOscillator();
+        const pingGain = ctx.createGain();
+        pingOsc.type = 'sine';
+        pingOsc.frequency.setValueAtTime(880, now + 0.38);
+        pingOsc.frequency.exponentialRampToValueAtTime(1174.66, now + 0.55); // D6
+        pingGain.gain.setValueAtTime(0.045, now + 0.38);
+        pingGain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+        pingOsc.connect(pingGain);
+        pingGain.connect(ctx.destination);
+        pingOsc.start(now + 0.38);
+        pingOsc.stop(now + 0.75);
         break;
       }
     }

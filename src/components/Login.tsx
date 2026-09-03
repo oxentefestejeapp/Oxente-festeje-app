@@ -20,7 +20,7 @@ interface LoginProps {
 }
 
 export const INITIAL_USERS = [
-  { id: 'abraaoapp', name: 'Abraão', email: 'abraaoapp@oxente.com', role: 'admin', status: 'approved', password: '69loj@oxente69' },
+  { id: 'abraaoapp', name: 'Abraão Administrador', email: 'abraaoapp@oxente.com', role: 'admin', status: 'approved', password: '69loj@oxente69' },
   { id: 'juan', name: 'Juan', email: 'juan@oxente.com', role: 'colaborador', status: 'approved', password: '69app69' },
   { id: 'assis', name: 'Assis', email: 'assis@oxente.com', role: 'colaborador', status: 'approved', password: '69app69' },
   { id: 'anaclara', name: 'Ana Clara', email: 'anaclara@oxente.com', role: 'colaborador', status: 'approved', password: '69app69' }

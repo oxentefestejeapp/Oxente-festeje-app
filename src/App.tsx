@@ -451,14 +451,15 @@ export default function App() {
                 if (isUsersTableSupported) {
                   const { data, error } = await supabase.from('oxente_users').select('*').eq('id', userIdNormal).maybeSingle();
                   if (data && !error) {
+                    const isAbraao = data.id === 'abraaoapp' || data.email === 'abraaoapp@oxente.com' || data.email === 'oxentefesteje@gmail.com';
                     const enhancedUser = {
                       ...userObj,
                       id: data.id,
                       uid: data.id,
-                      name: data.name || userObj.name || 'Colaborador',
-                      displayName: data.name || userObj.name || 'Colaborador',
+                      name: isAbraao ? 'Abraão Administrador' : (data.name || userObj.name || 'Colaborador'),
+                      displayName: isAbraao ? 'Abraão Administrador' : (data.name || userObj.name || 'Colaborador'),
                       email: data.email || userObj.email || '',
-                      role: data.role || (data.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+                      role: isAbraao ? 'admin' : (data.role || 'colaborador'),
                       status: data.status || 'approved'
                     };
                     setFirebaseUser(enhancedUser);
@@ -468,18 +469,35 @@ export default function App() {
                 }
 
                 // Fallback: Not found in database, table not supported, or database error
+                const isAbraaoFallback = userIdNormal === 'abraaoapp' || userObj.email === 'abraaoapp@oxente.com' || userObj.email === 'oxentefesteje@gmail.com';
+                const fallbackUser = {
+                  ...userObj,
+                  id: userIdNormal,
+                  name: isAbraaoFallback ? 'Abraão Administrador' : (userObj.name || 'Colaborador'),
+                  displayName: isAbraaoFallback ? 'Abraão Administrador' : (userObj.name || 'Colaborador'),
+                  email: userObj.email || '',
+                  role: isAbraaoFallback ? 'admin' : (userObj.role || 'colaborador'),
+                  status: userObj.status || 'approved'
+                };
                 await dbSupabase.saveUser({
                   id: userIdNormal,
-                  name: userObj.name || 'Colaborador',
-                  email: userObj.email || '',
-                  role: userObj.role || (userIdNormal === 'abraaoapp' ? 'admin' : 'colaborador'),
-                  status: userObj.status || 'approved'
+                  name: fallbackUser.name,
+                  email: fallbackUser.email,
+                  role: fallbackUser.role,
+                  status: fallbackUser.status
                 });
-                setFirebaseUser(userObj);
-                setUserStatus((userObj.status || 'approved') as any);
+                setFirebaseUser(fallbackUser);
+                setUserStatus((fallbackUser.status || 'approved') as any);
               } catch (e) {
                 console.error('Error loading profile from Supabase:', e);
-                setFirebaseUser(userObj);
+                const isAbraaoErr = userIdNormal === 'abraaoapp' || userObj.email === 'abraaoapp@oxente.com' || userObj.email === 'oxentefesteje@gmail.com';
+                const errUser = {
+                  ...userObj,
+                  name: isAbraaoErr ? 'Abraão Administrador' : (userObj.name || 'Colaborador'),
+                  displayName: isAbraaoErr ? 'Abraão Administrador' : (userObj.name || 'Colaborador'),
+                  role: isAbraaoErr ? 'admin' : (userObj.role || 'colaborador'),
+                };
+                setFirebaseUser(errUser);
                 setUserStatus((userObj.status || 'approved') as any);
               }
             };
@@ -508,14 +526,15 @@ export default function App() {
                   }, (payload) => {
                     const { eventType, new: newRow } = payload;
                     if (eventType === 'INSERT' || eventType === 'UPDATE') {
+                      const isAbraaoSync = newRow.id === 'abraaoapp' || newRow.email === 'abraaoapp@oxente.com' || newRow.email === 'oxentefesteje@gmail.com';
                       const enhancedUser = {
                         ...userObj,
                         id: newRow.id,
                         uid: newRow.id,
-                        name: newRow.name || userObj.name || 'Colaborador',
-                        displayName: newRow.name || userObj.name || 'Colaborador',
+                        name: isAbraaoSync ? 'Abraão Administrador' : (newRow.name || userObj.name || 'Colaborador'),
+                        displayName: isAbraaoSync ? 'Abraão Administrador' : (newRow.name || userObj.name || 'Colaborador'),
                         email: newRow.email || userObj.email || '',
-                        role: newRow.role || (newRow.id === 'abraaoapp' ? 'admin' : 'colaborador'),
+                        role: isAbraaoSync ? 'admin' : (newRow.role || 'colaborador'),
                         status: newRow.status || 'approved'
                       };
                       setFirebaseUser(enhancedUser);
