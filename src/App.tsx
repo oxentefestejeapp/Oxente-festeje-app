@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import { 
   Package, 
   TrendingUp, 
@@ -30,7 +30,8 @@ import {
   CalendarCheck,
   RefreshCw,
   AlertTriangle,
-  AlertCircle
+  AlertCircle,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig, isUsersTableSupported } from './lib/supabase';
@@ -40,12 +41,13 @@ import { ProductForm } from './components/ProductForm';
 import { StockManager } from './components/StockManager';
 import { SalesManager } from './components/SalesManager';
 import { SettingsManager } from './components/SettingsManager';
+import { SettingsLockGate } from './components/SettingsLockGate';
 import { DeliveryManager } from './components/DeliveryManager';
 import { ReceivablesManager } from './components/ReceivablesManager';
 import { Login } from './components/Login';
 import { PendingApproval } from './components/PendingApproval';
 import { UserApprovals } from './components/UserApprovals';
-import { SalesAudit } from './components/SalesAudit';
+const SalesAudit = lazy(() => import('./components/SalesAudit').then(m => ({ default: m.SalesAudit })));
 import { RemindersManager } from './components/RemindersManager';
 import { ClosedOrdersManager } from './components/ClosedOrdersManager';
 import { dispatchNewOrderNotification, dispatchOrderEditedNotification } from './lib/notifications';
@@ -224,6 +226,16 @@ export default function App() {
     return (allowedTabs.includes(saved || '') ? saved : 'vendas') as any;
   });
   const [preselectedSaleId, setPreselectedSaleId] = useState<string | null>(null);
+  const [unlockedTabs, setUnlockedTabs] = useState<Record<string, boolean>>({});
+
+  const isTabUnlocked = (tab: string) => !!unlockedTabs[tab];
+  const unlockTab = (tab: string) => {
+    setUnlockedTabs(prev => ({ ...prev, [tab]: true }));
+  };
+  const lockTab = (tab: string) => {
+    setUnlockedTabs(prev => ({ ...prev, [tab]: false }));
+    playAppSound('click');
+  };
 
   // 3. Supabase Sync Status State
   const [supabaseSyncStatus, setSupabaseSyncStatus] = useState<'idle' | 'syncing' | 'synced' | 'error' | 'tables_missing'>('idle');
@@ -334,6 +346,10 @@ export default function App() {
     playAppSound('click');
     if (tab !== 'estoque') {
       setShowOnlyCriticalInStock(false);
+    }
+    // Automatically relock any protected tab when navigating away
+    if (['configuracoes', 'estoque', 'cadastro', 'usuarios', 'auditoria'].includes(activeTab)) {
+      setUnlockedTabs(prev => ({ ...prev, [activeTab]: false }));
     }
   };
 
@@ -2878,20 +2894,72 @@ export default function App() {
             transition={{ duration: 0.18, ease: 'easeInOut' }}
           >
             {activeTab === 'cadastro' && isAdmin && (
-              <ProductForm onAddProduct={handleAddProduct} products={products} />
+              !isTabUnlocked('cadastro') ? (
+                <SettingsLockGate
+                  tabName="Cadastrar Produto"
+                  title="Acesso ao Cadastro"
+                  subtitle="Cadastro e edição de produtos protegido por segunda senha de segurança."
+                  unlockButtonText="Desbloquear Cadastro"
+                  idPrefix="cadastro"
+                  onUnlock={() => unlockTab('cadastro')}
+                  onCancel={() => changeTab('vendas')}
+                />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-end no-print">
+                    <button
+                      id="botao-bloquear-cadastro"
+                      type="button"
+                      onClick={() => lockTab('cadastro')}
+                      className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 px-3 py-1.5 rounded-xl transition-colors cursor-pointer shadow-sm"
+                      title="Bloquear cadastro com senha novamente"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Bloquear com Senha</span>
+                    </button>
+                  </div>
+                  <ProductForm onAddProduct={handleAddProduct} products={products} />
+                </div>
+              )
             )}
 
             {activeTab === 'estoque' && (
-              <StockManager
-                products={products}
-                onUpdateStock={handleUpdateStock}
-                onDeleteProduct={handleDeleteProduct}
-                onUpdateProduct={handleUpdateProduct}
-                onAddProduct={handleAddProduct}
-                isAdmin={isAdmin}
-                initialShowOnlyCritical={showOnlyCriticalInStock}
-                onClearCriticalFilter={() => setShowOnlyCriticalInStock(false)}
-              />
+              !isTabUnlocked('estoque') ? (
+                <SettingsLockGate
+                  tabName="Conferir Estoque"
+                  title="Acesso ao Estoque"
+                  subtitle="Visualização e controle de estoque protegido por segunda senha de segurança."
+                  unlockButtonText="Desbloquear Estoque"
+                  idPrefix="estoque"
+                  onUnlock={() => unlockTab('estoque')}
+                  onCancel={() => changeTab('vendas')}
+                />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-end no-print">
+                    <button
+                      id="botao-bloquear-estoque"
+                      type="button"
+                      onClick={() => lockTab('estoque')}
+                      className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 px-3 py-1.5 rounded-xl transition-colors cursor-pointer shadow-sm"
+                      title="Bloquear estoque com senha novamente"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Bloquear com Senha</span>
+                    </button>
+                  </div>
+                  <StockManager
+                    products={products}
+                    onUpdateStock={handleUpdateStock}
+                    onDeleteProduct={handleDeleteProduct}
+                    onUpdateProduct={handleUpdateProduct}
+                    onAddProduct={handleAddProduct}
+                    isAdmin={isAdmin}
+                    initialShowOnlyCritical={showOnlyCriticalInStock}
+                    onClearCriticalFilter={() => setShowOnlyCriticalInStock(false)}
+                  />
+                </div>
+              )
             )}
 
             {activeTab === 'vendas' && (
@@ -2983,26 +3051,111 @@ export default function App() {
             )}
 
             {activeTab === 'configuracoes' && isAdmin && (
-              <SettingsManager
-                products={products}
-                sales={sales}
-                storeInfo={storeInfo}
-                onRestoreBackup={handleRestoreBackup}
-                onUpdateStoreInfo={handleUpdateStoreInfo}
-                onClearAllSales={handleClearAllSales}
-                onForceAllUsersUpdate={handleForceAllUsersUpdate}
-                onTriggerCelebration={(type) => setShowCelebration(type)}
-                supabaseSyncStatus={supabaseSyncStatus}
-                supabaseErrorMsg={supabaseErrorMsg}
-              />
+              !isTabUnlocked('configuracoes') ? (
+                <SettingsLockGate
+                  tabName="Configurações"
+                  title="Área Restrita"
+                  subtitle="Configurações do Sistema protegidas por segunda senha de segurança."
+                  unlockButtonText="Desbloquear Configurações"
+                  idPrefix="configuracoes"
+                  onUnlock={() => unlockTab('configuracoes')}
+                  onCancel={() => changeTab('vendas')}
+                />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-end no-print">
+                    <button
+                      id="botao-bloquear-configuracoes"
+                      type="button"
+                      onClick={() => lockTab('configuracoes')}
+                      className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 px-3 py-1.5 rounded-xl transition-colors cursor-pointer shadow-sm"
+                      title="Bloquear configurações com senha novamente"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Bloquear com Senha</span>
+                    </button>
+                  </div>
+                  <SettingsManager
+                    products={products}
+                    sales={sales}
+                    storeInfo={storeInfo}
+                    onRestoreBackup={handleRestoreBackup}
+                    onUpdateStoreInfo={handleUpdateStoreInfo}
+                    onClearAllSales={handleClearAllSales}
+                    onForceAllUsersUpdate={handleForceAllUsersUpdate}
+                    onTriggerCelebration={(type) => setShowCelebration(type)}
+                    supabaseSyncStatus={supabaseSyncStatus}
+                    supabaseErrorMsg={supabaseErrorMsg}
+                  />
+                </div>
+              )
             )}
 
             {activeTab === 'usuarios' && isAdmin && (
-              <UserApprovals />
+              !isTabUnlocked('usuarios') ? (
+                <SettingsLockGate
+                  tabName="Usuários"
+                  title="Acesso a Usuários"
+                  subtitle="Gerenciamento e aprovação de usuários protegido por segunda senha de segurança."
+                  unlockButtonText="Desbloquear Usuários"
+                  idPrefix="usuarios"
+                  onUnlock={() => unlockTab('usuarios')}
+                  onCancel={() => changeTab('vendas')}
+                />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-end no-print">
+                    <button
+                      id="botao-bloquear-usuarios"
+                      type="button"
+                      onClick={() => lockTab('usuarios')}
+                      className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 px-3 py-1.5 rounded-xl transition-colors cursor-pointer shadow-sm"
+                      title="Bloquear usuários com senha novamente"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Bloquear com Senha</span>
+                    </button>
+                  </div>
+                  <UserApprovals />
+                </div>
+              )
             )}
 
             {activeTab === 'auditoria' && isAdmin && (
-              <SalesAudit sales={sales} products={products} storeInfo={storeInfo} onUpdateSale={handleUpdateSale} />
+              !isTabUnlocked('auditoria') ? (
+                <SettingsLockGate
+                  tabName="Auditoria"
+                  title="Acesso à Auditoria"
+                  subtitle="Auditoria e histórico detalhado protegido por segunda senha de segurança."
+                  unlockButtonText="Desbloquear Auditoria"
+                  idPrefix="auditoria"
+                  onUnlock={() => unlockTab('auditoria')}
+                  onCancel={() => changeTab('vendas')}
+                />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-end no-print">
+                    <button
+                      id="botao-bloquear-auditoria"
+                      type="button"
+                      onClick={() => lockTab('auditoria')}
+                      className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 px-3 py-1.5 rounded-xl transition-colors cursor-pointer shadow-sm"
+                      title="Bloquear auditoria com senha novamente"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>Bloquear com Senha</span>
+                    </button>
+                  </div>
+                  <Suspense fallback={
+                    <div className="flex flex-col items-center justify-center min-h-[380px] gap-3 bg-zinc-900/40 border border-zinc-850/80 rounded-2xl p-8 text-zinc-400">
+                      <div className="w-8 h-8 border-2 border-brand-pink border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs font-semibold text-zinc-300">Carregando painel de auditoria...</span>
+                    </div>
+                  }>
+                    <SalesAudit sales={sales} products={products} storeInfo={storeInfo} onUpdateSale={handleUpdateSale} />
+                  </Suspense>
+                </div>
+              )
             )}
           </motion.div>
         </AnimatePresence>

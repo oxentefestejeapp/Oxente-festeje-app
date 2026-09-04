@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   ClipboardList, 
   Search, 
@@ -214,23 +214,39 @@ interface SalesAuditProps {
 
 export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: SalesAuditProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('all');
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('this_month');
   const [startDateStr, setStartDateStr] = useState('');
   const [endDateStr, setEndDateStr] = useState('');
   const [selectedUserFilter, setSelectedUserFilter] = useState<string>('all');
   const [specialFilter, setSpecialFilter] = useState<'all' | 'avulso' | 'edited' | 'has_designer' | 'finished_art'>('all');
   const [viewingSale, setViewingSale] = useState<Sale | null>(null);
   const [showCharts, setShowCharts] = useState(true);
+  const [chartsReady, setChartsReady] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(40);
+  const [dailyDaysLimit, setDailyDaysLimit] = useState(10);
   const [auditChartTab, setAuditChartTab] = useState<'daily' | 'monthly' | 'avulso' | 'products'>('daily');
   const [avulsoSortBy, setAvulsoSortBy] = useState<'recent' | 'profit_desc' | 'profit_asc' | 'margin_desc' | 'sales_desc'>('recent');
   const [productSortBy, setProductSortBy] = useState<'profit_desc' | 'sales_desc' | 'qty_desc' | 'margin_desc' | 'cost_desc'>('profit_desc');
   const [productSearchTerm, setProductSearchTerm] = useState('');
 
-  // User Comparison specific filters
-  const [compDateFilter, setCompDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('all');
+  // User Comparison specific filters (default to 'this_month' for fast load)
+  const [compDateFilter, setCompDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('this_month');
   const [compStartDateStr, setCompStartDateStr] = useState('');
   const [compEndDateStr, setCompEndDateStr] = useState('');
   const [compCombineDays, setCompCombineDays] = useState(true); // Juntando os dias = true
+
+  // Defer heavy chart rendering so main UI and metrics display instantaneously
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setChartsReady(true);
+    }, 80);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Reset pagination count on filter changes
+  useEffect(() => {
+    setVisibleCount(40);
+  }, [searchTerm, dateFilter, startDateStr, endDateStr, selectedUserFilter, specialFilter]);
 
   // Convert string timestamp to comparative date
   const parseSaleDate = (dateStr: string) => {
@@ -368,14 +384,24 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
     };
   }, [creatorsStats]);
 
+  // Pre-sort sales once by date timestamp so subsequent filter operations are O(N) without sorting re-runs
+  const baseSortedSales = useMemo(() => {
+    return sales
+      .filter(s => s.status !== 'Orçamento')
+      .map(s => {
+        let ts = 0;
+        try {
+          ts = s.data ? new Date(s.data).getTime() : 0;
+        } catch {}
+        return { sale: s, ts: isNaN(ts) ? 0 : ts };
+      })
+      .sort((a, b) => b.ts - a.ts)
+      .map(x => x.sale);
+  }, [sales]);
+
   // Filter Sales list based on search term, date, user filter, and special audit filter
   const auditLogs = useMemo(() => {
-    // We sort sales to show the latest created orders first (Audit Timeline descending)
-    const sortedSales = sales.filter(s => s.status !== 'Orçamento').sort((a, b) => {
-      return parseSaleDate(b.data).getTime() - parseSaleDate(a.data).getTime();
-    });
-
-    return sortedSales.filter((sale) => {
+    return baseSortedSales.filter((sale) => {
       // 1. User Filter (Matches both sale creator and designer who completed the artwork)
       const creator = sale.criadoPorEmail || 'Sistema/Legado';
       const designer = sale.arteFinalizadaPorEmail || sale.puxadoPor || '';
@@ -460,7 +486,12 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
         matchItens
       );
     });
-  }, [sales, searchTerm, dateFilter, startDateStr, endDateStr, selectedUserFilter, specialFilter]);
+  }, [baseSortedSales, searchTerm, dateFilter, startDateStr, endDateStr, selectedUserFilter, specialFilter]);
+
+  // Windowed list of logs to avoid overloading the DOM with thousands of cards
+  const displayedAuditLogs = useMemo(() => {
+    return auditLogs.slice(0, visibleCount);
+  }, [auditLogs, visibleCount]);
 
   // Overall statistics for the filtered selection
   const filteredMetrics = useMemo(() => {
@@ -1091,8 +1122,15 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
               className="overflow-hidden"
             >
               <div className="border-t border-zinc-855 p-5 bg-zinc-950/20 space-y-6">
-                {/* Seleção de Sub-seção de Gráficos */}
-                <div className="flex flex-wrap items-center gap-1.5 bg-black/30 p-1 border border-zinc-850 rounded-xl max-w-xl select-none relative">
+                {!chartsReady ? (
+                  <div className="flex flex-col items-center justify-center py-16 gap-3 text-zinc-500">
+                    <div className="w-7 h-7 border-2 border-brand-pink border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-semibold text-zinc-400">Carregando visualizações gráficas...</span>
+                  </div>
+                ) : (
+                  <>
+                    {/* Seleção de Sub-seção de Gráficos */}
+                    <div className="flex flex-wrap items-center gap-1.5 bg-black/30 p-1 border border-zinc-850 rounded-xl max-w-xl select-none relative">
                   <button
                     type="button"
                     onClick={() => setAuditChartTab('daily')}
@@ -1505,7 +1543,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
 
                         {/* List items */}
                         <div className="divide-y divide-zinc-850/50 max-h-[380px] overflow-y-auto pr-1 space-y-2">
-                          {avulsoAnalytics.list.map((item, idx) => (
+                          {avulsoAnalytics.list.slice(0, 60).map((item, idx) => (
                             <div 
                               key={item.sale.id || idx}
                               onClick={() => setViewingSale(item.sale)}
@@ -1788,7 +1826,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                         </div>
                       ) : (
                         <div className="divide-y divide-zinc-850/50 max-h-[420px] overflow-y-auto pr-1 space-y-2">
-                          {productsAnalytics.list.map((prod, idx) => (
+                          {productsAnalytics.list.slice(0, 60).map((prod, idx) => (
                             <div 
                               key={prod.id || idx}
                               className="pt-2.5 pb-2.5 px-3 hover:bg-zinc-900/60 rounded-xl transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-transparent hover:border-zinc-800"
@@ -1854,6 +1892,8 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                       )}
                     </div>
                   </div>
+                )}
+                  </>
                 )}
               </div>
             </motion.div>
@@ -2066,7 +2106,8 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                 Nenhum dado registrado para o período filtrado.
               </div>
             ) : (
-              dailyCreatorsStats.map(([dateKey, usersRecordRaw]) => {
+              <>
+                {dailyCreatorsStats.slice(0, dailyDaysLimit).map(([dateKey, usersRecordRaw]) => {
                 const usersRecord = usersRecordRaw as Record<string, { count: number; totalValue: number; designsCompleted: number }>;
                 let maxSalesValOnDay = 0.01;
                 let maxDesignsOnDay = 0.01;
@@ -2149,7 +2190,19 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                     </div>
                   </div>
                 );
-              })
+              })}
+              {dailyCreatorsStats.length > dailyDaysLimit && (
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => setDailyDaysLimit(prev => prev + 15)}
+                    className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 hover:text-white rounded-xl text-xs font-bold border border-zinc-750 transition-colors cursor-pointer shadow-sm"
+                  >
+                    + Carregar Mais Dias ({dailyCreatorsStats.length - dailyDaysLimit} restantes)
+                  </button>
+                </div>
+              )}
+            </>
             )}
           </div>
         )}
@@ -2215,7 +2268,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
         {/* Audit Timeline List */}
         <div className="overflow-hidden border border-zinc-850 rounded-xl bg-black/20">
           <div className="divide-y divide-zinc-850/60 max-h-[500px] overflow-y-auto">
-            {auditLogs.map((sale) => {
+            {displayedAuditLogs.map((sale) => {
               const creator = sale.criadoPorEmail || 'Sistema/Legado';
               const isLegacy = !sale.criadoPorEmail;
               const saleDate = parseSaleDate(sale.data);
@@ -2407,6 +2460,30 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                 </div>
               );
             })}
+
+            {auditLogs.length > visibleCount && (
+              <div className="p-3.5 bg-zinc-950/90 border-t border-zinc-800/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+                <span className="text-zinc-400">
+                  Exibindo <strong className="text-white">{displayedAuditLogs.length}</strong> de <strong className="text-white">{auditLogs.length}</strong> pedidos no filtro
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount(prev => prev + 40)}
+                    className="px-3.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-200 hover:text-white rounded-lg text-xs font-bold border border-zinc-750 transition-all cursor-pointer shadow-sm"
+                  >
+                    + Carregar Mais 40
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount(auditLogs.length)}
+                    className="px-3 py-1.5 text-zinc-400 hover:text-white rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Ver Todos ({auditLogs.length})
+                  </button>
+                </div>
+              </div>
+            )}
 
             {auditLogs.length === 0 && (
               <div className="flex flex-col items-center justify-center p-12 text-center text-zinc-500 space-y-2">
