@@ -135,12 +135,14 @@ export async function incrementMobileOrderBadge(step = 1): Promise<number> {
   return next;
 }
 
+export const DEFAULT_VAPID_PUBLIC_KEY = 'BI7IEtKXkeIFKOELzwkwAAuofPOYUe07MN6h5_uH6jEFyWZ8L-4OwsWnI1NaWxNU_OwYF7kvBuM-n58MfDA0oHE';
+
 /**
- * Registers Web Push subscription for this mobile device and saves it in Supabase
+ * Registers Web Push subscription for this device and saves it in Supabase
  */
-export async function setupMobilePushSubscription(userEmail?: string): Promise<boolean> {
-  // Exclusivo para Mobile
-  if (!isMobileDevice()) return false;
+export async function setupMobilePushSubscription(userEmail?: string, allowDesktop = false): Promise<boolean> {
+  // Ativo para Mobile ou quando explicitamente solicitado no diagnóstico
+  if (!allowDesktop && !isMobileDevice()) return false;
   if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
     return false;
   }
@@ -156,18 +158,8 @@ export async function setupMobilePushSubscription(userEmail?: string): Promise<b
     // Check existing push subscription
     let subscription = await registration.pushManager.getSubscription();
 
-    // If already subscribed and stored, return true
-    const currentStoredEndpoint = localStorage.getItem(PUSH_SUBSCRIBED_KEY);
-    if (subscription && currentStoredEndpoint === subscription.endpoint) {
-      return true;
-    }
-
-    // Get VAPID public key from env or fallback
-    const vapidPublicKey = (import.meta as any).env?.VITE_VAPID_PUBLIC_KEY;
-    if (!vapidPublicKey) {
-      console.log('Mobile Push: VAPID Key não configurada ainda no .env. Badge local operando com sucesso.');
-      return false;
-    }
+    // Get VAPID public key from env or fallback to our default key
+    const vapidPublicKey = (import.meta as any).env?.VITE_VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY;
 
     if (!subscription) {
       // Convert VAPID key to Uint8Array
@@ -186,7 +178,7 @@ export async function setupMobilePushSubscription(userEmail?: string): Promise<b
       const payload = {
         id: deviceId,
         user_email: userEmail || 'colaborador@oxente.com',
-        device_type: 'mobile',
+        device_type: isMobileDevice() ? 'mobile' : 'desktop',
         subscription: subscription.toJSON(),
         updated_at: new Date().toISOString()
       };
@@ -195,7 +187,7 @@ export async function setupMobilePushSubscription(userEmail?: string): Promise<b
         .from('oxente_push_subscriptions')
         .upsert(payload, { onConflict: 'id' });
 
-      console.log('📱 Celular registrado com sucesso para receber notificações de novos pedidos no ícone!');
+      console.log('📱 Dispositivo registrado com sucesso para receber notificações de novos pedidos com app fechado!');
       return true;
     }
   } catch (err) {
@@ -203,6 +195,60 @@ export async function setupMobilePushSubscription(userEmail?: string): Promise<b
   }
 
   return false;
+}
+
+/**
+ * Dispatches an automated background push notification to all registered mobile phones
+ * by invoking the Supabase Edge Function `send-order-push`.
+ */
+export async function dispatchOrderPushNotification(sale: Partial<Sale>): Promise<boolean> {
+  try {
+    const { error } = await supabase.functions.invoke('send-order-push', {
+      body: { record: sale }
+    });
+    if (error) {
+      console.warn('Edge Function send-order-push retornou aviso:', error);
+      return false;
+    }
+    return true;
+  } catch (err) {
+    console.warn('Falha na chamada de push para Edge Function:', err);
+    return false;
+  }
+}
+
+/**
+ * Sends a test push notification to verify delivery with the app closed
+ */
+export async function triggerTestPushNotification(): Promise<{ success: boolean; message: string; details?: any }> {
+  try {
+    const { data, error } = await supabase.functions.invoke('send-order-push', {
+      body: {
+        is_test: true,
+        title: '🧪 Teste de Notificação (App Fechado)',
+        body: 'Parabéns! O seu celular recebeu esta notificação mesmo em segundo plano. Tudo 100% configurado!',
+        orderId: 'TESTE-001'
+      }
+    });
+
+    if (error) {
+      return { 
+        success: false, 
+        message: error.message || 'Erro ao acionar Edge Function no Supabase' 
+      };
+    }
+
+    return { 
+      success: true, 
+      message: data?.message || `Notificação despachada para ${data?.sentCount ?? 0} aparelho(s)!`,
+      details: data 
+    };
+  } catch (err: any) {
+    return { 
+      success: false, 
+      message: err?.message || 'Falha na conexão com a Edge Function do Supabase' 
+    };
+  }
 }
 
 /**

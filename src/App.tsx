@@ -53,6 +53,7 @@ import {
   incrementMobileOrderBadge, 
   clearMobileAppBadge, 
   setupMobilePushSubscription, 
+  dispatchOrderPushNotification,
   isMobileDevice 
 } from './lib/mobileBadgeNotification';
 import { WhatsAppWebTab } from './components/WhatsAppWebTab';
@@ -217,9 +218,9 @@ export default function App() {
     storeInfoRef.current = storeInfo;
   }, [storeInfo]);
 
-  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'agendamento' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web' | 'instalar_app' | 'leitor_qr'>(() => {
+  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'agendamento' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web' | 'leitor_qr'>(() => {
     const saved = localStorage.getItem('oxente_active_tab');
-    const allowedTabs = ['vendas', 'a_receber', 'entregas', 'agendamento', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'lembretes', 'pedidos_fechados', 'whatsapp_web', 'instalar_app', 'leitor_qr'];
+    const allowedTabs = ['vendas', 'a_receber', 'entregas', 'agendamento', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'lembretes', 'pedidos_fechados', 'whatsapp_web', 'leitor_qr'];
     return (allowedTabs.includes(saved || '') ? saved : 'vendas') as any;
   });
   const [preselectedSaleId, setPreselectedSaleId] = useState<string | null>(null);
@@ -312,12 +313,12 @@ export default function App() {
     }
   };
 
-  // Redirect unallowed users who try to access the install tab
+  // If activeTab is ever set to legacy 'instalar_app', redirect to 'vendas'
   useEffect(() => {
-    if (activeTab === 'instalar_app' && !isAnaClara && !isAdmin) {
+    if ((activeTab as string) === 'instalar_app') {
       setActiveTab('vendas');
     }
-  }, [activeTab, isAnaClara, isAdmin]);
+  }, [activeTab]);
 
   const toggleGlobalMute = () => {
     const nextVal = !globalMuted;
@@ -888,10 +889,10 @@ export default function App() {
     };
   }, [activeTab]);
 
-  // Mobile Push & App Badge registration on login (exclusivo para dispositivos móveis)
+  // Mobile Push & App Badge registration on login (registra para push em segundo plano)
   useEffect(() => {
-    if (firebaseUser && isMobileDevice()) {
-      setupMobilePushSubscription(firebaseUser.email);
+    if (firebaseUser) {
+      setupMobilePushSubscription(firebaseUser.email || undefined);
     }
   }, [firebaseUser]);
 
@@ -1846,6 +1847,9 @@ export default function App() {
           localStorage.setItem('oxente_sales', JSON.stringify(updatedSalesList));
           return updatedSalesList;
         });
+
+        // Dispara notificação push em segundo plano para celulares cadastrados (mesmo se o app estiver fechado)
+        dispatchOrderPushNotification(stampedSale).catch(() => {});
       } else {
         setSupabaseSyncStatus('error');
         setSupabaseErrorMsg(`Erro ao sincronizar venda/pedido no Supabase: ${getFormattedSupabaseError()}`);
@@ -2832,23 +2836,6 @@ export default function App() {
               <span className="sm:hidden">Auditoria</span>
             </button>
           )}
- 
-          {/* Install Mobile App Tab */}
-          <button
-            onClick={() => changeTab('instalar_app')}
-            className={getTabClass('instalar_app')}
-          >
-            <motion.div
-              animate={activeTab === 'instalar_app' ? { scale: [1, 1.3, 1], rotate: [0, 8, -8, 0] } : { scale: 1, rotate: 0 }}
-              whileHover={{ scale: 1.25 }}
-              whileTap={{ scale: 0.9 }}
-              transition={{ duration: 0.3 }}
-            >
-              <Smartphone className="h-4 w-4 text-brand-pink" />
-            </motion.div>
-            <span className="hidden sm:inline">Instalar no Celular</span>
-            <span className="sm:hidden">Instalar App</span>
-          </button>
 
           {/* Quick Sign Out Action Trigger */}
           <button
@@ -3016,10 +3003,6 @@ export default function App() {
 
             {activeTab === 'auditoria' && isAdmin && (
               <SalesAudit sales={sales} products={products} storeInfo={storeInfo} onUpdateSale={handleUpdateSale} />
-            )}
-
-            {activeTab === 'instalar_app' && (
-              <InstallAppTab />
             )}
           </motion.div>
         </AnimatePresence>

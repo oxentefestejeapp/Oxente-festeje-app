@@ -253,7 +253,9 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<string>('');
+  const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => getNotificationPermission());
+  const triggeredAlarmIdsRef = useRef<Map<string, number>>(new Map());
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -404,102 +406,147 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     flashDocumentTitle('📝 ANOTA OS PEDIDOS! - Oxente Festeje', 35000);
   };
 
-  // Periodic check for scheduled message reminders / alarms (every 3.5 seconds)
+  // Centralized synchronized alarm trigger:
+  // For group alarms (target === 'all'), whichever computer reaches the scheduled time first
+  // broadcasts to all other computers so they all chime and pop alert simultaneously!
+  const triggerReminderAlarm = (rem: ChatReminder, isFromBroadcast = false) => {
+    if (!rem || !rem.id) return;
+
+    // Guard against duplicate triggers within 45 seconds on this machine
+    const now = Date.now();
+    const lastTriggered = triggeredAlarmIdsRef.current.get(rem.id) || 0;
+    if (now - lastTriggered < 45000) {
+      return;
+    }
+    triggeredAlarmIdsRef.current.set(rem.id, now);
+
+    const isTeam = rem.target === 'all';
+
+    // 1. Fullscreen Animated Alert Overlay
+    setReminderAlertData({
+      id: rem.id,
+      messageId: rem.messageId,
+      senderName: rem.senderName,
+      senderRole: rem.senderRole,
+      text: rem.text,
+      timestamp: rem.timestamp,
+      scheduledAt: rem.scheduledAt,
+      triggerAt: rem.triggerAt,
+      target: rem.target || 'private',
+      creatorName: rem.creatorName,
+      creatorId: rem.creatorId,
+      repeatWeekly: rem.repeatWeekly,
+      repeatDayOfWeek: rem.repeatDayOfWeek,
+      repeatDayLabel: rem.repeatDayLabel,
+      repeatTime: rem.repeatTime
+    });
+
+    // 2. High-volume alarm chime sound
+    playAppSound('reminder_alert');
+
+    // 3. Pop native OS desktop notification over other windows/apps
+    sendDesktopAlert({
+      title: rem.repeatWeekly
+        ? (isTeam ? `🔁 ALARME SEMANAL (TODA ${rem.repeatDayLabel?.toUpperCase() || 'SEMANA'}): HORA DA TAREFA!` : `🔁 SEU ALARME SEMANAL (TODA ${rem.repeatDayLabel?.toUpperCase() || 'SEMANA'})`)
+        : (isTeam ? '⏰ ALARME DA EQUIPE: HORA DE FINALIZAR! ⏰' : '⏰ SEU ALARME: HORA DE FINALIZAR! ⏰'),
+      body: `${rem.senderName}: "${rem.text}"\n${rem.repeatWeekly ? `(Alarme repetitivo toda ${rem.repeatDayLabel || 'semana'})` : (isTeam ? `(Alarme da equipe criado por ${rem.creatorName || 'Colega'})` : '(Alarme privado do seu login)')}\nClique para abrir o sistema na hora!`,
+      tag: `oxente_rem_${rem.id}`,
+      requireInteraction: true,
+      onClick: () => {
+        try { window.focus(); } catch {}
+        setIsOpen(true);
+      }
+    });
+
+    // 4. Flash document tab title
+    const prefix = rem.repeatWeekly 
+      ? `🔁 [ALARME ${rem.repeatDayLabel?.toUpperCase() || 'SEMANAL'}]`
+      : (isTeam ? '⏰ [ALARME EQUIPE]' : '⏰ [SEU ALARME]');
+    flashDocumentTitle(`${prefix} ${rem.text.substring(0, 20)}... - Oxente Festeje`, 35000);
+
+    // 5. Update local reminder state (advance next occurrence if weekly or mark triggered)
+    let nextTriggerAt = rem.triggerAt;
+    if (rem.repeatWeekly && rem.repeatDayOfWeek !== undefined) {
+      nextTriggerAt = rem.repeatTime 
+        ? calculateNextWeekdayTrigger(rem.repeatDayOfWeek, rem.repeatTime)
+        : rem.triggerAt + 7 * 24 * 60 * 60 * 1000;
+    }
+
+    setReminders((prev) => {
+      const updatedList = prev.map((r) => {
+        if (r.id === rem.id) {
+          if (r.repeatWeekly && r.repeatDayOfWeek !== undefined) {
+            return { ...r, triggerAt: nextTriggerAt, triggered: false };
+          }
+          return { ...r, triggered: true };
+        }
+        return r;
+      });
+      try {
+        localStorage.setItem('oxente_chat_reminders', JSON.stringify(updatedList));
+      } catch {}
+      return updatedList;
+    });
+
+    // 6. Synchronized Group Alarm:
+    // When a group alarm is triggered on THIS machine for the first time, broadcast
+    // immediately to all other connected team members so their alarms accompany this one simultaneously!
+    if (!isFromBroadcast && isTeam) {
+      const broadcastPayload = {
+        ...rem,
+        firedAt: now,
+        firedBy: currentUserName
+      };
+
+      try {
+        supabaseChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'trigger_team_alarm',
+          payload: broadcastPayload
+        });
+      } catch (e) {
+        console.warn('Erro ao disparar alarme via Supabase:', e);
+      }
+
+      try {
+        broadcastRef.current?.postMessage({
+          type: 'TRIGGER_TEAM_ALARM',
+          payload: broadcastPayload
+        });
+      } catch {}
+
+      if (db) {
+        setDoc(doc(db, 'oxente_chat_reminders', rem.id), {
+          triggered: !rem.repeatWeekly,
+          lastTriggeredAt: now,
+          ...(rem.repeatWeekly && rem.repeatDayOfWeek !== undefined ? { triggerAt: nextTriggerAt } : {})
+        }, { merge: true }).catch(() => {});
+      }
+    }
+  };
+
+  // Periodic check for scheduled message reminders / alarms (every 3 seconds)
   useEffect(() => {
     const checkReminders = () => {
       const now = Date.now();
-      let updated = false;
-      const newReminders = reminders.map((rem) => {
-        // Only trigger if it is for the current user: team-wide OR user's own private reminder
+      for (const rem of reminders) {
+        // Group alarms trigger for everyone; private alarms only trigger for the creator on their local computer
         const isForMe = 
           rem.target === 'all' || 
           rem.creatorId === currentUserId || 
           !rem.creatorId;
 
         if (isForMe && !rem.triggered && rem.triggerAt <= now) {
-          updated = true;
-          const isTeam = rem.target === 'all';
-
-          // 1. Fullscreen Animated Alert Overlay
-          setReminderAlertData({
-            id: rem.id,
-            messageId: rem.messageId,
-            senderName: rem.senderName,
-            senderRole: rem.senderRole,
-            text: rem.text,
-            timestamp: rem.timestamp,
-            scheduledAt: rem.scheduledAt,
-            triggerAt: rem.triggerAt,
-            target: rem.target || 'private',
-            creatorName: rem.creatorName,
-            creatorId: rem.creatorId,
-            repeatWeekly: rem.repeatWeekly,
-            repeatDayOfWeek: rem.repeatDayOfWeek,
-            repeatDayLabel: rem.repeatDayLabel,
-            repeatTime: rem.repeatTime
-          });
-
-          // 2. High-volume alarm chime sound
-          playAppSound('reminder_alert');
-
-          // 3. Pop native OS desktop notification over WhatsApp/other applications
-          sendDesktopAlert({
-            title: rem.repeatWeekly
-              ? (isTeam ? `🔁 ALARME SEMANAL (TODA ${rem.repeatDayLabel?.toUpperCase() || 'SEMANA'}): HORA DA TAREFA!` : `🔁 SEU ALARME SEMANAL (TODA ${rem.repeatDayLabel?.toUpperCase() || 'SEMANA'})`)
-              : (isTeam ? '⏰ ALARME DA EQUIPE: HORA DE FINALIZAR! ⏰' : '⏰ SEU ALARME: HORA DE FINALIZAR! ⏰'),
-            body: `${rem.senderName}: "${rem.text}"\n${rem.repeatWeekly ? `(Alarme repetitivo toda ${rem.repeatDayLabel || 'semana'})` : (isTeam ? `(Alarme da equipe criado por ${rem.creatorName || 'Colega'})` : '(Alarme privado do seu login)')}\nClique para abrir o sistema na hora!`,
-            tag: `oxente_rem_${rem.id}`,
-            requireInteraction: true,
-            onClick: () => {
-              try { window.focus(); } catch {}
-              setIsOpen(true);
-            }
-          });
-
-          // 4. Flash document tab title
-          const prefix = rem.repeatWeekly 
-            ? `🔁 [ALARME ${rem.repeatDayLabel?.toUpperCase() || 'SEMANAL'}]`
-            : (isTeam ? '⏰ [ALARME EQUIPE]' : '⏰ [SEU ALARME]');
-          flashDocumentTitle(`${prefix} ${rem.text.substring(0, 20)}... - Oxente Festeje`, 35000);
-
-          if (rem.repeatWeekly && rem.repeatDayOfWeek !== undefined) {
-            // Advance to next week's occurrence
-            const nextTriggerAt = rem.repeatTime 
-              ? calculateNextWeekdayTrigger(rem.repeatDayOfWeek, rem.repeatTime)
-              : rem.triggerAt + 7 * 24 * 60 * 60 * 1000;
-
-            const updatedRem = {
-              ...rem,
-              triggerAt: nextTriggerAt,
-              triggered: false
-            };
-
-            // Sync updated reminder to Firestore
-            if (db) {
-              setDoc(doc(db, 'oxente_chat_reminders', rem.id), updatedRem, { merge: true }).catch(() => {});
-            }
-
-            return updatedRem;
-          }
-
-          return { ...rem, triggered: true };
+          triggerReminderAlarm(rem, false);
         }
-        return rem;
-      });
-
-      if (updated) {
-        setReminders(newReminders);
-        try {
-          localStorage.setItem('oxente_chat_reminders', JSON.stringify(newReminders));
-        } catch {}
       }
     };
 
-    const interval = setInterval(checkReminders, 3500);
+    const interval = setInterval(checkReminders, 3000);
     checkReminders();
 
     return () => clearInterval(interval);
-  }, [reminders, currentUserId]);
+  }, [reminders, currentUserId, currentUserName]);
 
   const handleOpenReminderModal = (msg: TeamChatMessage, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -830,6 +877,17 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
           if (snoozed) {
             setReminders(prev => prev.map(r => r.id === snoozed.id ? snoozed : r));
           }
+        } else if (event.data?.type === 'DELETE_MESSAGE') {
+          const delId = event.data.payload?.id;
+          if (delId) {
+            setMessages(prev => prev.filter(m => m.id !== delId));
+            setReminders(prev => prev.filter(r => r.messageId !== delId));
+          }
+        } else if (event.data?.type === 'TRIGGER_TEAM_ALARM') {
+          const payload = event.data.payload as ChatReminder;
+          if (payload && payload.target === 'all') {
+            triggerReminderAlarm(payload, true);
+          }
         }
       };
       return () => {
@@ -947,6 +1005,17 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
             setReminders(prev => prev.map(r => r.id === snoozed.id ? snoozed : r));
           }
         })
+        .on('broadcast', { event: 'delete_message' }, ({ payload }) => {
+          if (payload?.id) {
+            setMessages(prev => prev.filter(m => m.id !== payload.id));
+            setReminders(prev => prev.filter(r => r.messageId !== payload.id));
+          }
+        })
+        .on('broadcast', { event: 'trigger_team_alarm' }, ({ payload }) => {
+          if (payload && payload.id && payload.target === 'all') {
+            triggerReminderAlarm(payload as ChatReminder, true);
+          }
+        })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_store_info', filter: 'key=eq.team_chat_history' }, (changePayload: any) => {
           const raw = changePayload.new?.whatsapp_template;
           if (raw) {
@@ -994,6 +1063,13 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
               editedAt: row.edited_at ? new Date(row.edited_at).getTime() : Date.now()
             } : m));
             setReminders(prev => prev.map(r => r.messageId === row.id ? { ...r, text: row.text } : r));
+          }
+        })
+        .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'oxente_team_messages' }, (changePayload: any) => {
+          const oldRow = changePayload.old;
+          if (oldRow && oldRow.id) {
+            setMessages(prev => prev.filter(m => m.id !== oldRow.id));
+            setReminders(prev => prev.filter(r => r.messageId !== oldRow.id));
           }
         })
         .subscribe((status: string) => {
@@ -1377,6 +1453,73 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
           edited: true,
           editedAt: now
         }, { merge: true });
+      }
+    } catch {}
+  };
+
+  const handleDeleteMessage = async (messageId: string) => {
+    setDeletingMessageId(null);
+    if (!messageId) return;
+
+    const remainingMessages = messages.filter(m => m.id !== messageId);
+    setMessages(remainingMessages);
+
+    try {
+      localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(remainingMessages));
+    } catch {}
+
+    // Clean up any reminder assigned to this message
+    setReminders(prev => {
+      const filtered = prev.filter(r => r.messageId !== messageId);
+      try {
+        localStorage.setItem('oxente_chat_reminders', JSON.stringify(filtered));
+      } catch {}
+      return filtered;
+    });
+
+    playAppSound('trash');
+
+    // 1. Broadcast deletion to other tabs locally
+    try {
+      broadcastRef.current?.postMessage({
+        type: 'DELETE_MESSAGE',
+        payload: { id: messageId }
+      });
+    } catch {}
+
+    // 2. Broadcast deletion to all team members via Supabase Realtime
+    try {
+      await supabaseChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'delete_message',
+        payload: { id: messageId }
+      });
+    } catch {}
+
+    // 3. Delete from Supabase oxente_team_messages
+    try {
+      await supabase
+        .from('oxente_team_messages')
+        .delete()
+        .eq('id', messageId);
+    } catch (err) {
+      console.warn('Erro ao deletar mensagem no Supabase:', err);
+    }
+
+    // 4. Update Supabase oxente_store_info backup history
+    try {
+      await supabase.from('oxente_store_info').upsert({
+        key: 'team_chat_history',
+        nome: 'Chat Equipe',
+        whatsapp_template: JSON.stringify(remainingMessages.slice(-100)),
+        updated_at: new Date().toISOString()
+      });
+    } catch {}
+
+    // 5. Delete from Firestore if active
+    try {
+      if (db) {
+        await deleteDoc(doc(db, 'oxente_team_messages', messageId));
       }
     } catch {}
   };
@@ -1824,19 +1967,55 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                             </button>
 
                             {(isSelf || isUserAdmin) && editingMessageId !== msg.id && (
-                              <button
-                                type="button"
-                                onClick={() => handleStartEdit(msg)}
-                                title="Editar mensagem (corrigir erro de digitação)"
-                                className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-all cursor-pointer font-medium ${
-                                  isSelf
-                                    ? 'text-orange-100/70 hover:text-white hover:bg-white/10'
-                                    : 'text-zinc-400 hover:text-orange-300 hover:bg-zinc-800'
-                                }`}
-                              >
-                                <Pencil className="h-2.5 w-2.5" />
-                                <span>Editar</span>
-                              </button>
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEdit(msg)}
+                                  title="Editar mensagem (corrigir erro de digitação)"
+                                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-all cursor-pointer font-medium ${
+                                    isSelf
+                                      ? 'text-orange-100/70 hover:text-white hover:bg-white/10'
+                                      : 'text-zinc-400 hover:text-orange-300 hover:bg-zinc-800'
+                                  }`}
+                                >
+                                  <Pencil className="h-2.5 w-2.5" />
+                                  <span>Editar</span>
+                                </button>
+
+                                {deletingMessageId === msg.id ? (
+                                  <div className="flex items-center gap-1 bg-red-950/95 border border-red-800/80 px-1.5 py-0.5 rounded-md text-[9px] shadow-sm">
+                                    <span className="text-red-200 font-bold">Excluir?</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteMessage(msg.id)}
+                                      className="text-white font-bold px-1.5 py-0.5 bg-red-600 hover:bg-red-500 rounded transition-colors cursor-pointer text-[9px] shadow-xs"
+                                    >
+                                      Sim
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setDeletingMessageId(null)}
+                                      className="text-zinc-400 hover:text-zinc-200 px-1 py-0.5 cursor-pointer text-[9px]"
+                                    >
+                                      Não
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    onClick={() => setDeletingMessageId(msg.id)}
+                                    title="Excluir esta mensagem"
+                                    className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md transition-all cursor-pointer font-medium ${
+                                      isSelf
+                                        ? 'text-orange-100/70 hover:text-rose-200 hover:bg-white/10'
+                                        : 'text-zinc-400 hover:text-rose-400 hover:bg-zinc-800'
+                                    }`}
+                                  >
+                                    <Trash2 className="h-2.5 w-2.5" />
+                                    <span>Excluir</span>
+                                  </button>
+                                )}
+                              </>
                             )}
                           </div>
 

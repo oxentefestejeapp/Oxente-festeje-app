@@ -53,8 +53,11 @@ import {
   sendFakeTestOrderViaSupabase, 
   deleteFakeTestOrderViaSupabase, 
   clearMobileAppBadge, 
-  requestMobileNotificationPermission 
+  requestMobileNotificationPermission,
+  triggerTestPushNotification,
+  setupMobilePushSubscription
 } from '../lib/mobileBadgeNotification';
+import { SUPABASE_TABLES_SQL, EDGE_FUNCTION_INDEX_TS } from '../data/edgeFunctionCode';
 import { playAppSound } from '../lib/audio';
 import { 
   initAuth, 
@@ -173,6 +176,19 @@ export function SettingsManager({
   const [lastTestOrderId, setLastTestOrderId] = useState<string | null>(null);
   const [isTestingLocalBadge, setIsTestingLocalBadge] = useState(false);
   const [isTestingSupabaseOrder, setIsTestingSupabaseOrder] = useState(false);
+  const [isTestingPushClosed, setIsTestingPushClosed] = useState(false);
+  const [showPushGuide, setShowPushGuide] = useState(false);
+  const [copiedType, setCopiedType] = useState<string | null>(null);
+
+  const handleCopyCode = async (text: string, type: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedType(type);
+      setTimeout(() => setCopiedType(null), 3000);
+    } catch {
+      // Fallback if clipboard API fails
+    }
+  };
 
   const refreshDiagnostics = () => {
     setDiagInfo(getBadgeDiagnosticInfo());
@@ -235,6 +251,32 @@ export function SettingsManager({
     setBadgeTestMsg('🧹 Selo do ícone zerado.');
     playAppSound('trash');
     refreshDiagnostics();
+  };
+
+  const handleTestPushClosedApp = async () => {
+    setIsTestingPushClosed(true);
+    setBadgeTestMsg('📱 1/2 Registrando celular na nuvem e requisitando Push em segundo plano...');
+    try {
+      // 1. Garantir registro de push deste aparelho no Supabase
+      const subscribed = await setupMobilePushSubscription(user?.email || undefined, true);
+      
+      // 2. Chamar a Edge Function
+      setBadgeTestMsg('☁️ 2/2 Disparando notificação Push via Edge Function do Supabase...');
+      const res = await triggerTestPushNotification();
+      
+      if (res.success) {
+        setBadgeTestMsg(`🚀 Notificação despachada com sucesso! ${res.message}\n💡 TESTE REAL: Bloqueie a tela ou saia do aplicativo agora para ver o alerta chegar em 3 segundos!`);
+        playAppSound('success');
+      } else {
+        setBadgeTestMsg(`⚠️ Edge Function: ${res.message}.\n💡 Dica: Siga o guia 'SUPABASE_MOBILE_PUSH_WEBHOOK.md' para ativar a função 'send-order-push' no painel do Supabase.`);
+        playAppSound('alert');
+      }
+    } catch (err: any) {
+      setBadgeTestMsg(`Erro ao testar Push: ${err.message || String(err)}`);
+    } finally {
+      setIsTestingPushClosed(false);
+      refreshDiagnostics();
+    }
   };
 
   useEffect(() => {
@@ -1088,37 +1130,106 @@ export function SettingsManager({
             )}
 
             {/* Action Buttons Row */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
               <button
                 type="button"
                 onClick={handleTestLocalBadgeAndNotification}
                 disabled={isTestingLocalBadge}
-                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-brand-pink hover:from-pink-500 hover:to-pink-500 text-white font-bold text-xs py-2.5 px-3.5 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+                className="flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-brand-pink hover:from-pink-500 text-white font-bold text-xs py-2.5 px-3 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
               >
-                <Bell className="h-3.5 w-3.5" />
-                <span>{isTestingLocalBadge ? 'Disparando...' : '1. Testar Notificação & Selo (Local)'}</span>
+                <Bell className="h-3.5 w-3.5 shrink-0" />
+                <span>{isTestingLocalBadge ? 'Disparando...' : '1. Teste Local'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleTestSupabaseOrder}
                 disabled={isTestingSupabaseOrder}
-                className="flex-1 flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 hover:to-sky-500 text-white font-bold text-xs py-2.5 px-3.5 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+                className="flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 text-white font-bold text-xs py-2.5 px-3 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
               >
-                <Zap className="h-3.5 w-3.5" />
-                <span>{isTestingSupabaseOrder ? 'Gravando no Supabase...' : '2. Simular Pedido Fake no Supabase'}</span>
+                <Zap className="h-3.5 w-3.5 shrink-0" />
+                <span>{isTestingSupabaseOrder ? 'Gravando...' : '2. Pedido no Supabase'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={handleTestPushClosedApp}
+                disabled={isTestingPushClosed}
+                className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs py-2.5 px-3 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+                title="Envia notificação via Edge Function do Supabase para tocar mesmo com o app fechado"
+              >
+                <Smartphone className="h-3.5 w-3.5 shrink-0" />
+                <span>{isTestingPushClosed ? 'Despachando...' : '3. Push App Fechado'}</span>
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-zinc-800/60">
+              <button
+                type="button"
+                onClick={() => setShowPushGuide(!showPushGuide)}
+                className="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 font-semibold py-1.5 px-3 rounded-xl bg-cyan-950/40 border border-cyan-800/50 hover:bg-cyan-900/40 transition-colors cursor-pointer"
+              >
+                <Terminal className="h-3.5 w-3.5" />
+                <span>{showPushGuide ? 'Ocultar Instruções e Códigos' : '📋 Pegar Código da Edge Function (index.ts)'}</span>
               </button>
 
               <button
                 type="button"
                 onClick={handleClearBadge}
-                className="flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 font-semibold text-xs py-2.5 px-3 rounded-xl border border-zinc-700/80 transition-colors"
+                className="flex items-center justify-center gap-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 font-semibold text-xs py-1.5 px-3 rounded-xl border border-zinc-700/80 transition-colors"
                 title="Limpar número do ícone"
               >
                 <Trash className="h-3.5 w-3.5" />
-                <span>Zerar Selo</span>
+                <span>Zerar Selo do Ícone</span>
               </button>
             </div>
+
+            {/* Expandable Guide for Supabase Edge Function */}
+            {showPushGuide && (
+              <div className="bg-zinc-950 border border-cyan-900/40 rounded-xl p-4 space-y-3.5 animate-fade-in text-xs text-zinc-300">
+                <div className="flex items-start gap-2.5">
+                  <div className="p-2 bg-cyan-950/80 border border-cyan-800/60 rounded-lg text-cyan-400 shrink-0">
+                    <Sparkles className="h-4 w-4" />
+                  </div>
+                  <div className="space-y-1">
+                    <h5 className="font-bold text-white text-sm">Onde colar o código no Supabase?</h5>
+                    <p className="text-zinc-400 text-[11px] leading-relaxed">
+                      Quando você clica em <strong>Create Function</strong> no painel do Supabase com o nome <code className="bg-zinc-900 px-1 py-0.5 rounded text-cyan-300">send-order-push</code>, o Supabase abre um arquivo <code className="bg-zinc-900 px-1 py-0.5 rounded text-cyan-300">index.ts</code> com um exemplo inicial padrão ("Hello from Edge Functions!").
+                      <br />
+                      👉 <strong>Basta selecionar todo o texto desse arquivo lá no Supabase, apagar</strong> e colar o código abaixo:
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCode(EDGE_FUNCTION_INDEX_TS, 'edge')}
+                    className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs py-2 px-3 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
+                  >
+                    {copiedType === 'edge' ? <CheckCircle className="h-4 w-4 text-emerald-200" /> : <Copy className="h-4 w-4" />}
+                    <span>{copiedType === 'edge' ? '✓ Código Copiado!' : '1. Copiar Código do index.ts'}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCode(SUPABASE_TABLES_SQL, 'sql')}
+                    className="flex items-center justify-center gap-2 bg-zinc-850 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 font-bold text-xs py-2 px-3 rounded-xl transition-all active:scale-95 cursor-pointer"
+                  >
+                    {copiedType === 'sql' ? <CheckCircle className="h-4 w-4 text-emerald-400" /> : <Database className="h-4 w-4 text-cyan-400" />}
+                    <span>{copiedType === 'sql' ? '✓ SQL Copiado!' : '2. Copiar SQL das Tabelas'}</span>
+                  </button>
+                </div>
+
+                {/* Code preview snippet */}
+                <div className="relative rounded-lg overflow-hidden border border-zinc-800 bg-black/70 p-3 max-h-48 overflow-y-auto font-mono text-[10px] text-zinc-400">
+                  <div className="sticky top-0 right-0 flex justify-end">
+                    <span className="text-[10px] bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded">supabase/functions/send-order-push/index.ts</span>
+                  </div>
+                  <pre className="whitespace-pre-wrap">{EDGE_FUNCTION_INDEX_TS.slice(0, 600)}...</pre>
+                </div>
+              </div>
+            )}
 
             {/* Status message */}
             {badgeTestMsg && (
