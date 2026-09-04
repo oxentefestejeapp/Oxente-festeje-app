@@ -177,6 +177,7 @@ export function SettingsManager({
   const [isTestingLocalBadge, setIsTestingLocalBadge] = useState(false);
   const [isTestingSupabaseOrder, setIsTestingSupabaseOrder] = useState(false);
   const [isTestingPushClosed, setIsTestingPushClosed] = useState(false);
+  const [pushCountdown, setPushCountdown] = useState<number | null>(null);
   const [showPushGuide, setShowPushGuide] = useState(false);
   const [copiedType, setCopiedType] = useState<string | null>(null);
 
@@ -253,24 +254,45 @@ export function SettingsManager({
     refreshDiagnostics();
   };
 
-  const handleTestPushClosedApp = async () => {
+  const handleTestPushClosedApp = async (delaySeconds: number = 4) => {
     setIsTestingPushClosed(true);
-    setBadgeTestMsg('📱 1/2 Verificando permissão e registrando celular na nuvem...');
+    setBadgeTestMsg('📱 1/3 Verificando conexão e registrando celular na nuvem...');
     try {
       // 1. Garantir registro de push deste aparelho no Supabase
       const subResult = await setupMobilePushSubscription(user?.email || undefined, true);
       if (!subResult.success) {
         setBadgeTestMsg(`⚠️ ${subResult.message}`);
         playAppSound('alert');
+        setIsTestingPushClosed(false);
         return;
       }
       
+      if (delaySeconds > 0) {
+        playAppSound('pop');
+        let remaining = delaySeconds;
+        setPushCountdown(remaining);
+        setBadgeTestMsg(`⏳ BLOQUEIE A TELA OU FECHE O APP AGORA! A notificação chegará em ${remaining}s...`);
+
+        const timer = setInterval(() => {
+          remaining -= 1;
+          if (remaining > 0) {
+            setPushCountdown(remaining);
+            setBadgeTestMsg(`⏳ BLOQUEIE A TELA OU FECHE O APP AGORA! A notificação chegará em ${remaining}s...`);
+          } else {
+            clearInterval(timer);
+            setPushCountdown(null);
+            setBadgeTestMsg('🚀 Enviando notificação agora... Verifique a tela de bloqueio do celular!');
+          }
+        }, 1000);
+      } else {
+        setBadgeTestMsg('☁️ Disparando notificação Push imediatamente...');
+      }
+
       // 2. Disparar notificação Push
-      setBadgeTestMsg('☁️ 2/2 Disparando notificação Push para os aparelhos cadastrados...');
-      const res = await triggerTestPushNotification();
+      const res = await triggerTestPushNotification(delaySeconds);
       
       if (res.success) {
-        setBadgeTestMsg(`🚀 Notificação enviada com sucesso! ${res.message}\n💡 TESTE REAL: Bloqueie a tela ou saia do aplicativo agora para ver o alerta chegar em 3 segundos!`);
+        setBadgeTestMsg(`🚀 Notificação enviada com sucesso! ${res.message}\n💡 Se a tela estava bloqueada ou apagada, o visor acenderá com o alerta!`);
         playAppSound('success');
       } else {
         setBadgeTestMsg(`⚠️ ${res.message}`);
@@ -280,6 +302,7 @@ export function SettingsManager({
       setBadgeTestMsg(`Erro ao testar Push: ${err.message || String(err)}`);
     } finally {
       setIsTestingPushClosed(false);
+      setPushCountdown(null);
       refreshDiagnostics();
     }
   };
@@ -1189,20 +1212,37 @@ export function SettingsManager({
               <button
                 id="botao-push-app-fechado"
                 type="button"
-                onClick={handleTestPushClosedApp}
+                onClick={() => handleTestPushClosedApp(4)}
                 disabled={isTestingPushClosed}
-                className="relative flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs py-3 px-3 rounded-xl shadow-lg shadow-emerald-950/50 border-2 border-emerald-400/80 transition-all active:scale-95 disabled:opacity-50 ring-2 ring-emerald-400/30"
-                title="Envia notificação via Edge Function do Supabase para tocar mesmo com o app fechado"
+                className="relative flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs py-3 px-3 rounded-xl shadow-lg shadow-emerald-950/50 border-2 border-emerald-400/80 transition-all active:scale-95 disabled:opacity-50 ring-2 ring-emerald-400/30 cursor-pointer"
+                title="Dá 4 segundos para você desligar ou bloquear a tela antes da notificação chegar"
               >
                 <span className="absolute -top-2.5 right-2 px-1.5 py-0.2 bg-emerald-400 text-black text-[9px] font-black uppercase rounded-full tracking-wider shadow">
-                  NOVO
+                  RECOMENDADO
                 </span>
                 <Smartphone className="h-4 w-4 shrink-0 text-white animate-bounce-slow" />
-                <span>{isTestingPushClosed ? 'Despachando...' : '3. Push App Fechado'}</span>
+                <span>
+                  {pushCountdown !== null 
+                    ? `Bloqueie agora! (${pushCountdown}s)` 
+                    : isTestingPushClosed 
+                    ? 'Disparando...' 
+                    : '3. Push em 4s (Bloquear Celular)'}
+                </span>
               </button>
             </div>
 
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-zinc-800/60">
+              <button
+                id="botao-push-imediato"
+                type="button"
+                onClick={() => handleTestPushClosedApp(0)}
+                disabled={isTestingPushClosed}
+                className="flex items-center gap-1.5 text-xs text-emerald-400 hover:text-emerald-300 font-semibold py-1.5 px-3 rounded-xl bg-emerald-950/40 border border-emerald-800/50 hover:bg-emerald-900/40 transition-colors cursor-pointer disabled:opacity-50"
+                title="Dispara a notificação imediatamente sem contagem regressiva"
+              >
+                <Bell className="h-3.5 w-3.5" />
+                <span>Disparar Push Imediato (0s)</span>
+              </button>
               <button
                 type="button"
                 onClick={() => setShowPushGuide(!showPushGuide)}

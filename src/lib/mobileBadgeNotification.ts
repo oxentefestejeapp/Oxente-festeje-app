@@ -242,12 +242,17 @@ export async function dispatchOrderPushNotification(sale: Partial<Sale>): Promis
     // Continue to fallback
   }
 
-  // 2. Fallback to Supabase Edge Function
+  // 2. Fallback to Supabase Edge Function (support both quick-responder and send-order-push)
   try {
-    const { error } = await supabase.functions.invoke('send-order-push', {
+    let res = await supabase.functions.invoke('quick-responder', {
       body: { record: sale }
     });
-    if (!error) return true;
+    if (res.error) {
+      res = await supabase.functions.invoke('send-order-push', {
+        body: { record: sale }
+      });
+    }
+    if (!res.error) return true;
   } catch (err) {
     console.warn('Falha na chamada de push:', err);
   }
@@ -258,7 +263,7 @@ export async function dispatchOrderPushNotification(sale: Partial<Sale>): Promis
 /**
  * Sends a test push notification to verify delivery with the app closed
  */
-export async function triggerTestPushNotification(): Promise<{ success: boolean; message: string; details?: any }> {
+export async function triggerTestPushNotification(delaySeconds: number = 0): Promise<{ success: boolean; message: string; details?: any }> {
   // 1. Try internal backend server route first (direct and instant)
   try {
     const res = await fetch('/api/send-order-push', {
@@ -266,6 +271,7 @@ export async function triggerTestPushNotification(): Promise<{ success: boolean;
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         is_test: true,
+        delay_seconds: delaySeconds,
         title: '🧪 Teste de Notificação (App Fechado)',
         body: 'Parabéns! O seu celular recebeu esta notificação mesmo em segundo plano. Tudo 100% configurado!',
         orderId: 'TESTE-001'
@@ -287,21 +293,29 @@ export async function triggerTestPushNotification(): Promise<{ success: boolean;
           details: data
         };
       }
+    } else {
+      console.warn('/api/send-order-push retornou status HTTP:', res.status);
     }
   } catch (e) {
-    // Continue to Supabase Edge function fallback
+    console.warn('Falha ao conectar com /api/send-order-push:', e);
   }
 
-  // 2. Fallback to Supabase Edge Function
+  // 2. Fallback to Supabase Edge Function (supports quick-responder and send-order-push)
   try {
-    const { data, error } = await supabase.functions.invoke('send-order-push', {
-      body: {
-        is_test: true,
-        title: '🧪 Teste de Notificação (App Fechado)',
-        body: 'Parabéns! O seu celular recebeu esta notificação mesmo em segundo plano. Tudo 100% configurado!',
-        orderId: 'TESTE-001'
-      }
-    });
+    const payload = {
+      is_test: true,
+      delay_seconds: delaySeconds,
+      title: '🧪 Teste de Notificação (App Fechado)',
+      body: 'Parabéns! O seu celular recebeu esta notificação mesmo em segundo plano. Tudo 100% configurado!',
+      orderId: 'TESTE-001'
+    };
+
+    let result = await supabase.functions.invoke('quick-responder', { body: payload });
+    if (result.error) {
+      result = await supabase.functions.invoke('send-order-push', { body: payload });
+    }
+
+    const { data, error } = result;
 
     if (error) {
       return { 
@@ -318,15 +332,16 @@ export async function triggerTestPushNotification(): Promise<{ success: boolean;
       };
     }
 
-    return { 
-      success: true, 
-      message: data?.message || `Notificação despachada para ${data?.sentCount ?? 0} aparelho(s)!`,
-      details: data 
+    return {
+      success: true,
+      message: data?.message || 'Notificação despachada com sucesso via Edge Function!',
+      details: data
     };
   } catch (err: any) {
-    return { 
-      success: false, 
-      message: err?.message || 'Falha na conexão com o serviço de envio de notificações' 
+    return {
+      success: false,
+      message: err.message || 'Erro inesperado ao chamar a função de Push.',
+      details: err
     };
   }
 }
