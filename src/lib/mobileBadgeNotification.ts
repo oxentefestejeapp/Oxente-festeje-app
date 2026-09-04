@@ -272,8 +272,8 @@ export async function triggerTestPushNotification(delaySeconds: number = 0): Pro
       body: JSON.stringify({
         is_test: true,
         delay_seconds: delaySeconds,
-        title: '🧪 Teste de Notificação (App Fechado)',
-        body: 'Parabéns! O seu celular recebeu esta notificação mesmo em segundo plano. Tudo 100% configurado!',
+        title: '🛍️ Novo pedido #TESTE',
+        body: 'Cliente de Teste no valor de R$ 99,90. Toque para abrir!',
         orderId: 'TESTE-001'
       })
     });
@@ -305,8 +305,8 @@ export async function triggerTestPushNotification(delaySeconds: number = 0): Pro
     const payload = {
       is_test: true,
       delay_seconds: delaySeconds,
-      title: '🧪 Teste de Notificação (App Fechado)',
-      body: 'Parabéns! O seu celular recebeu esta notificação mesmo em segundo plano. Tudo 100% configurado!',
+      title: '🛍️ Novo pedido #TESTE',
+      body: 'Cliente de Teste no valor de R$ 99,90. Toque para abrir!',
       orderId: 'TESTE-001'
     };
 

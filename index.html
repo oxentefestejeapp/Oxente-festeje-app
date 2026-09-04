@@ -12,6 +12,22 @@
     <link rel="apple-touch-icon" href="/icon.svg" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
     <title>Oxente Festeje</title>
+    <script>
+      // Suppress benign [vite] websocket disconnect error popup in preview containers (HMR is disabled in cloud containers)
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event && event.reason && (
+          String(event.reason).includes('WebSocket closed without opened') ||
+          String(event.reason?.message || '').includes('WebSocket closed without opened')
+        )) {
+          event.preventDefault();
+        }
+      });
+      window.addEventListener('error', function(event) {
+        if (event && event.message && event.message.includes('[vite] failed to connect to websocket')) {
+          event.preventDefault();
+        }
+      });
+    </script>
   </head>
   <body>
     <div id="root"></div>

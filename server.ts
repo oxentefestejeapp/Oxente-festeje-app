@@ -53,22 +53,28 @@ app.post('/api/send-order-push', async (req, res) => {
     let orderId = 'novo';
 
     if (isTest) {
-      notificationTitle = bodyData.title || '🧪 Teste de Notificação (App Fechado)';
-      notificationBody = bodyData.body || 'Parabéns! Notificação recebida com sucesso no seu celular!';
+      notificationTitle = bodyData.title || '🛍️ Novo pedido #TESTE';
+      notificationBody = bodyData.body || 'Cliente de Teste no valor de R$ 99,90. Toque para abrir!';
       orderId = bodyData.orderId || 'TESTE-001';
-    } else if (saleRecord && (saleRecord.numeroPedido || saleRecord.clienteNome || saleRecord.valorTotal || saleRecord.cliente || saleRecord.total)) {
+    } else if (saleRecord && (saleRecord.numeroPedido || saleRecord.numero_pedido || saleRecord.clienteNome || saleRecord.cliente || saleRecord.valorTotal || saleRecord.total)) {
       const numPedido = saleRecord.numeroPedido || saleRecord.numero_pedido ? `#${saleRecord.numeroPedido || saleRecord.numero_pedido}` : '';
       const totalVal = saleRecord.valorTotal ?? saleRecord.total;
-      const valor = totalVal !== undefined ? ` - R$ ${Number(totalVal).toFixed(2).replace('.', ',')}` : '';
-      const cliente = saleRecord.clienteNome || saleRecord.cliente || 'Novo Cliente';
+      const valorStr = totalVal !== undefined
+        ? `R$ ${Number(totalVal).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+        : 'R$ 0,00';
+      const rawCliente = saleRecord.clienteNome || saleRecord.cliente || '';
+      const cliente = rawCliente && rawCliente.trim() !== 'Consumidor' ? rawCliente.trim() : 'Consumidor Geral';
       
       let qtdItens = '';
       if (Array.isArray(saleRecord.itens) && saleRecord.itens.length > 0) {
-        qtdItens = ` | ${saleRecord.itens.length} ${saleRecord.itens.length === 1 ? 'item' : 'itens'}`;
+        qtdItens = ` (${saleRecord.itens.length} ${saleRecord.itens.length === 1 ? 'item' : 'itens'})`;
       }
 
-      notificationTitle = `🛍️ Novo Pedido ${numPedido}${valor}`;
-      notificationBody = `Cliente: ${cliente}${qtdItens}\nToque para abrir e visualizar os detalhes!`;
+      // Título: apenas "Novo pedido tal" (ex: "🛍️ Novo pedido #1042")
+      // Mensagem (corpo): detalhes de quem é e o valor (ex: "Maria Silva no valor de R$ 150,00 (2 itens). Toque para abrir!")
+      const pedidoRef = numPedido ? ` ${numPedido}` : '';
+      notificationTitle = `🛍️ Novo pedido${pedidoRef}`;
+      notificationBody = `${cliente} no valor de ${valorStr}${qtdItens}. Toque para abrir!`;
       orderId = String(saleRecord.numeroPedido || saleRecord.numero_pedido || saleRecord.id || 'novo');
     }
 
