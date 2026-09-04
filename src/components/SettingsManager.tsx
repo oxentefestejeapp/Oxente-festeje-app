@@ -918,6 +918,33 @@ export function SettingsManager({
 
         {/* Informative notification context banner */}
         <div className="text-xs text-zinc-350 leading-relaxed bg-black/40 p-4.5 rounded-xl border border-zinc-850 space-y-3">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-gradient-to-r from-emerald-950/60 to-teal-950/40 border border-emerald-500/40 rounded-xl">
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-3 w-3 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+              </span>
+              <div>
+                <strong className="text-emerald-300 font-bold block text-xs">Novo: Notificação com App Fechado</strong>
+                <span className="text-[11px] text-zinc-400">Quer testar o alerta no celular bloqueado? Use o botão na seção de testes abaixo!</span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('secao-teste-push-app-fechado');
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  el.classList.add('ring-2', 'ring-emerald-400');
+                  setTimeout(() => el.classList.remove('ring-2', 'ring-emerald-400'), 2500);
+                }
+              }}
+              className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer shrink-0"
+            >
+              Ir para o Botão 3 👇
+            </button>
+          </div>
+
           <p>
             Este aplicativo utiliza sincronização em nuvem ultrarápida. Toda vez que um atendente, parceiro de equipe ou cliente cadastrar um pedido, seu dispositivo emitirá um alerta sonoro instantâneo e uma chamada de voz, mesmo se o aplicativo estiver trabalhando em segundo plano ou com a tela apagada!
           </p>
@@ -1026,7 +1053,10 @@ export function SettingsManager({
           )}
 
           {/* Central de Testes de Selo (Badge) no Celular & Webhook do Supabase */}
-          <div className="mt-4 pt-4 border-t border-zinc-800/80 space-y-4">
+          <div 
+            id="secao-teste-push-app-fechado" 
+            className="mt-4 pt-4 border-t border-zinc-800/80 space-y-4 rounded-xl transition-all duration-500"
+          >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 bg-brand-pink/15 border border-brand-pink/30 rounded-lg text-brand-pink">
@@ -1135,7 +1165,7 @@ export function SettingsManager({
                 type="button"
                 onClick={handleTestLocalBadgeAndNotification}
                 disabled={isTestingLocalBadge}
-                className="flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-brand-pink hover:from-pink-500 text-white font-bold text-xs py-2.5 px-3 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+                className="flex items-center justify-center gap-2 bg-gradient-to-r from-pink-600 to-brand-pink hover:from-pink-500 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
               >
                 <Bell className="h-3.5 w-3.5 shrink-0" />
                 <span>{isTestingLocalBadge ? 'Disparando...' : '1. Teste Local'}</span>
@@ -1145,20 +1175,24 @@ export function SettingsManager({
                 type="button"
                 onClick={handleTestSupabaseOrder}
                 disabled={isTestingSupabaseOrder}
-                className="flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 text-white font-bold text-xs py-2.5 px-3 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+                className="flex items-center justify-center gap-2 bg-gradient-to-r from-cyan-600 to-sky-600 hover:from-cyan-500 text-white font-bold text-xs py-3 px-3 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
               >
                 <Zap className="h-3.5 w-3.5 shrink-0" />
                 <span>{isTestingSupabaseOrder ? 'Gravando...' : '2. Pedido no Supabase'}</span>
               </button>
 
               <button
+                id="botao-push-app-fechado"
                 type="button"
                 onClick={handleTestPushClosedApp}
                 disabled={isTestingPushClosed}
-                className="flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 text-white font-bold text-xs py-2.5 px-3 rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+                className="relative flex items-center justify-center gap-2 bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-600 hover:from-emerald-400 hover:to-teal-400 text-white font-black text-xs py-3 px-3 rounded-xl shadow-lg shadow-emerald-950/50 border-2 border-emerald-400/80 transition-all active:scale-95 disabled:opacity-50 ring-2 ring-emerald-400/30"
                 title="Envia notificação via Edge Function do Supabase para tocar mesmo com o app fechado"
               >
-                <Smartphone className="h-3.5 w-3.5 shrink-0" />
+                <span className="absolute -top-2.5 right-2 px-1.5 py-0.2 bg-emerald-400 text-black text-[9px] font-black uppercase rounded-full tracking-wider shadow">
+                  NOVO
+                </span>
+                <Smartphone className="h-4 w-4 shrink-0 text-white animate-bounce-slow" />
                 <span>{isTestingPushClosed ? 'Despachando...' : '3. Push App Fechado'}</span>
               </button>
             </div>
