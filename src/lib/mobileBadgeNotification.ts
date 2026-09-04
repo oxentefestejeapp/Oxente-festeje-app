@@ -140,29 +140,46 @@ export const DEFAULT_VAPID_PUBLIC_KEY = 'BI7IEtKXkeIFKOELzwkwAAuofPOYUe07MN6h5_u
 /**
  * Registers Web Push subscription for this device and saves it in Supabase
  */
-export async function setupMobilePushSubscription(userEmail?: string, allowDesktop = false): Promise<boolean> {
-  // Ativo para Mobile ou quando explicitamente solicitado no diagnóstico
-  if (!allowDesktop && !isMobileDevice()) return false;
-  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
-    return false;
+export async function setupMobilePushSubscription(userEmail?: string, allowDesktop = false): Promise<{ success: boolean; message: string }> {
+  if (!allowDesktop && !isMobileDevice()) {
+    return { success: false, message: 'Push em segundo plano configurado prioritariamente para dispositivos móveis.' };
+  }
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return { success: false, message: 'Seu navegador não possui suporte a Service Worker.' };
+  }
+  if (!('PushManager' in window)) {
+    return { 
+      success: false, 
+      message: 'PushManager não disponível. No iPhone/iPad (iOS), você deve adicionar o app à Tela de Início (PWA) para receber notificações com app fechado.' 
+    };
   }
 
   try {
-    // Request permission if not already granted
-    await requestMobileNotificationPermission();
+    // 1. Request permission if not already granted
+    const perm = await requestMobileNotificationPermission();
+    if (perm !== 'granted') {
+      return { 
+        success: false, 
+        message: 'Permissão de notificação não foi concedida. Toque no cadeado da barra de endereço e clique em "Permitir notificações".' 
+      };
+    }
 
-    // Register or get active service worker registration
-    const registration = await navigator.serviceWorker.ready;
-    if (!registration) return false;
+    // 2. Register or get active service worker registration
+    let registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) {
+      registration = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+    }
+    await navigator.serviceWorker.ready;
 
-    // Check existing push subscription
+    if (!registration) {
+      return { success: false, message: 'Não foi possível inicializar o Service Worker do sistema.' };
+    }
+
+    // 3. Check or create push subscription
     let subscription = await registration.pushManager.getSubscription();
-
-    // Get VAPID public key from env or fallback to our default key
     const vapidPublicKey = (import.meta as any).env?.VITE_VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY;
 
     if (!subscription) {
-      // Convert VAPID key to Uint8Array
       const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -183,44 +200,99 @@ export async function setupMobilePushSubscription(userEmail?: string, allowDeskt
         updated_at: new Date().toISOString()
       };
 
-      await supabase
+      const { error: upsertErr } = await supabase
         .from('oxente_push_subscriptions')
         .upsert(payload, { onConflict: 'id' });
 
+      if (upsertErr) {
+        return { 
+          success: false, 
+          message: `Erro ao registrar aparelho no Supabase: ${upsertErr.message}. Certifique-se de executar o SQL da tabela oxente_push_subscriptions.` 
+        };
+      }
+
       console.log('📱 Dispositivo registrado com sucesso para receber notificações de novos pedidos com app fechado!');
-      return true;
+      return { success: true, message: 'Aparelho registrado com sucesso na nuvem!' };
     }
+  } catch (err: any) {
+    console.warn('Não foi possível registrar Web Push móvel completo:', err);
+    return { success: false, message: `Falha ao assinar notificações: ${err?.message || String(err)}` };
+  }
+
+  return { success: false, message: 'Inscrição de push não pôde ser concluída neste navegador.' };
+}
+
+/**
+ * Dispatches an automated background push notification to all registered mobile phones.
+ * Tries local server API first, then falls back to Supabase Edge Function.
+ */
+export async function dispatchOrderPushNotification(sale: Partial<Sale>): Promise<boolean> {
+  // 1. Try internal backend server route first
+  try {
+    const res = await fetch('/api/send-order-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ record: sale })
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.success) return true;
+    }
+  } catch (e) {
+    // Continue to fallback
+  }
+
+  // 2. Fallback to Supabase Edge Function
+  try {
+    const { error } = await supabase.functions.invoke('send-order-push', {
+      body: { record: sale }
+    });
+    if (!error) return true;
   } catch (err) {
-    console.warn('Não foi possível registrar Web Push móvel completo (modo local ativo):', err);
+    console.warn('Falha na chamada de push:', err);
   }
 
   return false;
 }
 
 /**
- * Dispatches an automated background push notification to all registered mobile phones
- * by invoking the Supabase Edge Function `send-order-push`.
- */
-export async function dispatchOrderPushNotification(sale: Partial<Sale>): Promise<boolean> {
-  try {
-    const { error } = await supabase.functions.invoke('send-order-push', {
-      body: { record: sale }
-    });
-    if (error) {
-      console.warn('Edge Function send-order-push retornou aviso:', error);
-      return false;
-    }
-    return true;
-  } catch (err) {
-    console.warn('Falha na chamada de push para Edge Function:', err);
-    return false;
-  }
-}
-
-/**
  * Sends a test push notification to verify delivery with the app closed
  */
 export async function triggerTestPushNotification(): Promise<{ success: boolean; message: string; details?: any }> {
+  // 1. Try internal backend server route first (direct and instant)
+  try {
+    const res = await fetch('/api/send-order-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        is_test: true,
+        title: '🧪 Teste de Notificação (App Fechado)',
+        body: 'Parabéns! O seu celular recebeu esta notificação mesmo em segundo plano. Tudo 100% configurado!',
+        orderId: 'TESTE-001'
+      })
+    });
+
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.success) {
+        return {
+          success: true,
+          message: data.message || `Notificação despachada com sucesso para ${data.sentCount ?? 1} aparelho(s)!`,
+          details: data
+        };
+      } else if (data?.sentCount === 0) {
+        return {
+          success: false,
+          message: data.message || 'Nenhum aparelho cadastrado no banco de dados ainda.',
+          details: data
+        };
+      }
+    }
+  } catch (e) {
+    // Continue to Supabase Edge function fallback
+  }
+
+  // 2. Fallback to Supabase Edge Function
   try {
     const { data, error } = await supabase.functions.invoke('send-order-push', {
       body: {
@@ -238,6 +310,14 @@ export async function triggerTestPushNotification(): Promise<{ success: boolean;
       };
     }
 
+    if (!data?.success || (data?.sentCount !== undefined && data.sentCount === 0)) {
+      return {
+        success: false,
+        message: data?.message || 'Nenhum celular cadastrado para receber notificações.',
+        details: data
+      };
+    }
+
     return { 
       success: true, 
       message: data?.message || `Notificação despachada para ${data?.sentCount ?? 0} aparelho(s)!`,
@@ -246,7 +326,7 @@ export async function triggerTestPushNotification(): Promise<{ success: boolean;
   } catch (err: any) {
     return { 
       success: false, 
-      message: err?.message || 'Falha na conexão com a Edge Function do Supabase' 
+      message: err?.message || 'Falha na conexão com o serviço de envio de notificações' 
     };
   }
 }

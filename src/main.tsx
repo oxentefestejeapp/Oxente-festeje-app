@@ -5,16 +5,22 @@ import './index.css';
 
 // Register Service Worker for Mobile App Badging & Web Push Notifications
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
+  const registerSW = () => {
     navigator.serviceWorker
       .register('/sw.js', { scope: '/' })
-      .then((reg) => {
+      .then(() => {
         console.log('Oxente Festeje: Service Worker ativo para Mobile Push & App Badging');
       })
       .catch((err) => {
         console.debug('Falha ao registrar Service Worker:', err);
       });
-  });
+  };
+
+  if (document.readyState === 'complete') {
+    registerSW();
+  } else {
+    window.addEventListener('load', registerSW);
+  }
 }
 
 // Periodic check: clear storage cache if present (only run once per app load session to avoid reload loops)

@@ -255,20 +255,25 @@ export function SettingsManager({
 
   const handleTestPushClosedApp = async () => {
     setIsTestingPushClosed(true);
-    setBadgeTestMsg('📱 1/2 Registrando celular na nuvem e requisitando Push em segundo plano...');
+    setBadgeTestMsg('📱 1/2 Verificando permissão e registrando celular na nuvem...');
     try {
       // 1. Garantir registro de push deste aparelho no Supabase
-      const subscribed = await setupMobilePushSubscription(user?.email || undefined, true);
+      const subResult = await setupMobilePushSubscription(user?.email || undefined, true);
+      if (!subResult.success) {
+        setBadgeTestMsg(`⚠️ ${subResult.message}`);
+        playAppSound('alert');
+        return;
+      }
       
-      // 2. Chamar a Edge Function
-      setBadgeTestMsg('☁️ 2/2 Disparando notificação Push via Edge Function do Supabase...');
+      // 2. Disparar notificação Push
+      setBadgeTestMsg('☁️ 2/2 Disparando notificação Push para os aparelhos cadastrados...');
       const res = await triggerTestPushNotification();
       
       if (res.success) {
-        setBadgeTestMsg(`🚀 Notificação despachada com sucesso! ${res.message}\n💡 TESTE REAL: Bloqueie a tela ou saia do aplicativo agora para ver o alerta chegar em 3 segundos!`);
+        setBadgeTestMsg(`🚀 Notificação enviada com sucesso! ${res.message}\n💡 TESTE REAL: Bloqueie a tela ou saia do aplicativo agora para ver o alerta chegar em 3 segundos!`);
         playAppSound('success');
       } else {
-        setBadgeTestMsg(`⚠️ Edge Function: ${res.message}.\n💡 Dica: Siga o guia 'SUPABASE_MOBILE_PUSH_WEBHOOK.md' para ativar a função 'send-order-push' no painel do Supabase.`);
+        setBadgeTestMsg(`⚠️ ${res.message}`);
         playAppSound('alert');
       }
     } catch (err: any) {
