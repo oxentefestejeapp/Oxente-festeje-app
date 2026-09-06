@@ -264,23 +264,6 @@ export function OrderTrackingPage() {
       s2Status = 'active';
     }
 
-    // Step 3: Aprovação do Layout pelo Cliente (Aguardando Aprovação / Aprovado)
-    let s3Title = 'Aguardando Aprovação do Layout';
-    let s3Desc = 'Esta etapa será liberada para sua conferência assim que o layout for concluído.';
-    let s3Status: 'pending' | 'active' | 'done' = 'pending';
-
-    if (sale.clienteAprovouLayout) {
-      s3Title = 'Layout Aprovado por Você! ✨';
-      s3Desc = `Você conferiu e aprovou formalmente o layout${sale.clienteAprovouLayoutEm ? ` em ${new Date(sale.clienteAprovouLayoutEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}. Pedido liberado para produção!`;
-      s3Status = 'done';
-    } else if (sale.statusArte === 'Arte Finalizada') {
-      s3Title = 'Aguardando sua Aprovação do Layout ⏳';
-      s3Desc = 'A arte foi finalizada! Por favor, confira todos os detalhes no card acima e confirme a aprovação para liberar a confecção.';
-      s3Status = 'active';
-    } else {
-      s3Status = 'pending';
-    }
-
     // Step 4: Produção Física / Confecção (Passado para fase de produção)
     const prod = sale.statusProducao || 'Agendado';
     let s4Title = 'Confecção & Produção Física';
@@ -307,6 +290,9 @@ export function OrderTrackingPage() {
       if (sale.statusArte === 'Arte Finalizada') {
         s4Title = 'Aguardando Aprovação para Iniciar Produção';
         s4Desc = 'Aguardando a sua confirmação no layout acima para dar início à confecção física.';
+      } else {
+        s4Title = 'Confecção & Produção Física';
+        s4Desc = 'Seu pedido entrará na produção física após a conclusão e aprovação da arte.';
       }
     }
 
@@ -327,13 +313,27 @@ export function OrderTrackingPage() {
       s5Status = 'active';
     }
 
-    return [
-      { id: 1, title: '🛒 Pedido Lançado & Confirmado', desc: `Registrado no sistema em ${step1Date}.`, status: 'done' as const },
+    const steps: Array<{ id: number; title: string; desc: string; status: 'done' | 'active' | 'pending' }> = [
+      { id: 1, title: '🛒 Pedido Lançado & Confirmado', desc: `Registrado no sistema em ${step1Date}.`, status: 'done' },
       { id: 2, title: s2Title, desc: s2Desc, status: s2Status },
-      { id: 3, title: s3Title, desc: s3Desc, status: s3Status },
-      { id: 4, title: s4Title, desc: s4Desc, status: s4Status },
-      { id: 5, title: s5Title, desc: s5Desc, status: s5Status }
     ];
+
+    // SÓ exibe a etapa de aprovação de layout se o designer já finalizou a arte ou se já foi aprovada
+    if (sale.statusArte === 'Arte Finalizada' || sale.clienteAprovouLayout) {
+      steps.push({
+        id: steps.length + 1,
+        title: sale.clienteAprovouLayout ? 'Layout Aprovado por Você! ✨' : 'Aguardando sua Aprovação do Layout ⏳',
+        desc: sale.clienteAprovouLayout
+          ? `Você conferiu e aprovou formalmente o layout${sale.clienteAprovouLayoutEm ? ` em ${new Date(sale.clienteAprovouLayoutEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}. Pedido liberado para produção!`
+          : 'A arte foi finalizada pelo designer! Por favor, confira todos os detalhes no card acima e confirme a aprovação para liberar a confecção.',
+        status: sale.clienteAprovouLayout ? ('done' as const) : ('active' as const)
+      });
+    }
+
+    steps.push({ id: steps.length + 1, title: s4Title, desc: s4Desc, status: s4Status });
+    steps.push({ id: steps.length + 1, title: s5Title, desc: s5Desc, status: s5Status });
+
+    return steps;
   };
 
   const titleCase = (str: string) => {
@@ -532,7 +532,7 @@ export function OrderTrackingPage() {
                   </motion.div>
                 )}
               </motion.div>
-            ) : (
+            ) : sale.statusArte === 'Arte Finalizada' ? (
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -607,7 +607,7 @@ export function OrderTrackingPage() {
                   </p>
                 </div>
               </motion.div>
-            )}
+            ) : null}
 
             {/* CARD 2: JORNADA TEMPORAL DO PEDIDO (Vertical Interactive Timeline) */}
             <div className="bg-zinc-900 border border-zinc-805 rounded-3xl p-6 shadow-lg space-y-4">

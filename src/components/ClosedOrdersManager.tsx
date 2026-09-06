@@ -1921,40 +1921,38 @@ ${produtosTexto}`;
                         </p>
                       </div>
 
-                      {/* Step 3: Aprovação de Layout pelo Cliente */}
-                      <div className="relative font-sans">
-                        <div className={`absolute -left-[25.5px] top-0.5 w-3 h-3 rounded-full border-2 border-zinc-950 ${
-                          viewedSale.clienteAprovouLayout
-                            ? 'bg-emerald-500'
-                            : viewedSale.statusArte === 'Arte Finalizada'
-                              ? 'bg-amber-500 animate-pulse'
-                              : 'bg-zinc-800'
-                        }`} />
-                        <h5 className="text-[10.5px] font-bold text-zinc-200">✨ Aprovação de Layout pelo Cliente</h5>
-                        <div className="text-[9px] text-zinc-550 mt-0.5 leading-normal space-y-1">
-                          {viewedSale.clienteAprovouLayout ? (
-                            <div className="text-emerald-300 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-1 rounded-md">
-                              ✅ Aceite do Layout Confirmado pelo Cliente{viewedSale.clienteAprovouLayoutEm && ` em ${new Date(viewedSale.clienteAprovouLayoutEm).toLocaleString('pt-BR')}`}. Liberado para confecção!
-                            </div>
-                          ) : viewedSale.statusArte === 'Arte Finalizada' ? (
-                            <div className="space-y-1.5">
-                              <span className="text-amber-400 font-medium block">
-                                ⏳ Arte finalizada! Aguardando cliente clicar no link de confirmação no WhatsApp
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => sendLayoutApprovalWhatsapp(viewedSale)}
-                                className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded transition-colors cursor-pointer"
-                              >
-                                <MessageSquare className="h-2.5 w-2.5" />
-                                <span>Reenviar Confirmação de Layout (WhatsApp)</span>
-                              </button>
-                            </div>
-                          ) : (
-                            <span className="text-zinc-600">Pendente (aguardando conclusão da arte pelo designer)</span>
-                          )}
+                      {/* Step 3: Aprovação de Layout pelo Cliente (Apenas quando a arte estiver finalizada ou aprovada) */}
+                      {(viewedSale.statusArte === 'Arte Finalizada' || viewedSale.clienteAprovouLayout) && (
+                        <div className="relative font-sans">
+                          <div className={`absolute -left-[25.5px] top-0.5 w-3 h-3 rounded-full border-2 border-zinc-950 ${
+                            viewedSale.clienteAprovouLayout
+                              ? 'bg-emerald-500'
+                              : 'bg-amber-500 animate-pulse'
+                          }`} />
+                          <h5 className="text-[10.5px] font-bold text-zinc-200">✨ Aprovação de Layout pelo Cliente</h5>
+                          <div className="text-[9px] text-zinc-550 mt-0.5 leading-normal space-y-1">
+                            {viewedSale.clienteAprovouLayout ? (
+                              <div className="text-emerald-300 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-1 rounded-md">
+                                ✅ Aceite do Layout Confirmado pelo Cliente{viewedSale.clienteAprovouLayoutEm && ` em ${new Date(viewedSale.clienteAprovouLayoutEm).toLocaleString('pt-BR')}`}. Liberado para confecção!
+                              </div>
+                            ) : (
+                              <div className="space-y-1.5">
+                                <span className="text-amber-400 font-medium block">
+                                  ⏳ Arte finalizada! Aguardando cliente clicar no link de confirmação no WhatsApp
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => sendLayoutApprovalWhatsapp(viewedSale)}
+                                  className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded transition-colors cursor-pointer"
+                                >
+                                  <MessageSquare className="h-2.5 w-2.5" />
+                                  <span>Reenviar Confirmação de Layout (WhatsApp)</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
 
                       {/* Step 4: Produção Física */}
                       <div className="relative font-sans">
