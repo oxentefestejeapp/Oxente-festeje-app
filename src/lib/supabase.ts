@@ -124,6 +124,8 @@ CREATE TABLE IF NOT EXISTS oxente_sales (
   editado_em TEXT,
   arte_finalizada_por_email TEXT,
   arte_finalizada_em TEXT,
+  cliente_aprovou_layout BOOLEAN DEFAULT FALSE,
+  cliente_aprovou_layout_em TEXT,
   valores_originais JSONB,
   notas_internas TEXT,
   pedido_anotado BOOLEAN DEFAULT FALSE,
@@ -159,6 +161,8 @@ ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS editado_por_email TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS editado_em TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS arte_finalizada_por_email TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS arte_finalizada_em TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS cliente_aprovou_layout BOOLEAN DEFAULT FALSE;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS cliente_aprovou_layout_em TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS valores_originais JSONB;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS notas_internas TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS pedido_anotado BOOLEAN DEFAULT FALSE;
@@ -441,6 +445,8 @@ const mapSaleToDb = (sale: Sale) => ({
   editado_em: sale.editadoEm || null,
   arte_finalizada_por_email: sale.arteFinalizadaPorEmail || null,
   arte_finalizada_em: sale.arteFinalizadaEm || null,
+  cliente_aprovou_layout: sale.clienteAprovouLayout || false,
+  cliente_aprovou_layout_em: sale.clienteAprovouLayoutEm || null,
   valores_originais: sale.valoresOriginais ? JSON.stringify(sale.valoresOriginais) : null,
   notas_internas: sale.notasInternas || null,
   pedido_anotado: sale.pedidoAnotado || false,
@@ -487,6 +493,8 @@ export const mapDbToSale = (dbItem: any): Sale => ({
   editadoEm: dbItem.editado_em || undefined,
   arteFinalizadaPorEmail: dbItem.arte_finalizada_por_email || undefined,
   arteFinalizadaEm: dbItem.arte_finalizada_em || undefined,
+  clienteAprovouLayout: !!dbItem.cliente_aprovou_layout,
+  clienteAprovouLayoutEm: dbItem.cliente_aprovou_layout_em || undefined,
   valoresOriginais: dbItem.valores_originais ? (typeof dbItem.valores_originais === 'string' ? JSON.parse(dbItem.valores_originais) : dbItem.valores_originais) : undefined,
   notasInternas: dbItem.notas_internas || undefined,
   pedidoAnotado: dbItem.pedido_anotado || false,

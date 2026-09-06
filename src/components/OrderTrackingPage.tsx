@@ -17,11 +17,13 @@ import {
   QrCode,
   ShieldCheck,
   Smartphone,
-  Clock
+  Clock,
+  CheckCircle2
 } from 'lucide-react';
 import { supabase, mapDbToSale } from '../lib/supabase';
 import { Sale, StoreInfo } from '../types';
 import { BrandLogo } from './BrandLogo';
+import { playAppSound } from '../lib/audio';
 
 const DEFAULT_STORE_INFO: StoreInfo = {
   nome: "Oxente Festeje",
@@ -33,6 +35,10 @@ const DEFAULT_STORE_INFO: StoreInfo = {
 export function OrderTrackingPage() {
   const [trackingId, setTrackingId] = useState<string>(() => {
     const urlParams = new URLSearchParams(window.location.search);
+    const aprovarParam = urlParams.get('aprovar');
+    if (aprovarParam && aprovarParam !== '1' && aprovarParam !== 'true') {
+      return aprovarParam;
+    }
     return urlParams.get('venda') || urlParams.get('acompanhar') || urlParams.get('pedido') || '';
   });
   
@@ -41,6 +47,8 @@ export function OrderTrackingPage() {
   const [storeInfo, setStoreInfo] = useState<StoreInfo>(DEFAULT_STORE_INFO);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [approving, setApproving] = useState(false);
+  const [justApproved, setJustApproved] = useState(false);
 
   // Fetch single order details
   const fetchTrackingOrder = async (idToFetch: string) => {
@@ -48,44 +56,74 @@ export function OrderTrackingPage() {
     setLoading(true);
     setErrorMsg(null);
     try {
-      // 1. Fetch sale detail
+      const cleanId = idToFetch.trim();
+      const numOnly = cleanId.replace(/^#/, '');
+
+      let foundRecord: any = null;
+
+      // 1. Fetch sale detail by UUID
       const { data: saleData, error: saleError } = await supabase
         .from('oxente_sales')
         .select('*')
-        .eq('id', idToFetch.trim())
+        .eq('id', cleanId)
         .maybeSingle();
 
       if (saleError) {
-        console.error('Error fetching order:', saleError);
-        setErrorMsg('Erro de conexão ao buscar o pedido. Verifique sua rede.');
+        console.error('Error fetching order by id:', saleError);
+      }
+
+      if (saleData) {
+        foundRecord = saleData;
+      } else {
+        // Try searching by order number (numeroPedido)
+        const { data: saleByNum } = await supabase
+          .from('oxente_sales')
+          .select('*')
+          .eq('numero_pedido', cleanId)
+          .maybeSingle();
+
+        if (saleByNum) {
+          foundRecord = saleByNum;
+        } else if (numOnly !== cleanId) {
+          const { data: saleByNumOnly } = await supabase
+            .from('oxente_sales')
+            .select('*')
+            .eq('numero_pedido', numOnly)
+            .maybeSingle();
+          if (saleByNumOnly) {
+            foundRecord = saleByNumOnly;
+          }
+        }
+      }
+
+      // If still not found, check localStorage fallback
+      if (!foundRecord) {
+        try {
+          const raw = localStorage.getItem('oxente_sales');
+          if (raw) {
+            const list = JSON.parse(raw);
+            if (Array.isArray(list)) {
+              const localMatch = list.find((s: any) => 
+                s.id === cleanId || 
+                s.numeroPedido === cleanId || 
+                s.numeroPedido === numOnly ||
+                (s.id && s.id.substring(0, 5) === cleanId)
+              );
+              if (localMatch) {
+                setSale(localMatch);
+                setLoading(false);
+                return;
+              }
+            }
+          }
+        } catch (e) {}
+
+        setErrorMsg('Pedido não encontrado. Verifique se o código ou o número do pedido está correto.');
         setSale(null);
         return;
       }
 
-      if (!saleData) {
-        // Try searching by order number (numeroPedido) instead of UUID/id
-        const { data: saleByNum, error: errorByNum } = await supabase
-          .from('oxente_sales')
-          .select('*')
-          .eq('numero_pedido', idToFetch.trim())
-          .maybeSingle();
-
-        if (errorByNum) {
-          console.error('Error fetching by order number:', errorByNum);
-        }
-
-        if (saleByNum) {
-          setSale(mapDbToSale(saleByNum));
-          // Update URL query string silently so refreshing keeps the state
-          const newUrl = `${window.location.origin}${window.location.pathname}?venda=${saleByNum.id}`;
-          window.history.replaceState({ path: newUrl }, '', newUrl);
-        } else {
-          setErrorMsg('Pedido não encontrado. Verifique se o código ou o número do pedido está correto.');
-          setSale(null);
-        }
-      } else {
-        setSale(mapDbToSale(saleData));
-      }
+      setSale(mapDbToSale(foundRecord));
 
       // 2. Fetch latest store details
       const { data: storeData } = await supabase
@@ -108,6 +146,54 @@ export function OrderTrackingPage() {
       setErrorMsg('Ocorreu um erro ao carregar os dados. Tente novamente.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApproveLayout = async () => {
+    if (!sale) return;
+    setApproving(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const { error } = await supabase
+        .from('oxente_sales')
+        .update({
+          cliente_aprovou_layout: true,
+          cliente_aprovou_layout_em: nowIso
+        })
+        .eq('id', sale.id);
+
+      if (error) {
+        console.error('Erro ao registrar aprovação do layout no Supabase:', error);
+      }
+
+      setSale(prev => prev ? {
+        ...prev,
+        clienteAprovouLayout: true,
+        clienteAprovouLayoutEm: nowIso
+      } : null);
+
+      setJustApproved(true);
+      playAppSound('complete');
+
+      // Local storage fallback sync
+      try {
+        const raw = localStorage.getItem('oxente_sales');
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list)) {
+            const updated = list.map((s: any) => s.id === sale.id ? { 
+              ...s, 
+              clienteAprovouLayout: true, 
+              clienteAprovouLayoutEm: nowIso 
+            } : s);
+            localStorage.setItem('oxente_sales', JSON.stringify(updated));
+          }
+        }
+      } catch (e) {}
+    } catch (err) {
+      console.error('Erro ao aprovar:', err);
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -149,8 +235,10 @@ export function OrderTrackingPage() {
     let s2Status: 'pending' | 'active' | 'done' = 'pending';
 
     if (sale.statusArte === 'Arte Finalizada') {
-      s2Title = 'Arte Aprovada & Finalizada! ✨';
-      s2Desc = 'Sua arte foi totalmente desenhada, aprovada e finalizada com sucesso.';
+      s2Title = sale.clienteAprovouLayout ? 'Arte Aprovada por Você! ✨' : 'Arte Concluída (Aguardando seu aceite)';
+      s2Desc = sale.clienteAprovouLayout 
+        ? `Você conferiu e confirmou a aprovação do layout${sale.clienteAprovouLayoutEm ? ` em ${new Date(sale.clienteAprovouLayoutEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}. Liberado para confecção!`
+        : 'Sua arte foi desenhada e finalizada pela equipe. Por favor, confirme a aprovação acima para liberar a confecção.';
       s2Status = 'done';
     } else if (sale.puxadoPor) {
       s2Title = 'Arte em Elaboração 🎨';
@@ -341,6 +429,127 @@ export function OrderTrackingPage() {
                 </div>
               </div>
             </div>
+
+            {/* CARD DE APROVAÇÃO DO LAYOUT PELO CLIENTE (OPÇÃO 1) */}
+            {sale.clienteAprovouLayout ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-gradient-to-br from-emerald-950/40 via-emerald-900/20 to-zinc-900 border-2 border-emerald-500/40 rounded-3xl p-5 shadow-xl relative overflow-hidden space-y-3"
+              >
+                <div className="flex items-start gap-3.5">
+                  <div className="p-2.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded-2xl shrink-0 mt-0.5">
+                    <CheckCircle2 className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9.5px] font-black uppercase text-emerald-400 tracking-wider bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/25">
+                        Aceite Confirmado
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-bold text-white font-display">
+                      Layout Conferido e Aprovado por Você! ✨
+                    </h3>
+                    <p className="text-xs text-zinc-300 font-sans leading-relaxed">
+                      Sua confirmação de layout foi registrada com sucesso em nosso sistema
+                      {sale.clienteAprovouLayoutEm && (
+                        <strong className="text-emerald-300 font-mono font-medium block mt-1">
+                          📅 Registrado em: {new Date(sale.clienteAprovouLayoutEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                        </strong>
+                      )}
+                    </p>
+                    <p className="text-[11px] text-zinc-400 font-sans pt-1">
+                      Como o layout já foi devidamente conferido e aprovado, está tudo certinho para a <strong>confecção e produção</strong> do seu pedido! 🚀🧵🎈
+                    </p>
+                  </div>
+                </div>
+
+                {justApproved && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-2xl text-center text-xs text-emerald-200 font-bold"
+                  >
+                    🎉 Obrigado pela confirmação! Sua liberação foi registrada e nossa produção foi notificada.
+                  </motion.div>
+                )}
+              </motion.div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="bg-zinc-900 border-2 border-brand-pink/50 rounded-3xl p-5 shadow-2xl relative overflow-hidden space-y-4"
+              >
+                <div className="absolute top-0 right-0 w-32 h-32 bg-brand-pink/10 rounded-full blur-2xl -z-10 pointer-events-none" />
+
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 bg-brand-pink/20 text-brand-pink border border-brand-pink/40 rounded-2xl shrink-0 mt-0.5">
+                    <Sparkles className="h-6 w-6" />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[9.5px] font-black uppercase text-brand-pink tracking-wider bg-brand-pink/15 px-2 py-0.5 rounded-full border border-brand-pink/25">
+                        Confirmação de Aprovação do Layout
+                      </span>
+                    </div>
+                    <h3 className="text-sm font-bold text-white font-display">
+                      Você Confere e Aprova o Layout?
+                    </h3>
+                    <p className="text-xs text-zinc-300 font-sans leading-relaxed">
+                      Olá, <strong className="text-white">{sale.cliente}</strong>! Informamos que, com a sua aprovação, <strong className="text-brand-pink">você CONFIRMA</strong> que conferiu com atenção todas as informações mostradas no layout:
+                    </p>
+                  </div>
+                </div>
+
+                <div className="bg-zinc-950/70 border border-zinc-800/80 rounded-2xl p-3.5 space-y-2 text-xs font-sans text-zinc-300">
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>Cores do produto e modelos</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>Possíveis erros de digitação</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>Textos, nomes, idades, datas</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>Todos os detalhes</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <Check className="h-4 w-4 text-emerald-400 shrink-0 mt-0.5" />
+                    <span>O produto será como foi aprovado</span>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <button
+                    type="button"
+                    disabled={approving}
+                    onClick={handleApproveLayout}
+                    className="w-full py-3.5 px-4 bg-emerald-600 hover:bg-emerald-550 active:scale-98 disabled:opacity-70 text-white font-black text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-emerald-950/50 cursor-pointer transition-all flex items-center justify-center gap-2"
+                  >
+                    {approving ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin text-white" />
+                        <span>Gravando sua aprovação...</span>
+                      </>
+                    ) : (
+                      <>
+                        <CheckCircle2 className="h-5 w-5 text-white" />
+                        <span>Sim, conferi tudo e aprovo o layout!</span>
+                      </>
+                    )}
+                  </button>
+                  
+                  <p className="text-[10.5px] text-zinc-500 text-center font-sans leading-tight">
+                    🔒 Ao clicar no botão, seu aceite é registrado automaticamente no sistema da loja para liberação da confecção.
+                  </p>
+                </div>
+              </motion.div>
+            )}
 
             {/* CARD 2: JORNADA TEMPORAL DO PEDIDO (Vertical Interactive Timeline) */}
             <div className="bg-zinc-900 border border-zinc-805 rounded-3xl p-6 shadow-lg space-y-4">

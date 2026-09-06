@@ -284,6 +284,9 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   const getLayoutApprovalMessage = (sale: Sale): string => {
     const clientName = sale.cliente || 'Cliente';
     const storeName = storeInfo?.nome || 'Oxente Festeje';
+    const baseUrl = window.location.origin;
+    const approvalParam = encodeURIComponent(sale.numeroPedido || sale.id);
+    const approvalLink = `${baseUrl}/?aprovar=${approvalParam}`;
 
     return `Olá, *${clientName}*! Tudo bem? 🎨✨
 
@@ -297,6 +300,9 @@ Informamos que, com a sua aprovação, *você CONFIRMA* que conferiu com atenç�
 ✅️ O produto será como foi aprovado;
 
 Como o layout já foi devidamente conferido e aprovado para a nossa loja, está tudo certinho para a *confecção e produção* do seu pedido! 🚀🧵🎈
+
+👉 *Para registrar formalmente sua aprovação e liberar para a produção, clique no link abaixo e confirme em 1 toque:*
+🔗 ${approvalLink}
  
 Muito obrigado pela confiança e preferência!
 *${storeName}*🎈`;
@@ -1324,6 +1330,28 @@ Muito obrigado pela confiança e preferência!
                       </div>
                     )}
 
+                    {/* Status de Confirmação pelo Cliente */}
+                    {sale.clienteAprovouLayout ? (
+                      <div className="text-[9.5px] bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 font-bold px-2 py-1 rounded-lg flex items-center justify-between gap-1 shadow-sm">
+                        <span className="flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                          <span>Aceite do Cliente Registrado</span>
+                        </span>
+                        {sale.clienteAprovouLayoutEm && (
+                          <span className="text-[8px] font-mono text-emerald-400/80">
+                            {formatDateTime(sale.clienteAprovouLayoutEm)}
+                          </span>
+                        )}
+                      </div>
+                    ) : isFinished ? (
+                      <div className="text-[8.5px] bg-amber-950/25 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-lg flex items-center justify-between gap-1">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-2.5 w-2.5 text-amber-400 shrink-0" />
+                          <span>Aguardando cliente confirmar</span>
+                        </span>
+                      </div>
+                    ) : null}
+
                     {/* Control Panel actions */}
                     <div className="flex items-center gap-2 pt-2 border-t border-zinc-900 no-print">
                       <div className="flex-1 flex gap-1.5">
@@ -1554,6 +1582,28 @@ Muito obrigado pela confiança e preferência!
                         )}
                       </div>
                     )}
+
+                    {/* Status de Confirmação pelo Cliente */}
+                    {sale.clienteAprovouLayout ? (
+                      <div className="text-[9.5px] bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 font-bold px-2 py-1 rounded-lg flex items-center justify-between gap-1 shadow-sm">
+                        <span className="flex items-center gap-1">
+                          <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
+                          <span>Aceite do Cliente Registrado</span>
+                        </span>
+                        {sale.clienteAprovouLayoutEm && (
+                          <span className="text-[8px] font-mono text-emerald-400/80">
+                            {formatDateTime(sale.clienteAprovouLayoutEm)}
+                          </span>
+                        )}
+                      </div>
+                    ) : isFinished ? (
+                      <div className="text-[8.5px] bg-amber-950/25 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-lg flex items-center justify-between gap-1">
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-2.5 w-2.5 text-amber-400 shrink-0" />
+                          <span>Aguardando cliente confirmar</span>
+                        </span>
+                      </div>
+                    ) : null}
 
                     {/* Control Panel actions */}
                     <div className="flex items-center gap-2 pt-2 border-t border-zinc-900 no-print">
@@ -1875,6 +1925,15 @@ ${produtosTexto}`;
                                   <span>Enviar Confirmação de Layout (WhatsApp)</span>
                                 </button>
                               </span>
+                              {viewedSale.clienteAprovouLayout ? (
+                                <span className="block mt-1.5 text-[9.5px] font-bold text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 px-2 py-1 rounded-md">
+                                  ✅ Aceite do Layout Confirmado pelo Cliente{viewedSale.clienteAprovouLayoutEm && ` em ${new Date(viewedSale.clienteAprovouLayoutEm).toLocaleString('pt-BR')}`}
+                                </span>
+                              ) : (
+                                <span className="block mt-1 text-[9px] text-amber-400 font-medium">
+                                  ⏳ Aguardando cliente clicar no link de confirmação
+                                </span>
+                              )}
                             </>
                           ) : viewedSale.puxadoPor ? (
                             <span>Em elaboração por <strong className="text-blue-400">{viewedSale.puxadoPor}</strong>{viewedSale.puxadoEm && ` desde ${new Date(viewedSale.puxadoEm).toLocaleString('pt-BR')}`}</span>
@@ -2453,7 +2512,7 @@ ${produtosTexto}`;
                 <p className="text-[11px] text-zinc-300 leading-relaxed">
                   {saleToRemovePrompt.telefoneCliente ? (
                     <>
-                      Mensagem gerada para o WhatsApp <strong className="text-emerald-300 font-mono font-bold">{saleToRemovePrompt.telefoneCliente}</strong> informando que o cliente conferiu o layout, cores, textos e ortografia, e que o pedido está pronto para a confecção!
+                      Mensagem gerada para o WhatsApp <strong className="text-emerald-300 font-mono font-bold">{saleToRemovePrompt.telefoneCliente}</strong> com o link direto para o cliente confirmar o layout com 1 toque e registrar a aprovação no sistema!
                     </>
                   ) : (
                     <span className="text-amber-400 font-medium">

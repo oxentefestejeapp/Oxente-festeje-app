@@ -94,6 +94,8 @@ export interface Sale {
   editadoEm?: string;
   arteFinalizadaPorEmail?: string;
   arteFinalizadaEm?: string;
+  clienteAprovouLayout?: boolean;
+  clienteAprovouLayoutEm?: string; // Data e hora ISO em que o cliente confirmou a aprovação do layout
   valoresOriginais?: SaleOriginalValues;
   notasInternas?: string;
   pedidoAnotado?: boolean;
