@@ -31,7 +31,8 @@ import {
   RefreshCw,
   AlertTriangle,
   AlertCircle,
-  Lock
+  Lock,
+  Landmark
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig, isUsersTableSupported } from './lib/supabase';
@@ -42,6 +43,7 @@ import { StockManager } from './components/StockManager';
 import { SalesManager } from './components/SalesManager';
 import { SettingsManager } from './components/SettingsManager';
 import { SettingsLockGate } from './components/SettingsLockGate';
+import { FinancialDREManager } from './components/FinancialDREManager';
 import { DeliveryManager } from './components/DeliveryManager';
 import { ReceivablesManager } from './components/ReceivablesManager';
 import { Login } from './components/Login';
@@ -220,9 +222,9 @@ export default function App() {
     storeInfoRef.current = storeInfo;
   }, [storeInfo]);
 
-  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'agendamento' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web' | 'leitor_qr'>(() => {
+  const [activeTab, setActiveTab] = useState<'vendas' | 'a_receber' | 'entregas' | 'agendamento' | 'estoque' | 'cadastro' | 'configuracoes' | 'usuarios' | 'auditoria' | 'financeiro_dre' | 'lembretes' | 'pedidos_fechados' | 'whatsapp_web' | 'leitor_qr'>(() => {
     const saved = localStorage.getItem('oxente_active_tab');
-    const allowedTabs = ['vendas', 'a_receber', 'entregas', 'agendamento', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'lembretes', 'pedidos_fechados', 'whatsapp_web', 'leitor_qr'];
+    const allowedTabs = ['vendas', 'a_receber', 'entregas', 'agendamento', 'estoque', 'cadastro', 'configuracoes', 'usuarios', 'auditoria', 'financeiro_dre', 'lembretes', 'pedidos_fechados', 'whatsapp_web', 'leitor_qr'];
     return (allowedTabs.includes(saved || '') ? saved : 'vendas') as any;
   });
   const [preselectedSaleId, setPreselectedSaleId] = useState<string | null>(null);
@@ -2474,6 +2476,9 @@ export default function App() {
       case 'auditoria':
         activeGradient = 'bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-[0_0_15px_rgba(224,36,36,0.35)]';
         break;
+      case 'financeiro_dre':
+        activeGradient = 'bg-gradient-to-r from-emerald-500 via-teal-500 to-green-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.35)]';
+        break;
       case 'instalar_app':
         activeGradient = 'bg-gradient-to-r from-cyan-400 to-emerald-450 text-black shadow-[0_0_15px_rgba(6,182,212,0.35)]';
         break;
@@ -2853,6 +2858,25 @@ export default function App() {
             </button>
           )}
 
+          {/* Exclusive Financial DRE Module for Admin */}
+          {isAdmin && (
+            <button
+              onClick={() => changeTab('financeiro_dre')}
+              className={getTabClass('financeiro_dre')}
+            >
+              <motion.div
+                animate={activeTab === 'financeiro_dre' ? { scale: [1, 1.2, 1], rotate: [0, -6, 6, 0] } : { scale: 1, rotate: 0 }}
+                whileHover={{ scale: 1.25 }}
+                whileTap={{ scale: 0.9 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Landmark className="h-4 w-4" />
+              </motion.div>
+              <span className="hidden sm:inline">Financeiro & DRE</span>
+              <span className="sm:hidden">DRE & Lucro</span>
+            </button>
+          )}
+
           {/* Quick Sign Out Action Trigger */}
           <button
             onClick={() => {
@@ -3154,6 +3178,40 @@ export default function App() {
                   }>
                     <SalesAudit sales={sales} products={products} storeInfo={storeInfo} onUpdateSale={handleUpdateSale} />
                   </Suspense>
+                </div>
+              )
+            )}
+
+            {activeTab === 'financeiro_dre' && isAdmin && (
+              !isTabUnlocked('financeiro_dre') ? (
+                <SettingsLockGate
+                  tabName="Financeiro & DRE"
+                  title="Acesso Financeiro & DRE"
+                  subtitle="Demonstrativo de Resultado e Lucro protegido por senha de segurança do administrador."
+                  unlockButtonText="Desbloquear Módulo Financeiro"
+                  idPrefix="financeiro_dre"
+                  onUnlock={() => unlockTab('financeiro_dre')}
+                  onCancel={() => changeTab('vendas')}
+                />
+              ) : (
+                <div className="space-y-3">
+                  <div className="flex justify-end no-print">
+                    <button
+                      id="botao-bloquear-financeiro-dre"
+                      type="button"
+                      onClick={() => lockTab('financeiro_dre')}
+                      className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white bg-zinc-900/90 hover:bg-zinc-800 border border-zinc-800 px-3 py-1.5 rounded-xl transition-colors cursor-pointer shadow-sm"
+                      title="Bloquear módulo financeiro com senha novamente"
+                    >
+                      <Lock className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>Bloquear com Senha</span>
+                    </button>
+                  </div>
+                  <FinancialDREManager
+                    sales={sales}
+                    products={products}
+                    currentUserEmail={firebaseUser?.email || ''}
+                  />
                 </div>
               )
             )}

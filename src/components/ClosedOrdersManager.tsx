@@ -49,6 +49,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   const [viewedSale, setViewedSale] = useState<Sale | null>(null);
   const [copiedText, setCopiedText] = useState(false);
   const [copiedQr, setCopiedQr] = useState(false);
+  const [copiedApprovalMsg, setCopiedApprovalMsg] = useState(false);
   const [notesText, setNotesText] = useState('');
   const [isSavingNotes, setIsSavingNotes] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -268,6 +269,60 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
     }
   };
 
+  // Formata o número para padrão internacional do WhatsApp (55 + DDD + dígitos)
+  const formatWhatsappNumber = (phoneStr?: string): string => {
+    if (!phoneStr) return '';
+    let digits = phoneStr.replace(/\D/g, '');
+    if (!digits) return '';
+    if (digits.length <= 11 && !digits.startsWith('55')) {
+      digits = `55${digits}`;
+    }
+    return digits;
+  };
+
+  // Gera a mensagem de aprovação de arte contendo confirmação de layout, cores e ortografia
+  const getLayoutApprovalMessage = (sale: Sale): string => {
+    const clientName = sale.cliente || 'Cliente';
+    const orderNum = sale.numeroPedido || sale.id.substring(0, 5);
+    const storeName = storeInfo?.nome || 'Oxente Festeje';
+
+    return `Olá, *${clientName}*! Tudo bem? 🎨✨
+
+Seu layout de arte para o pedido *#${orderNum}* foi *concluído e aprovado com sucesso*! 🥳
+
+📌 *Confirmação de Aprovação do Layout:*
+Informamos que, com a sua aprovação, você confirma que conferiu com atenção todas as informações mostradas no layout, inclusive:
+
+✅ Cores do produto e modelos;
+✅ Textos, nomes, idades, datas e possíveis erros de digitação;
+✅ Todos os detalhes visuais combinados.
+
+Como o layout já foi devidamente conferido e aprovado para a nossa loja, está tudo certinho para a *confecção e produção* do seu pedido! 🚀🧵🎈
+
+Muito obrigado pela confiança e preferência!
+*${storeName}*🎈`;
+  };
+
+  // Disparo automático via WhatsApp
+  const sendLayoutApprovalWhatsapp = (sale: Sale) => {
+    const numToUse = formatWhatsappNumber(sale.telefoneCliente);
+    const text = getLayoutApprovalMessage(sale);
+    const encodedText = encodeURIComponent(text);
+
+    let url = '';
+    if (numToUse) {
+      url = `https://api.whatsapp.com/send?phone=${numToUse}&text=${encodedText}`;
+    } else {
+      url = `https://api.whatsapp.com/send?text=${encodedText}`;
+    }
+
+    try {
+      window.open(url, '_blank');
+    } catch (e) {
+      console.warn('Erro ao abrir WhatsApp automaticamente:', e);
+    }
+  };
+
   // Toggle Artwork Finished Status
   const handleToggleArtworkStatus = (sale: Sale) => {
     const nextStatus = sale.statusArte === 'Arte Finalizada' ? 'Pendente' : 'Arte Finalizada';
@@ -281,6 +336,10 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
       };
       onUpdateSale(updated);
       playAppSound('complete');
+
+      // Disparo automático da mensagem no WhatsApp do cliente da arte
+      sendLayoutApprovalWhatsapp(updated);
+
       setSaleToRemovePrompt(updated);
     } else {
       const updated: Sale = {
@@ -1295,22 +1354,36 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                         </button>
 
                         {isFinished && (
-                          <button
-                            type="button"
-                            title={sale.removerDoDesign ? "Mostrar na lista de design" : "Remover da lista de design"}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleConfirmRemoveFromDesign(sale, !sale.removerDoDesign);
-                            }}
-                            className={`py-1.5 px-2.5 border rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 ${
-                              sale.removerDoDesign
-                                ? 'bg-emerald-950/20 border-emerald-950/40 hover:border-emerald-650 hover:text-emerald-300 text-emerald-400'
-                                : 'bg-red-950/20 border-red-900/30 hover:border-red-650 hover:text-red-300 text-red-400'
-                            }`}
-                          >
-                            <Trash className="h-3.5 w-3.5" />
-                            <span>{sale.removerDoDesign ? 'Mostrar' : 'Ocultar'}</span>
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              title="Reenviar mensagem de aprovação de arte no WhatsApp do cliente"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                sendLayoutApprovalWhatsapp(sale);
+                              }}
+                              className="py-1.5 px-2 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 text-[10px] font-bold"
+                            >
+                              <MessageSquare className="h-3 w-3" />
+                              <span className="hidden sm:inline">Zap Aprovação</span>
+                            </button>
+                            <button
+                              type="button"
+                              title={sale.removerDoDesign ? "Mostrar na lista de design" : "Remover da lista de design"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleConfirmRemoveFromDesign(sale, !sale.removerDoDesign);
+                              }}
+                              className={`py-1.5 px-2.5 border rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 ${
+                                sale.removerDoDesign
+                                  ? 'bg-emerald-950/20 border-emerald-950/40 hover:border-emerald-650 hover:text-emerald-300 text-emerald-400'
+                                  : 'bg-red-950/20 border-red-900/30 hover:border-red-650 hover:text-red-300 text-red-400'
+                              }`}
+                            >
+                              <Trash className="h-3.5 w-3.5" />
+                              <span>{sale.removerDoDesign ? 'Mostrar' : 'Ocultar'}</span>
+                            </button>
+                          </>
                         )}
                       </div>
 
@@ -1512,22 +1585,36 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
                         </button>
 
                         {isFinished && (
-                          <button
-                            type="button"
-                            title={sale.removerDoDesign ? "Mostrar na lista de design" : "Remover da lista de design"}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleConfirmRemoveFromDesign(sale, !sale.removerDoDesign);
-                            }}
-                            className={`py-1.5 px-2.5 border rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 ${
-                              sale.removerDoDesign
-                                ? 'bg-emerald-950/20 border-emerald-950/40 hover:border-emerald-650 hover:text-emerald-300 text-emerald-400'
-                                : 'bg-red-950/20 border-red-900/30 hover:border-red-650 hover:text-red-300 text-red-400'
-                            }`}
-                          >
-                            <Trash className="h-3.5 w-3.5" />
-                            <span>{sale.removerDoDesign ? 'Mostrar' : 'Ocultar'}</span>
-                          </button>
+                          <>
+                            <button
+                              type="button"
+                              title="Reenviar mensagem de aprovação de arte no WhatsApp do cliente"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                sendLayoutApprovalWhatsapp(sale);
+                              }}
+                              className="py-1.5 px-2 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 text-[10px] font-bold"
+                            >
+                              <MessageSquare className="h-3 w-3" />
+                              <span className="hidden sm:inline">Zap Aprovação</span>
+                            </button>
+                            <button
+                              type="button"
+                              title={sale.removerDoDesign ? "Mostrar na lista de design" : "Remover da lista de design"}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleConfirmRemoveFromDesign(sale, !sale.removerDoDesign);
+                              }}
+                              className={`py-1.5 px-2.5 border rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 ${
+                                sale.removerDoDesign
+                                  ? 'bg-emerald-950/20 border-emerald-950/40 hover:border-emerald-650 hover:text-emerald-300 text-emerald-400'
+                                  : 'bg-red-950/20 border-red-900/30 hover:border-red-650 hover:text-red-300 text-red-400'
+                              }`}
+                            >
+                              <Trash className="h-3.5 w-3.5" />
+                              <span>{sale.removerDoDesign ? 'Mostrar' : 'Ocultar'}</span>
+                            </button>
+                          </>
                         )}
                       </div>
 
@@ -1777,7 +1864,19 @@ ${produtosTexto}`;
                         <h5 className="text-[10.5px] font-bold text-zinc-200">🎨 Criação de Arte (Design)</h5>
                         <p className="text-[9px] text-zinc-550 mt-0.5 leading-normal">
                           {viewedSale.statusArte === 'Arte Finalizada' ? (
-                            <span>Aprovada e Finalizada por <strong className="text-emerald-400">{viewedSale.arteFinalizadaPorEmail || viewedSale.puxadoPor || 'Designer'}</strong>{viewedSale.arteFinalizadaEm && ` em ${new Date(viewedSale.arteFinalizadaEm).toLocaleString('pt-BR')}`}</span>
+                            <>
+                              <span>Aprovada e Finalizada por <strong className="text-emerald-400">{viewedSale.arteFinalizadaPorEmail || viewedSale.puxadoPor || 'Designer'}</strong>{viewedSale.arteFinalizadaEm && ` em ${new Date(viewedSale.arteFinalizadaEm).toLocaleString('pt-BR')}`}</span>
+                              <span className="block mt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => sendLayoutApprovalWhatsapp(viewedSale)}
+                                  className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded transition-colors cursor-pointer"
+                                >
+                                  <MessageSquare className="h-2.5 w-2.5" />
+                                  <span>Enviar Confirmação de Layout (WhatsApp)</span>
+                                </button>
+                              </span>
+                            </>
                           ) : viewedSale.puxadoPor ? (
                             <span>Em elaboração por <strong className="text-blue-400">{viewedSale.puxadoPor}</strong>{viewedSale.puxadoEm && ` desde ${new Date(viewedSale.puxadoEm).toLocaleString('pt-BR')}`}</span>
                           ) : (
@@ -2324,39 +2423,101 @@ ${produtosTexto}`;
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
               transition={{ duration: 0.2 }}
-              className="bg-zinc-900 border border-zinc-805 rounded-2xl w-full max-w-sm shadow-2xl p-5 space-y-4"
+              className="bg-zinc-900 border border-zinc-800 rounded-2xl w-full max-w-md shadow-2xl p-5 space-y-4"
             >
               <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-500/10 border border-emerald-500/30 text-emerald-450 rounded-xl">
-                  <CheckCircle2 className="h-5 w-5" />
+                <div className="p-2.5 bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 rounded-xl">
+                  <CheckCircle2 className="h-6 w-6" />
                 </div>
                 <div>
-                  <h3 className="font-bold text-zinc-100 text-sm">✨ Arte Concluída!</h3>
-                  <p className="text-[10.5px] text-zinc-400 mt-0.5">Cliente: <strong className="text-zinc-200 font-bold">{saleToRemovePrompt.cliente}</strong></p>
+                  <h3 className="font-bold text-zinc-100 text-sm flex items-center gap-1.5">
+                    <span>✨ Arte Concluída & Aprovada!</span>
+                  </h3>
+                  <p className="text-[11px] text-zinc-400 mt-0.5">
+                    Pedido <strong className="text-zinc-200 font-mono">#{saleToRemovePrompt.numeroPedido || saleToRemovePrompt.id.substring(0, 5)}</strong> • <strong className="text-zinc-200 font-bold">{saleToRemovePrompt.cliente}</strong>
+                  </p>
+                </div>
+              </div>
+
+              {/* Card de Notificação Automática do WhatsApp */}
+              <div className="bg-emerald-950/20 border border-emerald-500/30 p-3.5 rounded-xl space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-black uppercase tracking-wider">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    <span>Disparo Automático de WhatsApp</span>
+                  </div>
+                  <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-bold px-1.5 py-0.5 rounded border border-emerald-500/30">
+                    Aprovação de Layout
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-zinc-300 leading-relaxed">
+                  {saleToRemovePrompt.telefoneCliente ? (
+                    <>
+                      Mensagem gerada para o WhatsApp <strong className="text-emerald-300 font-mono font-bold">{saleToRemovePrompt.telefoneCliente}</strong> informando que o cliente conferiu o layout, cores, textos e ortografia, e que o pedido está pronto para a confecção!
+                    </>
+                  ) : (
+                    <span className="text-amber-400 font-medium">
+                      ⚠️ Este pedido não possui telefone cadastrado. Clique no botão abaixo para abrir o WhatsApp e selecionar o contato.
+                    </span>
+                  )}
+                </p>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-emerald-500/20">
+                  <button
+                    type="button"
+                    onClick={() => sendLayoutApprovalWhatsapp(saleToRemovePrompt)}
+                    className="flex-1 py-1.5 px-3 bg-emerald-600 hover:bg-emerald-550 text-white font-black text-xs rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-sm active:scale-95"
+                  >
+                    <Smartphone className="h-3.5 w-3.5" />
+                    <span>{saleToRemovePrompt.telefoneCliente ? 'Reenviar no WhatsApp' : 'Abrir WhatsApp'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      navigator.clipboard.writeText(getLayoutApprovalMessage(saleToRemovePrompt));
+                      setCopiedApprovalMsg(true);
+                      playAppSound('pop');
+                      setTimeout(() => setCopiedApprovalMsg(false), 2500);
+                    }}
+                    className="py-1.5 px-3 bg-zinc-800 hover:bg-zinc-750 text-zinc-200 border border-zinc-700 font-bold text-xs rounded-lg transition-all cursor-pointer flex items-center gap-1.5 active:scale-95"
+                  >
+                    {copiedApprovalMsg ? (
+                      <>
+                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                        <span className="text-emerald-400">Copiado!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="h-3.5 w-3.5 text-zinc-400" />
+                        <span>Copiar Texto</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
 
               <div className="bg-zinc-950 border border-zinc-850 p-3.5 rounded-xl text-xs text-zinc-400 space-y-1 leading-relaxed">
-                <p className="font-bold text-zinc-300">Deseja remover da lista do design?</p>
-                <p className="text-[10px] text-zinc-500">
-                  Ocultar este pedido libera espaço nas suas colunas. Ele continuará registrado em suas vendas normais.
+                <p className="font-bold text-zinc-300">Deseja remover da mesa do design?</p>
+                <p className="text-[10.5px] text-zinc-500">
+                  Ocultar este pedido libera espaço na mesa do designer. O pedido continuará ativo e visível na lista de vendas e produção.
                 </p>
               </div>
 
-              <div className="flex gap-2.5 justify-end">
+              <div className="flex gap-2.5 justify-end pt-1">
                 <button
                   type="button"
                   onClick={() => handleConfirmRemoveFromDesign(saleToRemovePrompt, false)}
-                  className="px-3 py-1.5 bg-zinc-850 hover:bg-zinc-850 text-zinc-450 hover:text-zinc-300 font-bold rounded-lg text-xs transition-colors cursor-pointer select-none"
+                  className="px-3.5 py-1.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-300 font-bold rounded-lg text-xs transition-colors cursor-pointer select-none"
                 >
-                  Manter na lista
+                  Manter na mesa
                 </button>
                 <button
                   type="button"
                   onClick={() => handleConfirmRemoveFromDesign(saleToRemovePrompt, true)}
                   className="px-4 py-1.5 bg-red-600 hover:bg-red-550 text-white font-extrabold rounded-lg text-xs shadow-md transition-colors cursor-pointer select-none"
                 >
-                  Ocultar agora 🚫
+                  Ocultar da mesa 🚫
                 </button>
               </div>
             </motion.div>

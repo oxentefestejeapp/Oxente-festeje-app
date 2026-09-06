@@ -432,3 +432,44 @@ export function getSaleCostInfo(sale: Sale, products: Product[] = []): SaleCostI
 }
 
 export const getSaleAvulsoInfo = getSaleCostInfo;
+
+export type ExpenseCategory = 
+  | 'fixa'          // Aluguel, energia, internet, água, contador
+  | 'insumos'        // Balões, fitilhos, gás hélio, embalagens, sacolas
+  | 'pessoal'        // Ajudantes, diárias, pró-labore
+  | 'operacional'    // Transporte, combustível, manutenção
+  | 'marketing'      // Anúncios Instagram, panfletos, taxas maquininha
+  | 'outros';        // Diversos
+
+export interface Expense {
+  id: string;
+  descricao: string;
+  categoria: ExpenseCategory;
+  valor: number;
+  dataVencimento: string; // YYYY-MM-DD
+  dataPagamento?: string; // YYYY-MM-DD
+  status: 'Pendente' | 'Pago';
+  recorrente?: boolean; // Repete mensalmente
+  observacoes?: string;
+  comprovante?: string;
+  criadoEm: string; // ISO
+  atualizadoEm?: string; // ISO
+}
+
+export interface CashClosing {
+  id: string;
+  data: string; // YYYY-MM-DD
+  abertoPor: string;
+  fechadoPor?: string;
+  saldoInicialGaveta: number;
+  dinheiroFisicoContado: number;
+  totalVendasDinheiroSistema: number;
+  totalVendasPixSistema: number;
+  totalVendasCartaoSistema: number;
+  totalDespesasPagasDinheiro: number;
+  diferencaGaveta: number; // dinheiroFisicoContado - (saldoInicialGaveta + totalVendasDinheiroSistema - totalDespesasPagasDinheiro)
+  status: 'Aberto' | 'Fechado';
+  observacoes?: string;
+  criadoEm: string;
+  fechadoEm?: string;
+}
