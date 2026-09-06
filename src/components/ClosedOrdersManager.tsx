@@ -283,22 +283,21 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   // Gera a mensagem de aprovação de arte contendo confirmação de layout, cores e ortografia
   const getLayoutApprovalMessage = (sale: Sale): string => {
     const clientName = sale.cliente || 'Cliente';
-    const orderNum = sale.numeroPedido || sale.id.substring(0, 5);
     const storeName = storeInfo?.nome || 'Oxente Festeje';
 
     return `Olá, *${clientName}*! Tudo bem? 🎨✨
 
-Seu layout de arte para o pedido *#${orderNum}* foi *concluído e aprovado com sucesso*! 🥳
-
 📌 *Confirmação de Aprovação do Layout:*
-Informamos que, com a sua aprovação, você confirma que conferiu com atenção todas as informações mostradas no layout, inclusive:
+Informamos que, com a sua aprovação, *você confirma* que conferiu com atenção todas as informações mostradas no layout, inclusive:
 
 ✅ Cores do produto e modelos;
-✅ Textos, nomes, idades, datas e possíveis erros de digitação;
-✅ Todos os detalhes visuais combinados.
+✅️ Possíveis erros de digitação;
+✅ Textos, nomes, idades, datas;
+✅ Todos os detalhes;
+✅️ O produto será como foi aprovado;
 
 Como o layout já foi devidamente conferido e aprovado para a nossa loja, está tudo certinho para a *confecção e produção* do seu pedido! 🚀🧵🎈
-
+ 
 Muito obrigado pela confiança e preferência!
 *${storeName}*🎈`;
   };
