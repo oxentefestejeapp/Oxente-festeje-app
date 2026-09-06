@@ -288,7 +288,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
     return `Olá, *${clientName}*! Tudo bem? 🎨✨
 
 📌 *Confirmação de Aprovação do Layout:*
-Informamos que, com a sua aprovação, *você confirma* que conferiu com atenção todas as informações mostradas no layout, inclusive:
+Informamos que, com a sua aprovação, *você CONFIRMA* que conferiu com atenção todas as informações mostradas no layout, inclusive:
 
 ✅ Cores do produto e modelos;
 ✅️ Possíveis erros de digitação;
