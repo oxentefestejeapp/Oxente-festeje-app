@@ -149,9 +149,20 @@ export function OrderTrackingPage() {
     }
   };
 
+  const getWhatsAppConfirmationUrl = () => {
+    if (!sale) return '#';
+    const cleanPhone = (storeInfo?.telefone || '83988859302').replace(/\D/g, '');
+    const storePhoneForWA = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+    const pedidoTag = sale.numeroPedido ? `#${sale.numeroPedido}` : `#${sale.id.substring(0, 5)}`;
+    const textMsg = `Olá, *${storeInfo?.nome || 'Oxente Festeje'}*! Tudo bem? 🎨✨\n\nAqui é *${sale.cliente || 'Cliente'}*!\nPassei para avisar que *APROVEI O LAYOUT* do meu pedido *${pedidoTag}*! ✅🧵\n\nConferi com atenção todas as cores, modelos, textos, ortografia e detalhes. Está tudo certinho para a confecção e produção! 🚀🎈\n\nMuito obrigado!`;
+    return `https://api.whatsapp.com/send?phone=${storePhoneForWA}&text=${encodeURIComponent(textMsg)}`;
+  };
+
   const handleApproveLayout = async () => {
     if (!sale) return;
     setApproving(true);
+    const waUrl = getWhatsAppConfirmationUrl();
+
     try {
       const nowIso = new Date().toISOString();
       const { error } = await supabase
@@ -190,6 +201,11 @@ export function OrderTrackingPage() {
           }
         }
       } catch (e) {}
+
+      // Abre a conversa no WhatsApp para enviar a confirmação também pelo Zap
+      if (waUrl && waUrl !== '#') {
+        window.open(waUrl, '_blank');
+      }
     } catch (err) {
       console.error('Erro ao aprovar:', err);
     } finally {
@@ -235,62 +251,83 @@ export function OrderTrackingPage() {
     let s2Status: 'pending' | 'active' | 'done' = 'pending';
 
     if (sale.statusArte === 'Arte Finalizada') {
-      s2Title = sale.clienteAprovouLayout ? 'Arte Aprovada por Você! ✨' : 'Arte Concluída (Aguardando seu aceite)';
-      s2Desc = sale.clienteAprovouLayout 
-        ? `Você conferiu e confirmou a aprovação do layout${sale.clienteAprovouLayoutEm ? ` em ${new Date(sale.clienteAprovouLayoutEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}. Liberado para confecção!`
-        : 'Sua arte foi desenhada e finalizada pela equipe. Por favor, confirme a aprovação acima para liberar a confecção.';
+      s2Title = 'Arte Concluída pelo Designer 🎨';
+      s2Desc = `Layout finalizado com capricho pela equipe de criação${sale.arteFinalizadaEm ? ` em ${new Date(sale.arteFinalizadaEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}.`;
       s2Status = 'done';
     } else if (sale.puxadoPor) {
       s2Title = 'Arte em Elaboração 🎨';
       s2Desc = `O designer ${sale.puxadoPor} está desenhando seu projeto com todo capricho.`;
       s2Status = 'active';
     } else {
-      s2Status = 'active'; // Se o pedido foi lançado, a arte está em fila/início de produção
+      s2Title = 'Arte na Fila de Criação 🎨';
+      s2Desc = 'Aguardando início da elaboração da arte pela nossa equipe.';
+      s2Status = 'active';
     }
 
-    // Step 3: Pronto para Retirada
-    let s3Title = 'Aguardando Produção Física';
-    let s3Desc = 'Seu pedido entrará na linha de produção física assim que a arte for aprovada.';
+    // Step 3: Aprovação do Layout pelo Cliente (Aguardando Aprovação / Aprovado)
+    let s3Title = 'Aguardando Aprovação do Layout';
+    let s3Desc = 'Esta etapa será liberada para sua conferência assim que o layout for concluído.';
     let s3Status: 'pending' | 'active' | 'done' = 'pending';
 
-    const prod = sale.statusProducao || 'Agendado';
-    if (['Pronto para Retirada', 'Agendado para Entrega', 'Entregue'].includes(prod)) {
-      s3Title = prod === 'Agendado para Entrega' ? 'Pedido Pronto & Agendado para Entrega! 🚚' : 'Pronto para Retirada! 🎁';
-      s3Desc = prod === 'Agendado para Entrega' 
-        ? 'Seu pedido foi finalizado fisicamente e está em rota logística ou agendado para entrega.'
-        : 'Seu pedido físico já está limpinho na loja e pronto esperando por você!';
+    if (sale.clienteAprovouLayout) {
+      s3Title = 'Layout Aprovado por Você! ✨';
+      s3Desc = `Você conferiu e aprovou formalmente o layout${sale.clienteAprovouLayoutEm ? ` em ${new Date(sale.clienteAprovouLayoutEm).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}. Pedido liberado para produção!`;
       s3Status = 'done';
-    } else if (prod === 'Em Produção') {
-      s3Title = 'Em Produção Física! ⚙️';
-      s3Desc = 'Imprimindo, recortando ou montando seus personalizados.';
-      s3Status = 'active';
     } else if (sale.statusArte === 'Arte Finalizada') {
-      s3Status = 'active'; // Se a arte já está pronta, a próxima etapa (produção) está ativa
-      s3Desc = 'Sua arte está finalizada e agendada para entrar em produção física.';
+      s3Title = 'Aguardando sua Aprovação do Layout ⏳';
+      s3Desc = 'A arte foi finalizada! Por favor, confira todos os detalhes no card acima e confirme a aprovação para liberar a confecção.';
+      s3Status = 'active';
+    } else {
+      s3Status = 'pending';
     }
 
-    // Step 4: Pedido Entregue
-    let s4Title = 'Aguardando Entrega / Retirada';
-    let s4Desc = 'Aguardando a conclusão da produção para que o pacote possa ser retirado.';
+    // Step 4: Produção Física / Confecção (Passado para fase de produção)
+    const prod = sale.statusProducao || 'Agendado';
+    let s4Title = 'Confecção & Produção Física';
+    let s4Desc = 'Seu pedido entrará na linha de produção física assim que a arte for aprovada por você.';
     let s4Status: 'pending' | 'active' | 'done' = 'pending';
 
-    if (prod === 'Entregue') {
-      s4Title = 'Pedido Entregue! 📦🎉';
-      s4Desc = 'Seu pedido foi entregue ou retirado na loja com sucesso. Obrigado pela preferência!';
+    if (['Pronto para Retirada', 'Agendado para Entrega', 'Entregue'].includes(prod)) {
+      s4Title = 'Confecção Concluída com Sucesso! 🎁';
+      s4Desc = 'Todos os seus personalizados foram produzidos, revisados e embalados.';
       s4Status = 'done';
-    } else if (['Pronto para Retirada', 'Agendado para Entrega'].includes(prod)) {
-      s4Title = 'Pronto para Entrega / Retirada 🚚';
-      s4Desc = prod === 'Agendado para Entrega' 
-        ? 'Pedido pronto aguardando a rota logística chegar ao seu destino.'
-        : 'Pedido pronto na loja física esperando o seu momento de retirada!';
+    } else if (prod === 'Em Produção') {
+      s4Title = 'Em Produção & Confecção Física! ⚙️🧵';
+      s4Desc = 'Seus personalizados estão sendo impressos, recortados e montados na oficina com todo carinho.';
       s4Status = 'active';
+    } else if (sale.clienteAprovouLayout) {
+      s4Title = 'Passado para Fase de Produção! 🚀🧵';
+      s4Desc = 'Com a sua aprovação confirmada, seu pedido avançou para a fila de confecção e produção!';
+      s4Status = 'active';
+    } else if (sale.statusArte === 'Arte Finalizada') {
+      s4Title = 'Aguardando Aprovação para Iniciar Produção';
+      s4Desc = 'Aguardando a sua confirmação no layout para dar a partida na confecção física.';
+      s4Status = 'pending';
+    }
+
+    // Step 5: Retirada / Entrega
+    let s5Title = 'Aguardando Conclusão da Produção';
+    let s5Desc = 'Assim que a confecção terminar, seu pacote ficará pronto para entrega ou retirada.';
+    let s5Status: 'pending' | 'active' | 'done' = 'pending';
+
+    if (prod === 'Entregue') {
+      s5Title = 'Pedido Entregue! 📦🎉';
+      s5Desc = 'Seu pedido foi entregue ou retirado na loja com sucesso. Muito obrigado pela preferência!';
+      s5Status = 'done';
+    } else if (['Pronto para Retirada', 'Agendado para Entrega'].includes(prod)) {
+      s5Title = prod === 'Agendado para Entrega' ? 'Pronto & Agendado para Entrega! 🚚' : 'Pronto para Retirada na Loja! 🎁';
+      s5Desc = prod === 'Agendado para Entrega' 
+        ? 'Pedido pronto aguardando a rota de entrega chegar até você.'
+        : 'Seu pacote já está limpinho e embalado na loja te esperando!';
+      s5Status = 'active';
     }
 
     return [
-      { id: 1, title: '🛒 Pedido Lançado', desc: `Registrado no sistema em ${step1Date}.`, status: 'done' as const },
+      { id: 1, title: '🛒 Pedido Lançado & Confirmado', desc: `Registrado no sistema em ${step1Date}.`, status: 'done' as const },
       { id: 2, title: s2Title, desc: s2Desc, status: s2Status },
       { id: 3, title: s3Title, desc: s3Desc, status: s3Status },
-      { id: 4, title: s4Title, desc: s4Desc, status: s4Status }
+      { id: 4, title: s4Title, desc: s4Desc, status: s4Status },
+      { id: 5, title: s5Title, desc: s5Desc, status: s5Status }
     ];
   };
 
@@ -459,18 +496,34 @@ export function OrderTrackingPage() {
                       )}
                     </p>
                     <p className="text-[11px] text-zinc-400 font-sans pt-1">
-                      Como o layout já foi devidamente conferido e aprovado, está tudo certinho para a <strong>confecção e produção</strong> do seu pedido! 🚀🧵🎈
+                      Seu pedido está liberado para a <strong>confecção e produção</strong>! 🚀🧵🎈
                     </p>
                   </div>
+                </div>
+
+                {/* Botão de Envio / Confirmação pelo WhatsApp */}
+                <div className="pt-1">
+                  <a
+                    href={getWhatsAppConfirmationUrl()}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 active:scale-98 text-white font-bold text-xs uppercase tracking-wider rounded-2xl shadow-lg shadow-emerald-950/50 cursor-pointer transition-all flex items-center justify-center gap-2 no-underline"
+                  >
+                    <MessageSquare className="h-4 w-4" />
+                    <span>Enviar Confirmação no WhatsApp da Loja</span>
+                  </a>
                 </div>
 
                 {justApproved && (
                   <motion.div
                     initial={{ opacity: 0, y: 5 }}
                     animate={{ opacity: 1, y: 0 }}
-                    className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-2xl text-center text-xs text-emerald-200 font-bold"
+                    className="p-3 bg-emerald-500/20 border border-emerald-500/40 rounded-2xl text-center text-xs text-emerald-200 font-bold space-y-1"
                   >
-                    🎉 Obrigado pela confirmação! Sua liberação foi registrada e nossa produção foi notificada.
+                    <div>🎉 Aprovação registrada com sucesso no sistema!</div>
+                    <div className="text-[11px] font-normal text-emerald-300/90">
+                      O WhatsApp foi aberto para registrar a confirmação também pela conversa. Se a conversa não abriu automaticamente, toque no botão verde acima.
+                    </div>
                   </motion.div>
                 )}
               </motion.div>
@@ -545,7 +598,7 @@ export function OrderTrackingPage() {
                   </button>
                   
                   <p className="text-[10.5px] text-zinc-500 text-center font-sans leading-tight">
-                    🔒 Ao clicar no botão, seu aceite é registrado automaticamente no sistema da loja para liberação da confecção.
+                    🔒 Ao clicar, seu aceite é registrado no sistema da loja e o WhatsApp é aberto para confirmar também pela conversa.
                   </p>
                 </div>
               </motion.div>

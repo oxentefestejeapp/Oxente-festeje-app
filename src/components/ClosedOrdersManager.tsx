@@ -291,7 +291,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
     return `Olá, *${clientName}*! Tudo bem? 🎨✨
 
 📌 *Confirmação de Aprovação do Layout:*
-Informamos que, com a sua aprovação, *você CONFIRMA* que conferiu com atenção todas as informações mostradas no layout, inclusive:
+Informamos que, ao clicar no link, *você CONFIRMA* que conferiu com atenção todas as informações mostradas no layout, inclusive:
 
 ✅ Cores do produto e modelos;
 ✅️ Possíveis erros de digitação;
@@ -299,8 +299,7 @@ Informamos que, com a sua aprovação, *você CONFIRMA* que conferiu com atenç�
 ✅ Todos os detalhes;
 ✅️ O produto será como foi aprovado;
 
-Como o layout já foi devidamente conferido e aprovado para a nossa loja, está tudo certinho para a *confecção e produção* do seu pedido! 🚀🧵🎈
-
+⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️
 👉 *Para registrar formalmente sua aprovação e liberar para a produção, clique no link abaixo e confirme em 1 toque:*
 🔗 ${approvalLink}
  
@@ -1913,28 +1912,7 @@ ${produtosTexto}`;
                         <h5 className="text-[10.5px] font-bold text-zinc-200">🎨 Criação de Arte (Design)</h5>
                         <p className="text-[9px] text-zinc-550 mt-0.5 leading-normal">
                           {viewedSale.statusArte === 'Arte Finalizada' ? (
-                            <>
-                              <span>Aprovada e Finalizada por <strong className="text-emerald-400">{viewedSale.arteFinalizadaPorEmail || viewedSale.puxadoPor || 'Designer'}</strong>{viewedSale.arteFinalizadaEm && ` em ${new Date(viewedSale.arteFinalizadaEm).toLocaleString('pt-BR')}`}</span>
-                              <span className="block mt-1">
-                                <button
-                                  type="button"
-                                  onClick={() => sendLayoutApprovalWhatsapp(viewedSale)}
-                                  className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded transition-colors cursor-pointer"
-                                >
-                                  <MessageSquare className="h-2.5 w-2.5" />
-                                  <span>Enviar Confirmação de Layout (WhatsApp)</span>
-                                </button>
-                              </span>
-                              {viewedSale.clienteAprovouLayout ? (
-                                <span className="block mt-1.5 text-[9.5px] font-bold text-emerald-300 bg-emerald-950/40 border border-emerald-500/30 px-2 py-1 rounded-md">
-                                  ✅ Aceite do Layout Confirmado pelo Cliente{viewedSale.clienteAprovouLayoutEm && ` em ${new Date(viewedSale.clienteAprovouLayoutEm).toLocaleString('pt-BR')}`}
-                                </span>
-                              ) : (
-                                <span className="block mt-1 text-[9px] text-amber-400 font-medium">
-                                  ⏳ Aguardando cliente clicar no link de confirmação
-                                </span>
-                              )}
-                            </>
+                            <span>Finalizada e Concluída por <strong className="text-emerald-400">{viewedSale.arteFinalizadaPorEmail || viewedSale.puxadoPor || 'Designer'}</strong>{viewedSale.arteFinalizadaEm && ` em ${new Date(viewedSale.arteFinalizadaEm).toLocaleString('pt-BR')}`}</span>
                           ) : viewedSale.puxadoPor ? (
                             <span>Em elaboração por <strong className="text-blue-400">{viewedSale.puxadoPor}</strong>{viewedSale.puxadoEm && ` desde ${new Date(viewedSale.puxadoEm).toLocaleString('pt-BR')}`}</span>
                           ) : (
@@ -1943,7 +1921,42 @@ ${produtosTexto}`;
                         </p>
                       </div>
 
-                      {/* Step 3: Produção Física */}
+                      {/* Step 3: Aprovação de Layout pelo Cliente */}
+                      <div className="relative font-sans">
+                        <div className={`absolute -left-[25.5px] top-0.5 w-3 h-3 rounded-full border-2 border-zinc-950 ${
+                          viewedSale.clienteAprovouLayout
+                            ? 'bg-emerald-500'
+                            : viewedSale.statusArte === 'Arte Finalizada'
+                              ? 'bg-amber-500 animate-pulse'
+                              : 'bg-zinc-800'
+                        }`} />
+                        <h5 className="text-[10.5px] font-bold text-zinc-200">✨ Aprovação de Layout pelo Cliente</h5>
+                        <div className="text-[9px] text-zinc-550 mt-0.5 leading-normal space-y-1">
+                          {viewedSale.clienteAprovouLayout ? (
+                            <div className="text-emerald-300 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-1 rounded-md">
+                              ✅ Aceite do Layout Confirmado pelo Cliente{viewedSale.clienteAprovouLayoutEm && ` em ${new Date(viewedSale.clienteAprovouLayoutEm).toLocaleString('pt-BR')}`}. Liberado para confecção!
+                            </div>
+                          ) : viewedSale.statusArte === 'Arte Finalizada' ? (
+                            <div className="space-y-1.5">
+                              <span className="text-amber-400 font-medium block">
+                                ⏳ Arte finalizada! Aguardando cliente clicar no link de confirmação no WhatsApp
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => sendLayoutApprovalWhatsapp(viewedSale)}
+                                className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded transition-colors cursor-pointer"
+                              >
+                                <MessageSquare className="h-2.5 w-2.5" />
+                                <span>Reenviar Confirmação de Layout (WhatsApp)</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-zinc-600">Pendente (aguardando conclusão da arte pelo designer)</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Step 4: Produção Física */}
                       <div className="relative font-sans">
                         <div className={`absolute -left-[25.5px] top-0.5 w-3 h-3 rounded-full border-2 border-zinc-950 ${
                           viewedSale.statusProducao === 'Entregue'
@@ -1952,11 +1965,17 @@ ${produtosTexto}`;
                               ? 'bg-amber-400'
                               : viewedSale.statusProducao === 'Em Produção'
                                 ? 'bg-amber-600'
-                                : 'bg-zinc-800'
+                                : viewedSale.clienteAprovouLayout
+                                  ? 'bg-blue-500'
+                                  : 'bg-zinc-800'
                         }`} />
-                        <h5 className="text-[10.5px] font-bold text-zinc-200">📦 Produção & Logística</h5>
+                        <h5 className="text-[10.5px] font-bold text-zinc-200">🧵 Produção & Confecção Física</h5>
                         <p className="text-[9px] text-zinc-550 mt-0.5 leading-normal">
-                          Etapa atual: <strong className="text-zinc-300 font-mono text-[9px]">{viewedSale.statusProducao || 'Agendado'}</strong>{viewedSale.dataRetirada && ` (Previsão: ${new Date(viewedSale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')})`}
+                          {viewedSale.clienteAprovouLayout && (!viewedSale.statusProducao || viewedSale.statusProducao === 'Agendado') ? (
+                            <span className="text-blue-400 font-bold">🚀 Passado para fase de produção! Na fila de confecção.</span>
+                          ) : (
+                            <>Etapa atual: <strong className="text-zinc-300 font-mono text-[9px]">{viewedSale.statusProducao || 'Agendado'}</strong>{viewedSale.dataRetirada && ` (Previsão: ${new Date(viewedSale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')})`}</>
+                          )}
                         </p>
                       </div>
 
