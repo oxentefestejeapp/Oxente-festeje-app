@@ -291,18 +291,23 @@ export function OrderTrackingPage() {
       s4Title = 'Confecção Concluída com Sucesso! 🎁';
       s4Desc = 'Todos os seus personalizados foram produzidos, revisados e embalados.';
       s4Status = 'done';
-    } else if (prod === 'Em Produção') {
-      s4Title = 'Em Produção & Confecção Física! ⚙️🧵';
-      s4Desc = 'Seus personalizados estão sendo impressos, recortados e montados na oficina com todo carinho.';
-      s4Status = 'active';
     } else if (sale.clienteAprovouLayout) {
-      s4Title = 'Passado para Fase de Produção! 🚀🧵';
-      s4Desc = 'Com a sua aprovação confirmada, seu pedido avançou para a fila de confecção e produção!';
+      // SÓ entra em fase ativa e anima/pisca após a aprovação formal do cliente
+      if (prod === 'Em Produção') {
+        s4Title = 'Em Produção & Confecção Física! ⚙️🧵';
+        s4Desc = 'Seus personalizados estão sendo impressos, recortados e montados na oficina com todo carinho.';
+      } else {
+        s4Title = 'Passado para Fase de Produção! 🚀🧵';
+        s4Desc = 'Com a sua aprovação confirmada, seu pedido avançou para a fila de confecção e produção!';
+      }
       s4Status = 'active';
-    } else if (sale.statusArte === 'Arte Finalizada') {
-      s4Title = 'Aguardando Aprovação para Iniciar Produção';
-      s4Desc = 'Aguardando a sua confirmação no layout para dar a partida na confecção física.';
+    } else {
+      // Cliente AINDA NÃO aprovou o layout: mantém estritamente pendente (sem piscar nem animar)
       s4Status = 'pending';
+      if (sale.statusArte === 'Arte Finalizada') {
+        s4Title = 'Aguardando Aprovação para Iniciar Produção';
+        s4Desc = 'Aguardando a sua confirmação no layout acima para dar início à confecção física.';
+      }
     }
 
     // Step 5: Retirada / Entrega

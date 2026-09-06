@@ -299,7 +299,7 @@ Informamos que, ao clicar no link, *você CONFIRMA* que conferiu com atenção t
 ✅ Todos os detalhes;
 ✅️ O produto será como foi aprovado;
 
-⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️
+⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️
 👉 *Para registrar formalmente sua aprovação e liberar para a produção, clique no link abaixo e confirme em 1 toque:*
 🔗 ${approvalLink}
  
@@ -1963,18 +1963,22 @@ ${produtosTexto}`;
                             ? 'bg-emerald-500'
                             : ['Pronto para Retirada', 'Agendado para Entrega'].includes(viewedSale.statusProducao || '')
                               ? 'bg-amber-400'
-                              : viewedSale.statusProducao === 'Em Produção'
-                                ? 'bg-amber-600'
-                                : viewedSale.clienteAprovouLayout
-                                  ? 'bg-blue-500'
-                                  : 'bg-zinc-800'
+                              : viewedSale.clienteAprovouLayout
+                                ? (viewedSale.statusProducao === 'Em Produção' ? 'bg-amber-500 animate-pulse' : 'bg-blue-500 animate-pulse')
+                                : 'bg-zinc-800'
                         }`} />
                         <h5 className="text-[10.5px] font-bold text-zinc-200">🧵 Produção & Confecção Física</h5>
                         <p className="text-[9px] text-zinc-550 mt-0.5 leading-normal">
-                          {viewedSale.clienteAprovouLayout && (!viewedSale.statusProducao || viewedSale.statusProducao === 'Agendado') ? (
-                            <span className="text-blue-400 font-bold">🚀 Passado para fase de produção! Na fila de confecção.</span>
+                          {viewedSale.clienteAprovouLayout ? (
+                            viewedSale.statusProducao === 'Em Produção' ? (
+                              <span className="text-amber-400 font-bold">⚙️ Em confecção e produção na oficina.</span>
+                            ) : (!viewedSale.statusProducao || viewedSale.statusProducao === 'Agendado') ? (
+                              <span className="text-blue-400 font-bold">🚀 Passado para fase de produção! Na fila de confecção.</span>
+                            ) : (
+                              <>Etapa atual: <strong className="text-zinc-300 font-mono text-[9px]">{viewedSale.statusProducao}</strong>{viewedSale.dataRetirada && ` (Previsão: ${new Date(viewedSale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')})`}</>
+                            )
                           ) : (
-                            <>Etapa atual: <strong className="text-zinc-300 font-mono text-[9px]">{viewedSale.statusProducao || 'Agendado'}</strong>{viewedSale.dataRetirada && ` (Previsão: ${new Date(viewedSale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')})`}</>
+                            <span className="text-zinc-500">Aguardando aprovação do layout pelo cliente para liberar confecção.</span>
                           )}
                         </p>
                       </div>
