@@ -27,7 +27,8 @@ import {
   Trophy,
   Filter,
   EyeOff,
-  Flame
+  Flame,
+  Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sale, StoreInfo, Product, SaleItem } from '../types';
@@ -343,13 +344,13 @@ Muito obrigado pela confiança e preferência!
 
       // Disparo automático da mensagem no WhatsApp do cliente da arte
       sendLayoutApprovalWhatsapp(updated);
-
-      setSaleToRemovePrompt(updated);
     } else {
       const updated: Sale = {
         ...sale,
         statusArte: nextStatus,
         removerDoDesign: false,
+        clienteAprovouLayout: false,
+        clienteAprovouLayoutEm: undefined,
         arteFinalizadaPorEmail: undefined,
         arteFinalizadaEm: undefined
       };
@@ -359,6 +360,10 @@ Muito obrigado pela confiança e preferência!
   };
 
   const handleConfirmRemoveFromDesign = (sale: Sale, shouldRemove: boolean) => {
+    // Bloqueia ocultação se o cliente ainda não tiver aprovado formalmente o layout
+    if (shouldRemove && !sale.clienteAprovouLayout) {
+      return;
+    }
     const updated: Sale = {
       ...sale,
       removerDoDesign: shouldRemove
@@ -1233,17 +1238,21 @@ Muito obrigado pela confiança e preferência!
             ) : (
               designer1Orders.map((sale) => {
                 const isFinished = sale.statusArte === 'Arte Finalizada';
+                const isPendingClientApproval = isFinished && !sale.clienteAprovouLayout;
+                const isApprovedByClient = isFinished && Boolean(sale.clienteAprovouLayout);
                 const delayInfo = checkArteDelay(sale);
                 return (
                   <div 
                     key={sale.id}
                     onClick={() => handleSelectSaleForReceipt(sale)}
                     className={`border border-l-4 rounded-xl p-4 space-y-3 transition-all cursor-pointer relative group ${
-                      isFinished 
-                        ? 'bg-emerald-950/10 border-brand-pink/20 border-l-emerald-500 hover:border-emerald-500/40 shadow-[0_0_10px_rgba(236,72,153,0.02)]' 
-                        : delayInfo.isDelayed
-                          ? 'bg-red-950/10 border-brand-pink/20 border-l-red-500 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
-                          : 'bg-gradient-to-br from-zinc-950 to-brand-pink/[0.02] border-brand-pink/25 border-l-brand-pink hover:border-brand-pink/40 shadow-[0_0_10px_rgba(236,72,153,0.03)]'
+                      isPendingClientApproval
+                        ? 'bg-amber-950/30 border-amber-500/50 border-l-amber-500 hover:border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/25'
+                        : isApprovedByClient
+                          ? 'bg-emerald-950/20 border-emerald-500/40 border-l-emerald-500 hover:border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.1)]'
+                          : delayInfo.isDelayed
+                            ? 'bg-red-950/10 border-brand-pink/20 border-l-red-500 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
+                            : 'bg-gradient-to-br from-zinc-950 to-brand-pink/[0.02] border-brand-pink/25 border-l-brand-pink hover:border-brand-pink/40 shadow-[0_0_10px_rgba(236,72,153,0.03)]'
                     }`}
                   >
                     {/* Floating Designer Badge */}
@@ -1256,9 +1265,13 @@ Muito obrigado pela confiança e preferência!
                       <span className="text-[10px] font-mono font-bold bg-zinc-900 border border-zinc-800 text-zinc-450 px-1.5 py-0.5 rounded">
                         Pedido #{sale.numeroPedido || sale.id.substring(0, 5)}
                       </span>
-                      {isFinished ? (
-                        <span className="text-[9px] font-bold text-emerald-450 uppercase flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded-sm">
-                          <CheckCircle2 className="h-2.5 w-2.5" /> Arte Finalizada
+                      {isPendingClientApproval ? (
+                        <span className="text-[9px] font-black text-amber-300 uppercase flex items-center gap-1 bg-amber-500/20 border border-amber-500/50 px-2 py-0.5 rounded-sm animate-pulse shadow-sm">
+                          <Clock className="h-2.5 w-2.5 text-amber-400" /> Pendente de Aprovação
+                        </span>
+                      ) : isApprovedByClient ? (
+                        <span className="text-[9px] font-bold text-emerald-350 uppercase flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-sm shadow-sm">
+                          <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" /> Arte Aprovada
                         </span>
                       ) : (
                         <div className="flex items-center gap-1.5">
@@ -1331,10 +1344,10 @@ Muito obrigado pela confiança e preferência!
 
                     {/* Status de Confirmação pelo Cliente */}
                     {sale.clienteAprovouLayout ? (
-                      <div className="text-[9.5px] bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 font-bold px-2 py-1 rounded-lg flex items-center justify-between gap-1 shadow-sm">
-                        <span className="flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
-                          <span>Aceite do Cliente Registrado</span>
+                      <div className="text-[9.5px] bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 font-bold px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-1 shadow-sm">
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                          <span>Arte Confirmada pelo Cliente ✨</span>
                         </span>
                         {sale.clienteAprovouLayoutEm && (
                           <span className="text-[8px] font-mono text-emerald-400/80">
@@ -1343,10 +1356,13 @@ Muito obrigado pela confiança e preferência!
                         )}
                       </div>
                     ) : isFinished ? (
-                      <div className="text-[8.5px] bg-amber-950/25 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-lg flex items-center justify-between gap-1">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-2.5 w-2.5 text-amber-400 shrink-0" />
-                          <span>Aguardando cliente confirmar</span>
+                      <div className="text-[9.5px] bg-amber-950/50 border border-amber-500/50 text-amber-200 font-bold px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-1 shadow-[0_0_10px_rgba(245,158,11,0.08)]">
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0 animate-pulse" />
+                          <span>Aguardando Aprovação do Cliente</span>
+                        </span>
+                        <span className="text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-mono uppercase tracking-wide">
+                          Pendente
                         </span>
                       </div>
                     ) : null}
@@ -1393,22 +1409,34 @@ Muito obrigado pela confiança e preferência!
                               <MessageSquare className="h-3 w-3" />
                               <span className="hidden sm:inline">Zap Aprovação</span>
                             </button>
-                            <button
-                              type="button"
-                              title={sale.removerDoDesign ? "Mostrar na lista de design" : "Remover da lista de design"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleConfirmRemoveFromDesign(sale, !sale.removerDoDesign);
-                              }}
-                              className={`py-1.5 px-2.5 border rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 ${
-                                sale.removerDoDesign
-                                  ? 'bg-emerald-950/20 border-emerald-950/40 hover:border-emerald-650 hover:text-emerald-300 text-emerald-400'
-                                  : 'bg-red-950/20 border-red-900/30 hover:border-red-650 hover:text-red-300 text-red-400'
-                              }`}
-                            >
-                              <Trash className="h-3.5 w-3.5" />
-                              <span>{sale.removerDoDesign ? 'Mostrar' : 'Ocultar'}</span>
-                            </button>
+                            {sale.clienteAprovouLayout ? (
+                              <button
+                                type="button"
+                                title={sale.removerDoDesign ? "Mostrar na lista de design" : "Ocultar da mesa de design"}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleConfirmRemoveFromDesign(sale, !sale.removerDoDesign);
+                                }}
+                                className={`py-1.5 px-2.5 border rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 text-[10px] font-bold ${
+                                  sale.removerDoDesign
+                                    ? 'bg-emerald-950/20 border-emerald-950/40 hover:border-emerald-650 hover:text-emerald-300 text-emerald-400'
+                                    : 'bg-red-950/20 border-red-900/30 hover:border-red-650 hover:text-red-300 text-red-400'
+                                }`}
+                              >
+                                <Trash className="h-3.5 w-3.5" />
+                                <span>{sale.removerDoDesign ? 'Mostrar' : 'Ocultar'}</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                title="Ocultar bloqueado: Aguardando o cliente aprovar a arte para liberar a remoção da mesa"
+                                className="py-1.5 px-2.5 border border-zinc-800 bg-zinc-900/60 text-zinc-600 rounded-lg flex items-center justify-center gap-1 shrink-0 text-[10px] font-bold cursor-not-allowed opacity-50 select-none"
+                              >
+                                <Lock className="h-3 w-3 text-zinc-600" />
+                                <span>Ocultar</span>
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -1486,17 +1514,21 @@ Muito obrigado pela confiança e preferência!
             ) : (
               designer2Orders.map((sale) => {
                 const isFinished = sale.statusArte === 'Arte Finalizada';
+                const isPendingClientApproval = isFinished && !sale.clienteAprovouLayout;
+                const isApprovedByClient = isFinished && Boolean(sale.clienteAprovouLayout);
                 const delayInfo = checkArteDelay(sale);
                 return (
                   <div 
                     key={sale.id}
                     onClick={() => handleSelectSaleForReceipt(sale)}
                     className={`border border-l-4 rounded-xl p-4 space-y-3 transition-all cursor-pointer relative group ${
-                      isFinished 
-                        ? 'bg-emerald-950/10 border-cyan-500/20 border-l-emerald-500 hover:border-emerald-500/40 shadow-[0_0_10px_rgba(6,182,212,0.02)]' 
-                        : delayInfo.isDelayed
-                          ? 'bg-red-950/10 border-cyan-500/20 border-l-red-500 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
-                          : 'bg-gradient-to-br from-zinc-950 to-cyan-500/[0.02] border-cyan-500/25 border-l-cyan-400 hover:border-cyan-400/40 shadow-[0_0_10px_rgba(6,182,212,0.03)]'
+                      isPendingClientApproval
+                        ? 'bg-amber-950/30 border-amber-500/50 border-l-amber-500 hover:border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/25'
+                        : isApprovedByClient
+                          ? 'bg-emerald-950/20 border-emerald-500/40 border-l-emerald-500 hover:border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.1)]'
+                          : delayInfo.isDelayed
+                            ? 'bg-red-950/10 border-cyan-500/20 border-l-red-500 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
+                            : 'bg-gradient-to-br from-zinc-950 to-cyan-500/[0.02] border-cyan-500/25 border-l-cyan-400 hover:border-cyan-400/40 shadow-[0_0_10px_rgba(6,182,212,0.03)]'
                     }`}
                   >
                     {/* Floating Designer Badge */}
@@ -1509,9 +1541,13 @@ Muito obrigado pela confiança e preferência!
                       <span className="text-[10px] font-mono font-bold bg-zinc-900 border border-zinc-800 text-zinc-450 px-1.5 py-0.5 rounded">
                         Pedido #{sale.numeroPedido || sale.id.substring(0, 5)}
                       </span>
-                      {isFinished ? (
-                        <span className="text-[9px] font-bold text-emerald-450 uppercase flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.5 rounded-sm">
-                          <CheckCircle2 className="h-2.5 w-2.5" /> Arte Finalizada
+                      {isPendingClientApproval ? (
+                        <span className="text-[9px] font-black text-amber-300 uppercase flex items-center gap-1 bg-amber-500/20 border border-amber-500/50 px-2 py-0.5 rounded-sm animate-pulse shadow-sm">
+                          <Clock className="h-2.5 w-2.5 text-amber-400" /> Pendente de Aprovação
+                        </span>
+                      ) : isApprovedByClient ? (
+                        <span className="text-[9px] font-bold text-emerald-350 uppercase flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-sm shadow-sm">
+                          <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" /> Arte Aprovada
                         </span>
                       ) : (
                         <div className="flex items-center gap-1.5">
@@ -1584,10 +1620,10 @@ Muito obrigado pela confiança e preferência!
 
                     {/* Status de Confirmação pelo Cliente */}
                     {sale.clienteAprovouLayout ? (
-                      <div className="text-[9.5px] bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 font-bold px-2 py-1 rounded-lg flex items-center justify-between gap-1 shadow-sm">
-                        <span className="flex items-center gap-1">
-                          <CheckCircle2 className="h-3 w-3 text-emerald-400 shrink-0" />
-                          <span>Aceite do Cliente Registrado</span>
+                      <div className="text-[9.5px] bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 font-bold px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-1 shadow-sm">
+                        <span className="flex items-center gap-1.5">
+                          <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                          <span>Arte Confirmada pelo Cliente ✨</span>
                         </span>
                         {sale.clienteAprovouLayoutEm && (
                           <span className="text-[8px] font-mono text-emerald-400/80">
@@ -1596,10 +1632,13 @@ Muito obrigado pela confiança e preferência!
                         )}
                       </div>
                     ) : isFinished ? (
-                      <div className="text-[8.5px] bg-amber-950/25 border border-amber-500/30 text-amber-300 px-2 py-0.5 rounded-lg flex items-center justify-between gap-1">
-                        <span className="flex items-center gap-1">
-                          <Clock className="h-2.5 w-2.5 text-amber-400 shrink-0" />
-                          <span>Aguardando cliente confirmar</span>
+                      <div className="text-[9.5px] bg-amber-950/50 border border-amber-500/50 text-amber-200 font-bold px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-1 shadow-[0_0_10px_rgba(245,158,11,0.08)]">
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0 animate-pulse" />
+                          <span>Aguardando Aprovação do Cliente</span>
+                        </span>
+                        <span className="text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-mono uppercase tracking-wide">
+                          Pendente
                         </span>
                       </div>
                     ) : null}
@@ -1646,22 +1685,34 @@ Muito obrigado pela confiança e preferência!
                               <MessageSquare className="h-3 w-3" />
                               <span className="hidden sm:inline">Zap Aprovação</span>
                             </button>
-                            <button
-                              type="button"
-                              title={sale.removerDoDesign ? "Mostrar na lista de design" : "Remover da lista de design"}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleConfirmRemoveFromDesign(sale, !sale.removerDoDesign);
-                              }}
-                              className={`py-1.5 px-2.5 border rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 ${
-                                sale.removerDoDesign
-                                  ? 'bg-emerald-950/20 border-emerald-950/40 hover:border-emerald-650 hover:text-emerald-300 text-emerald-400'
-                                  : 'bg-red-950/20 border-red-900/30 hover:border-red-650 hover:text-red-300 text-red-400'
-                              }`}
-                            >
-                              <Trash className="h-3.5 w-3.5" />
-                              <span>{sale.removerDoDesign ? 'Mostrar' : 'Ocultar'}</span>
-                            </button>
+                            {sale.clienteAprovouLayout ? (
+                              <button
+                                type="button"
+                                title={sale.removerDoDesign ? "Mostrar na lista de design" : "Remover da lista de design"}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleConfirmRemoveFromDesign(sale, !sale.removerDoDesign);
+                                }}
+                                className={`py-1.5 px-2.5 border rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 text-[10px] font-bold ${
+                                  sale.removerDoDesign
+                                    ? 'bg-emerald-950/20 border-emerald-950/40 hover:border-emerald-650 hover:text-emerald-300 text-emerald-400'
+                                    : 'bg-red-950/20 border-red-900/30 hover:border-red-650 hover:text-red-300 text-red-400'
+                                }`}
+                              >
+                                <Trash className="h-3.5 w-3.5" />
+                                <span>{sale.removerDoDesign ? 'Mostrar' : 'Ocultar'}</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled
+                                title="Ocultar bloqueado: Aguardando o cliente aprovar a arte para liberar a remoção da mesa"
+                                className="py-1.5 px-2.5 border border-zinc-800 bg-zinc-900/60 text-zinc-600 rounded-lg flex items-center justify-center gap-1 shrink-0 text-[10px] font-bold cursor-not-allowed opacity-50 select-none"
+                              >
+                                <Lock className="h-3 w-3 text-zinc-600" />
+                                <span>Ocultar</span>
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
@@ -1933,7 +1984,7 @@ ${produtosTexto}`;
                           <div className="text-[9px] text-zinc-550 mt-0.5 leading-normal space-y-1">
                             {viewedSale.clienteAprovouLayout ? (
                               <div className="text-emerald-300 font-bold bg-emerald-950/40 border border-emerald-500/30 px-2 py-1 rounded-md">
-                                ✅ Aceite do Layout Confirmado pelo Cliente{viewedSale.clienteAprovouLayoutEm && ` em ${new Date(viewedSale.clienteAprovouLayoutEm).toLocaleString('pt-BR')}`}. Liberado para confecção!
+                                ✅ Arte Confirmada pelo Cliente{viewedSale.clienteAprovouLayoutEm && ` em ${new Date(viewedSale.clienteAprovouLayoutEm).toLocaleString('pt-BR')}`}. Liberado para confecção!
                               </div>
                             ) : (
                               <div className="space-y-1.5">

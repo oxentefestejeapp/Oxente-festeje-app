@@ -486,7 +486,7 @@ export function OrderTrackingPage() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2">
                       <span className="text-[9.5px] font-black uppercase text-emerald-400 tracking-wider bg-emerald-500/15 px-2.5 py-0.5 rounded-full border border-emerald-500/25">
-                        Aceite Confirmado
+                        Arte Confirmada
                       </span>
                     </div>
                     <h3 className="text-sm font-bold text-white font-display">
