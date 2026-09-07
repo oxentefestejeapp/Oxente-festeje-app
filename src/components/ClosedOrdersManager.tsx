@@ -301,7 +301,7 @@ Informamos que, ao clicar no link, *você CONFIRMA* que conferiu com atenção t
 ✅ Todos os detalhes;
 ✅️ O produto será como foi aprovado;
 
-⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️⭐️
+
 👉 *Para registrar formalmente sua aprovação e liberar para a produção, clique no link abaixo e confirme em 1 toque:*
 🔗 ${approvalLink}
  
