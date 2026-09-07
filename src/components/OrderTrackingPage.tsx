@@ -603,7 +603,7 @@ export function OrderTrackingPage() {
                   </button>
                   
                   <p className="text-[10.5px] text-zinc-500 text-center font-sans leading-tight">
-                    🔒 Ao clicar, seu aceite é registrado no sistema da loja e o WhatsApp é aberto para confirmar também pela conversa.
+                    🔒 Ao clicar em aprovar arte, ele é registrado no sistema da loja e o WhatsApp é aberto para confirmar também pela conversa.
                   </p>
                 </div>
               </motion.div>
