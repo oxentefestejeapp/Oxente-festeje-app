@@ -1902,6 +1902,12 @@ export default function App() {
       }
     }
 
+    // Se a arte estiver voltando para 'Pendente', zera obrigatoriamente a aprovação do layout do cliente
+    if (finalSaleToUpdate.statusArte === 'Pendente' && oldSale && (oldSale.statusArte === 'Arte Finalizada' || oldSale.clienteAprovouLayout)) {
+      finalSaleToUpdate.clienteAprovouLayout = false;
+      finalSaleToUpdate.clienteAprovouLayoutEm = undefined;
+    }
+
     const stampedSale: Sale = {
       ...finalSaleToUpdate,
       updatedAt: new Date().toISOString(),
@@ -1959,6 +1965,15 @@ export default function App() {
       } else if (finishedArtsToday.length === 10) {
         setShowCelebration('designer_goal');
       }
+    }
+
+    // Se o status da arte foi reaberto (de 'Arte Finalizada' para 'Pendente')
+    if (oldSale && oldSale.statusArte === 'Arte Finalizada' && stampedSale.statusArte === 'Pendente') {
+      setShortFeedback({
+        title: 'Arte Reaberta para Edição 🎨✏️',
+        message: 'Aprovação do cliente foi zerada. Uma nova aprovação será necessária.',
+        type: 'padrao'
+      });
     }
 
     // Se o status de produção foi alterado

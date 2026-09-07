@@ -35,6 +35,7 @@ import { Sale, StoreInfo, Product, SaleItem } from '../types';
 import { Receipt } from './Receipt';
 import { CelebrationOverlay, UrgentArtOrderInfo } from './CelebrationOverlay';
 import { playAppSound } from '../lib/audio';
+import { supabase } from '../lib/supabase';
 import QRCode from 'qrcode';
 
 interface ClosedOrdersManagerProps {
@@ -329,33 +330,73 @@ Muito obrigado pela confiança e preferência!
   };
 
   // Toggle Artwork Finished Status
-  const handleToggleArtworkStatus = (sale: Sale) => {
+  const handleToggleArtworkStatus = async (sale: Sale) => {
     const nextStatus = sale.statusArte === 'Arte Finalizada' ? 'Pendente' : 'Arte Finalizada';
     if (nextStatus === 'Arte Finalizada') {
       const updated: Sale = {
         ...sale,
         statusArte: nextStatus,
         statusProducao: 'Em Produção', // Already set to in production when art is completed
+        clienteAprovouLayout: false, // Toda vez que a arte é finalizada/concluída, exige nova aprovação do cliente
+        clienteAprovouLayoutEm: undefined,
         arteFinalizadaPorEmail: currentUserEmail,
         arteFinalizadaEm: new Date().toISOString()
       };
       onUpdateSale(updated);
       playAppSound('complete');
 
+      // Atualização imediata no Supabase
+      try {
+        await supabase
+          .from('oxente_sales')
+          .update({
+            status_arte: 'Arte Finalizada',
+            status_producao: 'Em Produção',
+            cliente_aprovou_layout: false,
+            cliente_aprovou_layout_em: null,
+            arte_finalizada_por_email: currentUserEmail,
+            arte_finalizada_em: new Date().toISOString()
+          })
+          .eq('id', sale.id);
+      } catch (err) {
+        console.warn('Erro ao atualizar arte no Supabase:', err);
+      }
+
       // Disparo automático da mensagem no WhatsApp do cliente da arte
       sendLayoutApprovalWhatsapp(updated);
     } else {
+      // Reabrindo arte para edição: ZERA status da arte, remove a finalização e ZERA completamente a aprovação do cliente
       const updated: Sale = {
         ...sale,
-        statusArte: nextStatus,
+        statusArte: 'Pendente',
         removerDoDesign: false,
         clienteAprovouLayout: false,
         clienteAprovouLayoutEm: undefined,
         arteFinalizadaPorEmail: undefined,
-        arteFinalizadaEm: undefined
+        arteFinalizadaEm: undefined,
+        // Se a produção estava 'Em Produção' por ter sido finalizada, voltamos para 'Agendado'
+        statusProducao: sale.statusProducao === 'Em Produção' ? 'Agendado' : sale.statusProducao
       };
       onUpdateSale(updated);
       playAppSound('click');
+
+      // Atualização imediata no Supabase garantindo que cliente_aprovou_layout seja zerado na nuvem
+      try {
+        await supabase
+          .from('oxente_sales')
+          .update({
+            status_arte: 'Pendente',
+            remover_do_design: false,
+            cliente_aprovou_layout: false,
+            cliente_aprovou_layout_em: null,
+            arte_finalizada_por_email: null,
+            arte_finalizada_em: null,
+            status_producao: sale.statusProducao === 'Em Produção' ? 'Agendado' : sale.statusProducao
+          })
+          .eq('id', sale.id);
+      } catch (err) {
+        console.warn('Erro ao zerar aprovação de layout no Supabase ao reabrir arte:', err);
+      }
     }
   };
 
