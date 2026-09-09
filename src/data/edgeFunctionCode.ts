@@ -145,6 +145,7 @@ Deno.serve(async (req) => {
       body: notificationBody,
       orderId: orderId,
       badgeCount: 1,
+      tag: orderId ? ('oxente-order-' + orderId) : ('oxente-order-' + Date.now()),
       url: '/?tab=vendas',
       timestamp: Date.now()
     });

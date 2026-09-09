@@ -225,7 +225,7 @@ export function triggerSystemNotification(title: string, body: string, onClick?:
       body,
       icon: '/icon.svg',
       badge: '/icon.svg',
-      tag: 'new-sale-alert',
+      tag: `sale-alert-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       vibrate: [200, 100, 200], // vibration rhythm for mobile devices
       requireInteraction: false
     };
