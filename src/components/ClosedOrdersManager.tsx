@@ -415,17 +415,42 @@ Muito obrigado pela confiança e preferência!
 
   // Pre-filter database to only active or closed orders that are registered (all registered orders/sales are fechados)
   const filteredSales = useMemo(() => {
+    const normalize = (str?: string) =>
+      (str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+    const rawTerm = searchTerm.trim();
+    const normalizedTerm = normalize(rawTerm);
+    const termWords = normalizedTerm.split(/\s+/).filter(Boolean);
+    const cleanDigits = rawTerm.replace(/\D/g, '');
+
     return sales.filter(sale => {
       if (sale.status === 'Orçamento') return false;
       if (sale.removerDoDesign && !showRemovedFromDesign) return false;
 
-      const term = searchTerm.toLowerCase();
-      const isMatch = 
-        sale.cliente.toLowerCase().includes(term) ||
-        (sale.numeroPedido && sale.numeroPedido.toLowerCase().includes(term)) ||
-        sale.produtoNome.toLowerCase().includes(term) ||
-        (sale.itens && sale.itens.some(item => item.produtoNome.toLowerCase().includes(term)));
-      return isMatch;
+      if (!rawTerm) return true;
+
+      const clientNorm = normalize(sale.cliente);
+      const matchName = clientNorm.includes(normalizedTerm) ||
+        (termWords.length > 1 && termWords.every(w => clientNorm.includes(w)));
+
+      const cleanOrder = sale.numeroPedido ? sale.numeroPedido.replace(/\D/g, '') : '';
+      const matchOrderNum = Boolean(
+        (sale.numeroPedido && normalize(sale.numeroPedido).includes(normalizedTerm)) ||
+        (cleanDigits.length > 0 && (cleanOrder === cleanDigits || cleanOrder.includes(cleanDigits))) ||
+        (sale.id && sale.id.toLowerCase().includes(normalizedTerm))
+      );
+
+      const cleanPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '') : '';
+      const matchPhone = Boolean(cleanDigits.length >= 3 && cleanPhone.includes(cleanDigits));
+
+      const matchProduct = normalize(sale.produtoNome).includes(normalizedTerm);
+      const matchItens = Boolean(sale.itens && sale.itens.some(item => normalize(item.produtoNome).includes(normalizedTerm)));
+
+      return matchName || matchOrderNum || matchPhone || matchProduct || matchItens;
     });
   }, [sales, searchTerm, showRemovedFromDesign]);
 

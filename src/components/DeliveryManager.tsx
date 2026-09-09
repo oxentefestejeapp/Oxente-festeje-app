@@ -232,9 +232,17 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
     return actualSales.filter(s => s.statusProducao === 'Entregue');
   }, [actualSales]);
 
-  // Handle filtering by order number, client name, or telephone number
+  // Normaliza strings removendo acentos e convertendo para minúsculas
+  const normalizeText = (str?: string) =>
+    (str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  // Handle filtering by order number, client name, telephone number or products
   const getFilteredList = () => {
-    const term = deliverySearchTerm.toLowerCase().trim();
+    const rawTerm = deliverySearchTerm.trim();
     let list = category === 'Pendentes' ? pendingSales : deliveredSales;
     
     // Filtro por status de produção quando selecionado nas métricas
@@ -247,7 +255,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
       list = list.filter(s => isForgottenSale(s));
     }
     
-    if (!term) {
+    if (!rawTerm) {
       if (category === 'Entregues') {
         const now = new Date();
         return list.filter(sale => {
@@ -264,21 +272,68 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
       return list;
     }
     
+    const normalizedTerm = normalizeText(rawTerm);
+    const termWords = normalizedTerm.split(/\s+/).filter(Boolean);
+    const cleanDigits = rawTerm.replace(/\D/g, '');
+
     return list.filter((sale) => {
-      const matchName = sale.cliente.toLowerCase().includes(term);
-      const cleanTerm = term.replace(/\D/g, '');
+      // 1. Busca pelo nome do cliente (suporta busca parcial, acentuação e termos compostos)
+      const clientNormalized = normalizeText(sale.cliente);
+      const matchName = clientNormalized.includes(normalizedTerm) ||
+        (termWords.length > 1 && termWords.every(word => clientNormalized.includes(word)));
+
+      // 2. Busca por número do pedido ou ID
       const cleanOrder = sale.numeroPedido ? sale.numeroPedido.replace(/\D/g, '') : '';
       const matchOrderNum = Boolean(
-        (sale.numeroPedido && sale.numeroPedido.toLowerCase().includes(term)) ||
-        (cleanTerm.length > 0 && cleanOrder === cleanTerm) ||
-        (sale.id && sale.id.toLowerCase().includes(term))
+        (sale.numeroPedido && normalizeText(sale.numeroPedido).includes(normalizedTerm)) ||
+        (cleanDigits.length > 0 && (cleanOrder === cleanDigits || cleanOrder.includes(cleanDigits))) ||
+        (sale.id && sale.id.toLowerCase().includes(normalizedTerm))
       );
-      const matchPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '').includes(term.replace(/\D/g, '')) : false;
-      return matchName || matchOrderNum || matchPhone;
+
+      // 3. Busca por telefone (apenas se houver ao menos 3 dígitos digitados para não considerar letras como vazios)
+      const cleanPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '') : '';
+      const matchPhone = Boolean(cleanDigits.length >= 3 && cleanPhone.includes(cleanDigits));
+
+      // 4. Busca por nome do produto ou itens
+      const matchProduct = normalizeText(sale.produtoNome).includes(normalizedTerm);
+      const matchItens = sale.itens ? sale.itens.some(item => normalizeText(item.produtoNome).includes(normalizedTerm)) : false;
+
+      return matchName || matchOrderNum || matchPhone || matchProduct || matchItens;
     });
   };
 
   const filteredList = getFilteredList();
+
+  // Contagem de correspondências na outra categoria (caso não encontre na aba atual)
+  const otherCategoryMatchesCount = useMemo(() => {
+    const rawTerm = deliverySearchTerm.trim();
+    if (!rawTerm) return 0;
+    const otherList = category === 'Pendentes' ? deliveredSales : pendingSales;
+
+    const normalizedTerm = normalizeText(rawTerm);
+    const termWords = normalizedTerm.split(/\s+/).filter(Boolean);
+    const cleanDigits = rawTerm.replace(/\D/g, '');
+
+    return otherList.filter((sale) => {
+      const clientNormalized = normalizeText(sale.cliente);
+      const matchName = clientNormalized.includes(normalizedTerm) ||
+        (termWords.length > 1 && termWords.every(word => clientNormalized.includes(word)));
+
+      const cleanOrder = sale.numeroPedido ? sale.numeroPedido.replace(/\D/g, '') : '';
+      const matchOrderNum = Boolean(
+        (sale.numeroPedido && normalizeText(sale.numeroPedido).includes(normalizedTerm)) ||
+        (cleanDigits.length > 0 && (cleanOrder === cleanDigits || cleanOrder.includes(cleanDigits))) ||
+        (sale.id && sale.id.toLowerCase().includes(normalizedTerm))
+      );
+
+      const cleanPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '') : '';
+      const matchPhone = Boolean(cleanDigits.length >= 3 && cleanPhone.includes(cleanDigits));
+      const matchProduct = normalizeText(sale.produtoNome).includes(normalizedTerm);
+      const matchItens = sale.itens ? sale.itens.some(item => normalizeText(item.produtoNome).includes(normalizedTerm)) : false;
+
+      return matchName || matchOrderNum || matchPhone || matchProduct || matchItens;
+    }).length;
+  }, [category, deliveredSales, pendingSales, deliverySearchTerm]);
 
   // Find the currently active selected sale
   const selectedSale = useMemo(() => {
@@ -547,7 +602,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
             </span>
             <input
               type="text"
-              placeholder="Pesquisar por número do pedido (#), telefone ou cliente..."
+              placeholder="Pesquisar por nome do cliente, número (#) ou telefone..."
               value={deliverySearchTerm}
               onChange={(e) => setDeliverySearchTerm(e.target.value)}
               className="w-full pl-10 pr-24 py-2.5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 placeholder-zinc-600 text-xs font-sans transition-colors"
@@ -571,7 +626,7 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
                     ? 'bg-rose-500 text-white animate-pulse shadow-sm shadow-rose-500/40 ring-2 ring-rose-400'
                     : 'bg-zinc-800 hover:bg-zinc-750 text-zinc-300 hover:text-white border border-zinc-700/60'
                 }`}
-                title={isListening ? 'Parar de ouvir' : 'Pesquisar por voz (fale o número do pedido, telefone ou nome)'}
+                title={isListening ? 'Parar de ouvir' : 'Pesquisar por voz (fale o nome do cliente, número do pedido ou telefone)'}
               >
                 {isListening ? (
                   <>
@@ -620,11 +675,28 @@ export function DeliveryManager({ products, sales, storeInfo, onUpdateSale, pres
           {/* List display */}
           <div className="space-y-2.5 max-h-[450px] overflow-y-auto pr-1">
             {filteredList.length === 0 ? (
-              <div className="py-12 text-center text-zinc-500 border border-dashed border-zinc-850 rounded-xl bg-black/10">
-                <p className="text-sm font-medium">Nenhum pedido encontrado</p>
-                <p className="text-xs text-zinc-650 mt-1">
-                  Certifique-se de digitar o número do pedido ou telefone corretamente.
+              <div className="py-10 px-4 text-center text-zinc-500 border border-dashed border-zinc-850 rounded-xl bg-black/20 space-y-2.5">
+                <p className="text-sm font-semibold text-zinc-300">Nenhum pedido encontrado</p>
+                <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+                  {deliverySearchTerm
+                    ? `Nenhum pedido encontrado para "${deliverySearchTerm}" nesta aba.`
+                    : 'Não há pedidos para exibir com os filtros atuais.'}
                 </p>
+                {otherCategoryMatchesCount > 0 && (
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCategory(category === 'Pendentes' ? 'Entregues' : 'Pendentes');
+                        setSelectedSaleId(null);
+                      }}
+                      className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-brand-pink/15 hover:bg-brand-pink/25 text-brand-pink border border-brand-pink/30 transition-all cursor-pointer shadow-xs active:scale-95"
+                    >
+                      <span>🔍 Ver {otherCategoryMatchesCount} pedido(s) em {category === 'Pendentes' ? 'Pedidos Entregues' : 'Pedidos Pendentes'}</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               filteredList.map((sale) => {

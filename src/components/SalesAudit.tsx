@@ -462,27 +462,53 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
         console.error('Audit date filtering error:', e);
       }
 
-      // 3. Search Term Filter (checks customer, order number, creator, editor, or designer)
-      const term = searchTerm.toLowerCase().trim();
-      if (!term) return true;
+      // 3. Search Term Filter (checks customer, order number, phone, creator, editor, or designer)
+      const rawTerm = searchTerm.trim();
+      if (!rawTerm) return true;
+
+      const normalize = (str?: string) =>
+        (str || '')
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .toLowerCase()
+          .trim();
+
+      const normalizedTerm = normalize(rawTerm);
+      const termWords = normalizedTerm.split(/\s+/).filter(Boolean);
+      const cleanDigits = rawTerm.replace(/\D/g, '');
 
       const creatorEmail = (sale.criadoPorEmail || 'Sistema/Legado').toLowerCase();
       const editorEmail = (sale.editadoPorEmail || '').toLowerCase();
       const designerEmail = (sale.arteFinalizadaPorEmail || '').toLowerCase();
       const assignEmail = (sale.puxadoPor || '').toLowerCase();
-      const customer = sale.cliente.toLowerCase();
-      const orderNum = sale.numeroPedido ? sale.numeroPedido.toLowerCase() : '';
-      const product = sale.produtoNome.toLowerCase();
-      const matchItens = sale.itens ? sale.itens.some(item => item.produtoNome.toLowerCase().includes(term)) : false;
+
+      const customerNorm = normalize(sale.cliente);
+      const matchCustomer = customerNorm.includes(normalizedTerm) ||
+        (termWords.length > 1 && termWords.every(w => customerNorm.includes(w)));
+
+      const cleanOrder = sale.numeroPedido ? sale.numeroPedido.replace(/\D/g, '') : '';
+      const orderNum = sale.numeroPedido ? normalize(sale.numeroPedido) : '';
+      const matchOrderNum = Boolean(
+        (sale.numeroPedido && orderNum.includes(normalizedTerm)) ||
+        (cleanDigits.length > 0 && (cleanOrder === cleanDigits || cleanOrder.includes(cleanDigits)))
+      );
+
+      const cleanPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '') : '';
+      const matchPhone = Boolean(cleanDigits.length >= 3 && cleanPhone.includes(cleanDigits));
+
+      const product = normalize(sale.produtoNome);
+      const matchProduct = product.includes(normalizedTerm);
+      const matchItens = sale.itens ? sale.itens.some(item => normalize(item.produtoNome).includes(normalizedTerm)) : false;
 
       return (
-        creatorEmail.includes(term) ||
-        editorEmail.includes(term) ||
-        designerEmail.includes(term) ||
-        assignEmail.includes(term) ||
-        customer.includes(term) ||
-        orderNum.includes(term) ||
-        product.includes(term) ||
+        creatorEmail.includes(normalizedTerm) ||
+        editorEmail.includes(normalizedTerm) ||
+        designerEmail.includes(normalizedTerm) ||
+        assignEmail.includes(normalizedTerm) ||
+        matchCustomer ||
+        matchOrderNum ||
+        matchPhone ||
+        matchProduct ||
         matchItens
       );
     });

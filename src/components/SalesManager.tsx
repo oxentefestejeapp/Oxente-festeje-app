@@ -489,6 +489,14 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setVisibleSalesCount(10);
   }, [salesSearchTerm, dateFilter, startDateStr, endDateStr, filterOnlyAvulso]);
 
+  // Normaliza strings para busca insensível a maiúsculas e acentos
+  const normalizeSearchText = (str?: string) =>
+    (str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
   // Get filtered sales history by client, product name, or receipt order number, and period
   const filteredSales = sales.filter((sale) => {
     if (sale.status === 'Orçamento') return false;
@@ -541,20 +549,105 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       console.error(e);
     }
 
-    // 2. Text Search filtering
-    const term = salesSearchTerm.toLowerCase().trim();
-    if (!term) {
+    // 2. Text Search filtering (Avançado: Suporte a nome do cliente, acentuação, telefone, pedido, produto)
+    const rawTerm = salesSearchTerm.trim();
+    if (!rawTerm) {
       return true;
     }
     
-    const matchName = sale.cliente.toLowerCase().includes(term);
-    const matchProduct = sale.produtoNome.toLowerCase().includes(term);
-    const matchOrderNum = sale.numeroPedido ? sale.numeroPedido.toLowerCase().includes(term) : false;
-    const matchPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '').includes(term.replace(/\D/g, '')) : false;
-    const matchItens = sale.itens ? sale.itens.some(item => item.produtoNome.toLowerCase().includes(term)) : false;
+    const normalizedTerm = normalizeSearchText(rawTerm);
+    const termWords = normalizedTerm.split(/\s+/).filter(Boolean);
+    const cleanDigits = rawTerm.replace(/\D/g, '');
+
+    // Busca inteligente por nome do cliente
+    const clientNorm = normalizeSearchText(sale.cliente);
+    const matchName = clientNorm.includes(normalizedTerm) ||
+      (termWords.length > 1 && termWords.every(w => clientNorm.includes(w)));
+
+    // Busca por produto
+    const matchProduct = normalizeSearchText(sale.produtoNome).includes(normalizedTerm);
+
+    // Busca por número de pedido ou ID
+    const orderNorm = normalizeSearchText(sale.numeroPedido);
+    const cleanOrder = sale.numeroPedido ? sale.numeroPedido.replace(/\D/g, '') : '';
+    const matchOrderNum = Boolean(
+      (sale.numeroPedido && orderNorm.includes(normalizedTerm)) ||
+      (cleanDigits.length > 0 && (cleanOrder === cleanDigits || cleanOrder.includes(cleanDigits))) ||
+      (sale.id && sale.id.toLowerCase().includes(normalizedTerm))
+    );
+
+    // Busca por telefone (apenas se houver 3+ dígitos para não bater com letras)
+    const cleanPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '') : '';
+    const matchPhone = Boolean(cleanDigits.length >= 3 && cleanPhone.includes(cleanDigits));
+
+    // Busca nos itens adicionais
+    const matchItens = sale.itens ? sale.itens.some(item => normalizeSearchText(item.produtoNome).includes(normalizedTerm)) : false;
     
     return matchName || matchProduct || matchOrderNum || matchPhone || matchItens;
   });
+
+  // Se houver pesquisa ativa e filtro de período restritivo, calcula correspondências fora do período
+  const otherDatesMatchesCount = useMemo(() => {
+    const rawTerm = salesSearchTerm.trim();
+    if (!rawTerm || dateFilter === 'all') return 0;
+
+    const normalizedTerm = normalizeSearchText(rawTerm);
+    const termWords = normalizedTerm.split(/\s+/).filter(Boolean);
+    const cleanDigits = rawTerm.replace(/\D/g, '');
+
+    const matchesOutside = sales.filter((sale) => {
+      if (sale.status === 'Orçamento') return false;
+      if (filterOnlyAvulso && !isAvulsoSale(sale, products)) return false;
+
+      // Verifica se a venda está dentro do período atual
+      try {
+        const saleDate = new Date(sale.data);
+        const now = new Date();
+        const getBrazilDateString = (date: Date) => date.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit' });
+        
+        let isInPeriod = true;
+        if (dateFilter === 'today') {
+          isInPeriod = getBrazilDateString(saleDate) === getBrazilDateString(now);
+        } else if (dateFilter === 'yesterday') {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          isInPeriod = getBrazilDateString(saleDate) === getBrazilDateString(yesterday);
+        } else if (dateFilter === '7days') {
+          const diffDays = Math.abs(now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
+          isInPeriod = diffDays <= 7;
+        } else if (dateFilter === 'this_month') {
+          const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
+          isInPeriod = diffDays <= 30 && diffDays >= -0.5;
+        } else if (dateFilter === 'custom') {
+          if (startDateStr && saleDate < new Date(startDateStr + 'T00:00:00')) isInPeriod = false;
+          if (endDateStr && saleDate > new Date(endDateStr + 'T23:59:59')) isInPeriod = false;
+        }
+
+        if (isInPeriod) return false;
+      } catch {
+        return false;
+      }
+
+      // Verifica se confere com o termo buscado
+      const clientNorm = normalizeSearchText(sale.cliente);
+      const matchName = clientNorm.includes(normalizedTerm) || (termWords.length > 1 && termWords.every(w => clientNorm.includes(w)));
+      const matchProduct = normalizeSearchText(sale.produtoNome).includes(normalizedTerm);
+      const orderNorm = normalizeSearchText(sale.numeroPedido);
+      const cleanOrder = sale.numeroPedido ? sale.numeroPedido.replace(/\D/g, '') : '';
+      const matchOrderNum = Boolean(
+        (sale.numeroPedido && orderNorm.includes(normalizedTerm)) ||
+        (cleanDigits.length > 0 && (cleanOrder === cleanDigits || cleanOrder.includes(cleanDigits))) ||
+        (sale.id && sale.id.toLowerCase().includes(normalizedTerm))
+      );
+      const cleanPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '') : '';
+      const matchPhone = Boolean(cleanDigits.length >= 3 && cleanPhone.includes(cleanDigits));
+      const matchItens = sale.itens ? sale.itens.some(item => normalizeSearchText(item.produtoNome).includes(normalizedTerm)) : false;
+
+      return matchName || matchProduct || matchOrderNum || matchPhone || matchItens;
+    });
+
+    return matchesOutside.length;
+  }, [sales, salesSearchTerm, dateFilter, startDateStr, endDateStr, filterOnlyAvulso, products]);
 
   // Filter out delivered sales that are older than 15 days from the list, unless there is an active search term, an active date filter other than 'all', or showOldDeliveredSales is checked
   const displayedSales = useMemo(() => {
@@ -3230,12 +3323,38 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 </span>
                 <input
                   type="text"
-                  placeholder="Filtrar por cliente, produto, número do pedido ou telefone..."
+                  placeholder="Pesquisar por nome do cliente, telefone, produto ou pedido (#)..."
                   value={salesSearchTerm}
                   onChange={(e) => setSalesSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 bg-black border border-zinc-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 placeholder-zinc-650 text-xs transition-colors"
+                  className="w-full pl-9 pr-10 py-2 bg-black border border-zinc-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 placeholder-zinc-650 text-xs transition-colors"
                 />
+                {salesSearchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSalesSearchTerm('')}
+                    className="absolute right-3 top-2 text-zinc-500 hover:text-zinc-200 transition-colors cursor-pointer p-1 rounded-md"
+                    title="Limpar pesquisa"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
               </div>
+
+              {/* Banner avisando que há resultados fora do período selecionado */}
+              {otherDatesMatchesCount > 0 && (
+                <div className="flex items-center justify-between p-2.5 bg-brand-pink/10 border border-brand-pink/30 rounded-xl text-xs">
+                  <span className="text-zinc-300">
+                    🔍 Encontrado(s) <strong className="text-brand-pink">{otherDatesMatchesCount}</strong> pedido(s) correspondente(s) em <strong>outras datas</strong>.
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setDateFilter('all')}
+                    className="px-3 py-1 bg-brand-pink text-black font-bold rounded-lg hover:bg-brand-pink/90 text-xs transition-colors cursor-pointer whitespace-nowrap ml-2 shadow-xs active:scale-95"
+                  >
+                    Ver todas as datas
+                  </button>
+                </div>
+              )}
 
               {/* Date Filters Row */}
               <div className="flex flex-wrap gap-2 items-center bg-black/30 p-2 border border-zinc-850/85 rounded-xl">
@@ -3397,11 +3516,24 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               Nenhuma venda registrada ainda no sistema.
             </div>
           ) : displayedSales.length === 0 ? (
-            <div className="p-8 text-center bg-black/25 rounded-xl border border-dashed border-zinc-850">
-              <p className="text-zinc-450 text-sm font-medium">Nenhum resultado encontrado</p>
-              <p className="text-xs text-zinc-600 mt-1">
-                Tente redefinir a busca por cliente ou produto para encontrar registros históricos.
+            <div className="p-8 text-center bg-black/25 rounded-xl border border-dashed border-zinc-850 space-y-2.5">
+              <p className="text-zinc-300 text-sm font-semibold">Nenhum resultado encontrado</p>
+              <p className="text-xs text-zinc-500 max-w-md mx-auto">
+                {salesSearchTerm 
+                  ? `Nenhuma venda encontrada para "${salesSearchTerm}" no período selecionado.` 
+                  : 'Tente redefinir a busca por cliente, produto ou período para encontrar registros históricos.'}
               </p>
+              {otherDatesMatchesCount > 0 && (
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setDateFilter('all')}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-brand-pink text-black text-xs font-bold rounded-xl hover:bg-brand-pink/90 transition-all cursor-pointer shadow-xs active:scale-95"
+                  >
+                    <span>Exibir {otherDatesMatchesCount} venda(s) encontrada(s) em outras datas</span>
+                  </button>
+                </div>
+              )}
             </div>
           ) : (
             <div 

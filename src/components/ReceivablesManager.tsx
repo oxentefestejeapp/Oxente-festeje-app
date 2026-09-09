@@ -195,10 +195,12 @@ export function ReceivablesManager({ sales, storeInfo, onUpdateSale, onNavigateT
     const term = searchTerm.toLowerCase().trim();
     if (!term) return list;
 
+    const cleanDigits = term.replace(/\D/g, '');
+
     return list.filter(sale => {
       const matchName = sale.cliente.toLowerCase().includes(term);
       const matchOrderNum = sale.numeroPedido ? sale.numeroPedido.toLowerCase().includes(term) : false;
-      const matchPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '').includes(term.replace(/\D/g, '')) : false;
+      const matchPhone = cleanDigits.length >= 3 && sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '').includes(cleanDigits) : false;
       const matchProduct = sale.produtoNome.toLowerCase().includes(term);
       const matchItens = sale.itens ? sale.itens.some(item => item.produtoNome.toLowerCase().includes(term)) : false;
       return matchName || matchOrderNum || matchPhone || matchProduct || matchItens;

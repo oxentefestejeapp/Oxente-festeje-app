@@ -44,9 +44,10 @@ export function SchedulingManager({ products, sales, storeInfo, onUpdateSale, on
     return scheduledSales.filter(s => {
       // Search
       const text = searchTerm.toLowerCase().trim();
+      const cleanDigits = text.replace(/\D/g, '');
       const matchName = s.cliente.toLowerCase().includes(text);
       const matchOrderNum = s.numeroPedido ? s.numeroPedido.toLowerCase().includes(text) : false;
-      const matchPhone = s.telefoneCliente ? s.telefoneCliente.replace(/\D/g, '').includes(text.replace(/\D/g, '')) : false;
+      const matchPhone = cleanDigits.length >= 3 && s.telefoneCliente ? s.telefoneCliente.replace(/\D/g, '').includes(cleanDigits) : false;
       const matchProduct = s.produtoNome.toLowerCase().includes(text);
       const matchItens = s.itens ? s.itens.some(item => item.produtoNome.toLowerCase().includes(text)) : false;
       const matchesSearch = !text || matchName || matchOrderNum || matchPhone || matchProduct || matchItens;
