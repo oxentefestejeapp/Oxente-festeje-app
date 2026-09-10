@@ -285,7 +285,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   // Gera a mensagem de aprovação de arte contendo confirmação de layout, cores e ortografia
   const getLayoutApprovalMessage = (sale: Sale): string => {
     const clientName = sale.cliente || 'Cliente';
-    const storeName = storeInfo?.nome || 'Oxente Festeje';
+    const storeName = storeInfo?.nome && !/^\d{10,}$/.test(storeInfo.nome.trim()) ? storeInfo.nome : 'Oxente Festeje';
     const baseUrl = window.location.origin;
     const approvalParam = encodeURIComponent(sale.numeroPedido || sale.id);
     const approvalLink = `${baseUrl}/?aprovar=${approvalParam}`;

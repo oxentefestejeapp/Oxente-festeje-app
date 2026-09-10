@@ -690,10 +690,13 @@ export default function App() {
 
     if (cachedStoreInfo) {
       loadedStoreInfo = JSON.parse(cachedStoreInfo);
+      if (!loadedStoreInfo.nome || /^\d{10,}$/.test(loadedStoreInfo.nome.trim())) {
+        loadedStoreInfo.nome = defaultStoreInfo.nome;
+      }
       if (!loadedStoreInfo.whatsappTemplate || !loadedStoreInfo.whatsappTemplate.includes('Josina Lessa')) {
         loadedStoreInfo.whatsappTemplate = defaultStoreInfo.whatsappTemplate;
-        localStorage.setItem('oxente_store_info', JSON.stringify(loadedStoreInfo));
       }
+      localStorage.setItem('oxente_store_info', JSON.stringify(loadedStoreInfo));
       setStoreInfo(loadedStoreInfo);
     } else {
       setStoreInfo(defaultStoreInfo);
@@ -852,6 +855,10 @@ export default function App() {
 
         // Sync Store Info
         if (dbStore) {
+          if (!dbStore.nome || /^\d{10,}$/.test(dbStore.nome.trim())) {
+            dbStore.nome = defaultStoreInfo.nome;
+            dbSupabase.saveStoreInfo(dbStore).catch((err: any) => console.warn('Erro ao atualizar nome no Supabase:', err));
+          }
           if (!dbStore.whatsappTemplate || !dbStore.whatsappTemplate.includes('Josina Lessa')) {
             dbStore.whatsappTemplate = defaultStoreInfo.whatsappTemplate;
             dbSupabase.saveStoreInfo(dbStore).catch((err: any) => console.warn('Erro ao atualizar whatsappTemplate no Supabase:', err));
@@ -1115,7 +1122,7 @@ export default function App() {
 
       if (eventType === 'INSERT' || eventType === 'UPDATE') {
         if (newRow.key === 'app_version_trigger') {
-          const dbTrigger = Number(newRow.nome);
+          const dbTrigger = Number(newRow.whatsapp_template || newRow.nome);
           if (dbTrigger) {
             const lastProcessed = localStorage.getItem('oxente_last_reload_trigger');
             if (lastProcessed && lastProcessed !== String(dbTrigger)) {
@@ -1135,8 +1142,17 @@ export default function App() {
           return;
         }
 
+        // Apenas processa atualizações se for a linha principal da loja (key = 'default')
+        if (newRow.key !== 'default') {
+          return;
+        }
+
+        const validNome = newRow.nome && !/^\d{10,}$/.test(newRow.nome.trim())
+          ? newRow.nome
+          : defaultStoreInfo.nome;
+
         const updatedStore = {
-          nome: newRow.nome,
+          nome: validNome,
           instagram: newRow.instagram || '',
           telefone: newRow.telefone || '',
           endereco: newRow.endereco || '',
@@ -2370,7 +2386,8 @@ export default function App() {
       // Store in Supabase oxente_store_info table under key 'app_version_trigger'
       const { error } = await supabase.from('oxente_store_info').upsert({
         key: 'app_version_trigger',
-        nome: String(newTrigger),
+        nome: 'Version Trigger',
+        whatsapp_template: String(newTrigger),
         updated_at: new Date().toISOString()
       });
       

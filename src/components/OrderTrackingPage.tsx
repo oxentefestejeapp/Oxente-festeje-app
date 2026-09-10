@@ -125,16 +125,20 @@ export function OrderTrackingPage() {
 
       setSale(mapDbToSale(foundRecord));
 
-      // 2. Fetch latest store details
+      // 2. Fetch latest store details (apenas o registro 'default' da loja)
       const { data: storeData } = await supabase
         .from('oxente_store_info')
         .select('*')
-        .limit(1)
+        .eq('key', 'default')
         .maybeSingle();
       
       if (storeData) {
+        const validNome = storeData.nome && !/^\d{10,}$/.test(storeData.nome.trim())
+          ? storeData.nome
+          : DEFAULT_STORE_INFO.nome;
+
         setStoreInfo({
-          nome: storeData.nome || DEFAULT_STORE_INFO.nome,
+          nome: validNome,
           instagram: storeData.instagram || DEFAULT_STORE_INFO.instagram,
           telefone: storeData.telefone || DEFAULT_STORE_INFO.telefone,
           endereco: storeData.endereco || DEFAULT_STORE_INFO.endereco,
@@ -151,10 +155,11 @@ export function OrderTrackingPage() {
 
   const getWhatsAppConfirmationUrl = () => {
     if (!sale) return '#';
-    const cleanPhone = (storeInfo?.telefone || '83988859302').replace(/\D/g, '');
+    const cleanPhone = (storeInfo?.telefone || DEFAULT_STORE_INFO.telefone).replace(/\D/g, '');
     const storePhoneForWA = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
     const pedidoTag = sale.numeroPedido ? `#${sale.numeroPedido}` : `#${sale.id.substring(0, 5)}`;
-    const textMsg = `Olá, *${storeInfo?.nome || 'Oxente Festeje'}*! Tudo bem? 🎨✨\n\nAqui é *${sale.cliente || 'Cliente'}*!\nPassei para avisar que *APROVEI O LAYOUT* do meu pedido *${pedidoTag}*! ✅🧵\n\nConferi com atenção todas as cores, modelos, textos, ortografia e detalhes. Está tudo certinho para a confecção e produção! 🚀🎈\n\nMuito obrigado!`;
+    const storeName = storeInfo?.nome && !/^\d{10,}$/.test(storeInfo.nome.trim()) ? storeInfo.nome : 'Oxente Festeje';
+    const textMsg = `Olá, *${storeName}*! Tudo bem? 🎨✨\n\nAqui é *${sale.cliente || 'Cliente'}*!\nPassei para avisar que *APROVEI O LAYOUT* do meu pedido *${pedidoTag}*! ✅🧵\n\nConferi com atenção todas as cores, modelos, textos, ortografia e detalhes. Está tudo certinho para a confecção e produção! 🚀🎈\n\nMuito obrigado!`;
     return `https://api.whatsapp.com/send?phone=${storePhoneForWA}&text=${encodeURIComponent(textMsg)}`;
   };
 
