@@ -435,7 +435,7 @@ export async function testLocalMobileBadgeAndNotification(badgeNumber = 1): Prom
       body,
       icon: '/icon.svg',
       badge: '/icon.svg',
-      tag: 'test-order-badge-alert',
+      tag: `test-order-badge-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       vibrate: [250, 100, 250],
       requireInteraction: false
     };

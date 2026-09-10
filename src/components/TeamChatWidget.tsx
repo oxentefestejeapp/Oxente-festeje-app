@@ -325,7 +325,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       sendDesktopAlert({
         title: `💬 ${displayName} (Chat Equipe)`,
         body: msg.text,
-        tag: 'oxente_chat_msg',
+        tag: `oxente_chat_${msg.id || Date.now()}`,
         requireInteraction: false,
         onClick: () => {
           try { window.focus(); } catch {}
@@ -359,7 +359,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     sendDesktopAlert({
       title: '🚨 UBER A CAMINHO! 🚗',
       body: `${displayName}: "${msg.text}"\nClique para abrir o sistema na hora e conferir a expedição!`,
-      tag: 'oxente_uber_alert',
+      tag: `oxente_uber_${msg.id || Date.now()}`,
       requireInteraction: true, // Remains on screen until clicked or closed
       onClick: () => {
         try { window.focus(); } catch {}
@@ -394,7 +394,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     sendDesktopAlert({
       title: '📝 ANOTA OS PEDIDOS! 📋',
       body: `${displayName}: "${msg.text}"\nClique para abrir o sistema na hora e registrar no balcão!`,
-      tag: 'oxente_order_alert',
+      tag: `oxente_order_${msg.id || Date.now()}`,
       requireInteraction: true, // Remains on screen until clicked or closed
       onClick: () => {
         try { window.focus(); } catch {}

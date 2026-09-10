@@ -4,7 +4,7 @@
  * Network-only pass-through: NEVER locks stale asset caches.
  */
 
-const SW_VERSION = 'v3-push-badge-stack';
+const SW_VERSION = 'v4-push-badge-accumulate';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -51,8 +51,9 @@ self.addEventListener('push', (event) => {
   }
 
   // 2. Display Native Mobile Notification Banner
-  // Usa tag única por pedido/timestamp para que as notificações se acumulem na barra e tela de bloqueio do celular
-  const notificationTag = data.tag || (data.orderId ? `oxente-order-${data.orderId}` : `oxente-push-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`);
+  // Gera uma tag 100% única para cada notificação recebida, garantindo que o Android e iOS ACUMULEM na tela de bloqueio e na barra de notificações
+  const uniqueStamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const notificationTag = `oxente-${data.orderId || 'pedido'}-${uniqueStamp}`;
 
   const options = {
     body: messageBody,
