@@ -12,7 +12,8 @@ import {
   BellRing,
   Users,
   Lock,
-  Repeat
+  Repeat,
+  Trash2
 } from 'lucide-react';
 import { playAppSound } from '../lib/audio';
 
@@ -39,9 +40,10 @@ interface ReminderAlertOverlayProps {
   onClose: () => void;
   onOpenChat: () => void;
   onSnooze: (minutes: number) => void;
+  onCancelAlarm?: (alarmId: string) => void;
 }
 
-export function ReminderAlertOverlay({ alert, onClose, onOpenChat, onSnooze }: ReminderAlertOverlayProps) {
+export function ReminderAlertOverlay({ alert, onClose, onOpenChat, onSnooze, onCancelAlarm }: ReminderAlertOverlayProps) {
   const [secondsElapsed, setSecondsElapsed] = useState(0);
 
   useEffect(() => {
@@ -290,6 +292,21 @@ export function ReminderAlertOverlay({ alert, onClose, onOpenChat, onSnooze }: R
               +3 horas
             </button>
           </div>
+
+          {/* Delete / Cancel Permanently Option */}
+          {onCancelAlarm && (
+            <div className="mt-3">
+              <button
+                type="button"
+                onClick={() => onCancelAlarm(alert.id)}
+                title="Exclui definitivamente este alarme para que ele não volte a tocar"
+                className="w-full py-2 px-3 bg-red-950/40 hover:bg-red-900/60 text-red-300 hover:text-red-100 font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer border border-red-800/60 active:scale-98 shadow-sm"
+              >
+                <Trash2 className="h-3.5 w-3.5 text-red-400" />
+                <span>EXCLUIR ESTE ALARME DEFINITIVAMENTE</span>
+              </button>
+            </div>
+          )}
 
           {/* Persistent Indicator: Stays active until user confirms */}
           <div className="mt-4 pt-2 border-t border-zinc-800/80 flex items-center justify-between gap-2 px-1 text-xs">

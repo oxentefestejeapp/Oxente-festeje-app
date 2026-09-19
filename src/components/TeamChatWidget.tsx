@@ -250,6 +250,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       return [];
     }
   });
+  const [isShowRemindersList, setIsShowRemindersList] = useState(false);
   const [isConfirmingClear, setIsConfirmingClear] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<string>('');
@@ -628,11 +629,14 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
 
   const handleCancelReminder = async (reminderId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    const updated = reminders.filter(r => r.id !== reminderId);
+    const updated = reminders.filter(r => r.id !== reminderId && r.messageId !== reminderId);
     setReminders(updated);
     try {
       localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
     } catch {}
+
+    // Dismiss fullscreen alert if this alarm is currently ringing
+    setReminderAlertData(prev => (prev && (prev.id === reminderId || prev.messageId === reminderId)) ? null : prev);
 
     // Remove from Firestore
     try {
@@ -870,18 +874,38 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         } else if (event.data?.type === 'CANCEL_REMINDER') {
           const remId = event.data.payload?.id;
           if (remId) {
-            setReminders(prev => prev.filter(r => r.id !== remId));
+            setReminders(prev => {
+              const updated = prev.filter(r => r.id !== remId && r.messageId !== remId);
+              try {
+                localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
+            setReminderAlertData(prev => (prev && (prev.id === remId || prev.messageId === remId)) ? null : prev);
           }
         } else if (event.data?.type === 'SNOOZE_REMINDER') {
           const snoozed = event.data.payload as ChatReminder;
           if (snoozed) {
-            setReminders(prev => prev.map(r => r.id === snoozed.id ? snoozed : r));
+            setReminders(prev => {
+              const updated = prev.map(r => r.id === snoozed.id ? snoozed : r);
+              try {
+                localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
           }
         } else if (event.data?.type === 'DELETE_MESSAGE') {
           const delId = event.data.payload?.id;
           if (delId) {
             setMessages(prev => prev.filter(m => m.id !== delId));
-            setReminders(prev => prev.filter(r => r.messageId !== delId));
+            setReminders(prev => {
+              const remaining = prev.filter(r => r.messageId !== delId && r.id !== delId);
+              try {
+                localStorage.setItem('oxente_chat_reminders', JSON.stringify(remaining));
+              } catch {}
+              return remaining;
+            });
+            setReminderAlertData(prev => (prev && (prev.id === delId || prev.messageId === delId)) ? null : prev);
           }
         } else if (event.data?.type === 'TRIGGER_TEAM_ALARM') {
           const payload = event.data.payload as ChatReminder;
@@ -996,19 +1020,39 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         })
         .on('broadcast', { event: 'cancel_reminder' }, ({ payload }) => {
           if (payload?.id) {
-            setReminders(prev => prev.filter(r => r.id !== payload.id));
+            setReminders(prev => {
+              const updated = prev.filter(r => r.id !== payload.id && r.messageId !== payload.id);
+              try {
+                localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
+            setReminderAlertData(prev => (prev && (prev.id === payload.id || prev.messageId === payload.id)) ? null : prev);
           }
         })
         .on('broadcast', { event: 'snooze_reminder' }, ({ payload }) => {
           if (payload?.id) {
             const snoozed = payload as ChatReminder;
-            setReminders(prev => prev.map(r => r.id === snoozed.id ? snoozed : r));
+            setReminders(prev => {
+              const updated = prev.map(r => r.id === snoozed.id ? snoozed : r);
+              try {
+                localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
           }
         })
         .on('broadcast', { event: 'delete_message' }, ({ payload }) => {
           if (payload?.id) {
             setMessages(prev => prev.filter(m => m.id !== payload.id));
-            setReminders(prev => prev.filter(r => r.messageId !== payload.id));
+            setReminders(prev => {
+              const remaining = prev.filter(r => r.messageId !== payload.id && r.id !== payload.id);
+              try {
+                localStorage.setItem('oxente_chat_reminders', JSON.stringify(remaining));
+              } catch {}
+              return remaining;
+            });
+            setReminderAlertData(prev => (prev && (prev.id === payload.id || prev.messageId === payload.id)) ? null : prev);
           }
         })
         .on('broadcast', { event: 'trigger_team_alarm' }, ({ payload }) => {
@@ -1313,7 +1357,10 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       setMessages([]);
       setUnreadCount(0);
       setIncomingAlert(null);
+      setReminders([]);
+      setReminderAlertData(null);
       localStorage.removeItem(STORAGE_CACHE_KEY);
+      localStorage.removeItem('oxente_chat_reminders');
       localStorage.setItem('oxente_team_chat_cleared_at', Date.now().toString());
 
       // 2. Play sound feedback
@@ -1361,6 +1408,15 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
           await Promise.all(deletePromises);
         } catch (err) {
           console.warn('Erro ao deletar do Firestore:', err);
+        }
+
+        try {
+          const remindersRef = collection(db, 'oxente_chat_reminders');
+          const snapRem = await getDocs(remindersRef);
+          const deleteRemPromises = snapRem.docs.map((docSnap) => deleteDoc(doc(db, 'oxente_chat_reminders', docSnap.id)));
+          await Promise.all(deleteRemPromises);
+        } catch (err) {
+          console.warn('Erro ao deletar lembretes do Firestore:', err);
         }
       }
     } catch (e) {
@@ -1468,14 +1524,16 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(remainingMessages));
     } catch {}
 
-    // Clean up any reminder assigned to this message
-    setReminders(prev => {
-      const filtered = prev.filter(r => r.messageId !== messageId);
-      try {
-        localStorage.setItem('oxente_chat_reminders', JSON.stringify(filtered));
-      } catch {}
-      return filtered;
-    });
+    // Find and clean up ANY reminder assigned to this message
+    const remindersToDelete = reminders.filter(r => r.messageId === messageId || r.id === messageId);
+    const filteredReminders = reminders.filter(r => r.messageId !== messageId && r.id !== messageId);
+    setReminders(filteredReminders);
+    try {
+      localStorage.setItem('oxente_chat_reminders', JSON.stringify(filteredReminders));
+    } catch {}
+
+    // Dismiss active full-screen alert if it belongs to this message
+    setReminderAlertData(prev => (prev && (prev.messageId === messageId || prev.id === messageId)) ? null : prev);
 
     playAppSound('trash');
 
@@ -1522,6 +1580,32 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         await deleteDoc(doc(db, 'oxente_team_messages', messageId));
       }
     } catch {}
+
+    // 6. Permanently delete all associated reminders from Firestore & broadcast their cancellation
+    for (const rem of remindersToDelete) {
+      try {
+        if (db) {
+          await deleteDoc(doc(db, 'oxente_chat_reminders', rem.id));
+        }
+      } catch (err) {
+        console.warn('Erro ao deletar lembrete no Firestore ao excluir mensagem:', err);
+      }
+
+      try {
+        await supabaseChannelRef.current?.send({
+          type: 'broadcast',
+          event: 'cancel_reminder',
+          payload: { id: rem.id }
+        });
+      } catch {}
+
+      try {
+        broadcastRef.current?.postMessage({
+          type: 'CANCEL_REMINDER',
+          payload: { id: rem.id }
+        });
+      } catch {}
+    }
   };
 
   const formatMessageTime = (timestamp: number) => {
@@ -1574,6 +1658,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
           setIsOpen(true);
         }}
         onSnooze={handleSnoozeReminder}
+        onCancelAlarm={(id) => handleCancelReminder(id)}
       />
 
       {/* Modal to configure Reminder / Alarm for a clicked message */}
@@ -1700,6 +1785,30 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
               <div className="flex items-center gap-1">
                 <button
                   type="button"
+                  onClick={() => setIsShowRemindersList(prev => !prev)}
+                  title={
+                    reminders.length > 0
+                      ? `Ver e gerenciar ${reminders.length} alarme(s) agendado(s)`
+                      : 'Alarmes e Lembretes agendados'
+                  }
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer relative ${
+                    isShowRemindersList
+                      ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                      : reminders.length > 0
+                      ? 'text-teal-400 hover:bg-zinc-800'
+                      : 'text-zinc-400 hover:bg-zinc-800'
+                  }`}
+                >
+                  <AlarmClock className="h-3.5 w-3.5" />
+                  {reminders.length > 0 && (
+                    <span className="absolute -top-1 -right-1 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-teal-500 text-[8px] font-black text-black">
+                      {reminders.length}
+                    </span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleEnableNotifications}
                   title={
                     notifPermission === 'granted'
@@ -1779,8 +1888,97 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
               </div>
             )}
 
-            {/* Messages Body */}
-            <div className="flex-1 p-3.5 overflow-y-auto space-y-3 bg-zinc-950/60">
+            {/* Reminders Panel or Messages Body */}
+            {isShowRemindersList ? (
+              <div className="flex-1 p-3.5 overflow-y-auto space-y-2.5 bg-zinc-950/95 flex flex-col">
+                <div className="flex items-center justify-between pb-2 border-b border-zinc-800 shrink-0">
+                  <div className="flex items-center gap-1.5 text-xs font-bold text-teal-300">
+                    <AlarmClock className="h-4 w-4 text-teal-400" />
+                    <span>Alarmes Agendados ({reminders.length})</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsShowRemindersList(false)}
+                    className="text-[10px] text-zinc-300 hover:text-white px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 cursor-pointer font-medium transition-colors"
+                  >
+                    Voltar ao Chat
+                  </button>
+                </div>
+
+                {reminders.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 text-zinc-500">
+                    <div className="w-10 h-10 rounded-xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-2 text-zinc-500">
+                      <AlarmClock className="h-5 w-5" />
+                    </div>
+                    <p className="text-xs font-semibold text-zinc-300">Nenhum alarme ativo</p>
+                    <p className="text-[10px] text-zinc-500 mt-1 max-w-[220px]">
+                      Quando você define um lembrete ou alarme em uma mensagem, ele fica listado aqui para você cancelar ou excluir quando quiser.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {reminders.map((rem) => {
+                      const isWeekly = !!rem.repeatWeekly;
+                      const isTeam = rem.target === 'all';
+                      const triggerDate = new Date(rem.triggerAt);
+                      const timeFormatted = rem.repeatTime || triggerDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+                      return (
+                        <div
+                          key={rem.id}
+                          className={`p-2.5 rounded-xl border ${
+                            isTeam
+                              ? 'bg-indigo-950/40 border-indigo-700/50 text-indigo-100'
+                              : 'bg-teal-950/40 border-teal-700/50 text-teal-100'
+                          } flex items-start justify-between gap-2 shadow-sm`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold mb-1">
+                              {isWeekly ? (
+                                <span className="flex items-center gap-1 text-teal-300 font-bold">
+                                  <Repeat className="h-3 w-3" />
+                                  Toda {rem.repeatDayLabel || 'Semana'} às {timeFormatted}
+                                </span>
+                              ) : (
+                                <span className="flex items-center gap-1 text-zinc-300 font-medium">
+                                  <Clock className="h-3 w-3 text-teal-400" />
+                                  {triggerDate.toLocaleDateString('pt-BR')} às {timeFormatted}
+                                </span>
+                              )}
+
+                              <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                isTeam ? 'bg-indigo-900/80 text-indigo-200' : 'bg-teal-900/80 text-teal-200'
+                              }`}>
+                                {isTeam ? '👥 Toda a Equipe' : '🔒 Privado'}
+                              </span>
+                            </div>
+
+                            <p className="text-xs font-bold text-white leading-snug line-clamp-2 break-words">
+                              "{rem.text}"
+                            </p>
+
+                            <p className="text-[9px] text-zinc-400 mt-1 truncate">
+                              Por: {rem.creatorName || rem.senderName || 'Colaborador'}
+                            </p>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={(e) => handleCancelReminder(rem.id, e)}
+                            title="Cancelar e Excluir este Alarme Definitivamente"
+                            className="p-1.5 text-zinc-400 hover:text-rose-400 hover:bg-red-950/50 rounded-lg transition-colors cursor-pointer shrink-0 border border-transparent hover:border-red-800/40"
+                          >
+                            <Trash2 className="h-4 w-4 text-rose-400" />
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Messages Body */
+              <div className="flex-1 p-3.5 overflow-y-auto space-y-3 bg-zinc-950/60">
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-6 text-zinc-500">
                   <div className="w-12 h-12 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mb-3 text-zinc-400">
@@ -2031,6 +2229,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
               )}
               <div ref={messagesEndRef} />
             </div>
+            )}
 
             {/* Quick Action Chips */}
             <div className="px-3 py-1.5 bg-zinc-900/60 border-t border-zinc-850 overflow-x-auto flex items-center gap-1.5 no-scrollbar shrink-0">
