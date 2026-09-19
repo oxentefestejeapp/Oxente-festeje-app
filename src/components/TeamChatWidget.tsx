@@ -17,12 +17,14 @@ import {
   AlarmClock,
   Lock,
   Pencil,
-  Repeat
+  Repeat,
+  BellOff
 } from 'lucide-react';
 import { UberAlertOverlay, UberAlertData } from './UberAlertOverlay';
 import { OrderAlertOverlay, OrderAlertData } from './OrderAlertOverlay';
 import { ReminderAlertOverlay, ReminderAlertData } from './ReminderAlertOverlay';
 import { SetReminderModal, ReminderRepeatConfig } from './SetReminderModal';
+import { NotificationPermissionModal } from './NotificationPermissionModal';
 import {
   sendDesktopAlert,
   flashDocumentTitle,
@@ -256,7 +258,23 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
   const [editingText, setEditingText] = useState<string>('');
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => getNotificationPermission());
+  const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
   const triggeredAlarmIdsRef = useRef<Map<string, number>>(new Map());
+
+  // Auto-sync notification permission whenever the tab regains focus or visibility changes
+  useEffect(() => {
+    const handleSyncNotif = () => {
+      const current = getNotificationPermission();
+      setNotifPermission(current);
+    };
+
+    window.addEventListener('focus', handleSyncNotif);
+    document.addEventListener('visibilitychange', handleSyncNotif);
+    return () => {
+      window.removeEventListener('focus', handleSyncNotif);
+      document.removeEventListener('visibilitychange', handleSyncNotif);
+    };
+  }, []);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -272,6 +290,18 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
 
   // Request notification permission handler
   const handleEnableNotifications = async () => {
+    // If already granted, open modal to test or view details
+    if (notifPermission === 'granted') {
+      setIsNotifModalOpen(true);
+      return;
+    }
+
+    // If already denied, browser suppresses prompt dialog - open help guide modal immediately
+    if (notifPermission === 'denied') {
+      setIsNotifModalOpen(true);
+      return;
+    }
+
     const perm = await requestNotificationPermission();
     setNotifPermission(perm);
     if (perm === 'granted') {
@@ -282,6 +312,9 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         requireInteraction: false
       });
       playAppSound('success');
+    } else {
+      // Permission denied or dismissed: show step-by-step help modal
+      setIsNotifModalOpen(true);
     }
   };
 
@@ -1674,6 +1707,13 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         onSetReminder={handleSetReminder}
       />
 
+      {/* Modal to guide or test desktop notification permissions */}
+      <NotificationPermissionModal
+        isOpen={isNotifModalOpen}
+        onClose={() => setIsNotifModalOpen(false)}
+        onPermissionChanged={(perm) => setNotifPermission(perm)}
+      />
+
       <div className="no-print fixed bottom-5 right-5 z-50 flex flex-col items-end pointer-events-auto">
       {/* Toast Flutuante de Notificação quando minimizado */}
       <AnimatePresence>
@@ -1809,20 +1849,26 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
 
                 <button
                   type="button"
-                  onClick={handleEnableNotifications}
+                  onClick={() => setIsNotifModalOpen(true)}
                   title={
                     notifPermission === 'granted'
-                      ? 'Notificações na tela ativas (Windows, Mac e celular)'
+                      ? 'Notificações na tela ativas (Clique para testar)'
+                      : notifPermission === 'denied'
+                      ? 'Notificações bloqueadas no navegador (Clique para ver como desbloquear)'
                       : 'Clique para ativar notificações na área de trabalho'
                   }
                   className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
                     notifPermission === 'granted'
                       ? 'text-emerald-400 hover:bg-zinc-800'
+                      : notifPermission === 'denied'
+                      ? 'text-rose-400 hover:bg-rose-950/40 animate-pulse'
                       : 'text-amber-400 hover:bg-amber-950/40 animate-pulse'
                   }`}
                 >
                   {notifPermission === 'granted' ? (
                     <Bell className="h-3.5 w-3.5" />
+                  ) : notifPermission === 'denied' ? (
+                    <BellOff className="h-3.5 w-3.5" />
                   ) : (
                     <BellRing className="h-3.5 w-3.5" />
                   )}
@@ -1873,17 +1919,33 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
 
             {/* Notification Permission Banner */}
             {notifPermission !== 'granted' && (
-              <div className="bg-amber-950/50 border-b border-amber-800/40 px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] text-amber-200 shrink-0">
+              <div className={`border-b px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] shrink-0 ${
+                notifPermission === 'denied'
+                  ? 'bg-rose-950/40 border-rose-800/40 text-rose-200'
+                  : 'bg-amber-950/50 border-amber-800/40 text-amber-200'
+              }`}>
                 <div className="flex items-center gap-1.5 min-w-0">
-                  <BellRing className="h-3.5 w-3.5 text-amber-400 shrink-0 animate-bounce" />
-                  <span className="truncate font-medium">Ver avisos com WhatsApp na frente:</span>
+                  {notifPermission === 'denied' ? (
+                    <BellOff className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                  ) : (
+                    <BellRing className="h-3.5 w-3.5 text-amber-400 shrink-0 animate-bounce" />
+                  )}
+                  <span className="truncate font-medium">
+                    {notifPermission === 'denied'
+                      ? 'Notificações bloqueadas pelo navegador:'
+                      : 'Ver avisos com WhatsApp na frente:'}
+                  </span>
                 </div>
                 <button
                   type="button"
                   onClick={handleEnableNotifications}
-                  className="px-2.5 py-0.5 bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black rounded-md text-[10px] cursor-pointer whitespace-nowrap shadow-xs transition-colors shrink-0"
+                  className={`px-2.5 py-0.5 font-black rounded-md text-[10px] cursor-pointer whitespace-nowrap shadow-xs transition-colors shrink-0 ${
+                    notifPermission === 'denied'
+                      ? 'bg-rose-500 hover:bg-rose-400 text-white'
+                      : 'bg-amber-500 hover:bg-amber-400 text-zinc-950'
+                  }`}
                 >
-                  Ativar
+                  {notifPermission === 'denied' ? 'Como Ativar' : 'Ativar'}
                 </button>
               </div>
             )}

@@ -19,11 +19,22 @@ export function getNotificationPermission(): NotificationPermission {
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
   if (!isNotificationSupported()) return 'denied';
   try {
-    const permission = await Notification.requestPermission();
-    return permission;
+    if (Notification.permission === 'granted') {
+      return 'granted';
+    }
+    const res: any = Notification.requestPermission();
+    if (res && typeof res.then === 'function') {
+      const perm = await res;
+      return perm || Notification.permission || 'denied';
+    } else {
+      const perm = await new Promise<NotificationPermission>((resolve) => {
+        Notification.requestPermission((p) => resolve(p));
+      });
+      return perm || Notification.permission || 'denied';
+    }
   } catch (err) {
     console.warn('Erro ao solicitar permissao de notificacao:', err);
-    return 'denied';
+    return Notification.permission || 'denied';
   }
 }
 
@@ -39,24 +50,45 @@ interface DesktopAlertOptions {
  * Triggers native OS desktop toast notification that pops up on Windows / Mac / Android
  * even if the browser tab is in the background or behind WhatsApp.
  */
-export function sendDesktopAlert({
+export async function sendDesktopAlert({
   title,
   body,
   tag = 'oxente_alert',
   requireInteraction = true,
   onClick
-}: DesktopAlertOptions): Notification | null {
+}: DesktopAlertOptions): Promise<Notification | null> {
   if (!isNotificationSupported()) return null;
 
   try {
     if (Notification.permission === 'granted') {
+      // 1. If service worker is active, use it (required on Android Chrome / PWA)
+      if ('serviceWorker' in navigator) {
+        try {
+          const reg = await navigator.serviceWorker.getRegistration();
+          if (reg && reg.showNotification) {
+            await reg.showNotification(title, {
+              body,
+              icon: '/icon.svg',
+              badge: '/icon.svg',
+              tag,
+              requireInteraction,
+              silent: false,
+            } as any);
+            return null;
+          }
+        } catch (swErr) {
+          console.warn('Falha na notificacao via Service Worker, tentando construtor padrao:', swErr);
+        }
+      }
+
+      // 2. Standard Web Notification (Windows, macOS, Linux)
       const notification = new Notification(title, {
         body,
         icon: '/icon.svg',
         badge: '/icon.svg',
         tag,
-        requireInteraction, // Keeps notification visible on screen until user interacts with it
-        silent: false, // Ensure system chime/banner triggers
+        requireInteraction,
+        silent: false,
       });
 
       notification.onclick = () => {
@@ -69,12 +101,10 @@ export function sendDesktopAlert({
 
       return notification;
     } else if (Notification.permission === 'default') {
-      // If not decided yet, request and send upon grant
-      Notification.requestPermission().then((perm) => {
-        if (perm === 'granted') {
-          sendDesktopAlert({ title, body, tag, requireInteraction, onClick });
-        }
-      });
+      const perm = await requestNotificationPermission();
+      if (perm === 'granted') {
+        return sendDesktopAlert({ title, body, tag, requireInteraction, onClick });
+      }
     }
   } catch (error) {
     console.warn('Erro ao disparar notificacao desktop:', error);
