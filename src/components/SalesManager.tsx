@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check, CheckSquare, TrendingUp, TrendingDown, Sparkles, Activity, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost, calculateSaleItemUnitCost, findMatchingProduct, isAvulsoSale, isAvulsoItem, getSaleAvulsoInfo, getSaleCostInfo } from '../types';
+import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost, calculateSaleItemUnitCost, findMatchingProduct, isAvulsoSale, isAvulsoItem, getSaleAvulsoInfo, getSaleCostInfo, formatCpfCnpj } from '../types';
 import { Receipt } from './Receipt';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
@@ -89,6 +89,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [billingPeriod, setBillingPeriod] = useState<7 | 15 | 30>(7);
   const [cliente, setCliente] = useState('');
   const [telefoneCliente, setTelefoneCliente] = useState('');
+  const [documentoCliente, setDocumentoCliente] = useState('');
+  const [showDocumentoInput, setShowDocumentoInput] = useState(false);
   const [quantidade, setQuantidade] = useState<number | ''>(1);
   const [formaPagamento, setFormaPagamento] = useState<PaymentMethod>('Pix');
   const [valorPagoInput, setValorPagoInput] = useState('');
@@ -289,6 +291,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   const [isDeletingSaleId, setIsDeletingSaleId] = useState<string | null>(null);
   const [editCliente, setEditCliente] = useState('');
   const [editTelefone, setEditTelefone] = useState('');
+  const [editDocumentoCliente, setEditDocumentoCliente] = useState('');
+  const [showEditDocumentoInput, setShowEditDocumentoInput] = useState(false);
   const [editNumeroPedido, setEditNumeroPedido] = useState('');
   const [editPedidoVinculoNumero, setEditPedidoVinculoNumero] = useState('');
   const [editFormaPagamento, setEditFormaPagamento] = useState<PaymentMethod>('Pix');
@@ -352,6 +356,9 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
       setEditCliente(editingSale.cliente);
       setEditTelefone(editingSale.telefoneCliente || '');
+      const doc = editingSale.documentoCliente || editingSale.cpfCnpj || '';
+      setEditDocumentoCliente(doc);
+      setShowEditDocumentoInput(!!doc);
       setEditNumeroPedido(editingSale.numeroPedido || '');
       setEditPedidoVinculoNumero(editingSale.pedidoVinculoNumero || '');
       setEditFormaPagamento(editingSale.formaPagamento);
@@ -429,6 +436,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       }
     } else {
       editingSaleIdRef.current = null;
+      setEditDocumentoCliente('');
+      setShowEditDocumentoInput(false);
     }
   }, [editingSale, products]);
   
@@ -1298,10 +1307,14 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       }
     }
 
+    const finalDoc = documentoCliente.trim() ? documentoCliente.trim() : undefined;
+
     const newSale: Sale = {
       id: `sale-${Date.now()}`,
       cliente: cliente.trim(),
       telefoneCliente: telefoneCliente.trim() ? telefoneCliente.trim() : undefined,
+      documentoCliente: finalDoc,
+      cpfCnpj: finalDoc,
       produtoId: mainProdutoId,
       produtoNome: mainProdutoNome,
       precoUn: mainPrecoUn,
@@ -1371,6 +1384,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setValorTaxaCartao('');
     setCliente('');
     setTelefoneCliente('');
+    setDocumentoCliente('');
+    setShowDocumentoInput(false);
     setValorPagoInput('');
     setNumeroPedido('');
     setPedidoVinculoNumero('');
@@ -1418,6 +1433,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     const originalValues = editingSale.valoresOriginais || {
       cliente: editingSale.cliente,
       telefoneCliente: editingSale.telefoneCliente,
+      documentoCliente: editingSale.documentoCliente || editingSale.cpfCnpj,
+      cpfCnpj: editingSale.documentoCliente || editingSale.cpfCnpj,
       produtoNome: editingSale.produtoNome,
       total: editingSale.total,
       formaPagamento: editingSale.formaPagamento,
@@ -1497,9 +1514,12 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       };
     });
 
+    const finalEditDoc = editDocumentoCliente.trim() ? editDocumentoCliente.trim() : undefined;
+
     const hasStructuralChanges = 
       (editingSale.cliente !== (editCliente.trim() || 'Consumidor')) ||
       (editingSale.telefoneCliente !== (editTelefone.trim() ? editTelefone.trim() : undefined)) ||
+      ((editingSale.documentoCliente || editingSale.cpfCnpj || '') !== (editDocumentoCliente.trim() || '')) ||
       (editingSale.total !== editTotal) ||
       (editingSale.valorPago !== finalValorPago) ||
       (JSON.stringify(editingSale.itens || []) !== JSON.stringify(finalItensToSave));
@@ -1508,6 +1528,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       ...editingSale,
       cliente: editCliente.trim() || 'Consumidor',
       telefoneCliente: editTelefone.trim() ? editTelefone.trim() : undefined,
+      documentoCliente: finalEditDoc,
+      cpfCnpj: finalEditDoc,
       produtoId: mainProdutoId,
       produtoNome: mainProdutoNome,
       precoUn: mainPrecoUn,
@@ -2679,6 +2701,69 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 </div>
               </div>
             </div>
+
+            {/* Optional CPF / CNPJ for Buyer Receipt (Hidden by default, expandable) */}
+            {!showDocumentoInput && !documentoCliente ? (
+              <div className="flex items-center justify-start pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowDocumentoInput(true)}
+                  className="text-xs font-semibold text-zinc-400 hover:text-brand-pink transition-colors flex items-center gap-1.5 py-1 px-1 cursor-pointer select-none group"
+                >
+                  <span className="p-1 rounded bg-zinc-800/80 group-hover:bg-brand-pink/20 text-zinc-400 group-hover:text-brand-pink transition-colors">
+                    <FileText className="h-3 w-3" />
+                  </span>
+                  <span>+ Adicionar CPF ou CNPJ no recibo <span className="text-[11px] text-zinc-500 font-normal">(Opcional)</span></span>
+                </button>
+              </div>
+            ) : (
+              <motion.div
+                initial={{ opacity: 0, y: -4 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="p-3 bg-zinc-900/60 border border-zinc-800/80 rounded-xl space-y-1.5"
+              >
+                <div className="flex items-center justify-between">
+                  <label htmlFor="sale-client-document" className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                    <FileText className="h-3.5 w-3.5 text-brand-pink" />
+                    <span>CPF ou CNPJ do Cliente <span className="text-[11px] text-zinc-500 font-normal">(Opcional - sairá no recibo)</span></span>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDocumentoCliente('');
+                      setShowDocumentoInput(false);
+                    }}
+                    className="text-[11px] text-zinc-400 hover:text-zinc-200 flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <X className="h-3 w-3" />
+                    <span>Ocultar</span>
+                  </button>
+                </div>
+                <div className="relative">
+                  <input
+                    id="sale-client-document"
+                    type="text"
+                    value={documentoCliente}
+                    onChange={(e) => {
+                      const formatted = formatCpfCnpj(e.target.value);
+                      setDocumentoCliente(formatted);
+                    }}
+                    className="w-full px-3.5 py-2 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-1 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 text-xs font-mono placeholder-zinc-650"
+                    placeholder="Ex: 00.000.000/0001-00 ou 000.000.000-00"
+                  />
+                  {documentoCliente && (
+                    <button
+                      type="button"
+                      onClick={() => setDocumentoCliente('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs p-1"
+                      title="Limpar campo"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </motion.div>
+            )}
 
             {/* Live Referral Discount Lookup Alert */}
             {clientCashbackBalance > 0 && (
@@ -4754,6 +4839,69 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     />
                   </div>
                 </div>
+
+                {/* Optional CPF / CNPJ for Edit Modal (Hidden by default, expandable) */}
+                {!showEditDocumentoInput && !editDocumentoCliente ? (
+                  <div className="flex items-center justify-start pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowEditDocumentoInput(true)}
+                      className="text-xs font-semibold text-zinc-400 hover:text-brand-pink transition-colors flex items-center gap-1.5 py-1 px-1 cursor-pointer select-none group"
+                    >
+                      <span className="p-1 rounded bg-zinc-800/80 group-hover:bg-brand-pink/20 text-zinc-400 group-hover:text-brand-pink transition-colors">
+                        <FileText className="h-3 w-3" />
+                      </span>
+                      <span>+ Adicionar CPF ou CNPJ no recibo <span className="text-[11px] text-zinc-500 font-normal">(Opcional)</span></span>
+                    </button>
+                  </div>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 bg-zinc-900/60 border border-zinc-800/80 rounded-xl space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="edit-client-document" className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5 text-brand-pink" />
+                        <span>CPF ou CNPJ do Cliente <span className="text-[11px] text-zinc-500 font-normal">(Opcional - sairá no recibo)</span></span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditDocumentoCliente('');
+                          setShowEditDocumentoInput(false);
+                        }}
+                        className="text-[11px] text-zinc-400 hover:text-zinc-200 flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                        <span>Limpar e Ocultar</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="edit-client-document"
+                        type="text"
+                        value={editDocumentoCliente}
+                        onChange={(e) => {
+                          const formatted = formatCpfCnpj(e.target.value);
+                          setEditDocumentoCliente(formatted);
+                        }}
+                        className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-zinc-100 text-xs font-mono placeholder-zinc-650"
+                        placeholder="Ex: 00.000.000/0001-00 ou 000.000.000-00"
+                      />
+                      {editDocumentoCliente && (
+                        <button
+                          type="button"
+                          onClick={() => setEditDocumentoCliente('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs p-1"
+                          title="Limpar campo"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {/* Order Number Input */}

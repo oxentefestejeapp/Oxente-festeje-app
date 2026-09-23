@@ -49,6 +49,8 @@ export interface SaleItem {
 export interface SaleOriginalValues {
   cliente: string;
   telefoneCliente?: string;
+  documentoCliente?: string;
+  cpfCnpj?: string;
   produtoNome: string;
   total: number;
   formaPagamento: PaymentMethod;
@@ -68,6 +70,8 @@ export interface Sale {
   id: string;
   cliente: string;
   telefoneCliente?: string;
+  documentoCliente?: string; // CPF ou CNPJ do comprador (opcional para recibo)
+  cpfCnpj?: string; // Sinônimo para compatibilidade
   produtoId: string;
   produtoNome: string;
   precoUn: number;
@@ -474,4 +478,27 @@ export interface CashClosing {
   observacoes?: string;
   criadoEm: string;
   fechadoEm?: string;
+}
+
+/**
+ * Formata string de CPF (11 dígitos) ou CNPJ (14 dígitos)
+ */
+export function formatCpfCnpj(value: string): string {
+  if (!value) return '';
+  const clean = value.replace(/\D/g, '');
+  if (clean.length <= 11) {
+    // CPF: 000.000.000-00
+    return clean
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2');
+  } else {
+    // CNPJ: 00.000.000/0000-00
+    return clean
+      .slice(0, 14)
+      .replace(/(\d{2})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1/$2')
+      .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
+  }
 }

@@ -20,11 +20,12 @@ import {
   HelpCircle,
   Sliders,
   FileText,
-  AlertTriangle
+  AlertTriangle,
+  X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import QRCode from 'qrcode';
-import { Sale, StoreInfo } from '../types';
+import { Sale, StoreInfo, formatCpfCnpj } from '../types';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound } from '../lib/audio';
 
@@ -39,6 +40,8 @@ interface ReceiptProps {
 export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: ReceiptProps) {
   const [whatsAppOpen, setWhatsAppOpen] = useState(false);
   const [showConvertForm, setShowConvertForm] = useState(false);
+  const [showEditDocModal, setShowEditDocModal] = useState(false);
+  const [docInputValue, setDocInputValue] = useState(sale.documentoCliente || sale.cpfCnpj || '');
   const [selectedPayment, setSelectedPayment] = useState<any>('Pix');
   const [paidValue, setPaidValue] = useState<string>('');
   const [pickupDate, setPickupDate] = useState<string>(sale.dataRetirada || '');
@@ -73,6 +76,10 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
       }
     );
   }, [sale.id, sale.status]);
+
+  useEffect(() => {
+    setDocInputValue(sale.documentoCliente || sale.cpfCnpj || '');
+  }, [sale.documentoCliente, sale.cpfCnpj, sale.id]);
 
   const handleFormatChange = (format: 'a4' | '80mm' | '58mm') => {
     setReceiptFormat(format);
@@ -309,6 +316,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
     <div class="grid-info">
       <div>
         <div class="info-item"><strong>Cliente:</strong> ${sale.cliente}</div>
+        ${sale.documentoCliente || sale.cpfCnpj ? `<div class="info-item" style="margin-top: 4px;"><strong>CPF/CNPJ:</strong> ${sale.documentoCliente || sale.cpfCnpj}</div>` : ''}
         ${sale.telefoneCliente ? `<div class="info-item" style="margin-top: 4px;"><strong>Telefone:</strong> ${sale.telefoneCliente}</div>` : ''}
       </div>
       <div>
@@ -500,6 +508,12 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
     <span>Cliente:</span>
     <span class="font-bold">${sale.cliente}</span>
   </div>
+  ${sale.documentoCliente || sale.cpfCnpj ? `
+  <div class="row">
+    <span>CPF/CNPJ:</span>
+    <span class="font-bold">${sale.documentoCliente || sale.cpfCnpj}</span>
+  </div>
+  ` : ''}
   ${sale.telefoneCliente ? `<div class="row"><span>Telefone:</span><span>${sale.telefoneCliente}</span></div>` : ''}
   <div class="row">
     <span>Pagamento:</span>
@@ -710,7 +724,7 @@ Tel: (83) 98885-9302
 ${isOrcamento ? '📄 ORÇAMENTO / COTAÇÃO' : `RECIBO DE PEDIDO #${numPed}`}
 Data: ${new Date(sale.data).toLocaleString('pt-BR')}
 Cliente: ${sale.cliente}
-Telefone: ${tel}
+${(sale.documentoCliente || sale.cpfCnpj) ? `CPF/CNPJ: ${sale.documentoCliente || sale.cpfCnpj}\n` : ''}Telefone: ${tel}
 Pagamento: ${sale.formaPagamento}
 Retirada: ${entrega}
 --------------------------------
@@ -893,6 +907,12 @@ Instagram: ${storeInfo.instagram || '@oxentefesteje'}
             <span className="text-black font-bold uppercase select-none">Cliente:</span>
             <span className="font-bold text-right select-text">{sale.cliente}</span>
           </div>
+          {(sale.documentoCliente || sale.cpfCnpj) && (
+            <div className="flex justify-between">
+              <span className="text-black font-bold uppercase select-none">CPF/CNPJ:</span>
+              <span className="font-bold text-right select-text font-mono">{sale.documentoCliente || sale.cpfCnpj}</span>
+            </div>
+          )}
           {sale.telefoneCliente && (
             <div className="flex justify-between">
               <span className="text-black font-bold uppercase select-none">Tel Cliente:</span>
@@ -1199,6 +1219,21 @@ Instagram: ${storeInfo.instagram || '@oxentefesteje'}
           </div>
         ) : null}
 
+        {onUpdateSale && !showConvertForm && (
+          <button
+            type="button"
+            onClick={() => {
+              setDocInputValue(sale.documentoCliente || sale.cpfCnpj || '');
+              setShowEditDocModal(true);
+            }}
+            className="w-full flex items-center justify-center gap-2 py-2.5 px-3 bg-zinc-800/80 hover:bg-zinc-750 border border-zinc-700/80 hover:border-brand-pink/50 text-zinc-200 hover:text-white font-bold rounded-xl text-xs transition-all cursor-pointer select-none"
+            title="Adicionar ou editar o CPF ou CNPJ do comprador para sair no recibo impresso"
+          >
+            <FileText className="h-3.5 w-3.5 text-brand-pink" />
+            <span>{sale.documentoCliente || sale.cpfCnpj ? `CPF/CNPJ: ${sale.documentoCliente || sale.cpfCnpj} (Alterar)` : '➕ Adicionar CPF ou CNPJ no Recibo'}</span>
+          </button>
+        )}
+
         {onEdit && !showConvertForm && (
           <button
             onClick={onEdit}
@@ -1354,6 +1389,124 @@ Instagram: ${storeInfo.instagram || '@oxentefesteje'}
         onUpdateSale={onUpdateSale}
         storeInfo={storeInfo}
       />
+
+      {/* MODAL RÁPIDO PARA ACRESCENTAR / EDITAR CPF OU CNPJ NO RECIBO */}
+      <AnimatePresence>
+        {showEditDocModal && (
+          <div className="fixed inset-0 bg-black/75 backdrop-blur-xs flex items-center justify-center z-50 p-4 select-none">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="bg-zinc-900 border border-zinc-700/80 rounded-2xl w-full max-w-md overflow-hidden shadow-2xl p-5 space-y-4"
+            >
+              <div className="flex items-center justify-between border-b border-zinc-800 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-brand-pink/15 text-brand-pink rounded-lg">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-bold text-zinc-100">CPF ou CNPJ no Recibo</h4>
+                    <p className="text-[10px] text-zinc-400">Cliente: <span className="text-zinc-200 font-semibold">{sale.cliente}</span></p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowEditDocModal(false)}
+                  className="p-1 hover:bg-zinc-800 rounded-lg text-zinc-400 hover:text-white transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-xs font-semibold text-zinc-300">
+                  Informe o CPF ou CNPJ do comprador:
+                </label>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={docInputValue}
+                    onChange={(e) => {
+                      const formatted = formatCpfCnpj(e.target.value);
+                      setDocInputValue(formatted);
+                    }}
+                    placeholder="Ex: 00.000.000/0001-00 ou 000.000.000-00"
+                    className="w-full px-3.5 py-2.5 bg-black border border-zinc-800 focus:border-brand-pink rounded-xl text-zinc-100 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-brand-pink/50 placeholder-zinc-650"
+                    autoFocus
+                  />
+                  {docInputValue && (
+                    <button
+                      type="button"
+                      onClick={() => setDocInputValue('')}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs p-1"
+                      title="Limpar"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] text-zinc-500 leading-normal">
+                  Este número aparecerá diretamente no cabeçalho do recibo impresso (tanto em folhas normais A4 quanto em impressoras térmicas).
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-800">
+                {sale.documentoCliente || sale.cpfCnpj ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!onUpdateSale) return;
+                      onUpdateSale({
+                        ...sale,
+                        documentoCliente: undefined,
+                        cpfCnpj: undefined,
+                        foiAlterado: true,
+                        editadoEm: new Date().toISOString()
+                      });
+                      playAppSound('trash');
+                      setShowEditDocModal(false);
+                    }}
+                    className="px-3 py-2 text-xs font-bold text-red-400 hover:text-red-300 bg-red-950/30 hover:bg-red-950/60 border border-red-900/50 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Remover do Recibo
+                  </button>
+                ) : <div />}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowEditDocModal(false)}
+                    className="px-3.5 py-2 text-xs font-semibold text-zinc-400 hover:text-zinc-200 bg-zinc-800 hover:bg-zinc-750 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!onUpdateSale) return;
+                      const clean = docInputValue.trim() ? docInputValue.trim() : undefined;
+                      onUpdateSale({
+                        ...sale,
+                        documentoCliente: clean,
+                        cpfCnpj: clean,
+                        foiAlterado: true,
+                        editadoEm: new Date().toISOString()
+                      });
+                      playAppSound('complete');
+                      setShowEditDocModal(false);
+                    }}
+                    className="px-4 py-2 text-xs font-bold text-black bg-brand-pink hover:bg-brand-pink-hover rounded-xl shadow-md transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    <span>Salvar no Recibo</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
     </motion.div>
   );

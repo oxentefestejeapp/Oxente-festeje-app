@@ -31,7 +31,7 @@ import {
   Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sale, StoreInfo, Product, SaleItem } from '../types';
+import { Sale, StoreInfo, Product, SaleItem, formatCpfCnpj } from '../types';
 import { Receipt } from './Receipt';
 import { CelebrationOverlay, UrgentArtOrderInfo } from './CelebrationOverlay';
 import { playAppSound } from '../lib/audio';
@@ -61,6 +61,8 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [editCliente, setEditCliente] = useState('');
   const [editTelefone, setEditTelefone] = useState('');
+  const [editDocumentoCliente, setEditDocumentoCliente] = useState('');
+  const [showEditDocumentoInput, setShowEditDocumentoInput] = useState(false);
   const [editNumeroPedido, setEditNumeroPedido] = useState('');
   const [editFormaPagamento, setEditFormaPagamento] = useState<'Pix' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito'>('Pix');
   const [editValorPago, setEditValorPago] = useState('');
@@ -93,6 +95,9 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
     if (editingSale) {
       setEditCliente(editingSale.cliente);
       setEditTelefone(editingSale.telefoneCliente || '');
+      const doc = editingSale.documentoCliente || editingSale.cpfCnpj || '';
+      setEditDocumentoCliente(doc);
+      setShowEditDocumentoInput(!!doc);
       setEditNumeroPedido(editingSale.numeroPedido || '');
       setEditFormaPagamento(editingSale.formaPagamento);
       setEditValorPago(editingSale.valorPago !== undefined ? editingSale.valorPago.toString() : editingSale.total.toString());
@@ -138,6 +143,8 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
     const originalValues = editingSale.valoresOriginais || {
       cliente: editingSale.cliente,
       telefoneCliente: editingSale.telefoneCliente,
+      documentoCliente: editingSale.documentoCliente || editingSale.cpfCnpj,
+      cpfCnpj: editingSale.documentoCliente || editingSale.cpfCnpj,
       produtoNome: editingSale.produtoNome,
       total: editingSale.total,
       formaPagamento: editingSale.formaPagamento,
@@ -157,10 +164,14 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
       ]
     };
 
+    const finalEditDoc = editDocumentoCliente.trim() ? editDocumentoCliente.trim() : undefined;
+
     const updatedSale: Sale = {
       ...editingSale,
       cliente: editCliente.trim() || 'Consumidor',
       telefoneCliente: editTelefone.trim() ? editTelefone.trim() : undefined,
+      documentoCliente: finalEditDoc,
+      cpfCnpj: finalEditDoc,
       produtoId: mainProdutoId,
       produtoNome: mainProdutoNome,
       precoUn: mainPrecoUn,
@@ -2478,6 +2489,69 @@ ${produtosTexto}`;
                     />
                   </div>
                 </div>
+
+                {/* Optional CPF / CNPJ for Edit Modal (Hidden by default, expandable) */}
+                {!showEditDocumentoInput && !editDocumentoCliente ? (
+                  <div className="flex items-center justify-start pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setShowEditDocumentoInput(true)}
+                      className="text-xs font-semibold text-zinc-400 hover:text-brand-pink transition-colors flex items-center gap-1.5 py-1 px-1 cursor-pointer select-none group"
+                    >
+                      <span className="p-1 rounded bg-zinc-800/80 group-hover:bg-brand-pink/20 text-zinc-400 group-hover:text-brand-pink transition-colors">
+                        <FileText className="h-3 w-3" />
+                      </span>
+                      <span>+ Adicionar CPF ou CNPJ no recibo <span className="text-[11px] text-zinc-500 font-normal">(Opcional)</span></span>
+                    </button>
+                  </div>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0, y: -4 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-3 bg-zinc-900/60 border border-zinc-800/80 rounded-xl space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between">
+                      <label htmlFor="closed-edit-client-document" className="text-xs font-semibold text-zinc-300 flex items-center gap-1.5">
+                        <FileText className="h-3.5 w-3.5 text-brand-pink" />
+                        <span>CPF ou CNPJ do Cliente <span className="text-[11px] text-zinc-500 font-normal">(Opcional - sairá no recibo)</span></span>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setEditDocumentoCliente('');
+                          setShowEditDocumentoInput(false);
+                        }}
+                        className="text-[11px] text-zinc-400 hover:text-zinc-200 flex items-center gap-1 cursor-pointer transition-colors"
+                      >
+                        <X className="h-3 w-3" />
+                        <span>Limpar e Ocultar</span>
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <input
+                        id="closed-edit-client-document"
+                        type="text"
+                        value={editDocumentoCliente}
+                        onChange={(e) => {
+                          const formatted = formatCpfCnpj(e.target.value);
+                          setEditDocumentoCliente(formatted);
+                        }}
+                        className="w-full px-3 py-2 bg-black border border-zinc-800 rounded-lg focus:outline-none focus:ring-1 focus:ring-brand-pink/50 text-zinc-100 text-xs font-mono placeholder-zinc-650"
+                        placeholder="Ex: 00.000.000/0001-00 ou 000.000.000-00"
+                      />
+                      {editDocumentoCliente && (
+                        <button
+                          type="button"
+                          onClick={() => setEditDocumentoCliente('')}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 text-xs p-1"
+                          title="Limpar campo"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>

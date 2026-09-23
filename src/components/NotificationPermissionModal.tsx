@@ -14,7 +14,8 @@ import {
   Sliders, 
   Lock,
   Smartphone,
-  Laptop
+  Laptop,
+  CheckCircle2
 } from 'lucide-react';
 import { 
   requestNotificationPermission, 
