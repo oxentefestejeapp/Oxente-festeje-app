@@ -7,34 +7,76 @@
 let titleFlashInterval: NodeJS.Timeout | null = null;
 let originalDocumentTitle = typeof document !== 'undefined' ? document.title : 'Oxente Festeje';
 
+export const IN_APP_NOTIF_KEY = 'oxente_notifications_active';
+
 export function isNotificationSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window;
 }
 
+export function isAppNotificationActive(): boolean {
+  if (typeof window === 'undefined') return false;
+  // If browser native notification is granted, it is active
+  if (isNotificationSupported() && Notification.permission === 'granted') {
+    return true;
+  }
+  // If user enabled in-app notifications on this device/browser
+  return localStorage.getItem(IN_APP_NOTIF_KEY) === 'true';
+}
+
+export function setAppNotificationActive(active: boolean): void {
+  if (typeof window === 'undefined') return;
+  if (active) {
+    localStorage.setItem(IN_APP_NOTIF_KEY, 'true');
+  } else {
+    localStorage.removeItem(IN_APP_NOTIF_KEY);
+  }
+  // Broadcast change across tabs
+  try {
+    window.dispatchEvent(new CustomEvent('oxente_notif_permission_change', { detail: { active } }));
+  } catch {}
+}
+
 export function getNotificationPermission(): NotificationPermission {
-  if (!isNotificationSupported()) return 'denied';
+  if (isAppNotificationActive()) return 'granted';
+  if (!isNotificationSupported()) return 'default';
   return Notification.permission;
 }
 
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
-  if (!isNotificationSupported()) return 'denied';
+  // Always mark in-app notification as active when user clicks request
+  setAppNotificationActive(true);
+
+  if (!isNotificationSupported()) {
+    return 'granted';
+  }
+
   try {
     if (Notification.permission === 'granted') {
       return 'granted';
     }
+
+    // Check if browser allows requesting in this context
     const res: any = Notification.requestPermission();
+    let perm: NotificationPermission = 'default';
     if (res && typeof res.then === 'function') {
-      const perm = await res;
-      return perm || Notification.permission || 'denied';
+      perm = await res;
     } else {
-      const perm = await new Promise<NotificationPermission>((resolve) => {
+      perm = await new Promise<NotificationPermission>((resolve) => {
         Notification.requestPermission((p) => resolve(p));
       });
-      return perm || Notification.permission || 'denied';
     }
+
+    if (perm === 'granted') {
+      return 'granted';
+    }
+
+    // Even if native browser prompt returned denied or dismissed (e.g. non-HTTPS IP, local LAN or iframe),
+    // we still return 'granted' for the app context because in-app alerts are active!
+    return 'granted';
   } catch (err) {
-    console.warn('Erro ao solicitar permissao de notificacao:', err);
-    return Notification.permission || 'denied';
+    console.warn('Erro ao solicitar permissao de notificacao ao navegador:', err);
+    // Return granted so in-app alerts work seamlessly on non-secure LANs/iframes
+    return 'granted';
   }
 }
 

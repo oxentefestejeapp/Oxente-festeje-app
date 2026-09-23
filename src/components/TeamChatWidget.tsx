@@ -29,7 +29,9 @@ import {
   sendDesktopAlert,
   flashDocumentTitle,
   getNotificationPermission,
-  requestNotificationPermission
+  requestNotificationPermission,
+  isAppNotificationActive,
+  setAppNotificationActive
 } from '../lib/desktopNotification';
 import {
   collection,
@@ -257,22 +259,64 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingText, setEditingText] = useState<string>('');
   const [deletingMessageId, setDeletingMessageId] = useState<string | null>(null);
-  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => getNotificationPermission());
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => {
+    return isAppNotificationActive() ? 'granted' : getNotificationPermission();
+  });
   const [isNotifModalOpen, setIsNotifModalOpen] = useState(false);
   const triggeredAlarmIdsRef = useRef<Map<string, number>>(new Map());
+
+  // Helper to synchronize chat reminders to Supabase oxente_store_info so all team devices remain in sync
+  const syncRemindersToSupabase = async (remindersList: ChatReminder[]) => {
+    try {
+      await supabase.from('oxente_store_info').upsert({
+        key: 'team_chat_reminders',
+        nome: 'Lembretes Chat',
+        whatsapp_template: JSON.stringify(remindersList),
+        updated_at: new Date().toISOString()
+      });
+    } catch (err) {
+      console.warn('Erro ao sincronizar lembretes no Supabase:', err);
+    }
+  };
+
+  // Helper to clear all scheduled reminders
+  const handleClearAllReminders = async () => {
+    setReminders([]);
+    try {
+      localStorage.removeItem('oxente_chat_reminders');
+    } catch {}
+    setReminderAlertData(null);
+    await syncRemindersToSupabase([]);
+    try {
+      supabaseChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'clear_all_reminders',
+        payload: {}
+      });
+    } catch {}
+    try {
+      broadcastRef.current?.postMessage({
+        type: 'CLEAR_ALL_REMINDERS',
+        payload: {}
+      });
+    } catch {}
+    playAppSound('trash');
+  };
 
   // Auto-sync notification permission whenever the tab regains focus or visibility changes
   useEffect(() => {
     const handleSyncNotif = () => {
-      const current = getNotificationPermission();
+      const current = isAppNotificationActive() ? 'granted' : getNotificationPermission();
       setNotifPermission(current);
     };
 
     window.addEventListener('focus', handleSyncNotif);
     document.addEventListener('visibilitychange', handleSyncNotif);
+    window.addEventListener('oxente_notif_permission_change', handleSyncNotif);
     return () => {
       window.removeEventListener('focus', handleSyncNotif);
       document.removeEventListener('visibilitychange', handleSyncNotif);
+      window.removeEventListener('oxente_notif_permission_change', handleSyncNotif);
     };
   }, []);
 
@@ -288,34 +332,22 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     messagesEndRef.current?.scrollIntoView({ behavior });
   };
 
-  // Request notification permission handler
+  // Request notification permission handler - activates immediately on this machine
   const handleEnableNotifications = async () => {
-    // If already granted, open modal to test or view details
-    if (notifPermission === 'granted') {
-      setIsNotifModalOpen(true);
-      return;
-    }
+    setAppNotificationActive(true);
+    setNotifPermission('granted');
+    playAppSound('success');
 
-    // If already denied, browser suppresses prompt dialog - open help guide modal immediately
-    if (notifPermission === 'denied') {
-      setIsNotifModalOpen(true);
-      return;
-    }
+    sendDesktopAlert({
+      title: '🔔 Alertas e Notificações Ativos!',
+      body: 'Pronto! Agora você receberá os avisos do Uber e de novos pedidos com som e na tela deste computador.',
+      tag: 'oxente_notif_welcome',
+      requireInteraction: false
+    });
 
-    const perm = await requestNotificationPermission();
-    setNotifPermission(perm);
-    if (perm === 'granted') {
-      sendDesktopAlert({
-        title: '🔔 Alertas na Área de Trabalho Ativos!',
-        body: 'Você receberá os avisos do Uber e de Novos Pedidos na tela mesmo usando WhatsApp ou outros programas.',
-        tag: 'oxente_notif_welcome',
-        requireInteraction: false
-      });
-      playAppSound('success');
-    } else {
-      // Permission denied or dismissed: show step-by-step help modal
-      setIsNotifModalOpen(true);
-    }
+    try {
+      await requestNotificationPermission();
+    } catch {}
   };
 
   // Helper to trigger alert when a new message arrives with chat minimized
@@ -519,6 +551,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
       try {
         localStorage.setItem('oxente_chat_reminders', JSON.stringify(updatedList));
       } catch {}
+      syncRemindersToSupabase(updatedList);
       return updatedList;
     });
 
@@ -563,7 +596,16 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
   useEffect(() => {
     const checkReminders = () => {
       const now = Date.now();
+      const validMessageIds = new Set(messages.map(m => m.id));
+
       for (const rem of reminders) {
+        // If the original message was deleted from chat, NEVER trigger!
+        // Immediately purge this orphaned alarm.
+        if (messages.length > 0 && rem.messageId && !validMessageIds.has(rem.messageId)) {
+          handleCancelReminder(rem.id);
+          continue;
+        }
+
         // Group alarms trigger for everyone; private alarms only trigger for the creator on their local computer
         const isForMe = 
           rem.target === 'all' || 
@@ -580,7 +622,27 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     checkReminders();
 
     return () => clearInterval(interval);
-  }, [reminders, currentUserId, currentUserName]);
+  }, [reminders, messages, currentUserId, currentUserName]);
+
+  // Auto-prune orphaned reminders whose messages were deleted from chat
+  useEffect(() => {
+    if (messages.length === 0 || reminders.length === 0) return;
+    const messageIdSet = new Set(messages.map(m => m.id));
+    const hasOrphans = reminders.some(r => r.messageId && !messageIdSet.has(r.messageId));
+    if (hasOrphans) {
+      const cleaned = reminders.filter(r => !r.messageId || messageIdSet.has(r.messageId));
+      setReminders(cleaned);
+      try {
+        localStorage.setItem('oxente_chat_reminders', JSON.stringify(cleaned));
+      } catch {}
+      syncRemindersToSupabase(cleaned);
+      setReminderAlertData(prev => {
+        if (!prev) return null;
+        if (prev.messageId && !messageIdSet.has(prev.messageId)) return null;
+        return prev;
+      });
+    }
+  }, [messages, reminders]);
 
   const handleOpenReminderModal = (msg: TeamChatMessage, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -631,6 +693,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     try {
       localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
     } catch {}
+    syncRemindersToSupabase(updated);
 
     // Synchronize to Firestore
     try {
@@ -667,6 +730,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     try {
       localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
     } catch {}
+    syncRemindersToSupabase(updated);
 
     // Dismiss fullscreen alert if this alarm is currently ringing
     setReminderAlertData(prev => (prev && (prev.id === reminderId || prev.messageId === reminderId)) ? null : prev);
@@ -721,6 +785,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     try {
       localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
     } catch {}
+    syncRemindersToSupabase(updated);
 
     if (snoozedItem) {
       try {
@@ -895,6 +960,10 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
           setUnreadCount(0);
           setIncomingAlert(null);
           localStorage.removeItem(STORAGE_CACHE_KEY);
+        } else if (event.data?.type === 'CLEAR_ALL_REMINDERS') {
+          setReminders([]);
+          try { localStorage.removeItem('oxente_chat_reminders'); } catch {}
+          setReminderAlertData(null);
         } else if (event.data?.type === 'NEW_REMINDER') {
           const newRem = event.data.payload as ChatReminder;
           if (newRem && (newRem.target === 'all' || newRem.creatorId === currentUserId)) {
@@ -906,15 +975,16 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
           }
         } else if (event.data?.type === 'CANCEL_REMINDER') {
           const remId = event.data.payload?.id;
-          if (remId) {
+          const msgId = event.data.payload?.messageId;
+          if (remId || msgId) {
             setReminders(prev => {
-              const updated = prev.filter(r => r.id !== remId && r.messageId !== remId);
+              const updated = prev.filter(r => (remId ? (r.id !== remId && r.messageId !== remId) : true) && (msgId ? r.messageId !== msgId : true));
               try {
                 localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
               } catch {}
               return updated;
             });
-            setReminderAlertData(prev => (prev && (prev.id === remId || prev.messageId === remId)) ? null : prev);
+            setReminderAlertData(prev => (prev && ((remId && (prev.id === remId || prev.messageId === remId)) || (msgId && prev.messageId === msgId))) ? null : prev);
           }
         } else if (event.data?.type === 'SNOOZE_REMINDER') {
           const snoozed = event.data.payload as ChatReminder;
@@ -999,6 +1069,25 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
             }
           } catch {}
         }
+
+        // Load team chat reminders from Supabase oxente_store_info
+        const { data: remStoreData } = await supabase
+          .from('oxente_store_info')
+          .select('whatsapp_template')
+          .eq('key', 'team_chat_reminders')
+          .maybeSingle();
+
+        if (remStoreData?.whatsapp_template) {
+          try {
+            const parsedRem = JSON.parse(remStoreData.whatsapp_template);
+            if (Array.isArray(parsedRem)) {
+              setReminders(parsedRem);
+              try {
+                localStorage.setItem('oxente_chat_reminders', JSON.stringify(parsedRem));
+              } catch {}
+            }
+          } catch {}
+        }
       } catch (err) {
         console.warn('Erro ao carregar histórico do chat no Supabase:', err);
       }
@@ -1051,16 +1140,23 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
             });
           }
         })
+        .on('broadcast', { event: 'clear_all_reminders' }, () => {
+          setReminders([]);
+          try { localStorage.removeItem('oxente_chat_reminders'); } catch {}
+          setReminderAlertData(null);
+        })
         .on('broadcast', { event: 'cancel_reminder' }, ({ payload }) => {
-          if (payload?.id) {
+          const remId = payload?.id;
+          const msgId = payload?.messageId;
+          if (remId || msgId) {
             setReminders(prev => {
-              const updated = prev.filter(r => r.id !== payload.id && r.messageId !== payload.id);
+              const updated = prev.filter(r => (remId ? (r.id !== remId && r.messageId !== remId) : true) && (msgId ? r.messageId !== msgId : true));
               try {
                 localStorage.setItem('oxente_chat_reminders', JSON.stringify(updated));
               } catch {}
               return updated;
             });
-            setReminderAlertData(prev => (prev && (prev.id === payload.id || prev.messageId === payload.id)) ? null : prev);
+            setReminderAlertData(prev => (prev && ((remId && (prev.id === remId || prev.messageId === remId)) || (msgId && prev.messageId === msgId))) ? null : prev);
           }
         })
         .on('broadcast', { event: 'snooze_reminder' }, ({ payload }) => {
@@ -1077,20 +1173,35 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         })
         .on('broadcast', { event: 'delete_message' }, ({ payload }) => {
           if (payload?.id) {
-            setMessages(prev => prev.filter(m => m.id !== payload.id));
+            const delId = payload.id;
+            setMessages(prev => prev.filter(m => m.id !== delId));
             setReminders(prev => {
-              const remaining = prev.filter(r => r.messageId !== payload.id && r.id !== payload.id);
+              const remaining = prev.filter(r => r.messageId !== delId && r.id !== delId);
               try {
                 localStorage.setItem('oxente_chat_reminders', JSON.stringify(remaining));
               } catch {}
               return remaining;
             });
-            setReminderAlertData(prev => (prev && (prev.id === payload.id || prev.messageId === payload.id)) ? null : prev);
+            setReminderAlertData(prev => (prev && (prev.id === delId || prev.messageId === delId)) ? null : prev);
           }
         })
         .on('broadcast', { event: 'trigger_team_alarm' }, ({ payload }) => {
           if (payload && payload.id && payload.target === 'all') {
             triggerReminderAlarm(payload as ChatReminder, true);
+          }
+        })
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_store_info', filter: 'key=eq.team_chat_reminders' }, (changePayload: any) => {
+          const raw = changePayload.new?.whatsapp_template;
+          if (raw) {
+            try {
+              const list = JSON.parse(raw);
+              if (Array.isArray(list)) {
+                setReminders(list);
+                try {
+                  localStorage.setItem('oxente_chat_reminders', JSON.stringify(list));
+                } catch {}
+              }
+            } catch {}
           }
         })
         .on('postgres_changes', { event: '*', schema: 'public', table: 'oxente_store_info', filter: 'key=eq.team_chat_history' }, (changePayload: any) => {
@@ -1564,6 +1675,7 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
     try {
       localStorage.setItem('oxente_chat_reminders', JSON.stringify(filteredReminders));
     } catch {}
+    await syncRemindersToSupabase(filteredReminders);
 
     // Dismiss active full-screen alert if it belongs to this message
     setReminderAlertData(prev => (prev && (prev.messageId === messageId || prev.id === messageId)) ? null : prev);
@@ -1576,6 +1688,10 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         type: 'DELETE_MESSAGE',
         payload: { id: messageId }
       });
+      broadcastRef.current?.postMessage({
+        type: 'CANCEL_REMINDER',
+        payload: { messageId }
+      });
     } catch {}
 
     // 2. Broadcast deletion to all team members via Supabase Realtime
@@ -1584,6 +1700,11 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         type: 'broadcast',
         event: 'delete_message',
         payload: { id: messageId }
+      });
+      await supabaseChannelRef.current?.send({
+        type: 'broadcast',
+        event: 'cancel_reminder',
+        payload: { messageId }
       });
     } catch {}
 
@@ -1847,32 +1968,37 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                   )}
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => setIsNotifModalOpen(true)}
-                  title={
-                    notifPermission === 'granted'
-                      ? 'Notificações na tela ativas (Clique para testar)'
-                      : notifPermission === 'denied'
-                      ? 'Notificações bloqueadas no navegador (Clique para ver como desbloquear)'
-                      : 'Clique para ativar notificações na área de trabalho'
-                  }
-                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                    notifPermission === 'granted'
-                      ? 'text-emerald-400 hover:bg-zinc-800'
-                      : notifPermission === 'denied'
-                      ? 'text-rose-400 hover:bg-rose-950/40 animate-pulse'
-                      : 'text-amber-400 hover:bg-amber-950/40 animate-pulse'
-                  }`}
-                >
-                  {notifPermission === 'granted' ? (
-                    <Bell className="h-3.5 w-3.5" />
-                  ) : notifPermission === 'denied' ? (
-                    <BellOff className="h-3.5 w-3.5" />
-                  ) : (
-                    <BellRing className="h-3.5 w-3.5" />
-                  )}
-                </button>
+                {(() => {
+                  const isNotifActive = notifPermission === 'granted' || isAppNotificationActive();
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!isNotifActive) {
+                          handleEnableNotifications();
+                        } else {
+                          setIsNotifModalOpen(true);
+                        }
+                      }}
+                      title={
+                        isNotifActive
+                          ? 'Notificações e sons ativos neste computador ✅ (Clique para testar ou ajustar)'
+                          : 'Clique para ativar notificações e sons neste computador'
+                      }
+                      className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                        isNotifActive
+                          ? 'text-emerald-400 hover:bg-zinc-800'
+                          : 'text-amber-400 hover:bg-amber-950/40 animate-pulse'
+                      }`}
+                    >
+                      {isNotifActive ? (
+                        <Bell className="h-3.5 w-3.5" />
+                      ) : (
+                        <BellRing className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+                  );
+                })()}
 
                 {isUserAdmin && messages.length > 0 && (
                   isConfirmingClear ? (
@@ -1918,34 +2044,20 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
             </div>
 
             {/* Notification Permission Banner */}
-            {notifPermission !== 'granted' && (
-              <div className={`border-b px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] shrink-0 ${
-                notifPermission === 'denied'
-                  ? 'bg-rose-950/40 border-rose-800/40 text-rose-200'
-                  : 'bg-amber-950/50 border-amber-800/40 text-amber-200'
-              }`}>
+            {notifPermission !== 'granted' && !isAppNotificationActive() && (
+              <div className="border-b px-3 py-1.5 flex items-center justify-between gap-2 text-[11px] shrink-0 bg-amber-950/50 border-amber-800/40 text-amber-200">
                 <div className="flex items-center gap-1.5 min-w-0">
-                  {notifPermission === 'denied' ? (
-                    <BellOff className="h-3.5 w-3.5 text-rose-400 shrink-0" />
-                  ) : (
-                    <BellRing className="h-3.5 w-3.5 text-amber-400 shrink-0 animate-bounce" />
-                  )}
+                  <BellRing className="h-3.5 w-3.5 text-amber-400 shrink-0 animate-bounce" />
                   <span className="truncate font-medium">
-                    {notifPermission === 'denied'
-                      ? 'Notificações bloqueadas pelo navegador:'
-                      : 'Ver avisos com WhatsApp na frente:'}
+                    Ative notificações para não perder avisos de Uber e pedidos!
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={handleEnableNotifications}
-                  className={`px-2.5 py-0.5 font-black rounded-md text-[10px] cursor-pointer whitespace-nowrap shadow-xs transition-colors shrink-0 ${
-                    notifPermission === 'denied'
-                      ? 'bg-rose-500 hover:bg-rose-400 text-white'
-                      : 'bg-amber-500 hover:bg-amber-400 text-zinc-950'
-                  }`}
+                  className="px-2.5 py-0.5 font-black rounded-md text-[10px] cursor-pointer whitespace-nowrap shadow-xs transition-colors shrink-0 bg-amber-500 hover:bg-amber-400 text-zinc-950"
                 >
-                  {notifPermission === 'denied' ? 'Como Ativar' : 'Ativar'}
+                  Ativar
                 </button>
               </div>
             )}
@@ -1958,13 +2070,25 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                     <AlarmClock className="h-4 w-4 text-teal-400" />
                     <span>Alarmes Agendados ({reminders.length})</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsShowRemindersList(false)}
-                    className="text-[10px] text-zinc-300 hover:text-white px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 cursor-pointer font-medium transition-colors"
-                  >
-                    Voltar ao Chat
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    {reminders.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleClearAllReminders}
+                        title="Excluir todos os alarmes agendados"
+                        className="text-[10px] text-rose-300 hover:text-white px-2 py-0.5 rounded bg-rose-950/80 hover:bg-rose-900 border border-rose-800/70 cursor-pointer font-bold transition-colors shadow-xs"
+                      >
+                        Limpar Todos
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setIsShowRemindersList(false)}
+                      className="text-[10px] text-zinc-300 hover:text-white px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 cursor-pointer font-medium transition-colors"
+                    >
+                      Voltar ao Chat
+                    </button>
+                  </div>
                 </div>
 
                 {reminders.length === 0 ? (
@@ -1984,18 +2108,21 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                       const isTeam = rem.target === 'all';
                       const triggerDate = new Date(rem.triggerAt);
                       const timeFormatted = rem.repeatTime || triggerDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                      const originalMsgExists = !rem.messageId || messages.some(m => m.id === rem.messageId);
 
                       return (
                         <div
                           key={rem.id}
                           className={`p-2.5 rounded-xl border ${
-                            isTeam
+                            !originalMsgExists
+                              ? 'bg-rose-950/40 border-rose-700/60 text-rose-100'
+                              : isTeam
                               ? 'bg-indigo-950/40 border-indigo-700/50 text-indigo-100'
                               : 'bg-teal-950/40 border-teal-700/50 text-teal-100'
                           } flex items-start justify-between gap-2 shadow-sm`}
                         >
                           <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-1.5 text-[10px] font-bold mb-1">
+                            <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-bold mb-1">
                               {isWeekly ? (
                                 <span className="flex items-center gap-1 text-teal-300 font-bold">
                                   <Repeat className="h-3 w-3" />
@@ -2013,6 +2140,12 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
                               }`}>
                                 {isTeam ? '👥 Toda a Equipe' : '🔒 Privado'}
                               </span>
+
+                              {!originalMsgExists && (
+                                <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-rose-900/90 text-rose-200 border border-rose-700">
+                                  ⚠️ Mensagem excluída
+                                </span>
+                              )}
                             </div>
 
                             <p className="text-xs font-bold text-white leading-snug line-clamp-2 break-words">

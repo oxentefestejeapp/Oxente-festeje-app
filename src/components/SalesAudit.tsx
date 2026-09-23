@@ -25,7 +25,13 @@ import {
   ArrowUpDown,
   Percent,
   Calculator,
-  ArrowUpRight
+  ArrowUpRight,
+  CheckSquare,
+  Square,
+  Copy,
+  CheckCheck,
+  ListFilter,
+  Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
@@ -152,15 +158,64 @@ const getChanges = (sale: Sale) => {
   return changes;
 };
 
+export type DateFilterType = 'all' | 'today' | '7days' | 'this_month' | 'last_month' | '30days' | 'this_year' | 'custom';
+
+export const getBrazilMonthNames = () => {
+  const now = new Date();
+  const currentMonthName = now.toLocaleDateString('pt-BR', { month: 'long', timeZone: 'America/Sao_Paulo' });
+  const capitalizedCurrent = currentMonthName.charAt(0).toUpperCase() + currentMonthName.slice(1);
+
+  const nowParts = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: 'numeric' }).formatToParts(now);
+  const currentYear = Number(nowParts.find(p => p.type === 'year')?.value);
+  const currentMonth = Number(nowParts.find(p => p.type === 'month')?.value);
+
+  const prevMonthIdx = currentMonth === 1 ? 11 : currentMonth - 2;
+  const prevYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+  const lastMonthDate = new Date(prevYear, prevMonthIdx, 15);
+  const lastMonthName = lastMonthDate.toLocaleDateString('pt-BR', { month: 'long' });
+  const capitalizedLast = lastMonthName.charAt(0).toUpperCase() + lastMonthName.slice(1);
+
+  return {
+    current: capitalizedCurrent,
+    last: capitalizedLast
+  };
+};
+
+export const formatDateShort = (isoDate?: string) => {
+  if (!isoDate) return '';
+  const parts = isoDate.split('T')[0].split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return isoDate;
+};
+
+export function detectProductCategoryGroup(nome: string, categoria?: string): string {
+  const text = `${categoria || ''} ${nome || ''}`.toLowerCase();
+  if (text.includes('mochila') || text.includes('mochilinha')) return 'Mochilas';
+  if (text.includes('copo') || text.includes('twister') || text.includes('long drink') || text.includes('caldereta')) return 'Copos';
+  if (text.includes('taça') || text.includes('taca') || text.includes('gin') || text.includes('champagne')) return 'Taças';
+  if (text.includes('caneca') || text.includes('chopp')) return 'Canecas';
+  if (text.includes('squeeze') || text.includes('garrafa') || text.includes('cantil')) return 'Squeezes & Garrafas';
+  if (text.includes('bolsa') || text.includes('estojo') || text.includes('necessaire') || text.includes('porta moeda') || text.includes('porta-moeda')) return 'Bolsas & Estojos';
+  if (text.includes('tirante') || text.includes('cordao') || text.includes('cordão') || text.includes('pulseira')) return 'Tirantes & Acessórios';
+  if (text.includes('balde') || text.includes('cooler') || text.includes('champanheira')) return 'Baldes & Gelo';
+  if (categoria && categoria.trim() && !['catálogo', 'catalogo', 'avulso', 'outro', 'outros'].includes(categoria.toLowerCase().trim())) {
+    return categoria.trim();
+  }
+  return 'Outros Produtos';
+}
+
 const isDateInFilter = (
   dateStr: string | undefined, 
-  filter: 'all' | 'today' | '7days' | 'this_month' | 'custom',
+  filter: DateFilterType,
   startStr?: string,
   endStr?: string
 ) => {
   if (!dateStr) return false;
   try {
     const saleDate = new Date(dateStr);
+    if (isNaN(saleDate.getTime())) return false;
     const now = new Date();
 
     const getBrazilDateString = (date: Date) => {
@@ -182,10 +237,32 @@ const isDateInFilter = (
       const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
       return diffDays <= 7 && diffDays >= 0;
     }
-    
+
+    const nowParts = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: 'numeric' }).formatToParts(now);
+    const currentYear = Number(nowParts.find(p => p.type === 'year')?.value);
+    const currentMonth = Number(nowParts.find(p => p.type === 'month')?.value);
+
+    const saleParts = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', year: 'numeric', month: 'numeric' }).formatToParts(saleDate);
+    const saleYear = Number(saleParts.find(p => p.type === 'year')?.value);
+    const saleMonth = Number(saleParts.find(p => p.type === 'month')?.value);
+
     if (filter === 'this_month') {
+      return saleYear === currentYear && saleMonth === currentMonth;
+    }
+
+    if (filter === 'last_month') {
+      const targetMonth = currentMonth === 1 ? 12 : currentMonth - 1;
+      const targetYear = currentMonth === 1 ? currentYear - 1 : currentYear;
+      return saleYear === targetYear && saleMonth === targetMonth;
+    }
+    
+    if (filter === '30days') {
       const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
       return diffDays <= 30 && diffDays >= -0.5;
+    }
+
+    if (filter === 'this_year') {
+      return saleYear === currentYear;
     }
     
     if (filter === 'custom') {
@@ -214,7 +291,7 @@ interface SalesAuditProps {
 
 export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: SalesAuditProps) {
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('this_month');
+  const [dateFilter, setDateFilter] = useState<DateFilterType>('this_month');
   const [startDateStr, setStartDateStr] = useState('');
   const [endDateStr, setEndDateStr] = useState('');
   const [selectedUserFilter, setSelectedUserFilter] = useState<string>('all');
@@ -226,11 +303,16 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
   const [dailyDaysLimit, setDailyDaysLimit] = useState(10);
   const [auditChartTab, setAuditChartTab] = useState<'daily' | 'monthly' | 'avulso' | 'products'>('daily');
   const [avulsoSortBy, setAvulsoSortBy] = useState<'recent' | 'profit_desc' | 'profit_asc' | 'margin_desc' | 'sales_desc'>('recent');
-  const [productSortBy, setProductSortBy] = useState<'profit_desc' | 'sales_desc' | 'qty_desc' | 'margin_desc' | 'cost_desc'>('profit_desc');
+  const [productSortBy, setProductSortBy] = useState<'profit_desc' | 'sales_desc' | 'qty_desc' | 'margin_desc' | 'cost_desc' | 'name_asc'>('profit_desc');
   const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [productCategoryFilter, setProductCategoryFilter] = useState<string>('all');
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(new Set());
+  const [includeCatalogZeroSales, setIncludeCatalogZeroSales] = useState<boolean>(false);
+  const [copyFeedback, setCopyFeedback] = useState<string | null>(null);
+  const brazilMonthNames = useMemo(() => getBrazilMonthNames(), []);
 
   // User Comparison specific filters (default to 'this_month' for fast load)
-  const [compDateFilter, setCompDateFilter] = useState<'all' | 'today' | '7days' | 'this_month' | 'custom'>('this_month');
+  const [compDateFilter, setCompDateFilter] = useState<DateFilterType>('this_month');
   const [compStartDateStr, setCompStartDateStr] = useState('');
   const [compEndDateStr, setCompEndDateStr] = useState('');
   const [compCombineDays, setCompCombineDays] = useState(true); // Juntando os dias = true
@@ -428,35 +510,9 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
         const targetDateStr = (specialFilter === 'finished_art' && sale.statusArte === 'Arte Finalizada')
           ? (sale.arteFinalizadaEm || sale.puxadoEm || sale.data)
           : sale.data;
-        const saleDate = parseSaleDate(targetDateStr);
-        const now = new Date();
 
-        const getBrazilDateString = (date: Date) => {
-          return date.toLocaleDateString('pt-BR', {
-            timeZone: 'America/Sao_Paulo',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-          });
-        };
-
-        if (dateFilter === 'today') {
-          if (getBrazilDateString(saleDate) !== getBrazilDateString(now)) return false;
-        } else if (dateFilter === '7days') {
-          const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
-          if (diffDays > 7 || diffDays < 0) return false;
-        } else if (dateFilter === 'this_month') {
-          const diffDays = (now.getTime() - saleDate.getTime()) / (1000 * 60 * 60 * 24);
-          if (diffDays > 30 || diffDays < -0.5) return false;
-        } else if (dateFilter === 'custom') {
-          if (startDateStr) {
-            const start = new Date(startDateStr + 'T00:00:00');
-            if (saleDate < start) return false;
-          }
-          if (endDateStr) {
-            const end = new Date(endDateStr + 'T23:59:59');
-            if (saleDate > end) return false;
-          }
+        if (!isDateInFilter(targetDateStr, dateFilter, startDateStr, endDateStr)) {
+          return false;
         }
       } catch (e) {
         console.error('Audit date filtering error:', e);
@@ -838,6 +894,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
       id: string;
       nome: string;
       categoria?: string;
+      grupoCategoria: string;
       precoCustoAtual: number;
       precoVendaBase: number;
       quantidadeVendida: number;
@@ -864,16 +921,20 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
           const totalVenda = item.total !== undefined ? item.total : (unitPrice * q);
           const totalCost = unitCost * q;
 
+          const matchedProd = !isItemAvulso ? findMatchingProduct(item.produtoId, item.produtoNome || item.nome, products) : undefined;
           const prodKey = isItemAvulso
             ? `avulso_${(item.produtoNome || item.nome || 'Avulso').toLowerCase().trim()}`
-            : (item.produtoId || (item.produtoNome || 'Outro').toLowerCase().trim());
+            : (matchedProd?.id || item.produtoId || (item.produtoNome || 'Outro').toLowerCase().trim());
+
+          const nomeFinal = item.produtoNome || item.nome || (isItemAvulso ? 'Produto Avulso' : (matchedProd?.nome || 'Produto'));
+          const catFinal = matchedProd?.categoria || (isItemAvulso ? 'Avulso' : 'Catálogo');
 
           if (!map[prodKey]) {
-            const matchedProd = !isItemAvulso ? findMatchingProduct(item.produtoId, item.produtoNome || item.nome, products) : undefined;
             map[prodKey] = {
               id: prodKey,
-              nome: item.produtoNome || item.nome || (isItemAvulso ? 'Produto Avulso' : 'Produto'),
-              categoria: matchedProd?.categoria || (isItemAvulso ? 'Avulso' : 'Catálogo'),
+              nome: nomeFinal,
+              categoria: catFinal,
+              grupoCategoria: detectProductCategoryGroup(nomeFinal, catFinal),
               precoCustoAtual: isItemAvulso ? unitCost : (matchedProd?.precoCusto !== undefined && matchedProd.precoCusto !== null ? matchedProd.precoCusto : unitCost),
               precoVendaBase: matchedProd?.preco || unitPrice,
               quantidadeVendida: 0,
@@ -900,16 +961,20 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
         const totalCost = unitCost * q;
         const totalVenda = sale.total || 0;
 
+        const matchedProd = !isSaleAvulso ? findMatchingProduct(sale.produtoId, sale.produtoNome, products) : undefined;
         const prodKey = isSaleAvulso
           ? `avulso_${(sale.produtoNome || 'Avulso').toLowerCase().trim()}`
-          : (sale.produtoId || (sale.produtoNome || 'Outro').toLowerCase().trim());
+          : (matchedProd?.id || sale.produtoId || (sale.produtoNome || 'Outro').toLowerCase().trim());
+
+        const nomeFinal = sale.produtoNome || (isSaleAvulso ? 'Produto Avulso' : (matchedProd?.nome || 'Produto'));
+        const catFinal = matchedProd?.categoria || (isSaleAvulso ? 'Avulso' : 'Catálogo');
 
         if (!map[prodKey]) {
-          const matchedProd = !isSaleAvulso ? findMatchingProduct(sale.produtoId, sale.produtoNome, products) : undefined;
           map[prodKey] = {
             id: prodKey,
-            nome: sale.produtoNome || (isSaleAvulso ? 'Produto Avulso' : 'Produto'),
-            categoria: matchedProd?.categoria || (isSaleAvulso ? 'Avulso' : 'Catálogo'),
+            nome: nomeFinal,
+            categoria: catFinal,
+            grupoCategoria: detectProductCategoryGroup(nomeFinal, catFinal),
             precoCustoAtual: isSaleAvulso ? unitCost : (matchedProd?.precoCusto !== undefined && matchedProd.precoCusto !== null ? matchedProd.precoCusto : unitCost),
             precoVendaBase: matchedProd?.preco || (sale.precoUn || (sale.total / q)),
             quantidadeVendida: 0,
@@ -930,6 +995,33 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
       }
     });
 
+    // Optionally include catalog products that had 0 sales in this filtered period
+    if (includeCatalogZeroSales && products && products.length > 0) {
+      products.forEach(catProd => {
+        if (!catProd.id || catProd.id === 'taxacartao-service' || catProd.id.endsWith('-service')) return;
+        const catKey = catProd.id;
+        if (!map[catKey]) {
+          const unitCost = catProd.precoCusto !== undefined && catProd.precoCusto !== null ? catProd.precoCusto : (catProd.preco ? catProd.preco * 0.62 : 0);
+          map[catKey] = {
+            id: catKey,
+            nome: catProd.nome,
+            categoria: catProd.categoria || 'Catálogo',
+            grupoCategoria: detectProductCategoryGroup(catProd.nome, catProd.categoria),
+            precoCustoAtual: unitCost,
+            precoVendaBase: catProd.preco || 0,
+            quantidadeVendida: 0,
+            faturamentoTotal: 0,
+            custoTotal: 0,
+            lucroTotal: 0,
+            margem: 0,
+            isAvulso: false,
+            imagem: catProd.imagemBase64 || catProd.imagem,
+            salesCount: 0
+          };
+        }
+      });
+    }
+
     const rawList = Object.values(map).map(p => {
       const lucro = p.faturamentoTotal - p.custoTotal;
       const margem = p.faturamentoTotal > 0 ? (lucro / p.faturamentoTotal) * 100 : 0;
@@ -942,18 +1034,45 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
       };
     });
 
+    // Compute category aggregations (e.g. Mochilas, Copos, Taças)
+    const categoryBreakdown: Record<string, { count: number; qty: number; faturamento: number; custo: number; lucro: number }> = {};
+    rawList.forEach(p => {
+      const g = p.grupoCategoria || 'Outros';
+      if (!categoryBreakdown[g]) {
+        categoryBreakdown[g] = { count: 0, qty: 0, faturamento: 0, custo: 0, lucro: 0 };
+      }
+      categoryBreakdown[g].count += 1;
+      categoryBreakdown[g].qty += p.quantidadeVendida;
+      categoryBreakdown[g].faturamento += p.faturamentoTotal;
+      categoryBreakdown[g].custo += p.custoTotal;
+      categoryBreakdown[g].lucro += p.lucroTotal;
+    });
+
     const sortedList = [...rawList].sort((a, b) => {
       if (productSortBy === 'profit_desc') return b.lucroTotal - a.lucroTotal;
       if (productSortBy === 'sales_desc') return b.faturamentoTotal - a.faturamentoTotal;
       if (productSortBy === 'qty_desc') return b.quantidadeVendida - a.quantidadeVendida;
       if (productSortBy === 'margin_desc') return b.margem - a.margem;
       if (productSortBy === 'cost_desc') return b.custoTotal - a.custoTotal;
+      if (productSortBy === 'name_asc') return a.nome.localeCompare(b.nome);
       return b.lucroTotal - a.lucroTotal;
     });
 
-    const filteredList = productSearchTerm.trim()
-      ? sortedList.filter(p => p.nome.toLowerCase().includes(productSearchTerm.toLowerCase()) || (p.categoria && p.categoria.toLowerCase().includes(productSearchTerm.toLowerCase())))
-      : sortedList;
+    const filteredList = sortedList.filter(p => {
+      if (productCategoryFilter !== 'all') {
+        if (p.grupoCategoria !== productCategoryFilter && p.categoria !== productCategoryFilter) {
+          return false;
+        }
+      }
+      if (productSearchTerm.trim()) {
+        const term = productSearchTerm.toLowerCase();
+        const matchesName = p.nome.toLowerCase().includes(term);
+        const matchesCategory = p.categoria && p.categoria.toLowerCase().includes(term);
+        const matchesGroup = p.grupoCategoria && p.grupoCategoria.toLowerCase().includes(term);
+        if (!matchesName && !matchesCategory && !matchesGroup) return false;
+      }
+      return true;
+    });
 
     const totalFaturado = rawList.reduce((acc, p) => acc + p.faturamentoTotal, 0);
     const totalCusto = rawList.reduce((acc, p) => acc + p.custoTotal, 0);
@@ -963,6 +1082,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
 
     // Top products for chart
     const topProductsChart = [...rawList]
+      .filter(p => p.faturamentoTotal > 0 || p.lucroTotal > 0)
       .sort((a, b) => b.lucroTotal - a.lucroTotal)
       .slice(0, 8)
       .map(p => ({
@@ -980,6 +1100,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
     return {
       list: filteredList,
       allList: sortedList,
+      categoryBreakdown,
       topProductsChart,
       totalFaturado: Number(totalFaturado.toFixed(2)),
       totalCusto: Number(totalCusto.toFixed(2)),
@@ -987,7 +1108,105 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
       totalQtd,
       margemGeral: Number(margemGeral.toFixed(1))
     };
-  }, [auditLogs, products, productSortBy, productSearchTerm]);
+  }, [auditLogs, products, productSortBy, productSearchTerm, productCategoryFilter, includeCatalogZeroSales]);
+
+  // Selected Products Combinations & Totals
+  const selectedProductsList = useMemo(() => {
+    return productsAnalytics.allList.filter(p => selectedProductIds.has(p.id));
+  }, [productsAnalytics.allList, selectedProductIds]);
+
+  const selectedTotals = useMemo(() => {
+    const totalQtd = selectedProductsList.reduce((acc, p) => acc + p.quantidadeVendida, 0);
+    const totalFaturado = selectedProductsList.reduce((acc, p) => acc + p.faturamentoTotal, 0);
+    const totalCusto = selectedProductsList.reduce((acc, p) => acc + p.custoTotal, 0);
+    const totalLucro = totalFaturado - totalCusto;
+    const margem = totalFaturado > 0 ? (totalLucro / totalFaturado) * 100 : 0;
+    return {
+      count: selectedProductsList.length,
+      totalQtd,
+      totalFaturado: Number(totalFaturado.toFixed(2)),
+      totalCusto: Number(totalCusto.toFixed(2)),
+      totalLucro: Number(totalLucro.toFixed(2)),
+      margem: Number(margem.toFixed(1))
+    };
+  }, [selectedProductsList]);
+
+  const toggleProductSelection = (id: string) => {
+    setSelectedProductIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleSelectAllVisible = () => {
+    setSelectedProductIds(prev => {
+      const next = new Set(prev);
+      productsAnalytics.list.forEach(p => next.add(p.id));
+      return next;
+    });
+  };
+
+  const handleClearSelection = () => {
+    setSelectedProductIds(new Set());
+  };
+
+  const handleSelectCategoryQuick = (catName: string) => {
+    setSelectedProductIds(prev => {
+      const next = new Set(prev);
+      const matches = productsAnalytics.allList.filter(
+        p => p.grupoCategoria === catName || p.categoria === catName || p.nome.toLowerCase().includes(catName.toLowerCase())
+      );
+      matches.forEach(p => next.add(p.id));
+      return next;
+    });
+  };
+
+  const getPeriodLabel = (filter: DateFilterType) => {
+    switch (filter) {
+      case 'this_month': return `Este Mês (${brazilMonthNames.current})`;
+      case 'last_month': return `Mês Passado (${brazilMonthNames.last})`;
+      case 'today': return 'Hoje';
+      case '7days': return 'Últimos 7 Dias';
+      case '30days': return 'Últimos 30 Dias';
+      case 'this_year': return 'Este Ano';
+      case 'custom': return startDateStr && endDateStr ? `${formatDateShort(startDateStr)} até ${formatDateShort(endDateStr)}` : 'Período Personalizado';
+      case 'all': return 'Todo o Histórico';
+      default: return filter;
+    }
+  };
+
+  const handleCopySummary = () => {
+    const period = getPeriodLabel(dateFilter);
+    let text = `📊 *RESUMO DE LUCRO POR PRODUTO - OXENTE FESTEJE*\n`;
+    text += `📅 *Período:* ${period}\n\n`;
+
+    if (selectedTotals.count > 0) {
+      text += `🎯 *Produtos Selecionados (${selectedTotals.count}):*\n`;
+      selectedProductsList.forEach(p => {
+        text += `• *${p.nome}:* ${p.quantidadeVendida} un. | Venda: R$ ${p.faturamentoTotal.toFixed(2)} | Custo: R$ ${p.custoTotal.toFixed(2)} | *Lucro: R$ ${p.lucroTotal.toFixed(2)}* (${p.margem}%)\n`;
+      });
+      text += `\n💰 *LUCRO TOTAL SOMADO:* R$ ${selectedTotals.totalLucro.toFixed(2)}\n`;
+      text += `💎 *Faturamento Bruto:* R$ ${selectedTotals.totalFaturado.toFixed(2)}\n`;
+      text += `🏷️ *Custo Total:* R$ ${selectedTotals.totalCusto.toFixed(2)}\n`;
+      text += `📦 *Unidades Totais:* ${selectedTotals.totalQtd} un.\n`;
+      text += `📈 *Margem Média:* ${selectedTotals.margem}%\n`;
+    } else {
+      text += `💰 *LUCRO TOTAL GERAL:* R$ ${productsAnalytics.totalLucro.toFixed(2)}\n`;
+      text += `💎 *Faturamento Total:* R$ ${productsAnalytics.totalFaturado.toFixed(2)}\n`;
+      text += `📦 *Unidades Totais:* ${productsAnalytics.totalQtd} un. (${productsAnalytics.allList.length} itens distintos)\n`;
+      text += `📈 *Margem Geral:* ${productsAnalytics.margemGeral}%\n`;
+    }
+
+    navigator.clipboard.writeText(text).then(() => {
+      setCopyFeedback('Copiado para a área de transferência!');
+      setTimeout(() => setCopyFeedback(null), 3000);
+    });
+  };
 
   const totalArtworkFinishedEver = useMemo(() => {
     return sales.filter(s => s.statusArte === 'Arte Finalizada').length;
@@ -1021,8 +1240,8 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 bg-black/40 border border-zinc-850 p-1.5 rounded-xl w-full md:w-auto">
-          {(['all', 'today', '7days', 'this_month', 'custom'] as const).map((filter) => (
+        <div className="flex flex-wrap items-center gap-1.5 bg-black/40 border border-zinc-850 p-1.5 rounded-xl w-full md:w-auto">
+          {(['this_month', 'last_month', '30days', 'today', '7days', 'this_year', 'custom', 'all'] as const).map((filter) => (
             <button
               type="button"
               key={filter}
@@ -1039,11 +1258,14 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                   : 'bg-zinc-950 border-zinc-850/80 text-zinc-400 hover:text-zinc-200'
               }`}
             >
-              {filter === 'all' && 'Tudo'}
+              {filter === 'this_month' && `Este Mês (${brazilMonthNames.current})`}
+              {filter === 'last_month' && `Mês Passado (${brazilMonthNames.last})`}
+              {filter === '30days' && 'Últimos 30 Dias'}
               {filter === 'today' && 'Hoje'}
               {filter === '7days' && 'Últimos 7 Dias'}
-              {filter === 'this_month' && 'Últimos 30 Dias'}
-              {filter === 'custom' && 'Período Personalizado 📅'}
+              {filter === 'this_year' && 'Este Ano'}
+              {filter === 'custom' && 'Personalizado 📅'}
+              {filter === 'all' && 'Tudo'}
             </button>
           ))}
 
@@ -1649,7 +1871,264 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                 ) : (
                   // PRODUCTS DETAILED PROFIT RECALCULATION BREAKDOWN
                   <div className="space-y-6 animate-fadeIn">
-                    {/* KPI Cards: Products Profit Summary */}
+                    
+                    {/* Period Switcher Toolbar right inside the Products Tab */}
+                    <div className="bg-zinc-950/70 border border-zinc-850 p-3.5 rounded-xl flex flex-col lg:flex-row lg:items-center justify-between gap-3 select-none">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4 text-brand-pink shrink-0" />
+                        <div>
+                          <span className="text-xs font-black uppercase tracking-wider text-zinc-100 block">
+                            Período de Análise dos Produtos 📅
+                          </span>
+                          <span className="text-[10px] text-zinc-450 font-medium">
+                            Ativo: <strong className="text-brand-pink font-bold">{getPeriodLabel(dateFilter)}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {(['this_month', 'last_month', '30days', 'today', '7days', 'this_year', 'custom', 'all'] as const).map((f) => (
+                          <button
+                            type="button"
+                            key={f}
+                            onClick={() => {
+                              setDateFilter(f);
+                              if (f !== 'custom') {
+                                setStartDateStr('');
+                                setEndDateStr('');
+                              }
+                            }}
+                            className={`px-2.5 py-1 text-xs font-bold rounded-lg transition-all border cursor-pointer ${
+                              dateFilter === f
+                                ? 'bg-brand-pink/20 border-brand-pink/50 text-brand-pink shadow-xs font-black'
+                                : 'bg-black/50 border-zinc-850 text-zinc-400 hover:text-zinc-200'
+                            }`}
+                          >
+                            {f === 'this_month' && `Este Mês (${brazilMonthNames.current})`}
+                            {f === 'last_month' && `Mês Passado (${brazilMonthNames.last})`}
+                            {f === '30days' && 'Últimos 30 Dias'}
+                            {f === 'today' && 'Hoje'}
+                            {f === '7days' && '7 Dias'}
+                            {f === 'this_year' && 'Este Ano'}
+                            {f === 'custom' && 'Personalizado 📅'}
+                            {f === 'all' && 'Tudo'}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Custom Date Inputs if Custom is selected */}
+                    {dateFilter === 'custom' && (
+                      <div className="flex flex-wrap items-center gap-2.5 p-3 bg-zinc-950/60 border border-zinc-850 rounded-xl text-xs select-none animate-fadeIn">
+                        <span className="text-zinc-400 font-bold uppercase text-[10px]">Data Inicial:</span>
+                        <input
+                          type="date"
+                          value={startDateStr}
+                          onChange={(e) => setStartDateStr(e.target.value)}
+                          className="px-2.5 py-1 bg-black border border-zinc-800 rounded-lg text-zinc-200 font-mono text-xs focus:outline-none focus:border-brand-pink"
+                        />
+                        <span className="text-zinc-400 font-bold uppercase text-[10px]">Data Final:</span>
+                        <input
+                          type="date"
+                          value={endDateStr}
+                          onChange={(e) => setEndDateStr(e.target.value)}
+                          className="px-2.5 py-1 bg-black border border-zinc-800 rounded-lg text-zinc-200 font-mono text-xs focus:outline-none focus:border-brand-pink"
+                        />
+                      </div>
+                    )}
+
+                    {/* INTERACTIVE CUSTOM COMBINED SUMMATION PANEL */}
+                    <div className="transition-all duration-200">
+                      {selectedTotals.count > 0 ? (
+                        <div className="bg-gradient-to-br from-zinc-900 via-zinc-900/90 to-brand-pink/10 border-2 border-brand-pink/60 rounded-2xl p-4.5 shadow-xl shadow-brand-pink/5 space-y-4 animate-fadeIn">
+                          {/* Top Bar of Selection */}
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-brand-pink/20 pb-3">
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-2 bg-brand-pink text-black rounded-xl font-bold">
+                                <CheckSquare className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <h3 className="text-sm font-black uppercase tracking-wider text-zinc-100 flex items-center gap-2">
+                                  <span>Soma dos Produtos Selecionados</span>
+                                  <span className="px-2 py-0.5 bg-brand-pink text-black text-[10px] font-black rounded-full">
+                                    {selectedTotals.count} {selectedTotals.count === 1 ? 'produto' : 'produtos'}
+                                  </span>
+                                </h3>
+                                <p className="text-[11px] text-zinc-400 mt-0.5">
+                                  Lucro e métricas acumuladas em <strong className="text-brand-pink">{getPeriodLabel(dateFilter)}</strong>
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              {copyFeedback && (
+                                <span className="text-xs text-emerald-400 font-bold flex items-center gap-1 animate-fadeIn">
+                                  <CheckCheck className="h-4 w-4" /> {copyFeedback}
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={handleCopySummary}
+                                className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-bold rounded-xl border border-zinc-700 flex items-center gap-1.5 transition-colors cursor-pointer"
+                                title="Copiar demonstrativo formatado para enviar no WhatsApp ou colar no relatório"
+                              >
+                                <Copy className="h-3.5 w-3.5 text-brand-pink" />
+                                Copiar Resumo
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleClearSelection}
+                                className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 text-xs font-bold rounded-xl border border-rose-900/50 transition-colors cursor-pointer"
+                              >
+                                Limpar Seleção
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* Selected Totals Grid */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            {/* Lucro Líquido Real Somado */}
+                            <div className="bg-black/60 p-3.5 border border-brand-pink/40 rounded-xl shadow-xs border-l-4 border-l-brand-pink">
+                              <div className="text-[10px] font-black uppercase text-brand-pink tracking-wider mb-1 flex items-center justify-between">
+                                <span>Lucro Líquido Somado</span>
+                                <DollarSign className="h-4 w-4 text-brand-pink" />
+                              </div>
+                              <div className="text-2xl font-black font-mono text-brand-pink">
+                                R$ {selectedTotals.totalLucro.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                              <div className="text-[10px] text-zinc-400 mt-1 flex items-center gap-1.5 font-mono">
+                                <span className="px-1.5 py-0.2 bg-brand-pink/20 text-brand-pink font-bold rounded text-[9px]">
+                                  Margem: {selectedTotals.margem}%
+                                </span>
+                                <span>(Faturamento - Custos)</span>
+                              </div>
+                            </div>
+
+                            {/* Faturamento Bruto Somado */}
+                            <div className="bg-black/60 p-3.5 border border-zinc-800 rounded-xl shadow-xs">
+                              <div className="text-[10px] font-black uppercase text-emerald-450 tracking-wider mb-1 flex items-center justify-between">
+                                <span>Faturamento Bruto</span>
+                                <TrendingUp className="h-4 w-4 text-emerald-450" />
+                              </div>
+                              <div className="text-2xl font-black font-mono text-emerald-450">
+                                R$ {selectedTotals.totalFaturado.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                              <div className="text-[10px] text-zinc-450 mt-1">Total vendido dos itens selecionados</div>
+                            </div>
+
+                            {/* Custo Total Somado */}
+                            <div className="bg-black/60 p-3.5 border border-amber-900/40 rounded-xl shadow-xs border-l-4 border-l-amber-500/80">
+                              <div className="text-[10px] font-black uppercase text-amber-400 tracking-wider mb-1 flex items-center justify-between">
+                                <span>Custo Total dos Itens</span>
+                                <Calculator className="h-4 w-4 text-amber-400" />
+                              </div>
+                              <div className="text-2xl font-black font-mono text-amber-400">
+                                R$ {selectedTotals.totalCusto.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                              </div>
+                              <div className="text-[10px] text-zinc-450 mt-1">Custo unitário recalculado</div>
+                            </div>
+
+                            {/* Unidades Vendidas Somadas */}
+                            <div className="bg-black/60 p-3.5 border border-zinc-800 rounded-xl shadow-xs">
+                              <div className="text-[10px] font-black uppercase text-sky-400 tracking-wider mb-1 flex items-center justify-between">
+                                <span>Volume de Unidades</span>
+                                <Package className="h-4 w-4 text-sky-400" />
+                              </div>
+                              <div className="text-2xl font-black font-mono text-zinc-100">
+                                {selectedTotals.totalQtd} <span className="text-xs text-zinc-400 font-sans">unidades</span>
+                              </div>
+                              <div className="text-[10px] text-zinc-450 mt-1">
+                                Média: {(selectedTotals.totalFaturado / (selectedTotals.totalQtd || 1)).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}/un
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Chips of Selected Products */}
+                          <div className="pt-2 border-t border-zinc-850/80">
+                            <span className="text-[10px] font-bold text-zinc-400 uppercase block mb-2">
+                              Produtos incluídos nesta soma:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pr-1">
+                              {selectedProductsList.map((prod) => (
+                                <span
+                                  key={prod.id}
+                                  className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-950 border border-brand-pink/30 text-xs text-zinc-200"
+                                >
+                                  <span className="font-semibold truncate max-w-[180px]">{prod.nome}</span>
+                                  <span className="text-brand-pink font-mono font-bold text-[11px]">
+                                    R$ {prod.lucroTotal.toFixed(2)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleProductSelection(prod.id)}
+                                    className="text-zinc-500 hover:text-rose-400 ml-1 cursor-pointer"
+                                    title="Remover da soma"
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Empty Selection Prompt & Quick Sum Buttons */
+                        <div className="bg-zinc-950/60 border border-zinc-850 rounded-2xl p-4.5 space-y-3.5">
+                          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                            <div className="flex items-center gap-3">
+                              <div className="p-2.5 bg-zinc-900 border border-zinc-800 rounded-xl text-brand-pink shrink-0">
+                                <Calculator className="h-5 w-5" />
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-200">
+                                  Calculadora de Lucro Combinado por Produto
+                                </h4>
+                                <p className="text-[11px] text-zinc-450 mt-0.5">
+                                  Marque a caixinha de qualquer produto ou clique nos atalhos rápidos abaixo para somar o lucro de mochilas, copos, taças ou qualquer combinação no período de <strong className="text-brand-pink">{getPeriodLabel(dateFilter)}</strong>.
+                                </p>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={handleSelectAllVisible}
+                              className="px-3 py-1.5 bg-zinc-900 hover:bg-zinc-800 text-zinc-300 text-xs font-bold rounded-xl border border-zinc-800 flex items-center gap-1.5 shrink-0 transition-colors cursor-pointer"
+                            >
+                              <CheckSquare className="h-3.5 w-3.5 text-brand-pink" />
+                              Selecionar Todos os Visíveis ({productsAnalytics.list.length})
+                            </button>
+                          </div>
+
+                          {/* Quick Add by Category Buttons */}
+                          <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-zinc-850/60">
+                            <span className="text-[10px] font-extrabold uppercase tracking-wider text-zinc-500 mr-1 flex items-center gap-1">
+                              <Tag className="h-3 w-3 text-brand-pink" /> Somar Categoria em 1 clique:
+                            </span>
+
+                            {['Mochilas', 'Copos', 'Taças', 'Canecas', 'Squeezes & Garrafas', 'Bolsas & Estojos'].map((cat) => {
+                              const stats = productsAnalytics.categoryBreakdown[cat];
+                              const count = stats?.count || 0;
+                              const lucro = stats?.lucro || 0;
+                              if (count === 0 && lucro === 0) return null;
+                              return (
+                                <button
+                                  type="button"
+                                  key={cat}
+                                  onClick={() => handleSelectCategoryQuick(cat)}
+                                  className="px-2.5 py-1 bg-zinc-900/80 hover:bg-brand-pink/15 hover:border-brand-pink/40 hover:text-brand-pink text-zinc-300 text-xs font-bold rounded-lg border border-zinc-800 transition-all cursor-pointer flex items-center gap-1.5"
+                                >
+                                  <span>+ Somar todas as {cat}</span>
+                                  <span className="text-[10px] font-mono text-brand-pink bg-brand-pink/10 px-1.5 py-0.2 rounded">
+                                    {count} itens • R$ {lucro.toFixed(0)}
+                                  </span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* General KPI Cards: Products Profit Summary */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 select-none">
                       {/* Card 1: Unidades Vendidas */}
                       <div className="bg-zinc-950/70 p-4 border border-zinc-850 rounded-xl shadow-xs">
@@ -1690,7 +2169,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                       {/* Card 4: Lucro Real Recalculado */}
                       <div className="bg-zinc-950/70 p-4 border border-brand-pink/30 rounded-xl shadow-xs border-l-brand-pink border-l-2">
                         <div className="flex items-center justify-between text-zinc-500 mb-1.5">
-                          <span className="text-[9px] font-black uppercase tracking-wider text-brand-pink">Lucro Real Recalculado</span>
+                          <span className="text-[9px] font-black uppercase tracking-wider text-brand-pink">Lucro Geral de Todos os Produtos</span>
                           <DollarSign className="h-4 w-4 text-brand-pink" />
                         </div>
                         <div className="text-2xl font-black font-mono text-brand-pink">
@@ -1698,9 +2177,9 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                         </div>
                         <p className="text-[10px] text-zinc-400 mt-1 flex items-center gap-1.5">
                           <span className="px-1.5 py-0.2 bg-brand-pink/15 text-brand-pink rounded font-bold text-[9px] font-mono">
-                            Margem Real: {productsAnalytics.margemGeral}%
+                            Margem Geral: {productsAnalytics.margemGeral}%
                           </span>
-                          <span>(Faturamento - Novos Custos)</span>
+                          <span>(Faturamento - Custos)</span>
                         </p>
                       </div>
                     </div>
@@ -1717,7 +2196,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                               </span>
                             </h4>
                             <p className="text-[10px] text-zinc-500 font-medium font-sans">
-                              Demonstrativo dos produtos que mais geraram retorno financeiro real líquido
+                              Demonstrativo dos produtos que mais geraram retorno financeiro real líquido em {getPeriodLabel(dateFilter)}
                             </p>
                           </div>
                           
@@ -1794,41 +2273,64 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                       </div>
                     )}
 
-                    {/* Product Ranking & Detailed Profit Table */}
+                    {/* Product Ranking, Filtering & Selection Table */}
                     <div className="space-y-3 bg-zinc-950/40 p-4 border border-zinc-850/80 rounded-xl">
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-zinc-850 pb-3">
+                      {/* Toolbar Row */}
+                      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-zinc-850 pb-3">
                         <div className="flex items-center gap-2">
                           <Package className="h-4 w-4 text-brand-pink" />
-                          <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-200">
-                            Detalhamento de Lucro Real por Produto ({productsAnalytics.list.length} de {productsAnalytics.allList.length})
-                          </h4>
+                          <div>
+                            <h4 className="text-xs font-bold uppercase tracking-wider text-zinc-200">
+                              Detalhamento de Lucro por Produto ({productsAnalytics.list.length} exibidos)
+                            </h4>
+                            <span className="text-[10px] text-zinc-500">
+                              Marque os produtos para somar lucros específicos no painel acima
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Search & Sort Controls */}
+                        {/* Search, Filter & Sort Controls */}
                         <div className="flex flex-wrap items-center gap-2 select-none">
+                          {/* Search */}
                           <div className="relative">
                             <Search className="h-3.5 w-3.5 text-zinc-500 absolute left-2.5 top-1/2 -translate-y-1/2" />
                             <input
                               type="text"
-                              placeholder="Buscar produto..."
+                              placeholder="Buscar produto (ex: mochila, copo)..."
                               value={productSearchTerm}
                               onChange={(e) => setProductSearchTerm(e.target.value)}
-                              className="bg-black border border-zinc-800 rounded-lg pl-8 pr-2.5 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-pink w-44"
+                              className="bg-black border border-zinc-800 rounded-lg pl-8 pr-7 py-1 text-xs text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-pink w-52"
                             />
                             {productSearchTerm && (
                               <button
                                 onClick={() => setProductSearchTerm('')}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300"
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 cursor-pointer"
                               >
                                 <X className="h-3 w-3" />
                               </button>
                             )}
                           </div>
 
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-[10px] text-zinc-500 font-extrabold uppercase flex items-center gap-1">
-                              <ArrowUpDown className="h-3 w-3 text-zinc-400" />
-                            </span>
+                          {/* Category Filter */}
+                          <div className="flex items-center gap-1">
+                            <ListFilter className="h-3.5 w-3.5 text-zinc-500" />
+                            <select
+                              value={productCategoryFilter}
+                              onChange={(e) => setProductCategoryFilter(e.target.value)}
+                              className="bg-black border border-zinc-800 rounded-lg px-2.5 py-1 text-xs text-zinc-200 font-bold focus:outline-none focus:border-brand-pink"
+                            >
+                              <option value="all">Todas as Categorias</option>
+                              {Object.keys(productsAnalytics.categoryBreakdown).sort().map(cat => (
+                                <option key={cat} value={cat}>
+                                  {cat} ({productsAnalytics.categoryBreakdown[cat]?.count})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+
+                          {/* Sort */}
+                          <div className="flex items-center gap-1">
+                            <ArrowUpDown className="h-3 w-3 text-zinc-400" />
                             <select
                               value={productSortBy}
                               onChange={(e) => setProductSortBy(e.target.value as any)}
@@ -1839,81 +2341,157 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                               <option value="qty_desc">📦 Mais Vendidos (Qtd)</option>
                               <option value="margin_desc">📈 Maior Margem (%)</option>
                               <option value="cost_desc">🏷️ Maior Custo Total (R$)</option>
+                              <option value="name_asc">🔤 Nome (A-Z)</option>
                             </select>
                           </div>
                         </div>
                       </div>
 
+                      {/* Quick Select & Options Sub-bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 py-1 select-none text-xs text-zinc-400">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleSelectAllVisible}
+                            className="text-xs text-brand-pink hover:underline font-bold flex items-center gap-1 cursor-pointer"
+                          >
+                            <CheckSquare className="h-3.5 w-3.5" />
+                            Selecionar todos os visíveis ({productsAnalytics.list.length})
+                          </button>
+                          {selectedProductIds.size > 0 && (
+                            <>
+                              <span className="text-zinc-650">•</span>
+                              <button
+                                type="button"
+                                onClick={handleClearSelection}
+                                className="text-xs text-rose-400 hover:underline font-bold cursor-pointer"
+                              >
+                                Desmarcar todos ({selectedProductIds.size})
+                              </button>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Toggle zero sales catalog products */}
+                        <label className="flex items-center gap-2 cursor-pointer text-[11px] text-zinc-400 hover:text-zinc-200">
+                          <input
+                            type="checkbox"
+                            checked={includeCatalogZeroSales}
+                            onChange={(e) => setIncludeCatalogZeroSales(e.target.checked)}
+                            className="rounded border-zinc-700 text-brand-pink focus:ring-brand-pink/20 bg-black cursor-pointer"
+                          />
+                          <span>Mostrar também produtos do catálogo sem vendas no período</span>
+                        </label>
+                      </div>
+
                       {/* Products List Cards */}
                       {productsAnalytics.list.length === 0 ? (
-                        <div className="py-8 text-center text-zinc-550 border border-dashed border-zinc-850 rounded-xl">
+                        <div className="py-12 text-center text-zinc-550 border border-dashed border-zinc-850 rounded-xl">
                           <Package className="h-8 w-8 mx-auto mb-2 text-zinc-650" />
-                          <p className="text-xs font-bold">Nenhum produto encontrado com os filtros atuais.</p>
+                          <p className="text-xs font-bold">Nenhum produto encontrado com os filtros selecionados.</p>
+                          <p className="text-[10px] mt-1 text-zinc-600">Experimente alterar a busca ou o período selecionado.</p>
                         </div>
                       ) : (
-                        <div className="divide-y divide-zinc-850/50 max-h-[420px] overflow-y-auto pr-1 space-y-2">
-                          {productsAnalytics.list.slice(0, 60).map((prod, idx) => (
-                            <div 
-                              key={prod.id || idx}
-                              className="pt-2.5 pb-2.5 px-3 hover:bg-zinc-900/60 rounded-xl transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 border border-transparent hover:border-zinc-800"
-                            >
-                              {/* Left: Product Info */}
-                              <div className="flex items-center gap-3 min-w-0 flex-1">
-                                <div className="w-10 h-10 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
-                                  {prod.imagem ? (
-                                    <OptimizedImage
-                                      src={prod.imagem}
-                                      alt={prod.nome}
-                                      width={80}
-                                      quality={70}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <Package className="h-5 w-5 text-zinc-600" />
-                                  )}
-                                </div>
-
-                                <div className="space-y-0.5 min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-1.5">
-                                    <span className="text-xs font-bold text-zinc-100 truncate" title={prod.nome}>
-                                      {prod.nome}
-                                    </span>
-                                    {prod.isAvulso ? (
-                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-950/40 text-purple-400 border border-purple-900/40">
-                                        📦 Avulso (Custo na Venda)
-                                      </span>
+                        <div className="divide-y divide-zinc-850/50 max-h-[520px] overflow-y-auto pr-1 space-y-2">
+                          {productsAnalytics.list.slice(0, 100).map((prod, idx) => {
+                            const isSelected = selectedProductIds.has(prod.id);
+                            return (
+                              <div 
+                                key={prod.id || idx}
+                                onClick={() => toggleProductSelection(prod.id)}
+                                className={`pt-2.5 pb-2.5 px-3 rounded-xl transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-3 border cursor-pointer ${
+                                  isSelected 
+                                    ? 'bg-brand-pink/10 border-brand-pink/50 shadow-xs' 
+                                    : 'hover:bg-zinc-900/60 border-transparent hover:border-zinc-800'
+                                }`}
+                              >
+                                {/* Left: Checkbox & Product Info */}
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  {/* Checkbox */}
+                                  <div 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      toggleProductSelection(prod.id);
+                                    }}
+                                    className="shrink-0 cursor-pointer p-0.5"
+                                  >
+                                    {isSelected ? (
+                                      <div className="w-5 h-5 bg-brand-pink text-black rounded flex items-center justify-center font-bold shadow-xs">
+                                        <Check className="h-3.5 w-3.5 stroke-[3]" />
+                                      </div>
                                     ) : (
-                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/40">
-                                        🏷️ Catálogo (Custo Atual: R$ {prod.precoCustoAtual.toFixed(2)})
-                                      </span>
+                                      <div className="w-5 h-5 border-2 border-zinc-700 hover:border-brand-pink rounded bg-black/50 transition-colors" />
                                     )}
                                   </div>
 
-                                  <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-3 font-mono">
-                                    <span>Qtd Vendida: <strong className="text-zinc-200">{prod.quantidadeVendida} un.</strong></span>
-                                    <span className="text-zinc-650">•</span>
-                                    <span>Custo Un Atual: <strong className="text-amber-400">R$ {prod.precoCustoAtual.toFixed(2)}</strong></span>
-                                    <span className="text-zinc-650">•</span>
-                                    <span>Venda Base: <strong className="text-zinc-300">R$ {prod.precoVendaBase.toFixed(2)}</strong></span>
+                                  {/* Image */}
+                                  <div className="w-11 h-11 rounded-lg bg-zinc-900 border border-zinc-800 overflow-hidden shrink-0 flex items-center justify-center">
+                                    {prod.imagem ? (
+                                      <OptimizedImage
+                                        src={prod.imagem}
+                                        alt={prod.nome}
+                                        width={88}
+                                        quality={70}
+                                        className="w-full h-full object-cover"
+                                      />
+                                    ) : (
+                                      <Package className="h-5 w-5 text-zinc-600" />
+                                    )}
+                                  </div>
+
+                                  {/* Details */}
+                                  <div className="space-y-0.5 min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-1.5">
+                                      <span className="text-xs font-bold text-zinc-100 truncate" title={prod.nome}>
+                                        {prod.nome}
+                                      </span>
+                                      
+                                      {/* Category Badge */}
+                                      <span className="px-1.5 py-0.2 rounded text-[9px] font-extrabold bg-zinc-850 text-zinc-300 border border-zinc-750">
+                                        {prod.grupoCategoria || prod.categoria || 'Produto'}
+                                      </span>
+
+                                      {prod.isAvulso ? (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-purple-950/40 text-purple-400 border border-purple-900/40">
+                                          📦 Avulso
+                                        </span>
+                                      ) : (
+                                        <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-emerald-950/40 text-emerald-400 border border-emerald-900/40">
+                                          🏷️ Catálogo (Custo: R$ {prod.precoCustoAtual.toFixed(2)})
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="text-[11px] text-zinc-400 flex flex-wrap items-center gap-3 font-mono">
+                                      <span>Qtd Vendida: <strong className={prod.quantidadeVendida > 0 ? "text-zinc-100" : "text-zinc-500"}>{prod.quantidadeVendida} un.</strong></span>
+                                      <span className="text-zinc-650">•</span>
+                                      <span>Custo Un: <strong className="text-amber-400">R$ {prod.precoCustoAtual.toFixed(2)}</strong></span>
+                                      <span className="text-zinc-650">•</span>
+                                      <span>Venda Base: <strong className="text-zinc-300">R$ {prod.precoVendaBase.toFixed(2)}</strong></span>
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Right: Totals and Profit */}
+                                <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-1 border-t border-dashed border-zinc-850 sm:border-0 pt-1.5 sm:pt-0 shrink-0">
+                                  <div className="text-[10.5px] font-mono text-zinc-400 flex items-center gap-2">
+                                    <span>Venda: <strong className="text-emerald-450">R$ {prod.faturamentoTotal.toFixed(2)}</strong></span>
+                                    <span className="text-zinc-650">|</span>
+                                    <span>Custo: <strong className="text-amber-400">- R$ {prod.custoTotal.toFixed(2)}</strong></span>
+                                  </div>
+                                  <div>
+                                    <span className={`text-xs font-black font-mono px-2.5 py-0.5 rounded-lg border ${
+                                      isSelected
+                                        ? 'bg-brand-pink text-black border-brand-pink shadow-xs font-black'
+                                        : 'text-brand-pink bg-brand-pink/10 border-brand-pink/25'
+                                    }`}>
+                                      Lucro: R$ {prod.lucroTotal.toFixed(2)} ({prod.margem}%)
+                                    </span>
                                   </div>
                                 </div>
                               </div>
-
-                              {/* Right: Totals and Profit */}
-                              <div className="flex sm:flex-col items-start sm:items-end justify-between sm:justify-center gap-1 border-t border-dashed border-zinc-850 sm:border-0 pt-1.5 sm:pt-0 shrink-0">
-                                <div className="text-[10.5px] font-mono text-zinc-400 flex items-center gap-2">
-                                  <span>Faturamento: <strong className="text-emerald-450">R$ {prod.faturamentoTotal.toFixed(2)}</strong></span>
-                                  <span className="text-zinc-650">|</span>
-                                  <span>Custo: <strong className="text-amber-400">- R$ {prod.custoTotal.toFixed(2)}</strong></span>
-                                </div>
-                                <div>
-                                  <span className="text-xs font-black font-mono text-brand-pink bg-brand-pink/10 border border-brand-pink/25 px-2.5 py-0.5 rounded-lg">
-                                    Lucro Real: R$ {prod.lucroTotal.toFixed(2)} ({prod.margem}%)
-                                  </span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
                     </div>

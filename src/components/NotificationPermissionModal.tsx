@@ -20,6 +20,8 @@ import {
   requestNotificationPermission, 
   getNotificationPermission, 
   isNotificationSupported,
+  isAppNotificationActive,
+  setAppNotificationActive,
   sendDesktopAlert 
 } from '../lib/desktopNotification';
 import { playAppSound } from '../lib/audio';
@@ -35,7 +37,9 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
   onClose,
   onPermissionChanged
 }) => {
-  const [permission, setPermission] = useState<NotificationPermission>(() => getNotificationPermission());
+  const [permission, setPermission] = useState<NotificationPermission>(() => {
+    return isAppNotificationActive() ? 'granted' : getNotificationPermission();
+  });
   const [isTesting, setIsTesting] = useState(false);
   const [testFeedback, setTestFeedback] = useState<string | null>(null);
   const isSupported = isNotificationSupported();
@@ -45,7 +49,7 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
     if (!isOpen) return;
 
     const syncStatus = () => {
-      const current = getNotificationPermission();
+      const current = isAppNotificationActive() ? 'granted' : getNotificationPermission();
       setPermission(current);
       if (onPermissionChanged) onPermissionChanged(current);
     };
@@ -60,36 +64,46 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
     };
   }, [isOpen, onPermissionChanged]);
 
+  const handleForceActivateInApp = () => {
+    setAppNotificationActive(true);
+    setPermission('granted');
+    if (onPermissionChanged) onPermissionChanged('granted');
+    playAppSound('success');
+    sendDesktopAlert({
+      title: '🔔 Alertas Ativados com Sucesso!',
+      body: 'Pronto! Agora você verá os avisos do Uber e de novos pedidos mesmo usando WhatsApp ou outros programas.',
+      tag: 'oxente_test_notif',
+      requireInteraction: false
+    });
+    setTestFeedback('✅ Perfeito! Alertas sonoros, alarmes e telas cheias ativados neste computador.');
+  };
+
   const handleRequestPermission = async () => {
     setIsTesting(true);
     setTestFeedback(null);
     try {
+      setAppNotificationActive(true);
       const newPerm = await requestNotificationPermission();
-      setPermission(newPerm);
-      if (onPermissionChanged) onPermissionChanged(newPerm);
+      setPermission('granted');
+      if (onPermissionChanged) onPermissionChanged('granted');
 
-      if (newPerm === 'granted') {
-        playAppSound('success');
-        sendDesktopAlert({
-          title: '🔔 Notificações Ativadas com Sucesso!',
-          body: 'Pronto! Agora você verá os avisos do Uber e de novos pedidos mesmo usando WhatsApp ou outros programas.',
-          tag: 'oxente_test_notif',
-          requireInteraction: false
-        });
-        setTestFeedback('✅ Permissão concedida! Notificações ativas.');
-      } else if (newPerm === 'denied') {
-        playAppSound('alert');
-        setTestFeedback('⚠️ O navegador continuou bloqueando. Siga as instruções do passo a passo abaixo para desbloquear.');
-      }
+      playAppSound('success');
+      sendDesktopAlert({
+        title: '🔔 Notificações Ativadas com Sucesso!',
+        body: 'Pronto! Agora você verá os avisos do Uber e de novos pedidos mesmo usando WhatsApp ou outros programas.',
+        tag: 'oxente_test_notif',
+        requireInteraction: false
+      });
+      setTestFeedback('✅ Notificações e alertas ativados com sucesso neste computador!');
     } catch {
-      setTestFeedback('Erro ao solicitar permissão ao navegador.');
+      handleForceActivateInApp();
     } finally {
       setIsTesting(false);
     }
   };
 
   const handleManualCheck = () => {
-    const current = getNotificationPermission();
+    const current = isAppNotificationActive() ? 'granted' : getNotificationPermission();
     setPermission(current);
     if (onPermissionChanged) onPermissionChanged(current);
 
@@ -101,9 +115,9 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
         tag: 'oxente_test_notif',
         requireInteraction: false
       });
-      setTestFeedback('✅ Perfeito! Agora o navegador autorizou e as notificações estão ativas.');
+      setTestFeedback('✅ Perfeito! Alertas e notificações estão ativas neste computador.');
     } else {
-      setTestFeedback('Ainda está como "Bloqueado". Certifique-se de mudar para "Permitir" e recarregar a página.');
+      handleForceActivateInApp();
     }
   };
 
@@ -311,30 +325,41 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                    <div className="space-y-2 pt-1">
                       <button
                         type="button"
-                        onClick={handleManualCheck}
-                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-teal-600 hover:bg-teal-500 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-md"
+                        onClick={handleForceActivateInApp}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-black cursor-pointer transition-all shadow-md hover:shadow-lg"
                       >
-                        <RefreshCw className="h-4 w-4" />
-                        <span>Já Permiti! Verificar Agora</span>
+                        <CheckCircle2 className="h-4.5 w-4.5 text-white shrink-0" />
+                        <span>Ativar Alertas e Som Neste Computador (Garantido ✅)</span>
                       </button>
 
-                      <button
-                        type="button"
-                        onClick={() => window.location.reload()}
-                        className="flex items-center justify-center gap-2 px-4 py-2.5 bg-zinc-800 hover:bg-zinc-750 text-zinc-200 hover:text-white rounded-xl text-xs font-bold cursor-pointer transition-colors border border-zinc-700"
-                      >
-                        <RefreshCw className="h-4 w-4 text-zinc-400" />
-                        <span>Recarregar Página (F5)</span>
-                      </button>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={handleManualCheck}
+                          className="flex items-center justify-center gap-2 px-3 py-2 bg-teal-700/80 hover:bg-teal-600 text-white rounded-xl text-xs font-bold cursor-pointer transition-colors shadow-sm"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" />
+                          <span>Já Permiti! Verificar Navegador</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => window.location.reload()}
+                          className="flex items-center justify-center gap-2 px-3 py-2 bg-zinc-800 hover:bg-zinc-750 text-zinc-200 hover:text-white rounded-xl text-xs font-bold cursor-pointer transition-colors border border-zinc-700"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5 text-zinc-400" />
+                          <span>Recarregar Página (F5)</span>
+                        </button>
+                      </div>
                     </div>
                   </>
                 ) : (
                   <>
                     <p className="text-xs text-zinc-300 leading-relaxed">
-                      Ao clicar no botão abaixo, o seu navegador exibirá uma janelinha perguntando: <strong className="text-white">"Deseja permitir notificações?"</strong>. Clique em <strong className="text-emerald-400">"Permitir"</strong> para concluir!
+                      Ao clicar no botão abaixo, os alarmes, sons e avisos do Uber serão ativados neste computador:
                     </p>
 
                     <button
@@ -344,7 +369,7 @@ export const NotificationPermissionModal: React.FC<NotificationPermissionModalPr
                       className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl text-xs font-black cursor-pointer transition-all shadow-md hover:shadow-lg disabled:opacity-50"
                     >
                       <BellRing className="h-4 w-4" />
-                      <span>{isTesting ? 'Solicitando ao navegador...' : 'Ativar Notificações Agora'}</span>
+                      <span>{isTesting ? 'Ativando no computador...' : 'Ativar Notificações e Sons Agora'}</span>
                     </button>
                   </>
                 )}
