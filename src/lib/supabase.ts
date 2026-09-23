@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS oxente_sales (
   id TEXT PRIMARY KEY,
   cliente TEXT NOT NULL,
   telefone_cliente TEXT,
+  documento_cliente TEXT,
   produto_id TEXT,
   produto_nome TEXT,
   preco_un NUMERIC,
@@ -138,6 +139,7 @@ CREATE TABLE IF NOT EXISTS oxente_sales (
 
 -- Garantir que absolutamente todas as colunas de vendas existam caso a tabela já tenha sido criada anteriormente
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS telefone_cliente TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS documento_cliente TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS produto_id TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS produto_nome TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS preco_un NUMERIC;
@@ -414,59 +416,83 @@ export const mapDbToProduct = (dbItem: any): Product => {
   };
 };
 
-const mapSaleToDb = (sale: Sale) => ({
-  id: sale.id,
-  cliente: sale.cliente,
-  telefone_cliente: sale.telefoneCliente || null,
-  produto_id: sale.produtoId || null,
-  produto_nome: sale.produtoNome || null,
-  preco_un: sale.precoUn || null,
-  quantidade: sale.quantidade || null,
-  total: sale.total,
-  forma_pagamento: sale.formaPagamento,
-  data: sale.data,
-  valor_pago: sale.valorPago || null,
-  valor_faltante: sale.valorFaltante || null,
-  numero_pedido: sale.numeroPedido || null,
-  status: sale.status || null,
-  itens: sale.itens ? JSON.stringify(sale.itens) : null,
-  cor_selecionada: sale.corSelecionada || null,
-  criado_por_email: sale.criadoPorEmail || null,
-  data_retirada: sale.dataRetirada || null,
-  status_producao: sale.statusProducao || null,
-  designer_id: sale.designerId || null,
-  status_arte: sale.statusArte || null,
-  puxado_por: sale.puxadoPor || null,
-  puxado_em: sale.puxadoEm || null,
-  observacoes_design: sale.observacoesDesign || null,
-  foi_alterado: sale.foiAlterado || false,
-  remover_do_design: sale.removerDoDesign || false,
-  editado_por_email: sale.editadoPorEmail || null,
-  editado_em: sale.editadoEm || null,
-  arte_finalizada_por_email: sale.arteFinalizadaPorEmail || null,
-  arte_finalizada_em: sale.arteFinalizadaEm || null,
-  cliente_aprovou_layout: sale.clienteAprovouLayout || false,
-  cliente_aprovou_layout_em: sale.clienteAprovouLayoutEm || null,
-  valores_originais: sale.valoresOriginais ? JSON.stringify(sale.valoresOriginais) : null,
-  notas_internas: sale.notasInternas || null,
-  pedido_anotado: sale.pedidoAnotado || false,
-  aviso_pronto_sended: sale.avisoProntoSended || false,
-  turno_entrega: sale.turnoEntrega || null,
-  indicado_codigo: sale.indicadoCodigo || null,
-  desconto_referral: sale.descontoReferral || null,
-  cashback_gasto: sale.cashbackGasto || null,
-  referral_sended: sale.referralSended || false,
-  bloqueado_lembrete: sale.bloqueadoLembrete || false,
-  data_aviso_atraso: sale.dataAvisoAtraso || null,
-  pedido_vinculo_numero: sale.pedidoVinculoNumero || null,
-  updated_at: sale.updatedAt || new Date().toISOString()
-});
+const mapSaleToDb = (sale: Sale) => {
+  const doc = sale.documentoCliente || sale.cpfCnpj || null;
+  let origVals: any = sale.valoresOriginais;
+  if (doc) {
+    origVals = origVals ? { ...origVals } : {};
+    origVals.documentoCliente = doc;
+    origVals.cpfCnpj = doc;
+  }
 
-export const mapDbToSale = (dbItem: any): Sale => ({
-  id: dbItem.id,
-  cliente: dbItem.cliente,
-  telefoneCliente: dbItem.telefone_cliente || undefined,
-  produtoId: dbItem.produto_id || undefined,
+  return {
+    id: sale.id,
+    cliente: sale.cliente,
+    telefone_cliente: sale.telefoneCliente || null,
+    documento_cliente: doc,
+    produto_id: sale.produtoId || null,
+    produto_nome: sale.produtoNome || null,
+    preco_un: sale.precoUn || null,
+    quantidade: sale.quantidade || null,
+    total: sale.total,
+    forma_pagamento: sale.formaPagamento,
+    data: sale.data,
+    valor_pago: sale.valorPago || null,
+    valor_faltante: sale.valorFaltante || null,
+    numero_pedido: sale.numeroPedido || null,
+    status: sale.status || null,
+    itens: sale.itens ? JSON.stringify(sale.itens) : null,
+    cor_selecionada: sale.corSelecionada || null,
+    criado_por_email: sale.criadoPorEmail || null,
+    data_retirada: sale.dataRetirada || null,
+    status_producao: sale.statusProducao || null,
+    designer_id: sale.designerId || null,
+    status_arte: sale.statusArte || null,
+    puxado_por: sale.puxadoPor || null,
+    puxado_em: sale.puxadoEm || null,
+    observacoes_design: sale.observacoesDesign || null,
+    foi_alterado: sale.foiAlterado || false,
+    remover_do_design: sale.removerDoDesign || false,
+    editado_por_email: sale.editadoPorEmail || null,
+    editado_em: sale.editadoEm || null,
+    arte_finalizada_por_email: sale.arteFinalizadaPorEmail || null,
+    arte_finalizada_em: sale.arteFinalizadaEm || null,
+    cliente_aprovou_layout: sale.clienteAprovouLayout || false,
+    cliente_aprovou_layout_em: sale.clienteAprovouLayoutEm || null,
+    valores_originais: origVals ? JSON.stringify(origVals) : null,
+    notas_internas: sale.notasInternas || null,
+    pedido_anotado: sale.pedidoAnotado || false,
+    aviso_pronto_sended: sale.avisoProntoSended || false,
+    turno_entrega: sale.turnoEntrega || null,
+    indicado_codigo: sale.indicadoCodigo || null,
+    desconto_referral: sale.descontoReferral || null,
+    cashback_gasto: sale.cashbackGasto || null,
+    referral_sended: sale.referralSended || false,
+    bloqueado_lembrete: sale.bloqueadoLembrete || false,
+    data_aviso_atraso: sale.dataAvisoAtraso || null,
+    pedido_vinculo_numero: sale.pedidoVinculoNumero || null,
+    updated_at: sale.updatedAt || new Date().toISOString()
+  };
+};
+
+export const mapDbToSale = (dbItem: any): Sale => {
+  let doc = dbItem.documento_cliente || undefined;
+  if (!doc && dbItem.valores_originais) {
+    try {
+      const parsed = typeof dbItem.valores_originais === 'string' ? JSON.parse(dbItem.valores_originais) : dbItem.valores_originais;
+      if (parsed && (parsed.documentoCliente || parsed.cpfCnpj)) {
+        doc = parsed.documentoCliente || parsed.cpfCnpj;
+      }
+    } catch (e) {}
+  }
+
+  return {
+    id: dbItem.id,
+    cliente: dbItem.cliente,
+    telefoneCliente: dbItem.telefone_cliente || undefined,
+    documentoCliente: doc,
+    cpfCnpj: doc,
+    produtoId: dbItem.produto_id || undefined,
   produtoNome: dbItem.produto_nome || undefined,
   precoUn: dbItem.preco_un ? Number(dbItem.preco_un) : undefined as any,
   quantidade: dbItem.quantidade ? Number(dbItem.quantidade) : undefined as any,
@@ -508,7 +534,8 @@ export const mapDbToSale = (dbItem: any): Sale => ({
   dataAvisoAtraso: dbItem.data_aviso_atraso || undefined,
   pedidoVinculoNumero: dbItem.pedido_vinculo_numero || undefined,
   updatedAt: dbItem.updated_at || undefined
-});
+  };
+};
 
 // MAIN INTERACTION METHODS WITH GRACEFUL FALLBACKS
 const isNetworkFetchError = (err: any): boolean => {
@@ -796,6 +823,7 @@ const realDbSupabase = {
             if (colMatch && colMatch[1] && colMatch[1] in dbRow) {
               delete dbRow[colMatch[1]];
             } else {
+              delete dbRow.documento_cliente;
               delete dbRow.data_aviso_atraso;
               delete dbRow.bloqueado_lembrete;
               delete dbRow.pedido_vinculo_numero;

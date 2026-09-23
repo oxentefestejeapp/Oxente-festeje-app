@@ -1456,14 +1456,17 @@ Instagram: ${storeInfo.instagram || '@oxentefesteje'}
                   <button
                     type="button"
                     onClick={() => {
-                      if (!onUpdateSale) return;
-                      onUpdateSale({
-                        ...sale,
-                        documentoCliente: undefined,
-                        cpfCnpj: undefined,
-                        foiAlterado: true,
-                        editadoEm: new Date().toISOString()
-                      });
+                      sale.documentoCliente = undefined;
+                      sale.cpfCnpj = undefined;
+                      if (onUpdateSale) {
+                        onUpdateSale({
+                          ...sale,
+                          documentoCliente: undefined,
+                          cpfCnpj: undefined,
+                          foiAlterado: true,
+                          editadoEm: new Date().toISOString()
+                        });
+                      }
                       playAppSound('trash');
                       setShowEditDocModal(false);
                     }}
@@ -1484,15 +1487,18 @@ Instagram: ${storeInfo.instagram || '@oxentefesteje'}
                   <button
                     type="button"
                     onClick={() => {
-                      if (!onUpdateSale) return;
                       const clean = docInputValue.trim() ? docInputValue.trim() : undefined;
-                      onUpdateSale({
-                        ...sale,
-                        documentoCliente: clean,
-                        cpfCnpj: clean,
-                        foiAlterado: true,
-                        editadoEm: new Date().toISOString()
-                      });
+                      sale.documentoCliente = clean;
+                      sale.cpfCnpj = clean;
+                      if (onUpdateSale) {
+                        onUpdateSale({
+                          ...sale,
+                          documentoCliente: clean,
+                          cpfCnpj: clean,
+                          foiAlterado: true,
+                          editadoEm: new Date().toISOString()
+                        });
+                      }
                       playAppSound('complete');
                       setShowEditDocModal(false);
                     }}

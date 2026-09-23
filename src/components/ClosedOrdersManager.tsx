@@ -191,6 +191,9 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
     };
 
     onUpdateSale(updatedSale);
+    if (viewedSale && viewedSale.id === updatedSale.id) {
+      setViewedSale(updatedSale);
+    }
     playAppSound('success');
     setEditingSale(null);
   };

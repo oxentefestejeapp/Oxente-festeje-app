@@ -833,6 +833,15 @@ export default function App() {
             mergedSalesList.push(...unsavedLocalSalesAtStart);
           }
 
+          // Preserve local documentoCliente / cpfCnpj if server has it null (e.g. while schema cache is reloading)
+          mergedSalesList.forEach(s => {
+            const local = loadedSales.find(ls => ls.id === s.id);
+            if (local && (local.documentoCliente || local.cpfCnpj) && !s.documentoCliente && !s.cpfCnpj) {
+              s.documentoCliente = local.documentoCliente || local.cpfCnpj;
+              s.cpfCnpj = local.cpfCnpj || local.documentoCliente;
+            }
+          });
+
           if (mergedSalesList.length > 0) {
             const filteredSaless = mergedSalesList.filter(s => {
               if (s.status === 'Orçamento') {
@@ -1053,6 +1062,12 @@ export default function App() {
             if (localTime > serverTime) {
               return current;
             }
+          }
+
+          // If local sale has documentoCliente and server sale doesn't (due to Supabase cache or missing column), preserve it!
+          if (localSale && (localSale.documentoCliente || localSale.cpfCnpj) && !sale.documentoCliente && !sale.cpfCnpj) {
+            sale.documentoCliente = localSale.documentoCliente || localSale.cpfCnpj;
+            sale.cpfCnpj = localSale.cpfCnpj || localSale.documentoCliente;
           }
 
           const updated = current.map(s => s.id === sale.id ? sale : s);
