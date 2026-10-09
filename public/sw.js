@@ -4,7 +4,7 @@
  * Network-only pass-through: NEVER locks stale asset caches.
  */
 
-const SW_VERSION = 'v4-push-badge-accumulate';
+const SW_VERSION = 'v5-resilient-mobile-push';
 
 self.addEventListener('install', (event) => {
   self.skipWaiting();
@@ -27,16 +27,20 @@ self.addEventListener('fetch', (event) => {
   event.respondWith(fetch(event.request));
 });
 
-// Push Event: Received when Supabase Webhook sends a new order alert
+// Push Event: Received when Supabase Webhook or Backend sends a notification with app closed
 self.addEventListener('push', (event) => {
   let data = {};
   try {
     data = event.data ? event.data.json() : {};
   } catch (err) {
-    data = {
-      title: 'Oxente Festeje',
-      body: event.data ? event.data.text() : 'Novo pedido registrado!'
-    };
+    try {
+      data = {
+        title: 'Oxente Festeje',
+        body: event.data ? event.data.text() : 'Novo pedido registrado!'
+      };
+    } catch {
+      data = {};
+    }
   }
 
   const title = data.title || '🛍️ Novo Pedido Registrado!';
@@ -44,36 +48,59 @@ self.addEventListener('push', (event) => {
   const count = Number(data.badgeCount || data.unreadCount || 1);
 
   // 1. Update App Badge on Mobile Icon (Android / iOS PWA)
-  if ('setAppBadge' in self.navigator) {
-    self.navigator.setAppBadge(count).catch(() => {});
-  } else if ('setExperimentalAppBadge' in self.navigator) {
-    self.navigator.setExperimentalAppBadge(count).catch(() => {});
-  }
+  try {
+    if ('setAppBadge' in self.navigator) {
+      self.navigator.setAppBadge(count).catch(() => {});
+    } else if ('setExperimentalAppBadge' in self.navigator) {
+      self.navigator.setExperimentalAppBadge(count).catch(() => {});
+    }
+  } catch {}
 
   // 2. Display Native Mobile Notification Banner
-  // Gera uma tag 100% única para cada notificação recebida, garantindo que o Android e iOS ACUMULEM na tela de bloqueio e na barra de notificações
+  // Gera uma tag única para cada notificação recebida, garantindo que o Android e iOS acumulem na tela de bloqueio
   const uniqueStamp = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-  const notificationTag = `oxente-${data.orderId || 'pedido'}-${uniqueStamp}`;
+  const notificationTag = data.tag || `oxente-${data.orderId || 'notif'}-${uniqueStamp}`;
+  const targetUrl = data.url || '/?tab=vendas';
 
-  const options = {
+  // Primary options optimized for mobile devices (using PNG raster icons)
+  const primaryOptions = {
     body: messageBody,
-    icon: '/icon.svg',
-    badge: '/icon.svg',
-    vibrate: [200, 100, 200, 100, 200],
+    icon: '/pwa-192x192.png',
+    badge: '/badge-96.png',
+    vibrate: [250, 100, 250, 100, 250],
     tag: notificationTag,
+    renotify: true,
     data: {
-      url: data.url || '/?tab=vendas',
+      url: targetUrl,
       orderId: data.orderId || null,
       timestamp: Date.now()
-    },
-    actions: [
-      { action: 'open_order', title: 'Ver Pedido' }
-    ]
+    }
   };
 
-  event.waitUntil(
-    self.registration.showNotification(title, options)
-  );
+  // Safe execution with fallback: if advanced options fail on iOS or strict Android,
+  // fall back to ultra-compatible format so the notification is NEVER LOST!
+  const showNotificationSafe = async () => {
+    try {
+      await self.registration.showNotification(title, primaryOptions);
+    } catch (err1) {
+      console.warn('[SW Push] Tentando formato simplificado para compatibilidade máxima:', err1);
+      try {
+        await self.registration.showNotification(title, {
+          body: messageBody,
+          icon: '/pwa-192x192.png',
+          tag: notificationTag,
+          data: { url: targetUrl }
+        });
+      } catch (err2) {
+        console.error('[SW Push] Fallback elementar de notificação:', err2);
+        await self.registration.showNotification(title, {
+          body: messageBody
+        });
+      }
+    }
+  };
+
+  event.waitUntil(showNotificationSafe());
 });
 
 // Notification Click: User taps on the push banner on mobile

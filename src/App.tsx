@@ -57,6 +57,7 @@ import {
   incrementMobileOrderBadge, 
   clearMobileAppBadge, 
   setupMobilePushSubscription, 
+  ensureMobilePushRegisteredSilently,
   dispatchOrderPushNotification,
   isMobileDevice 
 } from './lib/mobileBadgeNotification';
@@ -927,7 +928,22 @@ export default function App() {
   useEffect(() => {
     if (firebaseUser) {
       setupMobilePushSubscription(firebaseUser.email || undefined);
+    } else {
+      ensureMobilePushRegisteredSilently();
     }
+  }, [firebaseUser]);
+
+  // Mantém a inscrição de Push sempre ativa e renovada ao voltar para o app
+  useEffect(() => {
+    const handleRecheckPush = () => {
+      ensureMobilePushRegisteredSilently(firebaseUser?.email || undefined);
+    };
+    window.addEventListener('focus', handleRecheckPush);
+    document.addEventListener('visibilitychange', handleRecheckPush);
+    return () => {
+      window.removeEventListener('focus', handleRecheckPush);
+      document.removeEventListener('visibilitychange', handleRecheckPush);
+    };
   }, [firebaseUser]);
 
   // Real-time Supabase Database Synchronisation for all users in real-time
@@ -2212,6 +2228,18 @@ export default function App() {
           localStorage.setItem('oxente_sales', JSON.stringify(updatedSalesList));
           return updatedSalesList;
         });
+
+        // Dispara notificação push em segundo plano para celulares cadastrados com app fechado
+        if (oldSale && oldSale.status === 'Orçamento' && stampedSale.status !== 'Orçamento') {
+          // Orçamento aprovado e transformado em pedido real
+          dispatchOrderPushNotification(stampedSale, 'new_order').catch(() => {});
+        } else if (oldSale && oldSale.statusProducao !== 'Pronto para Retirada' && stampedSale.statusProducao === 'Pronto para Retirada') {
+          // Pedido pronto para retirada no balcão
+          dispatchOrderPushNotification(stampedSale, 'order_ready').catch(() => {});
+        } else if (oldSale && (stampedSale.foiAlterado || oldSale.total !== stampedSale.total || oldSale.formaPagamento !== stampedSale.formaPagamento)) {
+          // Pedido alterado/editado
+          dispatchOrderPushNotification(stampedSale, 'order_edited').catch(() => {});
+        }
       } else {
         setSupabaseSyncStatus('error');
         setSupabaseErrorMsg(`Erro ao sincronizar alteração de venda no Supabase: ${getFormattedSupabaseError()}`);

@@ -33,6 +33,7 @@ import {
   isAppNotificationActive,
   setAppNotificationActive
 } from '../lib/desktopNotification';
+import { dispatchGeneralPushNotification } from '../lib/mobileBadgeNotification';
 import {
   collection,
   setDoc,
@@ -1464,6 +1465,15 @@ export function TeamChatWidget({ currentUser, isAdmin }: TeamChatWidgetProps) {
         whatsapp_template: JSON.stringify(currentList),
         updated_at: new Date().toISOString()
       });
+
+      // Dispara push para celulares da equipe com app fechado
+      dispatchGeneralPushNotification({
+        title: `💬 ${newMsg.senderName || 'Equipe Oxente'}`,
+        body: newMsg.text || 'Nova mensagem no chat interno',
+        url: '/?tab=chat',
+        orderId: newMsg.id,
+        actionType: 'chat_message'
+      }).catch(() => {});
     } catch (supaErr) {
       console.warn('Aviso de persistência Supabase:', supaErr);
     }

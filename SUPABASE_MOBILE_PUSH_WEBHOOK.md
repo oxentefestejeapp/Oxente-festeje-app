@@ -114,8 +114,28 @@ Para que qualquer venda inserida (pelo sistema, PDV, API ou importação) dispar
 
 1. Abra o aplicativo no seu celular (navegador Chrome no Android ou Safari no iPhone adicionado à Tela de Início).
 2. Vá na aba **⚙️ Configurações** ➔ role até a seção **"Diagnóstico & Teste de Notificações Mobile"**.
-3. Clique no botão **"3. Push App Fechado"**:
-   - O aplicativo vai registrar o celular e acionar a Edge Function.
-4. **Feche o aplicativo** ou **bloqueie a tela do celular imediatamente** (em até 3 segundos).
+3. Clique no botão **"3. Push em 4s (Bloquear Celular)"**:
+   - O aplicativo vai registrar o celular e acionar a notificação com contagem regressiva de 4 segundos.
+4. **Bloqueie a tela do celular imediatamente** ou saia para a tela inicial.
 5. Você ouvirá o som, a vibração e verá a notificação:
    `🛍️ Novo Pedido #... - R$ ...` na tela de bloqueio com o selo no ícone!
+
+---
+
+## 🛠️ Por que algumas notificações não chegavam com o app fechado?
+
+1. **Ícones SVG vs PNG nos Celulares**: O Android e o iPhone (iOS Safari) não renderizam ícones SVG em notificações de sistema em segundo plano. Se o ícone falhar ao ser decodificado com a tela apagada, o Android/iOS descartava a notificação. **Corrigido:** criamos ícones rasterizados PNG (`/pwa-192x192.png` e `/badge-96.png`) e adicionamos fallback triplo no Service Worker que nunca falha.
+2. **Eventos que não disparavam Push anteriormente**:
+   - Orçamento aprovado e transformado em pedido real (era um UPDATE, não disparava push). **Corrigido.**
+   - Pedido marcado como "Pronto para Retirada". **Corrigido.**
+   - Pedido alterado/editado por outro colaborador. **Corrigido.**
+   - Mensagens no Chat Interno da Equipe. **Corrigido.**
+3. **Otimização de Bateria do Android (Modo Doze / Deep Sleep)**:
+   - No Android (Samsung, Xiaomi, Motorola), por padrão os navegadores entram em "Otimização de Bateria". Quando o celular fica com a tela apagada por mais de 10 minutos, o sistema suspende o aplicativo para economizar energia.
+   - **Como resolver no Android**:
+     1. Mantenha pressionado o ícone do aplicativo (ou do Chrome) na tela inicial.
+     2. Toque no ícone de **Informações do app (i)**.
+     3. Vá em **Bateria** ➔ marque **Sem restrições** (ou "Não otimizar").
+     4. Em **Notificações**, certifique-se de que todas as opções estão permitidas e com som/pop-up ativados.
+4. **No iPhone (iOS)**:
+   - Para receber notificações com o app fechado no iPhone, é **obrigatório** abrir o app no Safari, tocar no botão de **Compartilhar** (quadrado com seta para cima) e escolher **"Adicionar à Tela de Início"**. O Web Push da Apple só é liberado para apps instalados na Tela de Início.

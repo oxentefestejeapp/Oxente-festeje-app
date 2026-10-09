@@ -223,16 +223,71 @@ export async function setupMobilePushSubscription(userEmail?: string, allowDeskt
 }
 
 /**
- * Dispatches an automated background push notification to all registered mobile phones.
- * Tries local server API first, then falls back to Supabase Edge Function.
+ * Silently ensures the current device has an active push subscription in Supabase
+ * without popping up permission prompts (only if permission was already granted).
  */
-export async function dispatchOrderPushNotification(sale: Partial<Sale>): Promise<boolean> {
-  // 1. Try internal backend server route first
+export async function ensureMobilePushRegisteredSilently(userEmail?: string): Promise<boolean> {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator) || !('PushManager' in window)) {
+    return false;
+  }
+  if (typeof Notification === 'undefined' || Notification.permission !== 'granted') {
+    return false;
+  }
+
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    if (!registration) return false;
+
+    let subscription = await registration.pushManager.getSubscription();
+    const vapidPublicKey = (import.meta as any).env?.VITE_VAPID_PUBLIC_KEY || DEFAULT_VAPID_PUBLIC_KEY;
+
+    if (!subscription) {
+      const convertedVapidKey = urlBase64ToUint8Array(vapidPublicKey);
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedVapidKey
+      });
+    }
+
+    if (subscription) {
+      const deviceId = getOrCreateDeviceId();
+      const payload = {
+        id: deviceId,
+        user_email: userEmail || localStorage.getItem('oxente_user_email') || 'colaborador@oxente.com',
+        device_type: isMobileDevice() ? 'mobile' : 'desktop',
+        subscription: subscription.toJSON(),
+        updated_at: new Date().toISOString()
+      };
+
+      await supabase
+        .from('oxente_push_subscriptions')
+        .upsert(payload, { onConflict: 'id' });
+
+      return true;
+    }
+  } catch (err) {
+    console.debug('Verificação silenciosa de push ignorada:', err);
+  }
+
+  return false;
+}
+
+/**
+ * Dispatches an automated background push notification to all registered mobile phones.
+ * Tries local server API first, then falls back directly to Supabase Edge Function.
+ */
+export async function dispatchOrderPushNotification(
+  sale: Partial<Sale>,
+  actionType: 'new_order' | 'order_edited' | 'order_ready' = 'new_order'
+): Promise<boolean> {
+  const payload = { record: sale, actionType };
+
+  // 1. Try internal backend server route first (direct and ultra-fast)
   try {
     const res = await fetch('/api/send-order-push', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ record: sale })
+      body: JSON.stringify(payload)
     });
     if (res.ok) {
       const data = await res.json();
@@ -242,19 +297,50 @@ export async function dispatchOrderPushNotification(sale: Partial<Sale>): Promis
     // Continue to fallback
   }
 
-  // 2. Fallback to Supabase Edge Function (support both quick-responder and send-order-push)
+  // 2. Fallback directly to Supabase Edge Function (instant, no 404 delay)
   try {
-    let res = await supabase.functions.invoke('quick-responder', {
-      body: { record: sale }
+    const res = await supabase.functions.invoke('send-order-push', {
+      body: payload
     });
-    if (res.error) {
-      res = await supabase.functions.invoke('send-order-push', {
-        body: { record: sale }
-      });
-    }
-    if (!res.error) return true;
+    if (!res.error && res.data?.success) return true;
   } catch (err) {
-    console.warn('Falha na chamada de push:', err);
+    console.warn('Falha na chamada de push via Edge Function:', err);
+  }
+
+  return false;
+}
+
+/**
+ * Dispatches any custom push notification (such as Team Chat or alerts) with app closed.
+ */
+export async function dispatchGeneralPushNotification(params: {
+  title: string;
+  body: string;
+  url?: string;
+  orderId?: string;
+  actionType?: string;
+}): Promise<boolean> {
+  // 1. Try local server API
+  try {
+    const res = await fetch('/api/send-order-push', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.success) return true;
+    }
+  } catch {}
+
+  // 2. Fallback to Supabase Edge Function
+  try {
+    const res = await supabase.functions.invoke('send-order-push', {
+      body: params
+    });
+    if (!res.error && res.data?.success) return true;
+  } catch (err) {
+    console.warn('Falha na chamada de push genérico:', err);
   }
 
   return false;
@@ -300,7 +386,7 @@ export async function triggerTestPushNotification(delaySeconds: number = 0): Pro
     console.warn('Falha ao conectar com /api/send-order-push:', e);
   }
 
-  // 2. Fallback to Supabase Edge Function (supports quick-responder and send-order-push)
+  // 2. Fallback directly to Supabase Edge Function
   try {
     const payload = {
       is_test: true,
@@ -310,11 +396,7 @@ export async function triggerTestPushNotification(delaySeconds: number = 0): Pro
       orderId: 'TESTE-001'
     };
 
-    let result = await supabase.functions.invoke('quick-responder', { body: payload });
-    if (result.error) {
-      result = await supabase.functions.invoke('send-order-push', { body: payload });
-    }
-
+    const result = await supabase.functions.invoke('send-order-push', { body: payload });
     const { data, error } = result;
 
     if (error) {

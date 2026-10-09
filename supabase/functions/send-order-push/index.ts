@@ -50,15 +50,21 @@ Deno.serve(async (req) => {
     // Extract sale record from either direct call, webhook call, or test call
     const isTest = Boolean(bodyData.is_test);
     const saleRecord = bodyData.record || bodyData.new || (bodyData.type === 'INSERT' ? bodyData.record : null) || bodyData;
+    const actionType = bodyData.actionType || bodyData.type || 'new_order';
 
-    let notificationTitle = '🛍️ Novo Pedido Registrado!';
-    let notificationBody = 'Um novo pedido acabou de entrar no sistema.';
-    let orderId = 'novo';
+    let notificationTitle = bodyData.title || '🛍️ Novo Pedido Registrado!';
+    let notificationBody = bodyData.body || 'Um novo pedido acabou de entrar no sistema.';
+    let orderId = bodyData.orderId || 'novo';
+    let targetUrl = bodyData.url || '/?tab=vendas';
 
     if (isTest) {
       notificationTitle = bodyData.title || '🛍️ Novo pedido #TESTE';
       notificationBody = bodyData.body || 'Cliente de Teste no valor de R$ 99,90. Toque para abrir!';
       orderId = bodyData.orderId || 'TESTE-001';
+    } else if (bodyData.title && bodyData.body) {
+      notificationTitle = bodyData.title;
+      notificationBody = bodyData.body;
+      if (bodyData.orderId) orderId = String(bodyData.orderId);
     } else if (saleRecord && (saleRecord.numeroPedido || saleRecord.numero_pedido || saleRecord.clienteNome || saleRecord.cliente || saleRecord.valorTotal || saleRecord.total)) {
       const numPedido = saleRecord.numeroPedido || saleRecord.numero_pedido ? `#${saleRecord.numeroPedido || saleRecord.numero_pedido}` : '';
       const totalVal = saleRecord.valorTotal ?? saleRecord.total;
@@ -73,11 +79,17 @@ Deno.serve(async (req) => {
         qtdItens = ` (${saleRecord.itens.length} ${saleRecord.itens.length === 1 ? 'item' : 'itens'})`;
       }
 
-      // Título: apenas "Novo pedido tal" (ex: "🛍️ Novo pedido #1042")
-      // Mensagem (corpo): quem é e o valor (ex: "Maria Silva no valor de R$ 150,00")
       const pedidoRef = numPedido ? ` ${numPedido}` : '';
-      notificationTitle = `🛍️ Novo pedido${pedidoRef}`;
-      notificationBody = `${cliente} no valor de ${valorStr}${qtdItens}. Toque para abrir!`;
+      if (actionType === 'order_edited') {
+        notificationTitle = `✏️ Pedido Alterado${pedidoRef}`;
+        notificationBody = `${cliente} • Novo valor: ${valorStr}${qtdItens}. Toque para conferir!`;
+      } else if (actionType === 'order_ready') {
+        notificationTitle = `📦 Pedido Pronto para Retirada${pedidoRef}`;
+        notificationBody = `Cliente: ${cliente}. Pedido pronto no balcão!`;
+      } else {
+        notificationTitle = `🛍️ Novo pedido${pedidoRef}`;
+        notificationBody = `${cliente} no valor de ${valorStr}${qtdItens}. Toque para abrir!`;
+      }
       orderId = String(saleRecord.numeroPedido || saleRecord.numero_pedido || saleRecord.id || 'novo');
     }
 
@@ -103,24 +115,41 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Deduplicate subscriptions by endpoint
+    const seenEndpoints = new Set<string>();
+    const uniqueSubs = subscriptions.filter((subRow: any) => {
+      let sub = subRow.subscription;
+      if (typeof sub === 'string') {
+        try { sub = JSON.parse(sub); } catch {}
+      }
+      if (!sub || !sub.endpoint) return false;
+      if (seenEndpoints.has(sub.endpoint)) return false;
+      seenEndpoints.add(sub.endpoint);
+      return true;
+    });
+
     const payload = JSON.stringify({
       title: notificationTitle,
       body: notificationBody,
       orderId: orderId,
       badgeCount: 1,
-      url: '/?tab=vendas',
+      tag: orderId ? `oxente-${actionType}-${orderId}` : `oxente-${Date.now()}`,
+      url: targetUrl,
       timestamp: Date.now()
     });
 
     const results = await Promise.allSettled(
-      subscriptions.map(async (subRow: any) => {
+      uniqueSubs.map(async (subRow: any) => {
         const sub = subRow.subscription;
         if (!sub || !sub.endpoint) return null;
 
         try {
           await webpush.sendNotification(sub, payload, {
             TTL: 86400, // 24 hours in seconds
-            urgency: 'high'
+            urgency: 'high',
+            headers: {
+              'Urgency': 'high'
+            }
           });
           return { id: subRow.id, status: 'sent' };
         } catch (err: any) {

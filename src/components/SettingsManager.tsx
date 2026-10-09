@@ -1325,6 +1325,25 @@ export function SettingsManager({
                 )}
               </div>
             )}
+
+            {/* Dicas para Notificações com App Fechado no Celular */}
+            <div className="bg-gradient-to-r from-zinc-950 to-zinc-900 border border-zinc-800 rounded-xl p-3.5 space-y-2 text-xs">
+              <div className="flex items-center gap-2 text-amber-400 font-bold text-xs">
+                <span>⚡</span>
+                <h6>Dicas Cruciais para o Celular Tocar com o App Fechado:</h6>
+              </div>
+              <ul className="text-zinc-400 text-[11px] space-y-1.5 list-disc pl-4 leading-relaxed">
+                <li>
+                  <strong className="text-zinc-200">Android (Samsung, Xiaomi, Motorola):</strong> Mantenha o dedo pressionado no ícone do app na tela inicial ➔ toque no <strong>(i) Informações do App</strong> ➔ <strong>Bateria</strong> ➔ selecione <strong>"Sem restrições"</strong> (para que o Android não congele o app quando a tela estiver apagada há mais de 10 minutos).
+                </li>
+                <li>
+                  <strong className="text-zinc-200">iPhone (iOS):</strong> É indispensável abrir pelo Safari, tocar no botão de compartilhar e selecionar <strong>"Adicionar à Tela de Início"</strong>. A Apple só autoriza notificações com app fechado para aplicativos instalados na tela inicial.
+                </li>
+                <li>
+                  <strong className="text-zinc-200">Cobertura Completa:</strong> Agora, novos pedidos, orçamentos confirmados, pedidos prontos para retirada, alterações e mensagens no chat disparam notificações push na nuvem mesmo com a tela bloqueada!
+                </li>
+              </ul>
+            </div>
           </div>
 
         </div>
