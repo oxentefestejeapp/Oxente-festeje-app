@@ -1337,7 +1337,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       referralSended: false,
       pedidoVinculoNumero: pedidoVinculoNumero.trim() ? pedidoVinculoNumero.trim() : undefined,
       corSelecionada: cart.length === 0 ? (selectedColor || undefined) : (cart.find(i => i.corSelecionada)?.corSelecionada || undefined),
-      isAvulso: isAvulsoProduct || finalItens.some(item => isAvulsoItem(item)) || undefined
+      isAvulso: isAvulsoProduct || finalItens.some(item => isAvulsoItem(item)) || undefined,
+      custoUn: finalItens[0]?.custoUn
     };
 
     // Salvar venda (que agora deduz o estoque de forma atômica no pai)
@@ -1504,9 +1505,12 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       }
     }
 
-    // Attach unit cost snapshot to each item
+    // Attach unit cost snapshot to each item, strictly preserving existing item cost
     finalItensToSave = finalItensToSave.map(item => {
-      const itemCost = calculateSaleItemUnitCost(item, editingSale.data || new Date().toISOString(), products);
+      const hasExistingCost = item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0;
+      const itemCost = hasExistingCost
+        ? item.custoUn
+        : calculateSaleItemUnitCost(item, editingSale.data || new Date().toISOString(), products);
       return {
         ...item,
         custoUn: itemCost,
@@ -1535,6 +1539,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       precoUn: mainPrecoUn,
       quantidade: mainQuantidade,
       total: editTotal,
+      custoUn: editingSale.custoUn !== undefined ? editingSale.custoUn : finalItensToSave[0]?.custoUn,
       formaPagamento: isBudget ? editingSale.formaPagamento : editFormaPagamento,
       valorPago: finalValorPago,
       valorFaltante: finalValorFaltante,

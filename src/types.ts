@@ -29,6 +29,12 @@ export interface Product {
   conferido?: boolean;
   prazoUrgencia?: number;
   linkedProductId?: string;
+  custoAtualizadoEm?: string;
+  precoAtualizadoEm?: string;
+  precoAnteriorCusto?: number;
+  precoAnteriorVenda?: number;
+  historicoCustos?: Array<{ dataAte: string; custo: number }>;
+  historicoPrecos?: Array<{ dataAte: string; preco: number; faixasPreco?: PricingTier[] }>;
 }
 
 export type PaymentMethod = 'Pix' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito';
@@ -297,36 +303,58 @@ export function calculateSaleItemUnitCost(
 
   const isAvulso = isAvulsoItem(item);
 
-  // 1. If item is an AVULSO product, strictly preserve the custom cost defined at creation time
+  // 1. Explicit snapshot priority:
+  // If the sale item ALREADY has a recorded custoUn (from when the sale was made),
+  // PRESERVE IT! Never overwrite closed or historical orders with subsequent catalog product cost changes.
+  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
+    return item.custoUn;
+  }
+
+  // 2. If item is an AVULSO product, fallback to 62% estimate if no custom cost was set
   if (isAvulso) {
-    if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
-      return item.custoUn;
-    }
     return item.precoUn * 0.62;
   }
 
-  // 2. For registered catalog products: find the matching product in the catalog
+  // 3. For registered catalog products: find the matching product in the catalog
   const nameToMatch = item.produtoNome || item.nome;
   const matchingProduct = findMatchingProduct(item.produtoId, nameToMatch, products);
 
   if (matchingProduct) {
-    // ALWAYS prioritize the updated configured precoCusto from the catalog (recalculates historical sales with new real costs!)
+    const saleDateClean = parseToBrazilDateString(saleDateStr);
+    const todayClean = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Sao_Paulo' });
+
+    // Check historical cost records if available
+    if (matchingProduct.historicoCustos && matchingProduct.historicoCustos.length > 0 && saleDateClean) {
+      const historicalEntry = matchingProduct.historicoCustos.find(h => {
+        const hDate = parseToBrazilDateString(h.dataAte);
+        return hDate && saleDateClean <= hDate;
+      });
+      if (historicalEntry && historicalEntry.custo !== undefined && historicalEntry.custo !== null && !isNaN(historicalEntry.custo) && historicalEntry.custo >= 0) {
+        return historicalEntry.custo;
+      }
+    }
+
+    // If sale date is strictly in the past (before today) and the cost was modified today or later
+    const isPastSale = saleDateClean && todayClean && saleDateClean < todayClean;
+    if (isPastSale && matchingProduct.custoAtualizadoEm) {
+      const updateDateClean = parseToBrazilDateString(matchingProduct.custoAtualizadoEm);
+      if (updateDateClean && saleDateClean < updateDateClean) {
+        // Cost was changed after this sale occurred - do not retroactively alter closed past sales!
+        if (matchingProduct.precoAnteriorCusto !== undefined && matchingProduct.precoAnteriorCusto !== null && !isNaN(matchingProduct.precoAnteriorCusto) && matchingProduct.precoAnteriorCusto >= 0) {
+          return matchingProduct.precoAnteriorCusto;
+        }
+      }
+    }
+
+    // For new sales, sales from the current day onwards, or if product cost is configured:
     if (matchingProduct.precoCusto !== undefined && matchingProduct.precoCusto !== null && !isNaN(matchingProduct.precoCusto) && matchingProduct.precoCusto >= 0) {
       return matchingProduct.precoCusto;
     }
-    // If no precoCusto was configured in the catalog, check if item had a custom custoUn or fallback to base price estimate
-    if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
-      return item.custoUn;
-    }
+
     const baseCatalogPrice = matchingProduct.preco || (matchingProduct.faixasPreco && matchingProduct.faixasPreco.length > 0 ? matchingProduct.faixasPreco[0].preco : 0);
     if (baseCatalogPrice > 0) {
       return baseCatalogPrice * 0.62;
     }
-  }
-
-  // 3. Fallback for uncataloged items: use saved custom cost or 62% estimate
-  if (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0) {
-    return item.custoUn;
   }
 
   return item.precoUn * 0.62;
@@ -393,9 +421,8 @@ export function getSaleCostInfo(sale: Sale, products: Product[] = []): SaleCostI
       
       const nameToMatch = item.produtoNome || item.nome;
       const prod = findMatchingProduct(item.produtoId, nameToMatch, products);
-      const hasItemExplicitCost = (isItemAvulso && item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0)
-        || (!isItemAvulso && prod && prod.precoCusto !== undefined && prod.precoCusto !== null && prod.precoCusto >= 0)
-        || (!isItemAvulso && !prod && item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0);
+      const hasItemExplicitCost = (item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0)
+        || (!isItemAvulso && prod && prod.precoCusto !== undefined && prod.precoCusto !== null && prod.precoCusto >= 0);
 
       if (!hasItemExplicitCost) {
         hasExplicitCost = false;
@@ -409,9 +436,8 @@ export function getSaleCostInfo(sale: Sale, products: Product[] = []): SaleCostI
     });
   } else {
     const prod = findMatchingProduct(sale.produtoId, sale.produtoNome, products);
-    const hasItemExplicitCost = (isAvulso && sale.custoUn !== undefined && sale.custoUn !== null && !isNaN(sale.custoUn) && sale.custoUn >= 0)
-      || (!isAvulso && prod && prod.precoCusto !== undefined && prod.precoCusto !== null && prod.precoCusto >= 0)
-      || (!isAvulso && !prod && sale.custoUn !== undefined && sale.custoUn !== null && !isNaN(sale.custoUn) && sale.custoUn >= 0);
+    const hasItemExplicitCost = (sale.custoUn !== undefined && sale.custoUn !== null && !isNaN(sale.custoUn) && sale.custoUn >= 0)
+      || (!isAvulso && prod && prod.precoCusto !== undefined && prod.precoCusto !== null && prod.precoCusto >= 0);
 
     hasExplicitCost = Boolean(hasItemExplicitCost);
     const unitCost = calculateSaleItemUnitCost({ produtoId: sale.produtoId, produtoNome: sale.produtoNome, precoUn: sale.precoUn || 0, custoUn: sale.custoUn, isAvulso: sale.isAvulso }, sale.data, products);

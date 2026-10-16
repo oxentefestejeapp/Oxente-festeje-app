@@ -287,6 +287,8 @@ export function ProductForm({ onAddProduct, products }: ProductFormProps) {
       faixasPreco: faixasPreco.length > 0 ? faixasPreco : undefined,
       prazoUrgencia: prazoUrgenciaNum,
       linkedProductId: linkedProductId || undefined,
+      custoAtualizadoEm: new Date().toISOString(),
+      precoAtualizadoEm: new Date().toISOString()
     };
 
     setIsSaving(true);

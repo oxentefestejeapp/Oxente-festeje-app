@@ -341,22 +341,41 @@ NOTIFY pgrst, 'reload schema';
 };
 
 // Map helpers between Javascript types and Postgres keys
-const mapProductToDb = (product: Product) => ({
-  id: product.id,
-  nome: product.nome,
-  preco: product.preco,
-  estoque: product.estoque,
-  imagem_base64: product.imagemBase64 || null,
-  estoque_infinito: product.estoqueInfinito || false,
-  adicional: product.adicional || false,
-  preco_custo: product.precoCusto || null,
-  precos_progressivos: product.faixasPreco ? JSON.stringify(product.faixasPreco) : null,
-  conferido: product.conferido || false,
-  prazo_urgencia: product.prazoUrgencia !== undefined && product.prazoUrgencia !== null ? product.prazoUrgencia : null,
-  cores: product.cores ? JSON.stringify(product.cores) : null,
-  linked_product_id: product.linkedProductId || null,
-  updated_at: new Date().toISOString()
-});
+const mapProductToDb = (product: Product) => {
+  // Persist cost history metadata in local storage redundantly
+  try {
+    if (product.custoAtualizadoEm || product.historicoCustos || product.precoAnteriorCusto) {
+      const chCached = localStorage.getItem('oxente_product_cost_history');
+      const parsed = chCached ? JSON.parse(chCached) : {};
+      parsed[product.id] = {
+        custoAtualizadoEm: product.custoAtualizadoEm,
+        precoAtualizadoEm: product.precoAtualizadoEm,
+        precoAnteriorCusto: product.precoAnteriorCusto,
+        precoAnteriorVenda: product.precoAnteriorVenda,
+        historicoCustos: product.historicoCustos,
+        historicoPrecos: product.historicoPrecos
+      };
+      localStorage.setItem('oxente_product_cost_history', JSON.stringify(parsed));
+    }
+  } catch (e) {}
+
+  return {
+    id: product.id,
+    nome: product.nome,
+    preco: product.preco,
+    estoque: product.estoque,
+    imagem_base64: product.imagemBase64 || null,
+    estoque_infinito: product.estoqueInfinito || false,
+    adicional: product.adicional || false,
+    preco_custo: product.precoCusto || null,
+    precos_progressivos: product.faixasPreco ? JSON.stringify(product.faixasPreco) : null,
+    conferido: product.conferido || false,
+    prazo_urgencia: product.prazoUrgencia !== undefined && product.prazoUrgencia !== null ? product.prazoUrgencia : null,
+    cores: product.cores ? JSON.stringify(product.cores) : null,
+    linked_product_id: product.linkedProductId || null,
+    updated_at: new Date().toISOString()
+  };
+};
 
 export const mapDbToProduct = (dbItem: any): Product => {
   let faixasPreco = undefined;
@@ -395,6 +414,18 @@ export const mapDbToProduct = (dbItem: any): Product => {
     }
   } catch (e) {}
 
+  // Recupera histórico de alteração de custos para proteger pedidos fechados passados
+  let costHistoryMeta: any = null;
+  try {
+    const chCached = localStorage.getItem('oxente_product_cost_history');
+    if (chCached) {
+      const parsed = JSON.parse(chCached);
+      if (parsed[dbItem.id]) {
+        costHistoryMeta = parsed[dbItem.id];
+      }
+    }
+  } catch (e) {}
+
   // Se já temos a marcação local recente no dispositivo, nós a priorizamos 
   // caso o retorno do banco ainda esteja se auto-ajustando ou com cache defasado.
   const finalConferido = hasLocalReg ? isLocalConferido : !!dbItem.conferido;
@@ -412,17 +443,28 @@ export const mapDbToProduct = (dbItem: any): Product => {
     conferido: finalConferido,
     prazoUrgencia: dbItem.prazo_urgencia !== null && dbItem.prazo_urgencia !== undefined ? Number(dbItem.prazo_urgencia) : undefined,
     cores: cores || undefined,
-    linkedProductId: dbItem.linked_product_id || undefined
+    linkedProductId: dbItem.linked_product_id || undefined,
+    custoAtualizadoEm: costHistoryMeta?.custoAtualizadoEm,
+    precoAtualizadoEm: costHistoryMeta?.precoAtualizadoEm,
+    precoAnteriorCusto: costHistoryMeta?.precoAnteriorCusto,
+    precoAnteriorVenda: costHistoryMeta?.precoAnteriorVenda,
+    historicoCustos: costHistoryMeta?.historicoCustos,
+    historicoPrecos: costHistoryMeta?.historicoPrecos
   };
 };
 
 const mapSaleToDb = (sale: Sale) => {
   const doc = sale.documentoCliente || sale.cpfCnpj || null;
   let origVals: any = sale.valoresOriginais;
-  if (doc) {
+  if (doc || sale.custoUn !== undefined) {
     origVals = origVals ? { ...origVals } : {};
-    origVals.documentoCliente = doc;
-    origVals.cpfCnpj = doc;
+    if (doc) {
+      origVals.documentoCliente = doc;
+      origVals.cpfCnpj = doc;
+    }
+    if (sale.custoUn !== undefined && origVals.custoUn === undefined) {
+      origVals.custoUn = sale.custoUn;
+    }
   }
 
   return {
@@ -477,13 +519,19 @@ const mapSaleToDb = (sale: Sale) => {
 
 export const mapDbToSale = (dbItem: any): Sale => {
   let doc = dbItem.documento_cliente || undefined;
-  if (!doc && dbItem.valores_originais) {
+  let parsedOrigVals: any = undefined;
+  if (dbItem.valores_originais) {
     try {
-      const parsed = typeof dbItem.valores_originais === 'string' ? JSON.parse(dbItem.valores_originais) : dbItem.valores_originais;
-      if (parsed && (parsed.documentoCliente || parsed.cpfCnpj)) {
-        doc = parsed.documentoCliente || parsed.cpfCnpj;
+      parsedOrigVals = typeof dbItem.valores_originais === 'string' ? JSON.parse(dbItem.valores_originais) : dbItem.valores_originais;
+      if (parsedOrigVals && (parsedOrigVals.documentoCliente || parsedOrigVals.cpfCnpj)) {
+        doc = parsedOrigVals.documentoCliente || parsedOrigVals.cpfCnpj;
       }
     } catch (e) {}
+  }
+
+  let savedCustoUn = dbItem.custo_un !== undefined && dbItem.custo_un !== null ? Number(dbItem.custo_un) : undefined;
+  if (savedCustoUn === undefined && parsedOrigVals && parsedOrigVals.custoUn !== undefined && parsedOrigVals.custoUn !== null && !isNaN(parsedOrigVals.custoUn)) {
+    savedCustoUn = Number(parsedOrigVals.custoUn);
   }
 
   return {
@@ -493,9 +541,10 @@ export const mapDbToSale = (dbItem: any): Sale => {
     documentoCliente: doc,
     cpfCnpj: doc,
     produtoId: dbItem.produto_id || undefined,
-  produtoNome: dbItem.produto_nome || undefined,
-  precoUn: dbItem.preco_un ? Number(dbItem.preco_un) : undefined as any,
-  quantidade: dbItem.quantidade ? Number(dbItem.quantidade) : undefined as any,
+    produtoNome: dbItem.produto_nome || undefined,
+    precoUn: dbItem.preco_un ? Number(dbItem.preco_un) : undefined as any,
+    custoUn: savedCustoUn,
+    quantidade: dbItem.quantidade ? Number(dbItem.quantidade) : undefined as any,
   total: Number(dbItem.total),
   formaPagamento: dbItem.forma_pagamento as any,
   data: dbItem.data,

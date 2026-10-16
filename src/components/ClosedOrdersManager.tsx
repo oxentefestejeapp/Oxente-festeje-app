@@ -113,7 +113,8 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
           produtoNome: editingSale.produtoNome || '',
           precoUn: editingSale.precoUn || 0,
           quantidade: editingSale.quantidade || 1,
-          total: (editingSale.precoUn || 0) * (editingSale.quantidade || 1)
+          total: (editingSale.precoUn || 0) * (editingSale.quantidade || 1),
+          custoUn: editingSale.custoUn
         }]);
       }
     }
@@ -177,6 +178,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
       precoUn: mainPrecoUn,
       quantidade: mainQuantidade,
       total: editTotal,
+      custoUn: editingSale.custoUn !== undefined ? editingSale.custoUn : editItens[0]?.custoUn,
       formaPagamento: editFormaPagamento,
       valorPago: finalValorPago,
       valorFaltante: finalValorFaltante,
@@ -2435,7 +2437,8 @@ ${produtosTexto}`;
                                   produtoNome: dbProd.nome,
                                   precoUn: dbProd.preco,
                                   quantidade: 1,
-                                  total: dbProd.preco
+                                  total: dbProd.preco,
+                                  custoUn: dbProd.precoCusto
                                 }
                               ]);
                             }

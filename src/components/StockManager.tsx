@@ -429,12 +429,52 @@ export function StockManager({
         setEditError('Digite um preço de venda válido.');
         return;
       }
+    } else {
+      precoNum = editPrecoVenda !== '' ? Number(editPrecoVenda) : (editingProduct.preco || 0);
     }
 
     const precoCustoNum = editPrecoCusto !== '' ? Number(editPrecoCusto) : undefined;
     if (precoCustoNum !== undefined && (isNaN(precoCustoNum) || precoCustoNum < 0)) {
       setEditError('Digite um preço de custo válido.');
       return;
+    }
+
+    // Detect if cost or price changed, and record historical snapshot for past orders protection
+    const custoMudou = editingProduct.precoCusto !== precoCustoNum;
+    const precoMudou = editingProduct.preco !== precoNum;
+    const faixasMudaram = JSON.stringify(editingProduct.faixasPreco || []) !== JSON.stringify(editFaixasPreco);
+
+    const agora = new Date().toISOString();
+
+    let updatedHistoricoCustos = editingProduct.historicoCustos ? [...editingProduct.historicoCustos] : [];
+    let updatedCustoAtualizadoEm = editingProduct.custoAtualizadoEm;
+    let updatedPrecoAnteriorCusto = editingProduct.precoAnteriorCusto;
+
+    if (custoMudou) {
+      updatedCustoAtualizadoEm = agora;
+      if (editingProduct.precoCusto !== undefined && editingProduct.precoCusto !== null) {
+        updatedPrecoAnteriorCusto = editingProduct.precoCusto;
+        updatedHistoricoCustos.push({
+          dataAte: agora,
+          custo: editingProduct.precoCusto
+        });
+      }
+    }
+
+    let updatedHistoricoPrecos = editingProduct.historicoPrecos ? [...editingProduct.historicoPrecos] : [];
+    let updatedPrecoAtualizadoEm = editingProduct.precoAtualizadoEm;
+    let updatedPrecoAnteriorVenda = editingProduct.precoAnteriorVenda;
+
+    if (precoMudou || faixasMudaram) {
+      updatedPrecoAtualizadoEm = agora;
+      if (editingProduct.preco !== undefined && editingProduct.preco !== null) {
+        updatedPrecoAnteriorVenda = editingProduct.preco;
+        updatedHistoricoPrecos.push({
+          dataAte: agora,
+          preco: editingProduct.preco,
+          faixasPreco: editingProduct.faixasPreco
+        });
+      }
     }
 
     let estoqueNum = editEstoqueInfinito ? 0 : Number(editEstoque);
@@ -476,6 +516,12 @@ export function StockManager({
       faixasPreco: editFaixasPreco.length > 0 ? editFaixasPreco : undefined,
       prazoUrgencia: prazoUrgenciaNum,
       linkedProductId: editLinkedProductId || undefined,
+      custoAtualizadoEm: updatedCustoAtualizadoEm,
+      precoAtualizadoEm: updatedPrecoAtualizadoEm,
+      precoAnteriorCusto: updatedPrecoAnteriorCusto,
+      precoAnteriorVenda: updatedPrecoAnteriorVenda,
+      historicoCustos: updatedHistoricoCustos.length > 0 ? updatedHistoricoCustos : undefined,
+      historicoPrecos: updatedHistoricoPrecos.length > 0 ? updatedHistoricoPrecos : undefined
     };
 
     setIsEditSaving(true);

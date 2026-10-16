@@ -834,12 +834,25 @@ export default function App() {
             mergedSalesList.push(...unsavedLocalSalesAtStart);
           }
 
-          // Preserve local documentoCliente / cpfCnpj if server has it null (e.g. while schema cache is reloading)
+          // Preserve local documentoCliente / cpfCnpj and historical custoUn if server has it null
           mergedSalesList.forEach(s => {
             const local = loadedSales.find(ls => ls.id === s.id);
-            if (local && (local.documentoCliente || local.cpfCnpj) && !s.documentoCliente && !s.cpfCnpj) {
-              s.documentoCliente = local.documentoCliente || local.cpfCnpj;
-              s.cpfCnpj = local.cpfCnpj || local.documentoCliente;
+            if (local) {
+              if ((local.documentoCliente || local.cpfCnpj) && !s.documentoCliente && !s.cpfCnpj) {
+                s.documentoCliente = local.documentoCliente || local.cpfCnpj;
+                s.cpfCnpj = local.cpfCnpj || local.documentoCliente;
+              }
+              if (local.custoUn !== undefined && s.custoUn === undefined) {
+                s.custoUn = local.custoUn;
+              }
+              if (local.itens && s.itens) {
+                s.itens.forEach((sItem, idx) => {
+                  const lItem = local.itens?.find(li => li.id === sItem.id) || local.itens?.[idx];
+                  if (lItem && lItem.custoUn !== undefined && sItem.custoUn === undefined) {
+                    sItem.custoUn = lItem.custoUn;
+                  }
+                });
+              }
             }
           });
 
@@ -1084,6 +1097,19 @@ export default function App() {
           if (localSale && (localSale.documentoCliente || localSale.cpfCnpj) && !sale.documentoCliente && !sale.cpfCnpj) {
             sale.documentoCliente = localSale.documentoCliente || localSale.cpfCnpj;
             sale.cpfCnpj = localSale.cpfCnpj || localSale.documentoCliente;
+          }
+
+          // If local sale has custoUn and server sale doesn't, preserve it!
+          if (localSale && localSale.custoUn !== undefined && sale.custoUn === undefined) {
+            sale.custoUn = localSale.custoUn;
+          }
+          if (localSale && localSale.itens && sale.itens) {
+            sale.itens.forEach((sItem, idx) => {
+              const lItem = localSale.itens?.find(li => li.id === sItem.id) || localSale.itens?.[idx];
+              if (lItem && lItem.custoUn !== undefined && sItem.custoUn === undefined) {
+                sItem.custoUn = lItem.custoUn;
+              }
+            });
           }
 
           const updated = current.map(s => s.id === sale.id ? sale : s);
