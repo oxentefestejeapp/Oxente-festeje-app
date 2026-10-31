@@ -31,7 +31,7 @@ import {
   Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sale, StoreInfo, Product, SaleItem, formatCpfCnpj } from '../types';
+import { Sale, StoreInfo, Product, SaleItem, formatCpfCnpj, calculateSaleItemUnitCost } from '../types';
 import { Receipt } from './Receipt';
 import { CelebrationOverlay, UrgentArtOrderInfo } from './CelebrationOverlay';
 import { playAppSound } from '../lib/audio';
@@ -167,6 +167,17 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
 
     const finalEditDoc = editDocumentoCliente.trim() ? editDocumentoCliente.trim() : undefined;
 
+    const finalItensToSave = editItens.map(item => {
+      const hasExistingCost = item.custoUn !== undefined && item.custoUn !== null && !isNaN(item.custoUn) && item.custoUn >= 0;
+      const itemCost = hasExistingCost
+        ? item.custoUn
+        : calculateSaleItemUnitCost(item, editingSale.data || new Date().toISOString(), products);
+      return {
+        ...item,
+        custoUn: itemCost
+      };
+    });
+
     const updatedSale: Sale = {
       ...editingSale,
       cliente: editCliente.trim() || 'Consumidor',
@@ -178,14 +189,14 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
       precoUn: mainPrecoUn,
       quantidade: mainQuantidade,
       total: editTotal,
-      custoUn: editingSale.custoUn !== undefined ? editingSale.custoUn : editItens[0]?.custoUn,
+      custoUn: editingSale.custoUn !== undefined ? editingSale.custoUn : finalItensToSave[0]?.custoUn,
       formaPagamento: editFormaPagamento,
       valorPago: finalValorPago,
       valorFaltante: finalValorFaltante,
       numeroPedido: editNumeroPedido.trim() ? editNumeroPedido.trim() : undefined,
       dataRetirada: editDataRetirada || undefined,
       statusProducao: editStatusProducao,
-      itens: editItens,
+      itens: finalItensToSave,
       foiAlterado: true,
       editadoPorEmail: currentUserEmail,
       editadoEm: new Date().toISOString(),

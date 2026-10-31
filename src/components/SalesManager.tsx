@@ -3400,7 +3400,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
               <h2 className="font-display font-semibold text-xl text-zinc-100">Histórico de Vendas</h2>
             </div>
             <span className="self-start sm:self-auto text-xs bg-zinc-950 border border-zinc-800 px-2.5 py-1 rounded-full text-zinc-400 font-bold whitespace-nowrap">
-              {sales.length} {sales.length === 1 ? 'venda registrada' : 'vendas registradas'}
+              {sales.length.toLocaleString('pt-BR')} {sales.length === 1 ? 'venda registrada' : 'vendas registradas'}
             </span>
           </div>
 
@@ -3632,7 +3632,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 const target = e.currentTarget;
                 if (target.scrollHeight - target.scrollTop <= target.clientHeight + 60) {
                   if (visibleSalesCount < displayedSales.length) {
-                    setVisibleSalesCount(prev => Math.min(prev + 10, displayedSales.length));
+                    setVisibleSalesCount(prev => Math.min(prev + 25, displayedSales.length));
                   }
                 }
               }}

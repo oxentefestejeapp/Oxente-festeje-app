@@ -100,6 +100,17 @@ export const getWeeklyNonBudgetOrdersCount = (salesList: Sale[]): number => {
   }).length;
 };
 
+export const safeSaveSalesToCache = (salesList: Sale[]): void => {
+  try {
+    localStorage.setItem('oxente_sales', JSON.stringify(salesList));
+  } catch (err) {
+    console.warn('Limite de quota do LocalStorage atingido ao salvar histórico completo. Salvando fatia recente para contingência offline:', err);
+    try {
+      localStorage.setItem('oxente_sales', JSON.stringify(salesList.slice(0, 1000)));
+    } catch {}
+  }
+};
+
 export default function App() {
   // 1. Custom Secure Credentials Auth State
   const [firebaseUser, setFirebaseUser] = useState<any | null>(null);
@@ -682,7 +693,7 @@ export default function App() {
       loadedSales = filteredSales;
       setSales(filteredSales);
       if (filteredSales.length !== parsedSales.length) {
-        localStorage.setItem('oxente_sales', JSON.stringify(filteredSales));
+        safeSaveSalesToCache(filteredSales);
       }
     } else {
       setSales([]);
@@ -867,7 +878,7 @@ export default function App() {
             });
             filteredSaless.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
             setSales(filteredSaless);
-            localStorage.setItem('oxente_sales', JSON.stringify(filteredSaless));
+            safeSaveSalesToCache(filteredSaless);
           } else {
             // Se o banco de dados de vendas foi esvaziado/zerado, limpa o estado local
             // para evitar ressuscitar vendas do localStorage.
@@ -1028,12 +1039,12 @@ export default function App() {
               if (localTime > serverTime) return current;
             }
             const updated = current.map(s => s.id === sale.id ? sale : s);
-            localStorage.setItem('oxente_sales', JSON.stringify(updated));
+            safeSaveSalesToCache(updated);
             return updated;
           }
           const updated = [sale, ...current];
           updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
-          localStorage.setItem('oxente_sales', JSON.stringify(updated));
+          safeSaveSalesToCache(updated);
           
           // Real-time synced celebrations for all connected users (5th, 10th and 50th orders)
           const isTodayVal = (dateStr: string): boolean => {
@@ -1114,7 +1125,7 @@ export default function App() {
 
           const updated = current.map(s => s.id === sale.id ? sale : s);
           updated.sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
-          localStorage.setItem('oxente_sales', JSON.stringify(updated));
+          safeSaveSalesToCache(updated);
 
           // Real-time synced celebrations for all connected users (5th, 10th and 50th orders)
           const isTodayVal = (dateStr: string): boolean => {
@@ -1165,7 +1176,7 @@ export default function App() {
         if (targetId) {
           setSales((current) => {
             const updated = current.filter(s => s.id !== targetId);
-            localStorage.setItem('oxente_sales', JSON.stringify(updated));
+            safeSaveSalesToCache(updated);
             return updated;
           });
         }
@@ -1334,7 +1345,7 @@ export default function App() {
                 console.log(`[Sync] Venda ${sale.id} sincronizada com sucesso.`);
                 setSales((current) => {
                   const updated = current.map(s => s.id === sale.id ? { ...s, pendingSync: false } : s);
-                  localStorage.setItem('oxente_sales', JSON.stringify(updated));
+                  safeSaveSalesToCache(updated);
                   return updated;
                 });
               }
@@ -1507,7 +1518,7 @@ export default function App() {
 
             const hasChanged = JSON.stringify(curr) !== JSON.stringify(mergedSalesList);
             if (hasChanged) {
-              localStorage.setItem('oxente_sales', JSON.stringify(mergedSalesList));
+              safeSaveSalesToCache(mergedSalesList);
               return mergedSalesList;
             }
             return curr;
@@ -1629,7 +1640,7 @@ export default function App() {
 
   const saveSales = (updatedSales: Sale[]) => {
     setSales(updatedSales);
-    localStorage.setItem('oxente_sales', JSON.stringify(updatedSales));
+    safeSaveSalesToCache(updatedSales);
   };
 
   // State mutation actions with automatic remote DB sync
@@ -1817,7 +1828,7 @@ export default function App() {
         if (success) {
           setSales((current) => {
             const updatedSalesList = current.map(s => s.id === stampedSale.id ? { ...s, pendingSync: false } : s);
-            localStorage.setItem('oxente_sales', JSON.stringify(updatedSalesList));
+            safeSaveSalesToCache(updatedSalesList);
             return updatedSalesList;
           });
         } else {
@@ -1935,7 +1946,7 @@ export default function App() {
       if (success) {
         setSales((current) => {
           const updatedSalesList = current.map(s => s.id === stampedSale.id ? { ...s, pendingSync: false } : s);
-          localStorage.setItem('oxente_sales', JSON.stringify(updatedSalesList));
+          safeSaveSalesToCache(updatedSalesList);
           return updatedSalesList;
         });
 
@@ -2251,7 +2262,7 @@ export default function App() {
       if (success) {
         setSales((current) => {
           const updatedSalesList = current.map(s => s.id === stampedSale.id ? { ...s, pendingSync: false } : s);
-          localStorage.setItem('oxente_sales', JSON.stringify(updatedSalesList));
+          safeSaveSalesToCache(updatedSalesList);
           return updatedSalesList;
         });
 
@@ -2397,7 +2408,7 @@ export default function App() {
     setSales(newSales);
     setStoreInfo(newStoreInfo);
     localStorage.setItem('oxente_products', JSON.stringify(newProducts));
-    localStorage.setItem('oxente_sales', JSON.stringify(newSales));
+    safeSaveSalesToCache(newSales);
     localStorage.setItem('oxente_store_info', JSON.stringify(newStoreInfo));
 
     // Upload whole dataset securely to Supabase

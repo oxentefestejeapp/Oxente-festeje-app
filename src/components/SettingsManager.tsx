@@ -1553,7 +1553,7 @@ export function SettingsManager({
             <FileText className="h-4.5 w-4.5 text-emerald-450 shrink-0" />
             <div>
               <span className="block text-[10px] text-zinc-500 uppercase font-bold tracking-wider">Vendas</span>
-              <span className="text-sm font-bold text-zinc-200">{totalSales} registradas</span>
+              <span className="text-sm font-bold text-zinc-200">{totalSales.toLocaleString('pt-BR')} registradas</span>
             </div>
           </div>
 

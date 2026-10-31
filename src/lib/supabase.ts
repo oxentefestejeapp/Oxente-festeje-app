@@ -87,6 +87,12 @@ ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS adicional BOOLEAN DEFAULT F
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS conferido BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS prazo_urgencia INTEGER;
 ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS linked_product_id TEXT;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS custo_atualizado_em TIMESTAMPTZ;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS preco_atualizado_em TIMESTAMPTZ;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS preco_anterior_custo NUMERIC;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS preco_anterior_venda NUMERIC;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS historico_custos JSONB;
+ALTER TABLE oxente_products ADD COLUMN IF NOT EXISTS historico_precos JSONB;
 
 -- Desabilitar RLS para permitir que o Realtime distribua as atualizações instantaneamente e sem restrições de token para clientes anônimos (anon key)
 ALTER TABLE oxente_products DISABLE ROW LEVEL SECURITY;
@@ -335,7 +341,25 @@ BEGIN
   END IF;
 END $$;
 
--- 7. FORÇAR RECARREGAMENTO DO CACHE DE SCHEMA DO SUPABASE (Diferencial Crucial!)
+-- 7. Tabela de Notificações Push para Celulares (Web Push PWA com app fechado)
+CREATE TABLE IF NOT EXISTS public.oxente_push_subscriptions (
+  id TEXT PRIMARY KEY,
+  user_email TEXT,
+  device_type TEXT DEFAULT 'mobile',
+  subscription JSONB NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.oxente_push_subscriptions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Permitir leitura e gravacao de push subscriptions" ON public.oxente_push_subscriptions;
+CREATE POLICY "Permitir leitura e gravacao de push subscriptions" ON public.oxente_push_subscriptions
+  FOR ALL
+  TO public
+  USING (true)
+  WITH CHECK (true);
+
+-- 8. FORÇAR RECARREGAMENTO DO CACHE DE SCHEMA DO SUPABASE (Diferencial Crucial!)
 NOTIFY pgrst, 'reload schema';
 `;
 };
@@ -373,6 +397,12 @@ const mapProductToDb = (product: Product) => {
     prazo_urgencia: product.prazoUrgencia !== undefined && product.prazoUrgencia !== null ? product.prazoUrgencia : null,
     cores: product.cores ? JSON.stringify(product.cores) : null,
     linked_product_id: product.linkedProductId || null,
+    custo_atualizado_em: product.custoAtualizadoEm || null,
+    preco_atualizado_em: product.precoAtualizadoEm || null,
+    preco_anterior_custo: product.precoAnteriorCusto !== undefined ? product.precoAnteriorCusto : null,
+    preco_anterior_venda: product.precoAnteriorVenda !== undefined ? product.precoAnteriorVenda : null,
+    historico_custos: product.historicoCustos ? JSON.stringify(product.historicoCustos) : null,
+    historico_precos: product.historicoPrecos ? JSON.stringify(product.historicoPrecos) : null,
     updated_at: new Date().toISOString()
   };
 };
@@ -426,6 +456,24 @@ export const mapDbToProduct = (dbItem: any): Product => {
     }
   } catch (e) {}
 
+  let historicoCustos = costHistoryMeta?.historicoCustos;
+  if (dbItem.historico_custos) {
+    try {
+      historicoCustos = typeof dbItem.historico_custos === 'string'
+        ? JSON.parse(dbItem.historico_custos)
+        : dbItem.historico_custos;
+    } catch (e) {}
+  }
+
+  let historicoPrecos = costHistoryMeta?.historicoPrecos;
+  if (dbItem.historico_precos) {
+    try {
+      historicoPrecos = typeof dbItem.historico_precos === 'string'
+        ? JSON.parse(dbItem.historico_precos)
+        : dbItem.historico_precos;
+    } catch (e) {}
+  }
+
   // Se já temos a marcação local recente no dispositivo, nós a priorizamos 
   // caso o retorno do banco ainda esteja se auto-ajustando ou com cache defasado.
   const finalConferido = hasLocalReg ? isLocalConferido : !!dbItem.conferido;
@@ -444,12 +492,12 @@ export const mapDbToProduct = (dbItem: any): Product => {
     prazoUrgencia: dbItem.prazo_urgencia !== null && dbItem.prazo_urgencia !== undefined ? Number(dbItem.prazo_urgencia) : undefined,
     cores: cores || undefined,
     linkedProductId: dbItem.linked_product_id || undefined,
-    custoAtualizadoEm: costHistoryMeta?.custoAtualizadoEm,
-    precoAtualizadoEm: costHistoryMeta?.precoAtualizadoEm,
-    precoAnteriorCusto: costHistoryMeta?.precoAnteriorCusto,
-    precoAnteriorVenda: costHistoryMeta?.precoAnteriorVenda,
-    historicoCustos: costHistoryMeta?.historicoCustos,
-    historicoPrecos: costHistoryMeta?.historicoPrecos
+    custoAtualizadoEm: dbItem.custo_atualizado_em || costHistoryMeta?.custoAtualizadoEm,
+    precoAtualizadoEm: dbItem.preco_atualizado_em || costHistoryMeta?.precoAtualizadoEm,
+    precoAnteriorCusto: dbItem.preco_anterior_custo !== null && dbItem.preco_anterior_custo !== undefined ? Number(dbItem.preco_anterior_custo) : costHistoryMeta?.precoAnteriorCusto,
+    precoAnteriorVenda: dbItem.preco_anterior_venda !== null && dbItem.preco_anterior_venda !== undefined ? Number(dbItem.preco_anterior_venda) : costHistoryMeta?.precoAnteriorVenda,
+    historicoCustos,
+    historicoPrecos
   };
 };
 
@@ -660,14 +708,42 @@ const realDbSupabase = {
   // PRODUCTS
   async fetchProducts(): Promise<Product[] | null> {
     try {
-      const { data, error } = await supabase.from('oxente_products').select('*').order('nome', { ascending: true });
-      if (error) {
-        lastSupabaseError = error;
-        console.warn('Erro ao carregar produtos do Supabase:', error.message);
-        return null;
+      const PAGE_SIZE = 1000;
+      let allRows: any[] = [];
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const to = from + PAGE_SIZE - 1;
+        const { data, error } = await supabase
+          .from('oxente_products')
+          .select('*')
+          .order('nome', { ascending: true })
+          .range(from, to);
+
+        if (error) {
+          lastSupabaseError = error;
+          console.warn('Erro ao carregar produtos do Supabase:', error.message);
+          if (allRows.length > 0) break;
+          return null;
+        }
+
+        if (!data || data.length === 0) {
+          hasMore = false;
+        } else {
+          allRows.push(...data);
+          if (data.length < PAGE_SIZE) {
+            hasMore = false;
+          } else {
+            from += PAGE_SIZE;
+          }
+        }
+
+        if (allRows.length >= 50000) break;
       }
+
       lastSupabaseError = null;
-      return data.map(mapDbToProduct);
+      return allRows.map(mapDbToProduct);
     } catch (e: any) {
       lastSupabaseError = { message: e.message || String(e) };
       console.warn('Erro geral de conexão com Supabase:', e);
@@ -725,7 +801,19 @@ const realDbSupabase = {
           } else {
             // Fallback: if we can't parse but it's a column error, try to delete potentially missing columns one by one
             console.warn('Dynamic Save Healing: Column error received but column name not parsed automatically. Trying fallback removal.');
-            const nonEssential = ['precos_progressivos', 'preco_custo', 'estoque_infinito', 'imagem_base64', 'linked_product_id'];
+            const nonEssential = [
+              'precos_progressivos', 
+              'preco_custo', 
+              'estoque_infinito', 
+              'imagem_base64', 
+              'linked_product_id',
+              'custo_atualizado_em',
+              'preco_atualizado_em',
+              'preco_anterior_custo',
+              'preco_anterior_venda',
+              'historico_custos',
+              'historico_precos'
+            ];
             let removedAny = false;
             for (const col of nonEssential) {
               if (col in currentPayload) {
@@ -841,14 +929,46 @@ const realDbSupabase = {
   // SALES / ORDERS
   async fetchSales(): Promise<Sale[] | null> {
     try {
-      const { data, error } = await supabase.from('oxente_sales').select('*').order('data', { ascending: false });
-      if (error) {
-        lastSupabaseError = error;
-        console.warn('Erro ao carregar vendas do Supabase:', error.message);
-        return null;
+      const PAGE_SIZE = 1000;
+      let allRows: any[] = [];
+      let from = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        const to = from + PAGE_SIZE - 1;
+        const { data, error } = await supabase
+          .from('oxente_sales')
+          .select('*')
+          .order('data', { ascending: false })
+          .range(from, to);
+
+        if (error) {
+          lastSupabaseError = error;
+          console.warn('Erro ao carregar vendas do Supabase:', error.message);
+          if (allRows.length > 0) break;
+          return null;
+        }
+
+        if (!data || data.length === 0) {
+          hasMore = false;
+        } else {
+          allRows.push(...data);
+          if (data.length < PAGE_SIZE) {
+            hasMore = false;
+          } else {
+            from += PAGE_SIZE;
+          }
+        }
+
+        // Limite de segurança de 250.000 pedidos
+        if (allRows.length >= 250000) {
+          console.warn('Limite de segurança de 250.000 vendas atingido ao sincronizar vendas.');
+          break;
+        }
       }
+
       lastSupabaseError = null;
-      return data.map(mapDbToSale);
+      return allRows.map(mapDbToSale);
     } catch (e: any) {
       lastSupabaseError = { message: e.message || String(e) };
       console.warn('Erro geral de conexão de vendas com Supabase:', e);

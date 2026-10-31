@@ -97,17 +97,30 @@ app.post('/api/send-order-push', async (req, res) => {
       await new Promise(r => setTimeout(r, delaySeconds * 1000));
     }
 
-    // Fetch all active subscriptions from oxente_push_subscriptions in Supabase
-    const { data: subscriptions, error: subError } = await supabase
-      .from('oxente_push_subscriptions')
-      .select('*');
+    // Fetch all active subscriptions from oxente_push_subscriptions in Supabase (with pagination)
+    let subscriptions: any[] = [];
+    let subFrom = 0;
+    const subPageSize = 1000;
+    while (true) {
+      const { data: pageSubs, error: subError } = await supabase
+        .from('oxente_push_subscriptions')
+        .select('*')
+        .range(subFrom, subFrom + subPageSize - 1);
 
-    if (subError) {
-      return res.status(500).json({ 
-        success: false, 
-        error: 'Erro ao buscar celulares cadastrados no Supabase', 
-        details: subError 
-      });
+      if (subError) {
+        if (subscriptions.length > 0) break;
+        return res.status(500).json({ 
+          success: false, 
+          error: 'Erro ao buscar celulares cadastrados no Supabase', 
+          details: subError 
+        });
+      }
+
+      if (!pageSubs || pageSubs.length === 0) break;
+      subscriptions.push(...pageSubs);
+      if (pageSubs.length < subPageSize) break;
+      subFrom += subPageSize;
+      if (subscriptions.length >= 20000) break;
     }
 
     if (!subscriptions || subscriptions.length === 0) {
@@ -136,7 +149,7 @@ app.post('/api/send-order-push', async (req, res) => {
       body: notificationBody,
       orderId: orderId,
       badgeCount: 1,
-      tag: orderId ? `oxente-${actionType}-${orderId}` : `oxente-${Date.now()}`,
+      tag: `oxente-${actionType}-${orderId}-${Date.now()}`,
       url: targetUrl,
       timestamp: Date.now()
     });
