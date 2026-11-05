@@ -49,7 +49,7 @@ import {
   ComposedChart,
   Line
 } from 'recharts';
-import { Sale, StoreInfo, Product, getProductUnitCost, calculateSaleItemUnitCost, isAvulsoItem, isAvulsoSale, findMatchingProduct, getSaleCostInfo } from '../types';
+import { Sale, StoreInfo, Product, getProductUnitCost, calculateSaleItemUnitCost, isAvulsoItem, isAvulsoSale, findMatchingProduct, getSaleCostInfo, getSaleAdjustments } from '../types';
 import { Receipt } from './Receipt';
 import { OptimizedImage } from '../utils/imageOptimizer';
 
@@ -511,7 +511,11 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
           ? (sale.arteFinalizadaEm || sale.puxadoEm || sale.data)
           : sale.data;
 
-        if (!isDateInFilter(targetDateStr, dateFilter, startDateStr, endDateStr)) {
+        const baseMatches = isDateInFilter(targetDateStr, dateFilter, startDateStr, endDateStr);
+        const adjustments = getSaleAdjustments(sale);
+        const hasMatchingAdj = adjustments.some(adj => isDateInFilter(adj.data, dateFilter, startDateStr, endDateStr));
+
+        if (!baseMatches && !hasMatchingAdj) {
           return false;
         }
       } catch (e) {
@@ -583,13 +587,33 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
     let artworkFinishedCount = 0;
     
     auditLogs.forEach(sale => {
-      totalValue += sale.total;
       if (sale.foiAlterado) editedCount++;
       if (sale.statusArte === 'Arte Finalizada') artworkFinishedCount++;
 
-      // Cost calculation with current product costs (preserving avulsos)
       const costInfo = getSaleCostInfo(sale, products);
-      totalEstimatedCost += costInfo.totalCusto;
+      const adjustments = getSaleAdjustments(sale);
+      const sumAdjValor = adjustments.reduce((sum, a) => sum + (a.valorAdicional || 0), 0);
+      const sumAdjCusto = adjustments.reduce((sum, a) => sum + (a.custoAdicional || 0), 0);
+
+      const baseSaleValue = Math.max(0, sale.total - sumAdjValor);
+      const baseSaleCost = Math.max(0, costInfo.totalCusto - sumAdjCusto);
+
+      const targetDateStr = (specialFilter === 'finished_art' && sale.statusArte === 'Arte Finalizada')
+        ? (sale.arteFinalizadaEm || sale.puxadoEm || sale.data)
+        : sale.data;
+
+      const baseMatches = isDateInFilter(targetDateStr, dateFilter, startDateStr, endDateStr);
+      if (baseMatches) {
+        totalValue += baseSaleValue;
+        totalEstimatedCost += baseSaleCost;
+      }
+
+      adjustments.forEach(adj => {
+        if (isDateInFilter(adj.data, dateFilter, startDateStr, endDateStr)) {
+          totalValue += (adj.valorAdicional || 0);
+          totalEstimatedCost += (adj.custoAdicional || 0);
+        }
+      });
     });
 
     const totalNetProfit = Math.max(0, totalValue - totalEstimatedCost);
@@ -601,7 +625,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
       editedCount,
       artworkFinishedCount
     };
-  }, [auditLogs, products]);
+  }, [auditLogs, products, dateFilter, startDateStr, endDateStr, specialFilter]);
 
   // Memoized Chart Data
   const chartsData = useMemo(() => {
@@ -617,19 +641,37 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
     auditLogs.forEach(sale => {
       // Cost calculation
       const costInfo = getSaleCostInfo(sale, products);
-      const saleCost = costInfo.totalCusto;
-      const saleProfit = Math.max(0, sale.total - saleCost);
+      const totalSaleProfit = Math.max(0, sale.total - costInfo.totalCusto);
+      const adjustments = getSaleAdjustments(sale);
+      const sumAdjValor = adjustments.reduce((sum, a) => sum + (a.valorAdicional || 0), 0);
+      const sumAdjProfit = adjustments.reduce((sum, a) => sum + (a.lucroAdicional || 0), 0);
 
-      // Income & Profit over time
+      const baseSaleValue = Math.max(0, sale.total - sumAdjValor);
+      const baseSaleProfit = Math.max(0, totalSaleProfit - sumAdjProfit);
+
+      // Income & Profit over time - Data original da venda
       try {
         const dateObj = new Date(sale.data);
         const dayKey = dateObj.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
         if (!dailyStats[dayKey]) {
           dailyStats[dayKey] = { faturamento: 0, lucro: 0 };
         }
-        dailyStats[dayKey].faturamento += sale.total;
-        dailyStats[dayKey].lucro += saleProfit;
+        dailyStats[dayKey].faturamento += baseSaleValue;
+        dailyStats[dayKey].lucro += baseSaleProfit;
       } catch {}
+
+      // Acréscimos posteriores caem no dia em que foram adicionados
+      adjustments.forEach(adj => {
+        try {
+          const adjDate = new Date(adj.data);
+          const adjDayKey = adjDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+          if (!dailyStats[adjDayKey]) {
+            dailyStats[adjDayKey] = { faturamento: 0, lucro: 0 };
+          }
+          dailyStats[adjDayKey].faturamento += (adj.valorAdicional || 0);
+          dailyStats[adjDayKey].lucro += (adj.lucroAdicional || 0);
+        } catch {}
+      });
 
       // Payments
       const method = sale.formaPagamento || 'Pix';

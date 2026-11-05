@@ -183,6 +183,7 @@ ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS referral_sended BOOLEAN DEFAUL
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS bloqueado_lembrete BOOLEAN DEFAULT FALSE;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS data_aviso_atraso TEXT;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS pedido_vinculo_numero TEXT;
+ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS ajustes_lucro JSONB;
 ALTER TABLE oxente_sales ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Desabilitar RLS para garantir que as atualizações de pedidos sejam propagadas instantaneamente entre todos os computadores e celulares
@@ -504,7 +505,7 @@ export const mapDbToProduct = (dbItem: any): Product => {
 const mapSaleToDb = (sale: Sale) => {
   const doc = sale.documentoCliente || sale.cpfCnpj || null;
   let origVals: any = sale.valoresOriginais;
-  if (doc || sale.custoUn !== undefined) {
+  if (doc || sale.custoUn !== undefined || (sale.ajustesLucro && sale.ajustesLucro.length > 0)) {
     origVals = origVals ? { ...origVals } : {};
     if (doc) {
       origVals.documentoCliente = doc;
@@ -512,6 +513,9 @@ const mapSaleToDb = (sale: Sale) => {
     }
     if (sale.custoUn !== undefined && origVals.custoUn === undefined) {
       origVals.custoUn = sale.custoUn;
+    }
+    if (sale.ajustesLucro && sale.ajustesLucro.length > 0) {
+      origVals.ajustesLucro = sale.ajustesLucro;
     }
   }
 
@@ -561,6 +565,7 @@ const mapSaleToDb = (sale: Sale) => {
     bloqueado_lembrete: sale.bloqueadoLembrete || false,
     data_aviso_atraso: sale.dataAvisoAtraso || null,
     pedido_vinculo_numero: sale.pedidoVinculoNumero || null,
+    ajustes_lucro: sale.ajustesLucro ? JSON.stringify(sale.ajustesLucro) : null,
     updated_at: sale.updatedAt || new Date().toISOString()
   };
 };
@@ -580,6 +585,16 @@ export const mapDbToSale = (dbItem: any): Sale => {
   let savedCustoUn = dbItem.custo_un !== undefined && dbItem.custo_un !== null ? Number(dbItem.custo_un) : undefined;
   if (savedCustoUn === undefined && parsedOrigVals && parsedOrigVals.custoUn !== undefined && parsedOrigVals.custoUn !== null && !isNaN(parsedOrigVals.custoUn)) {
     savedCustoUn = Number(parsedOrigVals.custoUn);
+  }
+
+  let parsedAjustes: any = undefined;
+  if (dbItem.ajustes_lucro) {
+    try {
+      parsedAjustes = typeof dbItem.ajustes_lucro === 'string' ? JSON.parse(dbItem.ajustes_lucro) : dbItem.ajustes_lucro;
+    } catch (e) {}
+  }
+  if (!parsedAjustes && parsedOrigVals && parsedOrigVals.ajustesLucro) {
+    parsedAjustes = parsedOrigVals.ajustesLucro;
   }
 
   return {
@@ -630,6 +645,7 @@ export const mapDbToSale = (dbItem: any): Sale => {
   bloqueadoLembrete: dbItem.bloqueado_lembrete || false,
   dataAvisoAtraso: dbItem.data_aviso_atraso || undefined,
   pedidoVinculoNumero: dbItem.pedido_vinculo_numero || undefined,
+  ajustesLucro: parsedAjustes,
   updatedAt: dbItem.updated_at || undefined
   };
 };

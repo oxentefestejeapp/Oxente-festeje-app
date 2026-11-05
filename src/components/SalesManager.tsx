@@ -7,7 +7,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check, CheckSquare, TrendingUp, TrendingDown, Sparkles, Activity, Package } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost, calculateSaleItemUnitCost, findMatchingProduct, isAvulsoSale, isAvulsoItem, getSaleAvulsoInfo, getSaleCostInfo, formatCpfCnpj } from '../types';
+import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost, calculateSaleItemUnitCost, findMatchingProduct, isAvulsoSale, isAvulsoItem, getSaleAvulsoInfo, getSaleCostInfo, formatCpfCnpj, SaleProfitAdjustment, getSaleAdjustments, getSaleAdjustmentsForDate, hasSaleAdditionOnDate, findAddedItemsSummary, getBrazilDayString } from '../types';
 import { Receipt } from './Receipt';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
@@ -514,7 +514,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     if (filterOnlyAvulso && !isAvulsoSale(sale, products)) {
       return false;
     }
-    // 1. Period Date filtering
+    // 1. Period Date filtering (inclui vendas originadas no período OU vendas com acréscimos/produtos adicionados no período)
     try {
       const saleDate = new Date(sale.data);
       const now = new Date();
@@ -527,33 +527,48 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
           day: '2-digit'
         });
       };
-      
-      if (dateFilter === 'today') {
-        const isToday = getBrazilDateString(saleDate) === getBrazilDateString(now);
-        if (!isToday) return false;
-      } else if (dateFilter === 'yesterday') {
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        const isYesterday = getBrazilDateString(saleDate) === getBrazilDateString(yesterday);
-        if (!isYesterday) return false;
-      } else if (dateFilter === '7days') {
-        const diffTime = Math.abs(now.getTime() - saleDate.getTime());
-        const diffDays = diffTime / (1000 * 60 * 60 * 24);
-        if (diffDays > 7) return false;
-      } else if (dateFilter === 'this_month') {
-        const diffTime = now.getTime() - saleDate.getTime();
-        const diffDays = diffTime / (1000 * 60 * 60 * 24);
-        if (diffDays > 30 || diffDays < -0.5) return false;
-      } else if (dateFilter === 'custom') {
-        if (startDateStr) {
-          const start = new Date(startDateStr + 'T00:00:00');
-          if (saleDate < start) return false;
+
+      const checkMatchesFilter = (targetD: Date) => {
+        if (dateFilter === 'all') return true;
+        if (dateFilter === 'today') {
+          return getBrazilDateString(targetD) === getBrazilDateString(now);
+        } else if (dateFilter === 'yesterday') {
+          const yesterday = new Date();
+          yesterday.setDate(yesterday.getDate() - 1);
+          return getBrazilDateString(targetD) === getBrazilDateString(yesterday);
+        } else if (dateFilter === '7days') {
+          const diffTime = Math.abs(now.getTime() - targetD.getTime());
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          return diffDays <= 7;
+        } else if (dateFilter === 'this_month') {
+          const diffTime = now.getTime() - targetD.getTime();
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          return diffDays <= 30 && diffDays >= -0.5;
+        } else if (dateFilter === 'custom') {
+          if (startDateStr) {
+            const start = new Date(startDateStr + 'T00:00:00');
+            if (targetD < start) return false;
+          }
+          if (endDateStr) {
+            const end = new Date(endDateStr + 'T23:59:59');
+            if (targetD > end) return false;
+          }
+          return true;
         }
-        if (endDateStr) {
-          const end = new Date(endDateStr + 'T23:59:59');
-          if (saleDate > end) return false;
+        return true;
+      };
+
+      const baseMatches = checkMatchesFilter(saleDate);
+      const adjustments = getSaleAdjustments(sale);
+      const hasMatchingAdj = adjustments.some(adj => {
+        try {
+          return checkMatchesFilter(new Date(adj.data));
+        } catch {
+          return false;
         }
-      }
+      });
+
+      if (!baseMatches && !hasMatchingAdj) return false;
     } catch (e) {
       console.error(e);
     }
@@ -877,19 +892,40 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     sales.forEach(sale => {
       if (sale.status === 'Orçamento') return;
       try {
+        const costInfo = getSaleCostInfo(sale, products);
+        const saleCost = costInfo.totalCusto;
+        const totalSaleProfit = Math.max(0, sale.total - saleCost);
+
+        const adjustments = getSaleAdjustments(sale);
+        const sumAdjValor = adjustments.reduce((sum, a) => sum + (a.valorAdicional || 0), 0);
+        const sumAdjProfit = adjustments.reduce((sum, a) => sum + (a.lucroAdicional || 0), 0);
+
+        // O valor base da venda (sem acréscimos posteriores) pertence à data original da venda
+        const baseSaleValue = Math.max(0, sale.total - sumAdjValor);
+        const baseSaleProfit = Math.max(0, totalSaleProfit - sumAdjProfit);
+
         const saleDate = new Date(sale.data);
         if (!isNaN(saleDate.getTime())) {
           const dateStr = saleDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' });
           if (dataMap[dateStr] !== undefined) {
-             dataMap[dateStr].value += sale.total;
-
-             // Calculate cost and profit for this sale
-             const costInfo = getSaleCostInfo(sale, products);
-             const saleCost = costInfo.totalCusto;
-             const saleProfit = Math.max(0, sale.total - saleCost);
-             dataMap[dateStr].profit += saleProfit;
+             dataMap[dateStr].value += baseSaleValue;
+             dataMap[dateStr].profit += baseSaleProfit;
           }
         }
+
+        // Os acréscimos realizados entram no lucro e faturamento exatamente no dia em que foram adicionados!
+        adjustments.forEach(adj => {
+          try {
+            const adjDate = new Date(adj.data);
+            if (!isNaN(adjDate.getTime())) {
+              const adjDateStr = adjDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' });
+              if (dataMap[adjDateStr] !== undefined) {
+                dataMap[adjDateStr].value += (adj.valorAdicional || 0);
+                dataMap[adjDateStr].profit += (adj.lucroAdicional || 0);
+              }
+            }
+          } catch (e) {}
+        });
       } catch (err) {
         console.error(err);
       }
@@ -910,6 +946,12 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     const todayStr = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' });
     const match = chartData.find(d => d.date === todayStr);
     return match ? match.value : 0;
+  }, [chartData]);
+
+  const todayProfit = useMemo(() => {
+    const todayStr = new Date().toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit' });
+    const match = chartData.find(d => d.date === todayStr);
+    return match ? match.profit : 0;
   }, [chartData]);
 
   const averageDailyRevenue = useMemo(() => {
@@ -1520,12 +1562,50 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
     const finalEditDoc = editDocumentoCliente.trim() ? editDocumentoCliente.trim() : undefined;
 
+    // 💰 Rastreamento de acréscimo de produtos e atribuição de lucro ao dia da alteração
+    const oldCostInfo = getSaleCostInfo(editingSale, products);
+    const oldTotal = editingSale.total || 0;
+    const oldLucro = oldCostInfo.lucro;
+    const oldCusto = oldCostInfo.totalCusto;
+
+    const tempUpdatedSale: Sale = {
+      ...editingSale,
+      total: editTotal,
+      itens: finalItensToSave
+    };
+    const newCostInfo = getSaleCostInfo(tempUpdatedSale, products);
+    const newTotal = editTotal;
+    const newCusto = newCostInfo.totalCusto;
+    const newLucro = newCostInfo.lucro;
+
+    const diffTotal = Math.max(0, Number((newTotal - oldTotal).toFixed(2)));
+    const diffCusto = Math.max(0, Number((newCusto - oldCusto).toFixed(2)));
+    const diffLucro = Math.max(0, Number((newLucro - oldLucro).toFixed(2)));
+
+    const currentAjustes: SaleProfitAdjustment[] = [...getSaleAdjustments(editingSale)];
+
+    if (!isBudget && (diffTotal > 0 || diffLucro > 0)) {
+      const addedDesc = findAddedItemsSummary(editingSale.itens || [], finalItensToSave);
+      const newAdjustment: SaleProfitAdjustment = {
+        id: `adj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        data: new Date().toISOString(),
+        valorAdicional: diffTotal,
+        custoAdicional: diffCusto,
+        lucroAdicional: diffLucro,
+        descricao: addedDesc,
+        editadoPorEmail: currentUserEmail
+      };
+      currentAjustes.push(newAdjustment);
+      originalValues.ajustesLucro = currentAjustes;
+    }
+
     const hasStructuralChanges = 
       (editingSale.cliente !== (editCliente.trim() || 'Consumidor')) ||
       (editingSale.telefoneCliente !== (editTelefone.trim() ? editTelefone.trim() : undefined)) ||
       ((editingSale.documentoCliente || editingSale.cpfCnpj || '') !== (editDocumentoCliente.trim() || '')) ||
       (editingSale.total !== editTotal) ||
       (editingSale.valorPago !== finalValorPago) ||
+      (diffTotal > 0 || diffLucro > 0) ||
       (JSON.stringify(editingSale.itens || []) !== JSON.stringify(finalItensToSave));
 
     const updatedSale: Sale = {
@@ -1555,6 +1635,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       foiAlterado: hasStructuralChanges ? true : (editingSale.foiAlterado || false),
       editadoPorEmail: hasStructuralChanges ? currentUserEmail : (editingSale.editadoPorEmail || undefined),
       editadoEm: hasStructuralChanges ? new Date().toISOString() : (editingSale.editadoEm || undefined),
+      ajustesLucro: currentAjustes.length > 0 ? currentAjustes : undefined,
       valoresOriginais: originalValues
     };
 
@@ -1672,81 +1753,133 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
     }
   };
 
+  // Helper de checagem de data do filtro
+  const isDateWithinFilter = (targetD: Date) => {
+    try {
+      const now = new Date();
+      const getBrazilDateString = (d: Date) => d.toLocaleDateString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
+      });
+
+      if (dateFilter === 'all') return true;
+      if (dateFilter === 'today') {
+        return getBrazilDateString(targetD) === getBrazilDateString(now);
+      } else if (dateFilter === 'yesterday') {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        return getBrazilDateString(targetD) === getBrazilDateString(yesterday);
+      } else if (dateFilter === '7days') {
+        const diffTime = Math.abs(now.getTime() - targetD.getTime());
+        const diffDays = diffTime / (1000 * 60 * 60 * 24);
+        return diffDays <= 7;
+      } else if (dateFilter === 'this_month') {
+        const diffTime = now.getTime() - targetD.getTime();
+        const diffDays = diffTime / (1000 * 60 * 60 * 24);
+        return diffDays <= 30 && diffDays >= -0.5;
+      } else if (dateFilter === 'custom') {
+        if (startDateStr) {
+          const start = new Date(startDateStr + 'T00:00:00');
+          if (targetD < start) return false;
+        }
+        if (endDateStr) {
+          const end = new Date(endDateStr + 'T23:59:59');
+          if (targetD > end) return false;
+        }
+        return true;
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   // Get sales filtered ONLY by period/date (no search term and no 15-day-old limit)
   const metricsSales = useMemo(() => {
     return sales.filter((sale) => {
       if (sale.status === 'Orçamento') return false;
-      
       try {
         const saleDate = new Date(sale.data);
-        const now = new Date();
-        
-        const getBrazilDateString = (date: Date) => {
-          return date.toLocaleDateString('pt-BR', {
-            timeZone: 'America/Sao_Paulo',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit'
-          });
-        };
-        
-        if (dateFilter === 'today') {
-          return getBrazilDateString(saleDate) === getBrazilDateString(now);
-        } else if (dateFilter === 'yesterday') {
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          return getBrazilDateString(saleDate) === getBrazilDateString(yesterday);
-        } else if (dateFilter === '7days') {
-          const diffTime = Math.abs(now.getTime() - saleDate.getTime());
-          const diffDays = diffTime / (1000 * 60 * 60 * 24);
-          return diffDays <= 7;
-        } else if (dateFilter === 'this_month') {
-          const diffTime = now.getTime() - saleDate.getTime();
-          const diffDays = diffTime / (1000 * 60 * 60 * 24);
-          return diffDays <= 30 && diffDays >= -0.5;
-        } else if (dateFilter === 'custom') {
-          if (startDateStr) {
-            const start = new Date(startDateStr + 'T00:00:00');
-            if (saleDate < start) return false;
+        const baseMatches = isDateWithinFilter(saleDate);
+        const adjustments = getSaleAdjustments(sale);
+        const hasMatchingAdj = adjustments.some(adj => {
+          try {
+            return isDateWithinFilter(new Date(adj.data));
+          } catch {
+            return false;
           }
-          if (endDateStr) {
-            const end = new Date(endDateStr + 'T23:59:59');
-            if (saleDate > end) return false;
-          }
-          return true;
-        }
+        });
+        return baseMatches || hasMatchingAdj;
       } catch (e) {
-        console.error(e);
+        return true;
       }
-      return true; // Default for 'all'
     });
   }, [sales, dateFilter, startDateStr, endDateStr]);
 
   const getTotalsAndProfit = useMemo(() => {
     let totalRevenue = 0;
     let totalEstimatedCost = 0;
+    let totalNetProfit = 0;
     let salesCount = 0;
 
     metricsSales.forEach(sale => {
       if (sale.status === 'Orçamento') return;
-      totalRevenue += sale.total;
-      salesCount += 1;
-      
+
       const costInfo = getSaleCostInfo(sale, products);
-      totalEstimatedCost += costInfo.totalCusto;
+      const totalSaleProfit = Math.max(0, sale.total - costInfo.totalCusto);
+      const adjustments = getSaleAdjustments(sale);
+      const sumAdjValor = adjustments.reduce((sum, a) => sum + (a.valorAdicional || 0), 0);
+      const sumAdjProfit = adjustments.reduce((sum, a) => sum + (a.lucroAdicional || 0), 0);
+      const sumAdjCusto = adjustments.reduce((sum, a) => sum + (a.custoAdicional || 0), 0);
+
+      const baseSaleValue = Math.max(0, sale.total - sumAdjValor);
+      const baseSaleProfit = Math.max(0, totalSaleProfit - sumAdjProfit);
+      const baseSaleCost = Math.max(0, costInfo.totalCusto - sumAdjCusto);
+
+      const saleDate = new Date(sale.data);
+      const baseMatches = isDateWithinFilter(saleDate);
+
+      let saleContributedRevenue = 0;
+      let saleContributedCost = 0;
+      let saleContributedProfit = 0;
+
+      if (baseMatches) {
+        saleContributedRevenue += baseSaleValue;
+        saleContributedCost += baseSaleCost;
+        saleContributedProfit += baseSaleProfit;
+      }
+
+      adjustments.forEach(adj => {
+        try {
+          const adjDate = new Date(adj.data);
+          if (isDateWithinFilter(adjDate)) {
+            saleContributedRevenue += (adj.valorAdicional || 0);
+            saleContributedCost += (adj.custoAdicional || 0);
+            saleContributedProfit += (adj.lucroAdicional || 0);
+          }
+        } catch {}
+      });
+
+      if (saleContributedRevenue > 0 || saleContributedProfit > 0 || baseMatches) {
+        totalRevenue += saleContributedRevenue;
+        totalEstimatedCost += saleContributedCost;
+        totalNetProfit += saleContributedProfit;
+        salesCount += 1;
+      }
     });
 
-    const totalNetProfit = Math.max(0, totalRevenue - totalEstimatedCost);
     const marginPercent = totalRevenue > 0 ? (totalNetProfit / totalRevenue) * 100 : 0;
 
     return {
-      revenue: totalRevenue,
-      cost: totalEstimatedCost,
-      profit: totalNetProfit,
-      margin: marginPercent,
+      revenue: Number(totalRevenue.toFixed(2)),
+      cost: Number(totalEstimatedCost.toFixed(2)),
+      profit: Number(totalNetProfit.toFixed(2)),
+      margin: Number(marginPercent.toFixed(1)),
       salesCount: salesCount
     };
-  }, [metricsSales, products]);
+  }, [metricsSales, products, dateFilter, startDateStr, endDateStr]);
 
   const closedOrdersCount = useMemo(() => {
     if (!metricStartDate) return 0;
@@ -1970,15 +2103,23 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
 
             {/* Premium Bento Grid KPIs */}
             <div className="md:col-span-4 space-y-4 self-stretch flex flex-col justify-between">
-              {/* Today's revenue */}
+              {/* Today's revenue & Today's profit */}
               <div className="group border border-emerald-500/15 hover:border-emerald-500/25 bg-emerald-500/[0.01] hover:bg-emerald-500/[0.03] rounded-xl p-4 transition-all duration-300">
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-[10px] text-zinc-500 uppercase font-black tracking-wider block font-mono">Faturamento de Hoje</span>
                   <span className="text-[9px] font-extrabold bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded tracking-wide">AO VIVO</span>
                 </div>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-2xl font-black text-emerald-400 font-sans tracking-tight">R$ {todayRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                  <span className="text-[10px] text-zinc-500 font-bold">líquido</span>
+                <div className="flex items-baseline justify-between gap-2">
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-2xl font-black text-emerald-400 font-sans tracking-tight">R$ {todayRevenue.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    <span className="text-[10px] text-zinc-500 font-bold">faturado</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[9px] uppercase font-bold text-zinc-400 block font-mono">Lucro de Hoje</span>
+                    <span className="text-base font-black text-emerald-300 font-sans" title="Lucro total gerado hoje, incluindo vendas e acréscimos adicionados hoje a pedidos anteriores">
+                      R$ {todayProfit.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -3797,6 +3938,27 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                                 <span className="font-bold">R$ {costInfo.lucro.toFixed(2)}</span>
                               </div>
                             )}
+
+                            {/* Badge de Acréscimo adicionado hoje ao lucro do dia */}
+                            {(() => {
+                              const ajustes = getSaleAdjustments(sale);
+                              if (ajustes.length === 0) return null;
+                              const now = new Date();
+                              const todayAdjustments = getSaleAdjustmentsForDate(sale, now);
+                              if (todayAdjustments.length > 0) {
+                                const todayLucroInc = todayAdjustments.reduce((sum, a) => sum + (a.lucroAdicional || 0), 0);
+                                return (
+                                  <div 
+                                    className="mt-1 text-[8.5px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 inline-flex items-center gap-1 shadow-sm"
+                                    title={todayAdjustments.map(a => `${a.descricao || 'Acréscimo'}: +R$ ${a.valorAdicional.toFixed(2)} (+R$ ${a.lucroAdicional.toFixed(2)} no lucro)`).join('\n')}
+                                  >
+                                    <Sparkles className="h-2.5 w-2.5 text-emerald-400 shrink-0" />
+                                    <span>+R$ {todayLucroInc.toFixed(2)} lucro hoje</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                           </td>
                           <td className="py-3 text-right pr-3">
                             <div className="flex flex-col-reverse sm:flex-row gap-1.5 items-end sm:items-center justify-end">

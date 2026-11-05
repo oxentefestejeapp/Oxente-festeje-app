@@ -36,8 +36,7 @@ import {
   X
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sale, Product, Expense, CashClosing, ExpenseCategory } from '../types';
-import { getSaleCostInfo } from '../types';
+import { Sale, Product, Expense, CashClosing, ExpenseCategory, getSaleCostInfo, getSaleAdjustments } from '../types';
 import { playAppSound } from '../lib/audio';
 
 interface FinancialDREManagerProps {
@@ -196,8 +195,13 @@ export const FinancialDREManager: React.FC<FinancialDREManagerProps> = ({
     return sales.filter(s => {
       if (s.status === 'Orçamento') return false;
       const saleDate = (s.data || '').split('T')[0];
-      if (!saleDate) return false;
-      return saleDate >= dateRange.startStr && saleDate <= dateRange.endStr;
+      const baseMatches = saleDate && saleDate >= dateRange.startStr && saleDate <= dateRange.endStr;
+      const adjustments = getSaleAdjustments(s);
+      const hasMatchingAdj = adjustments.some(adj => {
+        const adjDate = (adj.data || '').split('T')[0];
+        return adjDate && adjDate >= dateRange.startStr && adjDate <= dateRange.endStr;
+      });
+      return baseMatches || hasMatchingAdj;
     });
   }, [sales, dateRange]);
 
@@ -207,21 +211,41 @@ export const FinancialDREManager: React.FC<FinancialDREManagerProps> = ({
     let cmv = 0;
 
     periodSales.forEach(sale => {
-      receita += (sale.total || 0);
       const costInfo = getSaleCostInfo(sale, products);
-      cmv += (costInfo.totalCusto || 0);
+      const adjustments = getSaleAdjustments(sale);
+      const sumAdjValor = adjustments.reduce((sum, a) => sum + (a.valorAdicional || 0), 0);
+      const sumAdjCusto = adjustments.reduce((sum, a) => sum + (a.custoAdicional || 0), 0);
+
+      const baseSaleValue = Math.max(0, sale.total - sumAdjValor);
+      const baseSaleCost = Math.max(0, costInfo.totalCusto - sumAdjCusto);
+
+      const saleDate = (sale.data || '').split('T')[0];
+      const baseMatches = saleDate && saleDate >= dateRange.startStr && saleDate <= dateRange.endStr;
+
+      if (baseMatches) {
+        receita += baseSaleValue;
+        cmv += baseSaleCost;
+      }
+
+      adjustments.forEach(adj => {
+        const adjDate = (adj.data || '').split('T')[0];
+        if (adjDate && adjDate >= dateRange.startStr && adjDate <= dateRange.endStr) {
+          receita += (adj.valorAdicional || 0);
+          cmv += (adj.custoAdicional || 0);
+        }
+      });
     });
 
     const lucroBruto = receita - cmv;
     const margem = receita > 0 ? (lucroBruto / receita) * 100 : 0;
 
     return {
-      totalReceitaBruta: receita,
-      totalCMV: cmv,
-      totalLucroBruto: lucroBruto,
-      margemBrutaPercent: margem
+      totalReceitaBruta: Number(receita.toFixed(2)),
+      totalCMV: Number(cmv.toFixed(2)),
+      totalLucroBruto: Number(lucroBruto.toFixed(2)),
+      margemBrutaPercent: Number(margem.toFixed(1))
     };
-  }, [periodSales, products]);
+  }, [periodSales, products, dateRange]);
 
   // Filter expenses within the selected period
   const periodExpenses = useMemo(() => {

@@ -31,7 +31,7 @@ import {
   Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sale, StoreInfo, Product, SaleItem, formatCpfCnpj, calculateSaleItemUnitCost } from '../types';
+import { Sale, StoreInfo, Product, SaleItem, formatCpfCnpj, calculateSaleItemUnitCost, SaleProfitAdjustment, getSaleCostInfo, findAddedItemsSummary, getSaleAdjustments } from '../types';
 import { Receipt } from './Receipt';
 import { CelebrationOverlay, UrgentArtOrderInfo } from './CelebrationOverlay';
 import { playAppSound } from '../lib/audio';
@@ -178,6 +178,44 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
       };
     });
 
+    // 💰 Rastreamento de acréscimo de produtos e atribuição de lucro ao dia da alteração
+    const oldCostInfo = getSaleCostInfo(editingSale, products);
+    const oldTotal = editingSale.total || 0;
+    const oldLucro = oldCostInfo.lucro;
+    const oldCusto = oldCostInfo.totalCusto;
+
+    const tempUpdatedSale: Sale = {
+      ...editingSale,
+      total: editTotal,
+      itens: finalItensToSave
+    };
+    const newCostInfo = getSaleCostInfo(tempUpdatedSale, products);
+    const newTotal = editTotal;
+    const newCusto = newCostInfo.totalCusto;
+    const newLucro = newCostInfo.lucro;
+
+    const diffTotal = Math.max(0, Number((newTotal - oldTotal).toFixed(2)));
+    const diffCusto = Math.max(0, Number((newCusto - oldCusto).toFixed(2)));
+    const diffLucro = Math.max(0, Number((newLucro - oldLucro).toFixed(2)));
+
+    const currentAjustes: SaleProfitAdjustment[] = [...getSaleAdjustments(editingSale)];
+
+    // Se houve acréscimo de valor ou lucro por novos produtos adicionados
+    if (diffTotal > 0 || diffLucro > 0) {
+      const addedDesc = findAddedItemsSummary(editingSale.itens || [], finalItensToSave);
+      const newAdjustment: SaleProfitAdjustment = {
+        id: `adj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        data: new Date().toISOString(),
+        valorAdicional: diffTotal,
+        custoAdicional: diffCusto,
+        lucroAdicional: diffLucro,
+        descricao: addedDesc,
+        editadoPorEmail: currentUserEmail
+      };
+      currentAjustes.push(newAdjustment);
+      originalValues.ajustesLucro = currentAjustes;
+    }
+
     const updatedSale: Sale = {
       ...editingSale,
       cliente: editCliente.trim() || 'Consumidor',
@@ -200,6 +238,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
       foiAlterado: true,
       editadoPorEmail: currentUserEmail,
       editadoEm: new Date().toISOString(),
+      ajustesLucro: currentAjustes.length > 0 ? currentAjustes : undefined,
       valoresOriginais: originalValues
     };
 

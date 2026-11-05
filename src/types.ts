@@ -52,6 +52,16 @@ export interface SaleItem {
   isAvulso?: boolean;
 }
 
+export interface SaleProfitAdjustment {
+  id: string;
+  data: string; // ISO datetime when the addition was saved
+  valorAdicional: number; // Increment in sale total
+  custoAdicional: number; // Increment in total item costs
+  lucroAdicional: number; // Increment in estimated profit (valorAdicional - custoAdicional)
+  descricao?: string; // Description of items added, e.g. "Adicionado: Porcelana (1 un.)"
+  editadoPorEmail?: string;
+}
+
 export interface SaleOriginalValues {
   cliente: string;
   telefoneCliente?: string;
@@ -70,6 +80,7 @@ export interface SaleOriginalValues {
   pedidoVinculoNumero?: string;
   corSelecionada?: string;
   temTaxaUrgencia?: boolean;
+  ajustesLucro?: SaleProfitAdjustment[];
 }
 
 export interface Sale {
@@ -130,6 +141,7 @@ export interface Sale {
   descontoPercent?: number;
   descontoValor?: number;
   temTaxaUrgencia?: boolean;
+  ajustesLucro?: SaleProfitAdjustment[];
 }
 
 export interface StoreInfo {
@@ -464,6 +476,79 @@ export function getSaleCostInfo(sale: Sale, products: Product[] = []): SaleCostI
 }
 
 export const getSaleAvulsoInfo = getSaleCostInfo;
+
+/**
+ * Converte data para string no padrão DD/MM/AAAA em São Paulo (UTC-3)
+ */
+export function getBrazilDayString(dateInput: Date | string): string {
+  try {
+    const d = typeof dateInput === 'string' ? new Date(dateInput) : dateInput;
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleDateString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit'
+    });
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Retorna os ajustes de lucro de uma venda (persistidos diretamente ou em valoresOriginais)
+ */
+export function getSaleAdjustments(sale: Sale): SaleProfitAdjustment[] {
+  if (!sale) return [];
+  if (sale.ajustesLucro && Array.isArray(sale.ajustesLucro) && sale.ajustesLucro.length > 0) {
+    return sale.ajustesLucro;
+  }
+  if (sale.valoresOriginais?.ajustesLucro && Array.isArray(sale.valoresOriginais.ajustesLucro) && sale.valoresOriginais.ajustesLucro.length > 0) {
+    return sale.valoresOriginais.ajustesLucro;
+  }
+  return [];
+}
+
+/**
+ * Retorna os ajustes de lucro de uma venda que ocorreram em uma data específica
+ */
+export function getSaleAdjustmentsForDate(sale: Sale, targetDate: Date | string): SaleProfitAdjustment[] {
+  const targetDayStr = getBrazilDayString(targetDate);
+  if (!targetDayStr) return [];
+  const adjustments = getSaleAdjustments(sale);
+  return adjustments.filter(adj => getBrazilDayString(adj.data) === targetDayStr);
+}
+
+/**
+ * Verifica se uma venda teve acréscimo de produtos/lucro em uma data específica
+ */
+export function hasSaleAdditionOnDate(sale: Sale, targetDate: Date | string): boolean {
+  return getSaleAdjustmentsForDate(sale, targetDate).length > 0;
+}
+
+/**
+ * Gera um texto descritivo dos itens adicionados ou aumentados na edição de um pedido
+ */
+export function findAddedItemsSummary(oldItens: SaleItem[] = [], newItens: SaleItem[] = []): string {
+  const added: string[] = [];
+  
+  newItens.forEach(newItem => {
+    const matchingOld = oldItens.find(oi => (oi.produtoId && oi.produtoId === newItem.produtoId) || (oi.produtoNome === newItem.produtoNome));
+    if (!matchingOld) {
+      const nome = newItem.produtoNome || newItem.nome || 'Produto';
+      added.push(`${nome} (${newItem.quantidade} un.)`);
+    } else if (newItem.quantidade > matchingOld.quantidade) {
+      const diffQtd = newItem.quantidade - matchingOld.quantidade;
+      const nome = newItem.produtoNome || newItem.nome || 'Produto';
+      added.push(`+${diffQtd} un. ${nome}`);
+    }
+  });
+
+  if (added.length === 0) {
+    return 'Acréscimo de produtos';
+  }
+  return `Adicionado: ${added.join(', ')}`;
+}
 
 export type ExpenseCategory = 
   | 'fixa'          // Aluguel, energia, internet, água, contador
