@@ -27,16 +27,24 @@ import {
   Unlock,
   Link,
   Search,
-  X
+  X,
+  Package,
+  ChevronLeft,
+  ChevronRight,
+  SlidersHorizontal,
+  AlertTriangle,
+  Layers,
+  CalendarDays
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sale, StoreInfo } from '../types';
+import { Sale, StoreInfo, Product, findMatchingProduct, detectProductCategoryGroup } from '../types';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { Receipt } from './Receipt';
 import { playAppSound } from '../lib/audio';
 
 interface RemindersManagerProps {
   sales: Sale[];
+  products?: Product[];
   storeInfo: StoreInfo;
   onUpdateSale: (updatedSale: Sale) => void;
   isAdmin?: boolean;
@@ -60,7 +68,7 @@ export function getLinkedSales(sale: Sale, allSales: Sale[]): Sale[] {
   return Array.from(uniqueLinkedSalesMap.values());
 }
 
-export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = false }: RemindersManagerProps) {
+export function RemindersManager({ sales, products = [], storeInfo, onUpdateSale, isAdmin = false }: RemindersManagerProps) {
   const [selectedSaleForWA, setSelectedSaleForWA] = useState<Sale | null>(null);
   const [isDelayedReminderSelected, setIsDelayedReminderSelected] = useState<boolean>(false);
   const [selectedSaleForReceipt, setSelectedSaleForReceipt] = useState<Sale | null>(null);
@@ -69,8 +77,44 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
   const [readyId, setReadyId] = useState<string | null>(null);
   const [schedulingSaleId, setSchedulingSaleId] = useState<string | null>(null);
   
-  // Predictive recurrence engine states
-  const [activeSubTab, setActiveSubTab] = useState<'lembretes' | 'recorrencia' | 'indicacao'>('lembretes');
+  // Subtabs: Lembretes do Dia, Agenda da Semana (disponível para todos), Recorrência e Indicação (Admin)
+  const [activeSubTab, setActiveSubTab] = useState<'lembretes' | 'semana' | 'recorrencia' | 'indicacao'>('lembretes');
+
+  // Weekly Delivery & Production Capacity Planner states
+  const [weekMode, setWeekMode] = useState<'week' | 'custom'>('week');
+  const [weekOffset, setWeekOffset] = useState<number>(1); // Default: Próxima Semana (ou alternável facilmente para Esta Semana)
+  const [customRangeStart, setCustomRangeStart] = useState<string>(() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  const [customRangeEnd, setCustomRangeEnd] = useState<string>(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 6);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  });
+  const [selectedWeekDay, setSelectedWeekDay] = useState<string | null>(null);
+  const [selectedCategoryFilter, setSelectedCategoryFilter] = useState<string>('Todos');
+  const [selectedSpecificProduct, setSelectedSpecificProduct] = useState<string>('');
+  const [weekStatusFilter, setWeekStatusFilter] = useState<'todos' | 'pendentes' | 'prontos' | 'entregues'>('todos');
+  const [weekSearchQuery, setWeekSearchQuery] = useState<string>('');
+  const [weeklyCapacityLimit, setWeeklyCapacityLimit] = useState<number>(() => {
+    try {
+      const saved = localStorage.getItem('oxente_weekly_capacity_limit');
+      const parsed = saved ? parseInt(saved, 10) : 60;
+      return !isNaN(parsed) && parsed > 0 ? parsed : 60;
+    } catch {
+      return 60;
+    }
+  });
+  const [isEditingCapacity, setIsEditingCapacity] = useState<boolean>(false);
+
+  const updateWeeklyCapacityLimit = (newLimit: number) => {
+    const safeLimit = Math.max(1, Math.min(9999, Math.round(newLimit || 1)));
+    setWeeklyCapacityLimit(safeLimit);
+    try {
+      localStorage.setItem('oxente_weekly_capacity_limit', String(safeLimit));
+    } catch {}
+  };
 
   // Override / Unlock state for linked orders that are pending/unready
   const [unlockedLinkedOrderIds, setUnlockedLinkedOrderIds] = useState<string[]>([]);
@@ -82,9 +126,9 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
     );
   };
 
-  // Safeguard: Reset activeSubTab to 'lembretes' if the user is not an admin
+  // Safeguard: Reset activeSubTab to 'lembretes' only if non-admin tries to open admin-only tabs
   useEffect(() => {
-    if (!isAdmin && activeSubTab !== 'lembretes') {
+    if (!isAdmin && (activeSubTab === 'recorrencia' || activeSubTab === 'indicacao')) {
       setActiveSubTab('lembretes');
     }
   }, [isAdmin, activeSubTab]);
@@ -454,68 +498,442 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
     }
   };
 
+  // ============================================================================
+  // 📅 PLANEJAMENTO & CAPACIDADE SEMANAL DE ENTREGAS / PRODUÇÃO
+  // ============================================================================
+  const normalizeText = (str: string) =>
+    (str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  const formatYmd = (d: Date) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
+  const getWeekBounds = (offsetWeeks: number) => {
+    const now = new Date();
+    now.setHours(12, 0, 0, 0);
+    const dayOfWeek = now.getDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
+    const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMonday + offsetWeeks * 7);
+
+    const sunday = new Date(monday);
+    sunday.setDate(monday.getDate() + 6);
+
+    const shortDays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
+    const fullDays = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo'];
+
+    const days = Array.from({ length: 7 }, (_, idx) => {
+      const dt = new Date(monday);
+      dt.setDate(monday.getDate() + idx);
+      const dateStr = formatYmd(dt);
+      return {
+        dateStr,
+        weekdayShort: shortDays[idx],
+        weekdayFull: fullDays[idx],
+        dayMonth: `${String(dt.getDate()).padStart(2, '0')}/${String(dt.getMonth() + 1).padStart(2, '0')}`
+      };
+    });
+
+    const startStr = formatYmd(monday);
+    const endStr = formatYmd(sunday);
+    const label = `${days[0].dayMonth} a ${days[6].dayMonth}/${sunday.getFullYear()}`;
+    return { startStr, endStr, days, label };
+  };
+
+  const jumpToWeekOfDate = (dateStr: string) => {
+    if (!dateStr) return;
+    try {
+      const target = new Date(dateStr + 'T12:00:00');
+      if (isNaN(target.getTime())) return;
+      const now = new Date();
+      now.setHours(12, 0, 0, 0);
+
+      const nowDay = now.getDay();
+      const nowMon = new Date(now);
+      nowMon.setDate(now.getDate() + (nowDay === 0 ? -6 : 1 - nowDay));
+
+      const targetDay = target.getDay();
+      const targetMon = new Date(target);
+      targetMon.setDate(target.getDate() + (targetDay === 0 ? -6 : 1 - targetDay));
+
+      const diffWeeks = Math.round((targetMon.getTime() - nowMon.getTime()) / (1000 * 60 * 60 * 24 * 7));
+      setWeekMode('week');
+      setWeekOffset(diffWeeks);
+      setSelectedWeekDay(dateStr);
+    } catch {}
+  };
+
+  const activeWeekInfo = useMemo(() => getWeekBounds(weekOffset), [weekOffset]);
+
+  const activePeriodBounds = useMemo(() => {
+    if (weekMode === 'custom') {
+      const s = customRangeStart <= customRangeEnd ? customRangeStart : customRangeEnd;
+      const e = customRangeStart <= customRangeEnd ? customRangeEnd : customRangeStart;
+      return {
+        startStr: s,
+        endStr: e,
+        label: `${formatLocalDate(s)} a ${formatLocalDate(e)}`,
+        days: [] as { dateStr: string; weekdayShort: string; weekdayFull: string; dayMonth: string }[]
+      };
+    }
+    return activeWeekInfo;
+  }, [weekMode, customRangeStart, customRangeEnd, activeWeekInfo]);
+
+  // Helper to extract normalized items with categoryGroup for any sale
+  const getSaleNormalizedItems = (sale: Sale) => {
+    if (sale.itens && sale.itens.length > 0) {
+      return sale.itens.map(item => {
+        const nome = item.produtoNome || item.nome || sale.produtoNome || 'Produto';
+        const matchedProd = findMatchingProduct(item.produtoId, nome, products);
+        const categoriaGrupo = detectProductCategoryGroup(nome, matchedProd?.categoria);
+        const qtd = Number((item as any).quantity || item.quantidade || 1);
+        return {
+          nome,
+          produtoId: item.produtoId || matchedProd?.id || '',
+          categoriaGrupo,
+          quantidade: isNaN(qtd) ? 1 : qtd,
+          total: item.total || 0
+        };
+      });
+    }
+    const nome = sale.produtoNome || 'Produto';
+    const matchedProd = findMatchingProduct(sale.produtoId, nome, products);
+    const categoriaGrupo = detectProductCategoryGroup(nome, matchedProd?.categoria);
+    const qtd = Number(sale.quantidade || 1);
+    return [
+      {
+        nome,
+        produtoId: sale.produtoId || matchedProd?.id || '',
+        categoriaGrupo,
+        quantidade: isNaN(qtd) ? 1 : qtd,
+        total: sale.total || 0
+      }
+    ];
+  };
+
+  // Resumos rápidos de Esta Semana (offset 0) e Próxima Semana (offset 1) para exibir no painel de Lembretes
+  const quickWeeksOverview = useMemo(() => {
+    const thisWeek = getWeekBounds(0);
+    const nextWeek = getWeekBounds(1);
+
+    const countOrdersInBounds = (startStr: string, endStr: string) =>
+      sales.filter(s => s.status !== 'Orçamento' && s.dataRetirada && s.dataRetirada >= startStr && s.dataRetirada <= endStr).length;
+
+    return {
+      thisWeekCount: countOrdersInBounds(thisWeek.startStr, thisWeek.endStr),
+      thisWeekLabel: thisWeek.label,
+      nextWeekCount: countOrdersInBounds(nextWeek.startStr, nextWeek.endStr),
+      nextWeekLabel: nextWeek.label
+    };
+  }, [sales]);
+
+  // All closed orders & budgets scheduled inside activePeriodBounds
+  const { periodClosedSales, periodBudgetCount } = useMemo(() => {
+    const closed: Sale[] = [];
+    let budgets = 0;
+
+    sales.forEach(s => {
+      if (!s.dataRetirada) return;
+      if (s.dataRetirada >= activePeriodBounds.startStr && s.dataRetirada <= activePeriodBounds.endStr) {
+        if (s.status === 'Orçamento') {
+          budgets += 1;
+        } else {
+          closed.push(s);
+        }
+      }
+    });
+
+    closed.sort((a, b) => (a.dataRetirada || '').localeCompare(b.dataRetirada || ''));
+    return { periodClosedSales: closed, periodBudgetCount: budgets };
+  }, [sales, activePeriodBounds]);
+
+  // Daily breakdown inside the selected week
+  const weekDaysBreakdown = useMemo(() => {
+    if (weekMode !== 'week') return [];
+    return activePeriodBounds.days.map(d => {
+      const count = periodClosedSales.filter(s => s.dataRetirada === d.dateStr).length;
+      return { ...d, count };
+    });
+  }, [weekMode, activePeriodBounds, periodClosedSales]);
+
+  // Orders filtered by selected day (if any) and status
+  const dayAndStatusSales = useMemo(() => {
+    return periodClosedSales.filter(sale => {
+      if (selectedWeekDay && sale.dataRetirada !== selectedWeekDay) return false;
+      if (weekStatusFilter === 'pendentes') {
+        return sale.statusProducao !== 'Entregue' && sale.statusProducao !== 'Pronto para Retirada';
+      }
+      if (weekStatusFilter === 'prontos') {
+        return sale.statusProducao === 'Pronto para Retirada' || sale.statusProducao === 'Agendado para Entrega';
+      }
+      if (weekStatusFilter === 'entregues') {
+        return sale.statusProducao === 'Entregue';
+      }
+      return true;
+    });
+  }, [periodClosedSales, selectedWeekDay, weekStatusFilter]);
+
+  // Breakdown by Category Group AND Specific Product for dayAndStatusSales
+  const { categoryBreakdown, specificProductsBreakdown, totalUnitsInPeriod } = useMemo(() => {
+    const catMap = new Map<string, { category: string; orderIds: Set<string>; units: number }>();
+    const prodMap = new Map<string, { key: string; name: string; category: string; orderIds: Set<string>; units: number }>();
+    let totalUnits = 0;
+
+    dayAndStatusSales.forEach(sale => {
+      const items = getSaleNormalizedItems(sale);
+      items.forEach(item => {
+        totalUnits += item.quantidade;
+
+        // Category aggregation
+        if (!catMap.has(item.categoriaGrupo)) {
+          catMap.set(item.categoriaGrupo, { category: item.categoriaGrupo, orderIds: new Set(), units: 0 });
+        }
+        const catEntry = catMap.get(item.categoriaGrupo)!;
+        catEntry.orderIds.add(sale.id);
+        catEntry.units += item.quantidade;
+
+        // Specific product aggregation
+        const prodKey = normalizeText(item.nome);
+        if (prodKey) {
+          if (!prodMap.has(prodKey)) {
+            prodMap.set(prodKey, {
+              key: prodKey,
+              name: item.nome,
+              category: item.categoriaGrupo,
+              orderIds: new Set(),
+              units: 0
+            });
+          }
+          const prodEntry = prodMap.get(prodKey)!;
+          prodEntry.orderIds.add(sale.id);
+          prodEntry.units += item.quantidade;
+        }
+      });
+    });
+
+    const categories = Array.from(catMap.values())
+      .map(c => ({ category: c.category, ordersCount: c.orderIds.size, unitsCount: c.units }))
+      .sort((a, b) => b.ordersCount - a.ordersCount || b.unitsCount - a.unitsCount);
+
+    const specificProducts = Array.from(prodMap.values())
+      .map(p => ({ key: p.key, name: p.name, category: p.category, ordersCount: p.orderIds.size, unitsCount: p.units }))
+      .sort((a, b) => b.ordersCount - a.ordersCount || b.unitsCount - a.unitsCount);
+
+    return {
+      categoryBreakdown: categories,
+      specificProductsBreakdown: specificProducts,
+      totalUnitsInPeriod: totalUnits
+    };
+  }, [dayAndStatusSales, products]);
+
+  // Final filtered orders list + matching product/category unit count
+  const { weeklyFilteredSales, matchingItemsUnitsCount, hasProductOrTextFilter } = useMemo(() => {
+    const qNorm = normalizeText(weekSearchQuery);
+    const qDigits = weekSearchQuery.replace(/\D/g, '');
+    const isFilteringByProductOrText =
+      selectedCategoryFilter !== 'Todos' || Boolean(selectedSpecificProduct) || qNorm.length > 0;
+
+    let matchingUnits = 0;
+
+    const filtered = dayAndStatusSales.filter(sale => {
+      const items = getSaleNormalizedItems(sale);
+
+      // 1. Category Filter
+      if (selectedCategoryFilter !== 'Todos') {
+        const hasCat = items.some(it => it.categoriaGrupo === selectedCategoryFilter);
+        if (!hasCat) return false;
+      }
+
+      // 2. Specific Product Filter
+      if (selectedSpecificProduct) {
+        const hasProd = items.some(it => normalizeText(it.nome) === selectedSpecificProduct);
+        if (!hasProd) return false;
+      }
+
+      // 3. Text Search (product name, category, client name, order #, phone)
+      if (qNorm) {
+        const words = qNorm.split(/\s+/).filter(Boolean);
+        const clientNorm = normalizeText(sale.cliente || '');
+        const orderNorm = normalizeText(sale.numeroPedido || sale.id || '');
+        const phoneRaw = (sale.telefoneCliente || '').replace(/\D/g, '');
+
+        const matchesClient = words.every(w => clientNorm.includes(w));
+        const matchesOrder = orderNorm.includes(qNorm);
+        const matchesPhone = qDigits.length >= 3 && phoneRaw.includes(qDigits);
+        const matchesAnyItem = items.some(it => {
+          const itemNorm = normalizeText(it.nome);
+          const catNorm = normalizeText(it.categoriaGrupo);
+          return words.every(w => itemNorm.includes(w) || catNorm.includes(w));
+        });
+
+        if (!matchesClient && !matchesOrder && !matchesPhone && !matchesAnyItem) {
+          return false;
+        }
+      }
+
+      // Sum matching units for accuracy when filtered by product/category
+      items.forEach(it => {
+        const catOk = selectedCategoryFilter === 'Todos' || it.categoriaGrupo === selectedCategoryFilter;
+        const prodOk = !selectedSpecificProduct || normalizeText(it.nome) === selectedSpecificProduct;
+        let textOk = true;
+        if (qNorm) {
+          const words = qNorm.split(/\s+/).filter(Boolean);
+          const itemNorm = normalizeText(it.nome);
+          const catNorm = normalizeText(it.categoriaGrupo);
+          const itemMatchesQuery = words.every(w => itemNorm.includes(w) || catNorm.includes(w));
+          // If the query matched a product/category on this item, count only matching items;
+          // otherwise if query only matched client name, count all items of the selected category/product
+          const anyItemMatchedQuery = items.some(x => words.every(w => normalizeText(x.nome).includes(w) || normalizeText(x.categoriaGrupo).includes(w)));
+          if (anyItemMatchedQuery) {
+            textOk = itemMatchesQuery;
+          }
+        }
+        if (catOk && prodOk && textOk) {
+          matchingUnits += it.quantidade;
+        }
+      });
+
+      return true;
+    });
+
+    return {
+      weeklyFilteredSales: filtered,
+      matchingItemsUnitsCount: matchingUnits,
+      hasProductOrTextFilter: isFilteringByProductOrText
+    };
+  }, [dayAndStatusSales, selectedCategoryFilter, selectedSpecificProduct, weekSearchQuery, products]);
+
+  const weekPendingCount = useMemo(() => {
+    return periodClosedSales.filter(s => s.statusProducao !== 'Entregue').length;
+  }, [periodClosedSales]);
+
+  const weekDeliveredCount = useMemo(() => {
+    return periodClosedSales.filter(s => s.statusProducao === 'Entregue').length;
+  }, [periodClosedSales]);
+
+  const getWeekdayPt = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr + 'T12:00:00');
+      const names = ['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'];
+      return names[d.getDay()] || '';
+    } catch {
+      return '';
+    }
+  };
+
   return (
     <div className="space-y-6 select-text">
       
-      {/* Subtab Switcher: Lembretes vs Recorrência vs Indicação */}
-      {isAdmin && (
-        <div className="flex bg-zinc-950 p-1 border border-zinc-900 rounded-xl max-w-md no-print relative">
-          <button
-            onClick={() => setActiveSubTab('lembretes')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent relative z-10 ${
-              activeSubTab === 'lembretes'
-                ? 'text-black font-extrabold'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            {activeSubTab === 'lembretes' && (
-              <motion.div
-                layoutId="activeSubTabIndicator"
-                className="absolute inset-0 bg-brand-pink rounded-lg -z-10"
-                transition={{ type: "spring", stiffness: 380, damping: 30 }}
-              />
-            )}
-            <Bell className="h-3.5 w-3.5" />
-            <span>🔔 Lembretes</span>
-          </button>
-          <button
-            onClick={() => setActiveSubTab('recorrencia')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent relative z-10 ${
-              activeSubTab === 'recorrencia'
-                ? 'text-white font-extrabold'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            {activeSubTab === 'recorrencia' && (
-              <motion.div
-                layoutId="activeSubTabIndicator"
-                className="absolute inset-0 bg-purple-650 rounded-lg -z-10 shadow-md shadow-purple-950/40"
-                transition={{ type: "spring", stiffness: 380, damping: 30 }}
-              />
-            )}
-            <Brain className="h-3.5 w-3.5 text-purple-300" />
-            <span>🔮 Recorrência</span>
-          </button>
-          <button
-            onClick={() => setActiveSubTab('indicacao')}
-            className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent relative z-10 ${
-              activeSubTab === 'indicacao'
-                ? 'text-white font-extrabold'
-                : 'text-zinc-400 hover:text-zinc-200'
-            }`}
-          >
-            {activeSubTab === 'indicacao' && (
-              <motion.div
-                layoutId="activeSubTabIndicator"
-                className="absolute inset-0 bg-emerald-650 rounded-lg -z-10 shadow-md shadow-emerald-950/40"
-                transition={{ type: "spring", stiffness: 380, damping: 30 }}
-              />
-            )}
-            <Gift className="h-3.5 w-3.5 text-emerald-300" />
-            <span>🎁 Indicação 5%</span>
-          </button>
-        </div>
-      )}
+      {/* Subtab Switcher: Lembretes vs Agenda da Semana vs Recorrência vs Indicação */}
+      <div className="flex bg-zinc-950 p-1 border border-zinc-900 rounded-xl w-full sm:w-fit flex-wrap sm:flex-nowrap gap-1 no-print relative">
+        <button
+          onClick={() => {
+            playAppSound('click');
+            setActiveSubTab('lembretes');
+          }}
+          className={`py-1.5 px-3.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent relative z-10 whitespace-nowrap ${
+            activeSubTab === 'lembretes'
+              ? 'text-black font-extrabold'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          {activeSubTab === 'lembretes' && (
+            <motion.div
+              layoutId="activeSubTabIndicator"
+              className="absolute inset-0 bg-brand-pink rounded-lg -z-10"
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            />
+          )}
+          <Bell className="h-3.5 w-3.5" />
+          <span>🔔 Lembretes do Dia</span>
+        </button>
+
+        <button
+          onClick={() => {
+            playAppSound('click');
+            setActiveSubTab('semana');
+          }}
+          className={`py-1.5 px-3.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent relative z-10 whitespace-nowrap ${
+            activeSubTab === 'semana'
+              ? 'text-white font-extrabold'
+              : 'text-zinc-400 hover:text-zinc-200'
+          }`}
+        >
+          {activeSubTab === 'semana' && (
+            <motion.div
+              layoutId="activeSubTabIndicator"
+              className="absolute inset-0 bg-sky-600 rounded-lg -z-10 shadow-md shadow-sky-950/40"
+              transition={{ type: "spring", stiffness: 380, damping: 30 }}
+            />
+          )}
+          <CalendarDays className="h-3.5 w-3.5" />
+          <span>📅 Agenda da Semana</span>
+          <span className={`text-[9px] font-mono px-1.5 py-0.2 rounded-full ${
+            activeSubTab === 'semana'
+              ? 'bg-black/25 text-white'
+              : quickWeeksOverview.nextWeekCount >= weeklyCapacityLimit
+                ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30'
+                : 'bg-sky-500/15 text-sky-300 border border-sky-500/25'
+          }`} title="Pedidos fechados para a Próxima Semana / Meta semanal">
+            {quickWeeksOverview.nextWeekCount}/{weeklyCapacityLimit}
+          </span>
+        </button>
+
+        {isAdmin && (
+          <>
+            <button
+              onClick={() => {
+                playAppSound('click');
+                setActiveSubTab('recorrencia');
+              }}
+              className={`py-1.5 px-3.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent relative z-10 whitespace-nowrap ${
+                activeSubTab === 'recorrencia'
+                  ? 'text-white font-extrabold'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {activeSubTab === 'recorrencia' && (
+                <motion.div
+                  layoutId="activeSubTabIndicator"
+                  className="absolute inset-0 bg-purple-650 rounded-lg -z-10 shadow-md shadow-purple-950/40"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <Brain className="h-3.5 w-3.5 text-purple-300" />
+              <span>🔮 Recorrência</span>
+            </button>
+            <button
+              onClick={() => {
+                playAppSound('click');
+                setActiveSubTab('indicacao');
+              }}
+              className={`py-1.5 px-3.5 rounded-lg text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border border-transparent relative z-10 whitespace-nowrap ${
+                activeSubTab === 'indicacao'
+                  ? 'text-white font-extrabold'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+            >
+              {activeSubTab === 'indicacao' && (
+                <motion.div
+                  layoutId="activeSubTabIndicator"
+                  className="absolute inset-0 bg-emerald-650 rounded-lg -z-10 shadow-md shadow-emerald-950/40"
+                  transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                />
+              )}
+              <Gift className="h-3.5 w-3.5 text-emerald-300" />
+              <span>🎁 Indicação 5%</span>
+            </button>
+          </>
+        )}
+      </div>
 
       {activeSubTab === 'lembretes' && (
         <>
@@ -1422,6 +1840,81 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
             ⚠️ <strong>Dica Prática:</strong> Separar as tampas dos copos e verificar se tem borda pra colocar nos pedidos.
           </div>
 
+          {/* Quick Weekly Overview Card right inside Lembretes */}
+          <div className="bg-sky-950/15 border border-sky-500/25 rounded-xl p-3.5 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-black uppercase tracking-wider text-sky-300 flex items-center gap-1.5">
+                <CalendarDays className="h-3.5 w-3.5 text-sky-400" />
+                Capacidade Semanal
+              </span>
+              <span className="text-[9px] font-mono text-zinc-400">Meta: {weeklyCapacityLimit}/sem</span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  playAppSound('click');
+                  setWeekMode('week');
+                  setWeekOffset(0);
+                  setSelectedWeekDay(null);
+                  setActiveSubTab('semana');
+                }}
+                className="bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800 hover:border-sky-500/40 rounded-lg p-2 text-left transition-all cursor-pointer"
+              >
+                <span className="text-[9px] font-bold uppercase text-zinc-400 block">Esta Semana</span>
+                <span className={`text-sm font-black font-mono ${
+                  quickWeeksOverview.thisWeekCount >= weeklyCapacityLimit
+                    ? 'text-rose-400'
+                    : quickWeeksOverview.thisWeekCount >= weeklyCapacityLimit * 0.8
+                      ? 'text-amber-400'
+                      : 'text-emerald-400'
+                }`}>
+                  {quickWeeksOverview.thisWeekCount} <span className="text-[10px] text-zinc-500 font-normal">/ {weeklyCapacityLimit}</span>
+                </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  playAppSound('click');
+                  setWeekMode('week');
+                  setWeekOffset(1);
+                  setSelectedWeekDay(null);
+                  setActiveSubTab('semana');
+                }}
+                className="bg-zinc-950/80 hover:bg-zinc-900 border border-zinc-800 hover:border-sky-500/40 rounded-lg p-2 text-left transition-all cursor-pointer"
+              >
+                <span className="text-[9px] font-bold uppercase text-sky-300 block">Próx. Semana</span>
+                <span className={`text-sm font-black font-mono ${
+                  quickWeeksOverview.nextWeekCount >= weeklyCapacityLimit
+                    ? 'text-rose-400'
+                    : quickWeeksOverview.nextWeekCount >= weeklyCapacityLimit * 0.8
+                      ? 'text-amber-400'
+                      : 'text-sky-300'
+                }`}>
+                  {quickWeeksOverview.nextWeekCount} <span className="text-[10px] text-zinc-500 font-normal">/ {weeklyCapacityLimit}</span>
+                </span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                playAppSound('click');
+                setWeekMode('week');
+                setWeekOffset(1);
+                setSelectedWeekDay(null);
+                setActiveSubTab('semana');
+              }}
+              className="w-full py-1.5 px-3 bg-sky-600/20 hover:bg-sky-600/35 text-sky-300 border border-sky-500/30 rounded-lg text-[10px] font-black transition-all cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <Search className="h-3 w-3" />
+              <span>Pesquisar Semanas &amp; Produtos</span>
+              <ArrowRight className="h-3 w-3" />
+            </button>
+          </div>
+
           {/* Tomorrow's entries list */}
           <div className="space-y-3">
             {tomorrowSales.map((sale) => {
@@ -1659,6 +2152,703 @@ export function RemindersManager({ sales, storeInfo, onUpdateSale, isAdmin = fal
 
       </div>
         </>
+      )}
+
+      {activeSubTab === 'semana' && (
+        <div className="space-y-6 animate-fade-in">
+          {/* Header & Week Picker */}
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 sm:p-6 shadow-md space-y-5">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+              <div className="flex items-center gap-3.5">
+                <div className="h-12 w-12 rounded-xl bg-sky-500/10 border border-sky-500/25 flex items-center justify-center text-sky-400 shrink-0">
+                  <CalendarDays className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[10px] text-sky-400 font-extrabold uppercase tracking-widest">
+                      {weekMode === 'custom'
+                        ? 'Período Personalizado'
+                        : weekOffset === 0
+                          ? 'Esta Semana'
+                          : weekOffset === 1
+                            ? 'Próxima Semana'
+                            : weekOffset > 1
+                              ? `Daqui a ${weekOffset} Semanas`
+                              : `${Math.abs(weekOffset)} Semana(s) Atrás`}
+                    </span>
+                    <span className="text-[10px] font-mono bg-zinc-950 border border-zinc-800 text-zinc-300 px-2 py-0.5 rounded">
+                      {activePeriodBounds.label}
+                    </span>
+                  </div>
+                  <h2 className="text-lg font-bold text-zinc-100 mt-0.5">
+                    Controle Semanal de Entregas &amp; Produção
+                  </h2>
+                  <p className="text-[11px] text-zinc-400">
+                    Consulte quantos pedidos estão fechados por semana e separe por produto (copos, bolsas, taças...) para não exceder sua capacidade
+                  </p>
+                </div>
+              </div>
+
+              {/* Navigation Arrows & Quick Date Jump */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    playAppSound('click');
+                    setWeekMode('week');
+                    setWeekOffset(prev => prev - 1);
+                    setSelectedWeekDay(null);
+                  }}
+                  className="px-3 py-2 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Semana Anterior"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                  <span>Anterior</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    playAppSound('click');
+                    setWeekMode('week');
+                    setWeekOffset(prev => prev + 1);
+                    setSelectedWeekDay(null);
+                  }}
+                  className="px-3 py-2 bg-zinc-950 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 rounded-xl text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Próxima Semana"
+                >
+                  <span>Próxima</span>
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+                <div className="flex items-center gap-1.5 bg-zinc-950 border border-zinc-800 rounded-xl px-2.5 py-1.5">
+                  <span className="text-[10px] text-zinc-400 font-bold">Ir p/ data:</span>
+                  <input
+                    type="date"
+                    onChange={(e) => {
+                      if (e.target.value) {
+                        playAppSound('click');
+                        jumpToWeekOfDate(e.target.value);
+                      }
+                    }}
+                    className="bg-transparent text-xs text-zinc-200 font-mono focus:outline-none cursor-pointer"
+                    title="Escolha qualquer data para abrir a semana correspondente"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Quick Week Preset Buttons */}
+            <div className="flex flex-wrap gap-2 items-center pt-1">
+              {[
+                { label: 'Esta Semana', offset: 0 },
+                { label: 'Próxima Semana', offset: 1 },
+                { label: 'Daqui 2 Semanas', offset: 2 },
+                { label: 'Daqui 3 Semanas', offset: 3 }
+              ].map(preset => {
+                const isActive = weekMode === 'week' && weekOffset === preset.offset;
+                return (
+                  <button
+                    key={preset.offset}
+                    type="button"
+                    onClick={() => {
+                      playAppSound('click');
+                      setWeekMode('week');
+                      setWeekOffset(preset.offset);
+                      setSelectedWeekDay(null);
+                    }}
+                    className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border ${
+                      isActive
+                        ? 'bg-sky-600 text-white border-sky-500 shadow-md shadow-sky-950/40'
+                        : 'bg-zinc-950/70 text-zinc-400 hover:text-zinc-100 border-zinc-800 hover:border-zinc-700'
+                    }`}
+                  >
+                    {preset.label}
+                  </button>
+                );
+              })}
+
+              <button
+                type="button"
+                onClick={() => {
+                  playAppSound('click');
+                  setWeekMode('custom');
+                  setSelectedWeekDay(null);
+                }}
+                className={`px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer border flex items-center gap-1.5 ${
+                  weekMode === 'custom'
+                    ? 'bg-brand-pink text-black border-brand-pink shadow-md'
+                    : 'bg-zinc-950/70 text-zinc-400 hover:text-zinc-100 border-zinc-800 hover:border-zinc-700'
+                }`}
+              >
+                <SlidersHorizontal className="h-3 w-3" />
+                <span>Período Personalizado</span>
+              </button>
+            </div>
+
+            {/* Custom Date Range Pickers */}
+            {weekMode === 'custom' && (
+              <div className="flex flex-wrap items-center gap-3 bg-zinc-950/80 border border-zinc-800 p-3.5 rounded-xl">
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-zinc-400">De:</span>
+                  <input
+                    type="date"
+                    value={customRangeStart}
+                    onChange={(e) => setCustomRangeStart(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 font-mono focus:outline-none focus:border-brand-pink"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-bold text-zinc-400">Até:</span>
+                  <input
+                    type="date"
+                    value={customRangeEnd}
+                    onChange={(e) => setCustomRangeEnd(e.target.value)}
+                    className="bg-zinc-900 border border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs text-zinc-100 font-mono focus:outline-none focus:border-brand-pink"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Day-by-day clickable breakdown strip (for week mode) */}
+            {weekMode === 'week' && (
+              <div className="space-y-2 pt-2 border-t border-zinc-800/80">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-zinc-400">
+                    Distribuição por Dia da Semana (clique no dia para filtrar)
+                  </span>
+                  {selectedWeekDay && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        playAppSound('click');
+                        setSelectedWeekDay(null);
+                      }}
+                      className="text-[10px] font-bold text-sky-400 hover:underline cursor-pointer"
+                    >
+                      Ver Semana Inteira
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2">
+                  {weekDaysBreakdown.map(day => {
+                    const isSelected = selectedWeekDay === day.dateStr;
+                    const isToday = day.dateStr === todayStr;
+                    return (
+                      <button
+                        key={day.dateStr}
+                        type="button"
+                        onClick={() => {
+                          playAppSound('click');
+                          setSelectedWeekDay(isSelected ? null : day.dateStr);
+                        }}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          isSelected
+                            ? 'bg-sky-600/20 border-sky-400 text-white ring-1 ring-sky-400/50'
+                            : isToday
+                              ? 'bg-brand-pink/10 border-brand-pink/35 hover:border-brand-pink text-zinc-100'
+                              : 'bg-zinc-950/70 border-zinc-850 hover:border-zinc-700 text-zinc-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between w-full">
+                          <span className={`text-[10px] font-black uppercase ${isToday ? 'text-brand-pink' : 'text-zinc-400'}`}>
+                            {day.weekdayShort}
+                          </span>
+                          <span className="text-[10px] font-mono text-zinc-500">{day.dayMonth}</span>
+                        </div>
+                        <div className="mt-1.5 flex items-baseline gap-1">
+                          <span className={`text-base font-black font-mono ${
+                            day.count === 0 ? 'text-zinc-600' : day.count >= 15 ? 'text-amber-400' : 'text-zinc-100'
+                          }`}>
+                            {day.count}
+                          </span>
+                          <span className="text-[9.5px] text-zinc-500">
+                            {day.count === 1 ? 'pedido' : 'pedidos'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Weekly Production Capacity Meter Card */}
+          {(() => {
+            const totalClosed = periodClosedSales.length;
+            const percent = Math.min(100, Math.round((totalClosed / Math.max(1, weeklyCapacityLimit)) * 100));
+            const remaining = weeklyCapacityLimit - totalClosed;
+            const isOver = remaining < 0;
+            const isWarning = !isOver && percent >= 75;
+
+            return (
+              <div className={`border rounded-2xl p-5 shadow-md space-y-4 transition-all ${
+                isOver
+                  ? 'bg-rose-950/20 border-rose-500/40'
+                  : isWarning
+                    ? 'bg-amber-950/15 border-amber-500/35'
+                    : 'bg-zinc-900/70 border-zinc-800'
+              }`}>
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs font-black uppercase tracking-wider text-zinc-200 flex items-center gap-1.5">
+                        {isOver ? (
+                          <AlertTriangle className="h-4 w-4 text-rose-400 animate-pulse" />
+                        ) : (
+                          <TrendingUp className="h-4 w-4 text-emerald-400" />
+                        )}
+                        Capacidade de Produção da Semana
+                      </span>
+                      <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${
+                        isOver
+                          ? 'bg-rose-500/20 text-rose-300 border-rose-500/40'
+                          : isWarning
+                            ? 'bg-amber-500/20 text-amber-300 border-amber-500/40'
+                            : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
+                      }`}>
+                        {isOver
+                          ? `⚠️ ${Math.abs(remaining)} acima da meta!`
+                          : remaining === 0
+                            ? 'Limite exato atingido'
+                            : `Restam ${remaining} vagas livres`}
+                      </span>
+                    </div>
+                    <p className="text-xs text-zinc-400">
+                      <strong className="text-zinc-100 text-base font-black font-mono">{totalClosed}</strong> de{' '}
+                      <strong className="text-zinc-200 font-mono">{weeklyCapacityLimit} pedidos</strong> fechados para entrega neste período ({percent}%)
+                      {periodBudgetCount > 0 && (
+                        <span className="ml-2 text-amber-400/90 font-semibold">
+                          • +{periodBudgetCount} {periodBudgetCount === 1 ? 'orçamento em aberto' : 'orçamentos em aberto'} (não contam na meta)
+                        </span>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Editable Capacity Goal */}
+                  <div className="flex items-center gap-2 bg-zinc-950/90 border border-zinc-800 rounded-xl px-3 py-2 shrink-0 self-start md:self-auto">
+                    <span className="text-[10px] font-bold uppercase text-zinc-400">Meta semanal:</span>
+                    {isEditingCapacity ? (
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="number"
+                          min={1}
+                          max={9999}
+                          value={weeklyCapacityLimit}
+                          onChange={(e) => updateWeeklyCapacityLimit(parseInt(e.target.value, 10) || 1)}
+                          className="w-16 bg-zinc-900 border border-sky-500 rounded-lg px-2 py-1 text-xs font-mono font-bold text-white focus:outline-none text-center"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playAppSound('success');
+                            setIsEditingCapacity(false);
+                          }}
+                          className="px-2 py-1 bg-sky-600 hover:bg-sky-500 text-white rounded-lg text-[10px] font-black cursor-pointer"
+                        >
+                          OK
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => updateWeeklyCapacityLimit(weeklyCapacityLimit - 5)}
+                          className="h-6 w-6 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-bold text-xs cursor-pointer"
+                          title="Diminuir 5"
+                        >
+                          -
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setIsEditingCapacity(true)}
+                          className="px-2 py-0.5 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-sky-300 font-mono font-black text-xs cursor-pointer"
+                          title="Clique para digitar o número exato da sua capacidade semanal"
+                        >
+                          {weeklyCapacityLimit} ped.
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => updateWeeklyCapacityLimit(weeklyCapacityLimit + 5)}
+                          className="h-6 w-6 rounded-md bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-bold text-xs cursor-pointer"
+                          title="Aumentar 5"
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Progress Bar */}
+                <div className="w-full h-3 bg-zinc-950 rounded-full overflow-hidden border border-zinc-800/80">
+                  <div
+                    className={`h-full transition-all duration-500 rounded-full ${
+                      isOver
+                        ? 'bg-gradient-to-r from-rose-600 to-red-400'
+                        : isWarning
+                          ? 'bg-gradient-to-r from-amber-500 to-orange-400'
+                          : 'bg-gradient-to-r from-emerald-600 to-sky-400'
+                    }`}
+                    style={{ width: `${Math.min(100, (totalClosed / Math.max(1, weeklyCapacityLimit)) * 100)}%` }}
+                  />
+                </div>
+
+                {/* Secondary quick metrics */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                  <div className="bg-zinc-950/70 border border-zinc-850 rounded-xl p-3">
+                    <span className="text-[9.5px] font-bold uppercase text-zinc-500 block">Total da Semana</span>
+                    <span className="text-lg font-black font-mono text-zinc-100">{periodClosedSales.length} pedidos</span>
+                  </div>
+                  <div className="bg-zinc-950/70 border border-zinc-850 rounded-xl p-3">
+                    <span className="text-[9.5px] font-bold uppercase text-amber-500/80 block">Ainda Não Entregues</span>
+                    <span className="text-lg font-black font-mono text-amber-400">{weekPendingCount} pedidos</span>
+                  </div>
+                  <div className="bg-zinc-950/70 border border-zinc-850 rounded-xl p-3">
+                    <span className="text-[9.5px] font-bold uppercase text-emerald-500/80 block">Já Entregues</span>
+                    <span className="text-lg font-black font-mono text-emerald-400">{weekDeliveredCount} pedidos</span>
+                  </div>
+                  <div className="bg-zinc-950/70 border border-zinc-850 rounded-xl p-3">
+                    <span className="text-[9.5px] font-bold uppercase text-sky-400/80 block">Soma de Unidades</span>
+                    <span className="text-lg font-black font-mono text-sky-300">{totalUnitsInPeriod.toLocaleString('pt-BR')} un.</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Separação por Tipo de Produto & Pesquisa Robusta */}
+          <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-zinc-800/80 pb-3">
+              <div>
+                <h3 className="text-sm font-black text-zinc-100 uppercase tracking-wide flex items-center gap-2">
+                  <Layers className="h-4 w-4 text-brand-pink" />
+                  <span>Separação por Produto &amp; Categoria</span>
+                  {selectedWeekDay && (
+                    <span className="text-[10px] font-mono bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded">
+                      {getWeekdayPt(selectedWeekDay)} ({formatLocalDate(selectedWeekDay)})
+                    </span>
+                  )}
+                </h3>
+                <p className="text-[11px] text-zinc-400 mt-0.5">
+                  Clique em uma categoria (ex: Copos, Bolsas) ou digite o nome do produto para saber exatamente quantos pedidos e unidades você tem para entregar
+                </p>
+              </div>
+
+              {(selectedCategoryFilter !== 'Todos' || selectedSpecificProduct || weekSearchQuery || selectedWeekDay || weekStatusFilter !== 'todos') && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    playAppSound('click');
+                    setSelectedCategoryFilter('Todos');
+                    setSelectedSpecificProduct('');
+                    setWeekSearchQuery('');
+                    setSelectedWeekDay(null);
+                    setWeekStatusFilter('todos');
+                  }}
+                  className="px-3 py-1.5 bg-zinc-950 hover:bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-lg text-[10.5px] font-bold flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  <span>Limpar Filtros</span>
+                </button>
+              )}
+            </div>
+
+            {/* Category Cards */}
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  playAppSound('click');
+                  setSelectedCategoryFilter('Todos');
+                  setSelectedSpecificProduct('');
+                }}
+                className={`px-3.5 py-2 rounded-xl border text-left transition-all cursor-pointer ${
+                  selectedCategoryFilter === 'Todos' && !selectedSpecificProduct
+                    ? 'bg-brand-pink text-black border-brand-pink font-extrabold shadow-sm'
+                    : 'bg-zinc-950/80 border-zinc-800 hover:border-zinc-700 text-zinc-300'
+                }`}
+              >
+                <span className={`text-[10px] uppercase font-black block ${selectedCategoryFilter === 'Todos' && !selectedSpecificProduct ? 'text-black/75' : 'text-zinc-400'}`}>
+                  Todos os Produtos
+                </span>
+                <span className="text-xs font-mono font-black">
+                  {dayAndStatusSales.length} {dayAndStatusSales.length === 1 ? 'pedido' : 'pedidos'} • {totalUnitsInPeriod} un.
+                </span>
+              </button>
+
+              {categoryBreakdown.map(cat => {
+                const isSelected = selectedCategoryFilter === cat.category && !selectedSpecificProduct;
+                return (
+                  <button
+                    key={cat.category}
+                    type="button"
+                    onClick={() => {
+                      playAppSound('click');
+                      setSelectedCategoryFilter(isSelected ? 'Todos' : cat.category);
+                      setSelectedSpecificProduct('');
+                    }}
+                    className={`px-3.5 py-2 rounded-xl border text-left transition-all cursor-pointer ${
+                      isSelected
+                        ? 'bg-sky-600 text-white border-sky-400 font-extrabold shadow-md shadow-sky-950/40'
+                        : 'bg-zinc-950/80 border-zinc-800 hover:border-sky-500/40 text-zinc-200'
+                    }`}
+                  >
+                    <span className={`text-[10px] uppercase font-black block ${isSelected ? 'text-sky-100' : 'text-sky-400'}`}>
+                      {cat.category}
+                    </span>
+                    <span className="text-xs font-mono font-black">
+                      {cat.ordersCount} {cat.ordersCount === 1 ? 'pedido' : 'pedidos'} • {cat.unitsCount} un.
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Search Input + Status Filter + Specific Product Dropdown */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-3 pt-1">
+              <div className="relative md:col-span-5">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                <input
+                  type="text"
+                  value={weekSearchQuery}
+                  onChange={(e) => setWeekSearchQuery(e.target.value)}
+                  placeholder="Buscar produto (ex: copo, bolsa, gin), cliente ou nº pedido..."
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl pl-9 pr-8 py-2.5 text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-sky-500/60 focus:ring-1 focus:ring-sky-500/40"
+                />
+                {weekSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setWeekSearchQuery('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-200 cursor-pointer"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="md:col-span-4">
+                <select
+                  value={selectedSpecificProduct}
+                  onChange={(e) => {
+                    playAppSound('click');
+                    setSelectedSpecificProduct(e.target.value);
+                  }}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-zinc-200 font-semibold focus:outline-none focus:border-sky-500/60"
+                >
+                  <option value="">📦 Filtrar por produto específico ({specificProductsBreakdown.length} tipos)</option>
+                  {specificProductsBreakdown
+                    .filter(p => selectedCategoryFilter === 'Todos' || p.category === selectedCategoryFilter)
+                    .map(p => (
+                      <option key={p.key} value={p.key}>
+                        {p.name} — {p.ordersCount} {p.ordersCount === 1 ? 'pedido' : 'pedidos'} ({p.unitsCount} un.)
+                      </option>
+                    ))}
+                </select>
+              </div>
+
+              <div className="md:col-span-3">
+                <select
+                  value={weekStatusFilter}
+                  onChange={(e) => {
+                    playAppSound('click');
+                    setWeekStatusFilter(e.target.value as any);
+                  }}
+                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 text-xs text-zinc-200 font-semibold focus:outline-none focus:border-sky-500/60"
+                >
+                  <option value="todos">Status: Todos Fechados</option>
+                  <option value="pendentes">Status: A Produzir / Agendados</option>
+                  <option value="prontos">Status: Prontos p/ Retirada</option>
+                  <option value="entregues">Status: Já Entregues</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Active Product/Category Highlight Banner */}
+            {hasProductOrTextFilter && (
+              <div className="bg-sky-950/30 border border-sky-500/35 rounded-xl p-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5">
+                  <Package className="h-5 w-5 text-sky-400 shrink-0" />
+                  <div className="text-xs text-zinc-200">
+                    Resultado do filtro:{' '}
+                    <strong className="text-sky-300 font-black text-sm font-mono">
+                      {weeklyFilteredSales.length} {weeklyFilteredSales.length === 1 ? 'pedido' : 'pedidos'}
+                    </strong>{' '}
+                    para entregar neste período
+                    {matchingItemsUnitsCount > 0 && (
+                      <span>
+                        {' '}• totalizando{' '}
+                        <strong className="text-emerald-300 font-black font-mono">
+                          {matchingItemsUnitsCount} {matchingItemsUnitsCount === 1 ? 'unidade' : 'unidades'}
+                        </strong>{' '}
+                        do item pesquisado
+                      </span>
+                    )}
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono text-zinc-400">
+                  {selectedCategoryFilter !== 'Todos' ? `Categoria: ${selectedCategoryFilter}` : ''}
+                  {selectedSpecificProduct ? ` • Produto selecionado` : ''}
+                  {weekSearchQuery ? ` • Busca: "${weekSearchQuery}"` : ''}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* List of Matching Orders for the Selected Week */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between px-1">
+              <h4 className="text-xs font-black uppercase tracking-wider text-zinc-300">
+                Pedidos Agendados na Semana ({weeklyFilteredSales.length})
+              </h4>
+              <span className="text-[10px] text-zinc-500 font-mono">
+                Ordenados pela data de retirada/entrega
+              </span>
+            </div>
+
+            {weeklyFilteredSales.length === 0 ? (
+              <div className="py-14 text-center bg-zinc-950/30 border border-dashed border-zinc-850 rounded-2xl flex flex-col items-center justify-center space-y-2.5">
+                <CalendarDays className="h-8 w-8 text-zinc-600" />
+                <div>
+                  <h5 className="text-sm font-bold text-zinc-300">Nenhum pedido encontrado neste filtro</h5>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    Não há pedidos fechados para entregar nesta semana com os filtros selecionados.
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {weeklyFilteredSales.map((sale) => {
+                  const normItems = getSaleNormalizedItems(sale);
+                  const isDelivered = sale.statusProducao === 'Entregue';
+                  const isReady = sale.statusProducao === 'Pronto para Retirada';
+                  const qNorm = normalizeText(weekSearchQuery);
+
+                  return (
+                    <div
+                      key={sale.id}
+                      className={`border rounded-2xl p-4 space-y-3 transition-all ${
+                        isDelivered
+                          ? 'bg-zinc-950/40 border-zinc-900 opacity-75'
+                          : isReady
+                            ? 'bg-emerald-950/10 border-emerald-500/30 hover:border-emerald-500/50'
+                            : 'bg-zinc-900/60 border-zinc-800 hover:border-zinc-700'
+                      }`}
+                    >
+                      {/* Top row: Date badge + Order number + Status */}
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-[10px] font-black bg-sky-500/15 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded-md font-mono">
+                            📅 {getWeekdayPt(sale.dataRetirada)}, {formatLocalDate(sale.dataRetirada || '')}
+                          </span>
+                          {sale.turnoEntrega && (
+                            <span className="text-[9.5px] font-bold bg-zinc-950 border border-zinc-800 text-zinc-300 px-1.5 py-0.5 rounded">
+                              {sale.turnoEntrega === 'Manhã' ? '☀️ Manhã' : '🌇 Tarde'}
+                            </span>
+                          )}
+                          <span className="text-[10px] bg-zinc-950 border border-zinc-800 text-zinc-400 font-mono font-bold px-2 py-0.5 rounded-md">
+                            #{sale.numeroPedido || sale.id.substring(0, 5).toUpperCase()}
+                          </span>
+                        </div>
+
+                        <span className={`text-[9.5px] font-bold px-2 py-0.5 rounded border ${
+                          (!sale.statusProducao || sale.statusProducao === 'Agendado') ? 'bg-blue-900/15 text-blue-400 border-blue-900/30' :
+                          sale.statusProducao === 'Em Produção' ? 'bg-amber-900/15 text-amber-400 border-amber-900/30' :
+                          sale.statusProducao === 'Pronto para Retirada' ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' :
+                          sale.statusProducao === 'Agendado para Entrega' ? 'bg-purple-900/15 text-purple-400 border-purple-900/30' :
+                          'bg-emerald-950/30 text-emerald-500 border-emerald-900/30'
+                        }`}>
+                          {sale.statusProducao || 'Agendado'}
+                        </span>
+                      </div>
+
+                      {/* Customer info */}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <h5 className="text-sm font-bold text-zinc-100 truncate flex items-center gap-1.5">
+                            <User className="h-3.5 w-3.5 text-brand-pink shrink-0" />
+                            <span className="truncate">{sale.cliente}</span>
+                          </h5>
+                          {sale.telefoneCliente && (
+                            <p className="text-[10.5px] text-zinc-400 font-mono flex items-center gap-1 mt-0.5">
+                              <Phone className="h-3 w-3 shrink-0" />
+                              <span>{sale.telefoneCliente}</span>
+                            </p>
+                          )}
+                        </div>
+                        <div className="text-right shrink-0">
+                          <span className="text-xs font-mono font-black text-brand-pink block">
+                            R$ {sale.total.toFixed(2)}
+                          </span>
+                          {sale.valorFaltante && sale.valorFaltante > 0 ? (
+                            <span className="text-[9.5px] font-bold text-rose-400">
+                              Falta R$ {sale.valorFaltante.toFixed(2)}
+                            </span>
+                          ) : (
+                            <span className="text-[9.5px] font-bold text-emerald-400">Pago</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Items list highlighting matching products/categories */}
+                      <div className="bg-black/35 border border-zinc-850 rounded-xl p-2.5 space-y-1">
+                        {normItems.map((it, idx) => {
+                          const isHighlighted =
+                            (selectedCategoryFilter !== 'Todos' && it.categoriaGrupo === selectedCategoryFilter) ||
+                            (selectedSpecificProduct && normalizeText(it.nome) === selectedSpecificProduct) ||
+                            (qNorm.length > 0 && (normalizeText(it.nome).includes(qNorm) || normalizeText(it.categoriaGrupo).includes(qNorm)));
+
+                          return (
+                            <div
+                              key={idx}
+                              className={`flex items-center justify-between text-[11px] px-1.5 py-0.5 rounded ${
+                                isHighlighted ? 'bg-sky-500/15 text-sky-200 font-bold border border-sky-500/25' : 'text-zinc-300'
+                              }`}
+                            >
+                              <span className="truncate pr-2">
+                                • {it.nome}{' '}
+                                <span className="text-[9.5px] text-zinc-500 font-normal">({it.categoriaGrupo})</span>
+                              </span>
+                              <span className="font-mono font-bold text-[10.5px] shrink-0">
+                                {it.quantidade}x
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Quick Actions */}
+                      <div className="flex items-center justify-between gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            playAppSound('click');
+                            setSelectedSaleForReceipt(sale);
+                          }}
+                          className="px-2.5 py-1.5 bg-purple-950/40 hover:bg-purple-900/50 text-purple-300 border border-purple-800/40 rounded-lg text-[10.5px] font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span>Ver Recibo</span>
+                        </button>
+
+                        {!isDelivered && (
+                          <button
+                            type="button"
+                            onClick={() => handleReminderAction(sale)}
+                            className="px-3 py-1.5 bg-brand-pink/15 hover:bg-brand-pink text-brand-pink hover:text-black border border-brand-pink/30 rounded-lg text-[10.5px] font-black flex items-center gap-1 cursor-pointer transition-all"
+                          >
+                            <MessageSquare className="h-3.5 w-3.5" />
+                            <span>Avisar / WhatsApp</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {activeSubTab === 'recorrencia' && isAdmin && (

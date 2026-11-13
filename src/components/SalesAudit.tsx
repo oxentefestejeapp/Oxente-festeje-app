@@ -49,7 +49,8 @@ import {
   ComposedChart,
   Line
 } from 'recharts';
-import { Sale, StoreInfo, Product, getProductUnitCost, calculateSaleItemUnitCost, isAvulsoItem, isAvulsoSale, findMatchingProduct, getSaleCostInfo, getSaleAdjustments } from '../types';
+import { Sale, StoreInfo, Product, getProductUnitCost, calculateSaleItemUnitCost, isAvulsoItem, isAvulsoSale, findMatchingProduct, getSaleCostInfo, getSaleAdjustments, detectProductCategoryGroup } from '../types';
+export { detectProductCategoryGroup };
 import { Receipt } from './Receipt';
 import { OptimizedImage } from '../utils/imageOptimizer';
 
@@ -189,22 +190,6 @@ export const formatDateShort = (isoDate?: string) => {
   }
   return isoDate;
 };
-
-export function detectProductCategoryGroup(nome: string, categoria?: string): string {
-  const text = `${categoria || ''} ${nome || ''}`.toLowerCase();
-  if (text.includes('mochila') || text.includes('mochilinha')) return 'Mochilas';
-  if (text.includes('copo') || text.includes('twister') || text.includes('long drink') || text.includes('caldereta')) return 'Copos';
-  if (text.includes('taça') || text.includes('taca') || text.includes('gin') || text.includes('champagne')) return 'Taças';
-  if (text.includes('caneca') || text.includes('chopp')) return 'Canecas';
-  if (text.includes('squeeze') || text.includes('garrafa') || text.includes('cantil')) return 'Squeezes & Garrafas';
-  if (text.includes('bolsa') || text.includes('estojo') || text.includes('necessaire') || text.includes('porta moeda') || text.includes('porta-moeda')) return 'Bolsas & Estojos';
-  if (text.includes('tirante') || text.includes('cordao') || text.includes('cordão') || text.includes('pulseira')) return 'Tirantes & Acessórios';
-  if (text.includes('balde') || text.includes('cooler') || text.includes('champanheira')) return 'Baldes & Gelo';
-  if (categoria && categoria.trim() && !['catálogo', 'catalogo', 'avulso', 'outro', 'outros'].includes(categoria.toLowerCase().trim())) {
-    return categoria.trim();
-  }
-  return 'Outros Produtos';
-}
 
 const isDateInFilter = (
   dateStr: string | undefined, 

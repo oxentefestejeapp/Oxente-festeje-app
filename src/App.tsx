@@ -3155,6 +3155,7 @@ export default function App() {
             {activeTab === 'lembretes' && (
               <RemindersManager
                 sales={sales}
+                products={products}
                 storeInfo={storeInfo}
                 onUpdateSale={handleUpdateSale}
                 isAdmin={isAdmin}

@@ -31,7 +31,7 @@ import {
   Lock
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sale, StoreInfo, Product, SaleItem, formatCpfCnpj, calculateSaleItemUnitCost, SaleProfitAdjustment, getSaleCostInfo, findAddedItemsSummary, getSaleAdjustments } from '../types';
+import { Sale, StoreInfo, Product, SaleItem, formatCpfCnpj, calculateSaleItemUnitCost, SaleProfitAdjustment, getSaleCostInfo, findAddedItemsSummary, getSaleAdjustments, getSaleAdjustmentsForDate } from '../types';
 import { Receipt } from './Receipt';
 import { CelebrationOverlay, UrgentArtOrderInfo } from './CelebrationOverlay';
 import { playAppSound } from '../lib/audio';
@@ -194,22 +194,22 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
     const newCusto = newCostInfo.totalCusto;
     const newLucro = newCostInfo.lucro;
 
-    const diffTotal = Math.max(0, Number((newTotal - oldTotal).toFixed(2)));
-    const diffCusto = Math.max(0, Number((newCusto - oldCusto).toFixed(2)));
-    const diffLucro = Math.max(0, Number((newLucro - oldLucro).toFixed(2)));
+    const diffTotal = Number((newTotal - oldTotal).toFixed(2));
+    const diffCusto = Number((newCusto - oldCusto).toFixed(2));
+    const diffLucro = Number((newLucro - oldLucro).toFixed(2));
 
     const currentAjustes: SaleProfitAdjustment[] = [...getSaleAdjustments(editingSale)];
 
-    // Se houve acréscimo de valor ou lucro por novos produtos adicionados
-    if (diffTotal > 0 || diffLucro > 0) {
-      const addedDesc = findAddedItemsSummary(editingSale.itens || [], finalItensToSave);
+    // Se houve alteração (acréscimo OU diminuição) no valor ou no lucro do pedido
+    if (Math.abs(diffTotal) >= 0.01 || Math.abs(diffLucro) >= 0.01) {
+      const changeDesc = findAddedItemsSummary(editingSale.itens || [], finalItensToSave);
       const newAdjustment: SaleProfitAdjustment = {
         id: `adj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         data: new Date().toISOString(),
         valorAdicional: diffTotal,
         custoAdicional: diffCusto,
         lucroAdicional: diffLucro,
-        descricao: addedDesc,
+        descricao: changeDesc,
         editadoPorEmail: currentUserEmail
       };
       currentAjustes.push(newAdjustment);
@@ -1288,6 +1288,33 @@ Muito obrigado pela confiança e preferência!
                         ))}
                       </div>
                     )}
+
+                    {/* Badge de Acréscimo ou Diminuição ajustado hoje no lucro do dia */}
+                    {(() => {
+                      const ajustes = getSaleAdjustments(sale);
+                      if (ajustes.length === 0) return null;
+                      const now = new Date();
+                      const todayAdjustments = getSaleAdjustmentsForDate(sale, now);
+                      if (todayAdjustments.length > 0) {
+                        const todayLucroInc = todayAdjustments.reduce((sum, a) => sum + (a.lucroAdicional || 0), 0);
+                        if (Math.abs(todayLucroInc) < 0.005) return null;
+                        const isPositive = todayLucroInc >= 0;
+                        const formattedVal = Math.abs(todayLucroInc).toFixed(2);
+                        return (
+                          <div 
+                            className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-md inline-flex items-center gap-1 border ${
+                              isPositive
+                                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
+                                : 'bg-rose-950/80 text-rose-300 border-rose-700/60'
+                            }`}
+                            title={todayAdjustments.map(a => `${a.descricao || 'Ajuste'}: ${a.valorAdicional >= 0 ? '+' : ''}R$ ${a.valorAdicional.toFixed(2)} (${a.lucroAdicional >= 0 ? '+' : ''}R$ ${a.lucroAdicional.toFixed(2)} no lucro)`).join('\n')}
+                          >
+                            <span>{isPositive ? '✨ +' : '📉 -'}R$ {formattedVal} no lucro de hoje</span>
+                          </div>
+                        );
+                      }
+                      return null;
+                    })()}
 
                   {/* Actions to Drag / Pull */}
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-900">

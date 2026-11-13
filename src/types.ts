@@ -527,28 +527,43 @@ export function hasSaleAdditionOnDate(sale: Sale, targetDate: Date | string): bo
 }
 
 /**
- * Gera um texto descritivo dos itens adicionados ou aumentados na edição de um pedido
+ * Gera um texto descritivo dos itens adicionados, aumentados ou diminuídos na edição de um pedido
  */
-export function findAddedItemsSummary(oldItens: SaleItem[] = [], newItens: SaleItem[] = []): string {
-  const added: string[] = [];
+export function findItemsChangeSummary(oldItens: SaleItem[] = [], newItens: SaleItem[] = []): string {
+  const changes: string[] = [];
   
+  // 1. Itens novos ou alterados
   newItens.forEach(newItem => {
     const matchingOld = oldItens.find(oi => (oi.produtoId && oi.produtoId === newItem.produtoId) || (oi.produtoNome === newItem.produtoNome));
+    const nome = newItem.produtoNome || newItem.nome || 'Produto';
     if (!matchingOld) {
-      const nome = newItem.produtoNome || newItem.nome || 'Produto';
-      added.push(`${nome} (${newItem.quantidade} un.)`);
+      changes.push(`+${newItem.quantidade} un. ${nome}`);
     } else if (newItem.quantidade > matchingOld.quantidade) {
       const diffQtd = newItem.quantidade - matchingOld.quantidade;
-      const nome = newItem.produtoNome || newItem.nome || 'Produto';
-      added.push(`+${diffQtd} un. ${nome}`);
+      changes.push(`+${diffQtd} un. ${nome}`);
+    } else if (newItem.quantidade < matchingOld.quantidade) {
+      const diffQtd = matchingOld.quantidade - newItem.quantidade;
+      changes.push(`-${diffQtd} un. ${nome}`);
     }
   });
 
-  if (added.length === 0) {
-    return 'Acréscimo de produtos';
+  // 2. Itens removidos completamente
+  oldItens.forEach(oldItem => {
+    const matchingNew = newItens.find(ni => (ni.produtoId && ni.produtoId === oldItem.produtoId) || (ni.produtoNome === oldItem.produtoNome));
+    if (!matchingNew) {
+      const nome = oldItem.produtoNome || oldItem.nome || 'Produto';
+      changes.push(`Removido: ${nome} (${oldItem.quantidade} un.)`);
+    }
+  });
+
+  if (changes.length === 0) {
+    return 'Ajuste de valor/itens';
   }
-  return `Adicionado: ${added.join(', ')}`;
+  return changes.join(', ');
 }
+
+export const findAddedItemsSummary = findItemsChangeSummary;
+export const hasSaleAdjustmentOnDate = hasSaleAdditionOnDate;
 
 export type ExpenseCategory = 
   | 'fixa'          // Aluguel, energia, internet, água, contador
@@ -613,3 +628,41 @@ export function formatCpfCnpj(value: string): string {
       .replace(/(\d{4})(\d{1,2})$/, '$1-$2');
   }
 }
+
+/**
+ * Agrupa um produto em categorias padronizadas para relatórios e planejamento de produção
+ */
+export function detectProductCategoryGroup(nome: string, categoria?: string): string {
+  const rawText = `${categoria || ''} ${nome || ''}`;
+  const text = rawText
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+
+  if (text.includes('mochila') || text.includes('mochilinha')) return 'Mochilas';
+  if (text.includes('copo') || text.includes('twister') || text.includes('long drink') || text.includes('caldereta') || text.includes('eco') && text.includes('copo')) return 'Copos';
+  if (text.includes('taca') || text.includes('gin') || text.includes('champagne')) return 'Taças';
+  if (text.includes('caneca') || text.includes('chopp')) return 'Canecas';
+  if (text.includes('squeeze') || text.includes('garrafa') || text.includes('cantil')) return 'Squeezes & Garrafas';
+  if (
+    text.includes('bolsa') ||
+    text.includes('estojo') ||
+    text.includes('necessaire') ||
+    text.includes('porta moeda') ||
+    text.includes('porta-moeda') ||
+    text.includes('sacola') ||
+    text.includes('ecobag') ||
+    text.includes('frasqueira') ||
+    text.includes('lancheira')
+  ) {
+    return 'Bolsas & Estojos';
+  }
+  if (text.includes('tirante') || text.includes('cordao') || text.includes('pulseira')) return 'Tirantes & Acessórios';
+  if (text.includes('balde') || text.includes('cooler') || text.includes('champanheira')) return 'Baldes & Gelo';
+
+  if (categoria && categoria.trim() && !['catálogo', 'catalogo', 'avulso', 'outro', 'outros'].includes(categoria.toLowerCase().trim())) {
+    return categoria.trim();
+  }
+  return 'Outros Produtos';
+}
+

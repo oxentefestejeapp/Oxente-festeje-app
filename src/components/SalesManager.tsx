@@ -1578,21 +1578,22 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     const newCusto = newCostInfo.totalCusto;
     const newLucro = newCostInfo.lucro;
 
-    const diffTotal = Math.max(0, Number((newTotal - oldTotal).toFixed(2)));
-    const diffCusto = Math.max(0, Number((newCusto - oldCusto).toFixed(2)));
-    const diffLucro = Math.max(0, Number((newLucro - oldLucro).toFixed(2)));
+    const diffTotal = Number((newTotal - oldTotal).toFixed(2));
+    const diffCusto = Number((newCusto - oldCusto).toFixed(2));
+    const diffLucro = Number((newLucro - oldLucro).toFixed(2));
 
     const currentAjustes: SaleProfitAdjustment[] = [...getSaleAdjustments(editingSale)];
 
-    if (!isBudget && (diffTotal > 0 || diffLucro > 0)) {
-      const addedDesc = findAddedItemsSummary(editingSale.itens || [], finalItensToSave);
+    // Se houve alteração (acréscimo OU diminuição) no valor ou no lucro do pedido
+    if (!isBudget && (Math.abs(diffTotal) >= 0.01 || Math.abs(diffLucro) >= 0.01)) {
+      const changeDesc = findAddedItemsSummary(editingSale.itens || [], finalItensToSave);
       const newAdjustment: SaleProfitAdjustment = {
         id: `adj-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
         data: new Date().toISOString(),
         valorAdicional: diffTotal,
         custoAdicional: diffCusto,
         lucroAdicional: diffLucro,
-        descricao: addedDesc,
+        descricao: changeDesc,
         editadoPorEmail: currentUserEmail
       };
       currentAjustes.push(newAdjustment);
@@ -1605,7 +1606,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       ((editingSale.documentoCliente || editingSale.cpfCnpj || '') !== (editDocumentoCliente.trim() || '')) ||
       (editingSale.total !== editTotal) ||
       (editingSale.valorPago !== finalValorPago) ||
-      (diffTotal > 0 || diffLucro > 0) ||
+      (Math.abs(diffTotal) >= 0.01 || Math.abs(diffLucro) >= 0.01) ||
       (JSON.stringify(editingSale.itens || []) !== JSON.stringify(finalItensToSave));
 
     const updatedSale: Sale = {
@@ -1862,7 +1863,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
         } catch {}
       });
 
-      if (saleContributedRevenue > 0 || saleContributedProfit > 0 || baseMatches) {
+      if (saleContributedRevenue !== 0 || saleContributedProfit !== 0 || baseMatches) {
         totalRevenue += saleContributedRevenue;
         totalEstimatedCost += saleContributedCost;
         totalNetProfit += saleContributedProfit;
@@ -3939,7 +3940,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                               </div>
                             )}
 
-                            {/* Badge de Acréscimo adicionado hoje ao lucro do dia */}
+                            {/* Badge de Acréscimo ou Diminuição ajustado hoje no lucro do dia */}
                             {(() => {
                               const ajustes = getSaleAdjustments(sale);
                               if (ajustes.length === 0) return null;
@@ -3947,13 +3948,24 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                               const todayAdjustments = getSaleAdjustmentsForDate(sale, now);
                               if (todayAdjustments.length > 0) {
                                 const todayLucroInc = todayAdjustments.reduce((sum, a) => sum + (a.lucroAdicional || 0), 0);
+                                if (Math.abs(todayLucroInc) < 0.005) return null;
+                                const isPositive = todayLucroInc >= 0;
+                                const formattedVal = Math.abs(todayLucroInc).toFixed(2);
                                 return (
                                   <div 
-                                    className="mt-1 text-[8.5px] font-mono px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/60 inline-flex items-center gap-1 shadow-sm"
-                                    title={todayAdjustments.map(a => `${a.descricao || 'Acréscimo'}: +R$ ${a.valorAdicional.toFixed(2)} (+R$ ${a.lucroAdicional.toFixed(2)} no lucro)`).join('\n')}
+                                    className={`mt-1 text-[8.5px] font-mono px-1.5 py-0.5 rounded inline-flex items-center gap-1 shadow-sm border ${
+                                      isPositive
+                                        ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
+                                        : 'bg-rose-950/80 text-rose-300 border-rose-700/60'
+                                    }`}
+                                    title={todayAdjustments.map(a => `${a.descricao || 'Ajuste'}: ${a.valorAdicional >= 0 ? '+' : ''}R$ ${a.valorAdicional.toFixed(2)} (${a.lucroAdicional >= 0 ? '+' : ''}R$ ${a.lucroAdicional.toFixed(2)} no lucro)`).join('\n')}
                                   >
-                                    <Sparkles className="h-2.5 w-2.5 text-emerald-400 shrink-0" />
-                                    <span>+R$ {todayLucroInc.toFixed(2)} lucro hoje</span>
+                                    {isPositive ? (
+                                      <Sparkles className="h-2.5 w-2.5 text-emerald-400 shrink-0" />
+                                    ) : (
+                                      <TrendingDown className="h-2.5 w-2.5 text-rose-400 shrink-0" />
+                                    )}
+                                    <span>{isPositive ? '+' : '-'}R$ {formattedVal} lucro hoje</span>
                                   </div>
                                 );
                               }
