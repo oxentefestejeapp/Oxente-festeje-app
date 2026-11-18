@@ -13,7 +13,7 @@ const DEFAULT_TEMPLATES: MessageTemplate[] = [
   {
     id: 'anotado',
     title: 'Pedido Anotado 📝',
-    text: 'Olá, {cliente}! Seu pedido foi anotado com sucesso e já está em nossa linha de produção! Logo entraremos em contato com mais novidades. Muito obrigado pela preferência! Oxente Festeje 🎈\n\n🎨A partir de agora, será encaminhado para fila de artes do design.\n\n🚨 Ele poderá entrar em contato com 1 a 3 dias uteis, sem alteração da data da entrega.',
+    text: 'Olá, {cliente}! Seu pedido foi anotado com sucesso e já está em nossa linha de produção! Logo entraremos em contato com mais novidades. Muito obrigado pela preferência! Oxente Festeje 🎈\n\n🎨A partir de agora, será encaminhado para fila de artes do design.\n\n🚨 Ele poderá entrar em contato com 1 a 8 dias uteis, dependendo do quão urgente é o seu pedido, mas sem alteração da data da entrega.',
     isDefault: true
   },
   {
@@ -59,7 +59,21 @@ export function WhatsAppWebTab({ sales, storeInfo }: WhatsAppWebTabProps) {
     const stored = localStorage.getItem('oxente_whatsapp_templates');
     if (stored) {
       try {
-        return JSON.parse(stored);
+        const parsed: MessageTemplate[] = JSON.parse(stored);
+        const oldPhrase = '🚨 Ele poderá entrar em contato com 1 a 3 dias uteis, sem alteração da data da entrega.';
+        const newPhrase = '🚨 Ele poderá entrar em contato com 1 a 8 dias uteis, dependendo do quão urgente é o seu pedido, mas sem alteração da data da entrega.';
+        let migrated = false;
+        const updated = parsed.map((tpl) => {
+          if (tpl.id === 'anotado' && tpl.text.includes(oldPhrase)) {
+            migrated = true;
+            return { ...tpl, text: tpl.text.replace(oldPhrase, newPhrase) };
+          }
+          return tpl;
+        });
+        if (migrated) {
+          localStorage.setItem('oxente_whatsapp_templates', JSON.stringify(updated));
+        }
+        return updated;
       } catch (e) {
         console.warn('Erro ao carregar templates do localStorage', e);
       }

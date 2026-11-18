@@ -1721,7 +1721,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
 
 🎨A partir de agora, será encaminhado para fila de artes do design.
 
-🚨 Ele poderá entrar em contato com 1 a 3 dias uteis, sem alteração da data da entrega.`;
+🚨 Ele poderá entrar em contato com 1 a 8 dias uteis, dependendo do quão urgente é o seu pedido, mas sem alteração da data da entrega.`;
 
     const encodedText = encodeURIComponent(message);
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
