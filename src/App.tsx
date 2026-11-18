@@ -38,20 +38,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { supabase, dbSupabase, mapDbToProduct, mapDbToSale, getFormattedSupabaseError, getSupabaseConfig, isUsersTableSupported } from './lib/supabase';
 
 import { Header } from './components/Header';
-import { ProductForm } from './components/ProductForm';
-import { StockManager } from './components/StockManager';
 import { SalesManager } from './components/SalesManager';
-import { SettingsManager } from './components/SettingsManager';
 import { SettingsLockGate } from './components/SettingsLockGate';
-import { FinancialDREManager } from './components/FinancialDREManager';
-import { DeliveryManager } from './components/DeliveryManager';
-import { ReceivablesManager } from './components/ReceivablesManager';
 import { Login } from './components/Login';
 import { PendingApproval } from './components/PendingApproval';
-import { UserApprovals } from './components/UserApprovals';
-const SalesAudit = lazy(() => import('./components/SalesAudit').then(m => ({ default: m.SalesAudit })));
-import { RemindersManager } from './components/RemindersManager';
-import { ClosedOrdersManager } from './components/ClosedOrdersManager';
 import { dispatchNewOrderNotification, dispatchOrderEditedNotification } from './lib/notifications';
 import { 
   incrementMobileOrderBadge, 
@@ -61,17 +51,28 @@ import {
   dispatchOrderPushNotification,
   isMobileDevice 
 } from './lib/mobileBadgeNotification';
-import { WhatsAppWebTab } from './components/WhatsAppWebTab';
 import { CelebrationOverlay } from './components/CelebrationOverlay';
 import { ShortFeedbackToast, ShortFeedback } from './components/ShortFeedbackToast';
-import InstallAppTab from './components/InstallAppTab';
-import { SchedulingManager } from './components/SchedulingManager';
-import QrScannerTab from './components/QrScannerTab';
-import { OrderTrackingPage } from './components/OrderTrackingPage';
-import { LandingPage } from './components/LandingPage';
 import { SystemProductPhotoModal } from './components/SystemProductPhotoModal';
-import { TeamChatWidget } from './components/TeamChatWidget';
 import { disableGoogleAds } from './lib/analytics';
+
+// 🚀 Lazy loading de abas e telas pesadas para carregamento rápido no celular/4G
+const ProductForm = lazy(() => import('./components/ProductForm').then(m => ({ default: m.ProductForm })));
+const StockManager = lazy(() => import('./components/StockManager').then(m => ({ default: m.StockManager })));
+const SettingsManager = lazy(() => import('./components/SettingsManager').then(m => ({ default: m.SettingsManager })));
+const FinancialDREManager = lazy(() => import('./components/FinancialDREManager').then(m => ({ default: m.FinancialDREManager })));
+const DeliveryManager = lazy(() => import('./components/DeliveryManager').then(m => ({ default: m.DeliveryManager })));
+const ReceivablesManager = lazy(() => import('./components/ReceivablesManager').then(m => ({ default: m.ReceivablesManager })));
+const UserApprovals = lazy(() => import('./components/UserApprovals').then(m => ({ default: m.UserApprovals })));
+const SalesAudit = lazy(() => import('./components/SalesAudit').then(m => ({ default: m.SalesAudit })));
+const RemindersManager = lazy(() => import('./components/RemindersManager').then(m => ({ default: m.RemindersManager })));
+const ClosedOrdersManager = lazy(() => import('./components/ClosedOrdersManager').then(m => ({ default: m.ClosedOrdersManager })));
+const WhatsAppWebTab = lazy(() => import('./components/WhatsAppWebTab').then(m => ({ default: m.WhatsAppWebTab })));
+const SchedulingManager = lazy(() => import('./components/SchedulingManager').then(m => ({ default: m.SchedulingManager })));
+const QrScannerTab = lazy(() => import('./components/QrScannerTab'));
+const OrderTrackingPage = lazy(() => import('./components/OrderTrackingPage').then(m => ({ default: m.OrderTrackingPage })));
+const LandingPage = lazy(() => import('./components/LandingPage').then(m => ({ default: m.LandingPage })));
+const TeamChatWidget = lazy(() => import('./components/TeamChatWidget').then(m => ({ default: m.TeamChatWidget })));
 
 import { Product, Sale, StoreInfo } from './types';
 import { defaultProducts, defaultSales, defaultStoreInfo } from './defaultData';
@@ -2498,7 +2499,16 @@ export default function App() {
   const isTracking = trackingParams.has('acompanhar') || trackingParams.has('pedido') || trackingParams.has('venda') || trackingParams.has('aprovar');
 
   if (isTracking) {
-    return <OrderTrackingPage />;
+    return (
+      <Suspense fallback={
+        <div className="min-h-screen bg-black flex flex-col items-center justify-center font-sans select-none antialiased">
+          <Loader2 className="h-8 w-8 animate-spin text-brand-pink mb-3" />
+          <p className="text-xs font-semibold text-zinc-400">Carregando pedido...</p>
+        </div>
+      }>
+        <OrderTrackingPage />
+      </Suspense>
+    );
   }
 
   if (userStatus === 'loading') {
@@ -2523,14 +2533,21 @@ export default function App() {
 
   if ((!isLandingBypassed && userStatus !== 'approved') || (isDirectMuralUrl() && userStatus !== 'approved')) {
     return (
-      <LandingPage 
-        onUnlockSystem={() => {
-          localStorage.setItem('oxente_landing_bypassed', 'true');
-          setIsLandingBypassed(true);
-        }}
-        savedPhone={storeInfo?.telefone}
-        savedAddress={storeInfo?.endereco}
-      />
+      <Suspense fallback={
+        <div className="min-h-screen bg-black flex flex-col items-center justify-center font-sans select-none antialiased">
+          <Loader2 className="h-8 w-8 animate-spin text-brand-pink mb-3" />
+          <p className="text-xs font-semibold text-zinc-400">Carregando vitrine...</p>
+        </div>
+      }>
+        <LandingPage 
+          onUnlockSystem={() => {
+            localStorage.setItem('oxente_landing_bypassed', 'true');
+            setIsLandingBypassed(true);
+          }}
+          savedPhone={storeInfo?.telefone}
+          savedAddress={storeInfo?.endereco}
+        />
+      </Suspense>
     );
   }
 
@@ -3021,6 +3038,12 @@ export default function App() {
         </div>
 
         {/* Tab Components Render View */}
+        <Suspense fallback={
+          <div className="flex flex-col items-center justify-center min-h-[340px] gap-3 bg-zinc-900/35 border border-zinc-850/70 rounded-2xl p-8 text-zinc-400">
+            <div className="w-7 h-7 border-2 border-brand-pink border-t-transparent rounded-full animate-spin" />
+            <span className="text-xs font-semibold text-zinc-300">Carregando módulo...</span>
+          </div>
+        }>
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -3330,6 +3353,7 @@ export default function App() {
             )}
           </motion.div>
         </AnimatePresence>
+        </Suspense>
 
       </main>
 
@@ -3374,10 +3398,12 @@ export default function App() {
       <SystemProductPhotoModal />
 
       {/* Internal Team Chat Widget (available strictly in the management area) */}
-      <TeamChatWidget 
-        currentUser={firebaseUser} 
-        isAdmin={isAdmin} 
-      />
+      <Suspense fallback={null}>
+        <TeamChatWidget 
+          currentUser={firebaseUser} 
+          isAdmin={isAdmin} 
+        />
+      </Suspense>
 
     </div>
   );

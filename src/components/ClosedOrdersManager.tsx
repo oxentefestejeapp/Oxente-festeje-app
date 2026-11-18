@@ -28,7 +28,8 @@ import {
   Filter,
   EyeOff,
   Flame,
-  Lock
+  Lock,
+  ArrowUpDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sale, StoreInfo, Product, SaleItem, formatCpfCnpj, calculateSaleItemUnitCost, SaleProfitAdjustment, getSaleCostInfo, findAddedItemsSummary, getSaleAdjustments, getSaleAdjustmentsForDate } from '../types';
@@ -82,6 +83,11 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   const [showRemovedFromDesign, setShowRemovedFromDesign] = useState(false);
   const [hideFinishedInColumns, setHideFinishedInColumns] = useState(false);
   const [filterUrgentOnly, setFilterUrgentOnly] = useState(false);
+  const [sortByPriority, setSortByPriority] = useState(true);
+  const [filterPendingApprovalOnly, setFilterPendingApprovalOnly] = useState(false);
+  const [col1Limit, setCol1Limit] = useState(35);
+  const [col2Limit, setCol2Limit] = useState(35);
+  const [col3Limit, setCol3Limit] = useState(35);
 
   const paymentMethods: { value: 'Pix' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito'; label: string; icon: string }[] = [
     { value: 'Pix', label: 'Pix', icon: '⚡' },
@@ -395,6 +401,65 @@ Muito obrigado pela confiança e preferência!
     }
   };
 
+  // Quantas horas se passaram desde o envio/finalização da arte sem aprovação do cliente
+  const getHoursWaitingApproval = (sale: Sale): number => {
+    if (sale.statusArte !== 'Arte Finalizada' || sale.clienteAprovouLayout) return 0;
+    const refDateStr = sale.arteFinalizadaEm || sale.puxadoEm || sale.data;
+    if (!refDateStr) return 0;
+    try {
+      const diffMs = Date.now() - new Date(refDateStr).getTime();
+      return Math.max(0, Math.floor(diffMs / (1000 * 60 * 60)));
+    } catch {
+      return 0;
+    }
+  };
+
+  const formatWaitingTime = (hours: number): string => {
+    if (hours < 1) return 'agora';
+    if (hours < 24) return `há ${hours}h`;
+    const days = Math.floor(hours / 24);
+    const remHours = hours % 24;
+    return remHours > 0 ? `há ${days}d ${remHours}h` : `há ${days}d`;
+  };
+
+  // Mensagem de cobrança rápida no WhatsApp para artes paradas aguardando aprovação (+24h/+48h)
+  const sendLayoutApprovalReminderWhatsapp = (sale: Sale, waitingHours: number) => {
+    const clientName = sale.cliente || 'Cliente';
+    const storeName = storeInfo?.nome && !/^\d{10,}$/.test(storeInfo.nome.trim()) ? storeInfo.nome : 'Oxente Festeje';
+    const baseUrl = window.location.origin;
+    const approvalParam = encodeURIComponent(sale.numeroPedido || sale.id);
+    const approvalLink = `${baseUrl}/?aprovar=${approvalParam}`;
+    const pickupText = sale.dataRetirada
+      ? new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')
+      : null;
+
+    const tempoMsg = waitingHours >= 24
+      ? `já faz cerca de *${waitingHours >= 48 ? `${Math.floor(waitingHours / 24)} dias` : `${waitingHours} horas`}* que enviamos a prévia da sua arte`
+      : 'enviamos a prévia da sua arte recentemente';
+
+    const text = `Olá, *${clientName}*! Tudo bem? 🎨✨
+
+Passando com carinho para lembrar do seu pedido *#${sale.numeroPedido || sale.id.substring(0, 5)}* — ${tempoMsg} e ele ainda aguarda sua confirmação para entrarmos na produção!${pickupText ? `\n\n📅 *Data prevista de entrega/retirada:* ${pickupText}` : ''}
+
+⚠️ Como a confecção só é liberada após a aprovação, confirme assim que puder pelo link abaixo (leva 1 clique) para não atrasar o seu prazo:
+🔗 ${approvalLink}
+
+Qualquer ajuste que precisar, estamos por aqui!
+*${storeName}* 🎈`;
+
+    const numToUse = formatWhatsappNumber(sale.telefoneCliente);
+    const encodedText = encodeURIComponent(text);
+    const url = numToUse
+      ? `https://api.whatsapp.com/send?phone=${numToUse}&text=${encodedText}`
+      : `https://api.whatsapp.com/send?text=${encodedText}`;
+
+    try {
+      window.open(url, '_blank');
+    } catch (e) {
+      console.warn('Erro ao abrir WhatsApp para cobrança de aprovação:', e);
+    }
+  };
+
   // Toggle Artwork Finished Status
   const handleToggleArtworkStatus = async (sale: Sale) => {
     const nextStatus = sale.statusArte === 'Arte Finalizada' ? 'Pendente' : 'Arte Finalizada';
@@ -555,15 +620,115 @@ Muito obrigado pela confiança e preferência!
     }
   };
 
-  // Urgent orders that still have pending artwork
+  // Calcula quantos dias faltam até a data de retirada (negativo = atrasado)
+  const getDaysUntilPickup = (sale: Sale): number | null => {
+    if (!sale.dataRetirada) return null;
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const pickupDate = new Date(sale.dataRetirada + 'T12:00:00');
+      pickupDate.setHours(0, 0, 0, 0);
+      return Math.round((pickupDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    } catch {
+      return null;
+    }
+  };
+
+  // Ordenação por prioridade real da Fila de Artes:
+  // 1) Artes pendentes de finalização no topo, ordenadas pela entrega mais próxima + taxa de urgência
+  // 2) Artes finalizadas aguardando aprovação há +48h / +24h / <24h
+  // 3) Artes já aprovadas pelo cliente por último
+  const compareByArtPriority = (a: Sale, b: Sale): number => {
+    const getBucket = (s: Sale) => {
+      if (s.statusArte !== 'Arte Finalizada') return 0; // Pendente de criação -> prioridade máxima
+      if (!s.clienteAprovouLayout) {
+        const hrs = getHoursWaitingApproval(s);
+        if (hrs >= 48) return 1; // Aprovação travada +48h
+        if (hrs >= 24) return 2; // Aprovação travada +24h
+        return 3; // Aguardando aprovação recente
+      }
+      return 4; // Arte já aprovada
+    };
+
+    const bucketA = getBucket(a);
+    const bucketB = getBucket(b);
+    if (bucketA !== bucketB) return bucketA - bucketB;
+
+    const daysA = getDaysUntilPickup(a);
+    const daysB = getDaysUntilPickup(b);
+
+    // Dentro de artes pendentes (bucket 0): considerar entrega mais próxima + taxa de urgência
+    if (bucketA === 0) {
+      const scoreA = daysA !== null ? daysA - (a.temTaxaUrgencia ? 2 : 0) : (a.temTaxaUrgencia ? 0 : 9999);
+      const scoreB = daysB !== null ? daysB - (b.temTaxaUrgencia ? 2 : 0) : (b.temTaxaUrgencia ? 0 : 9999);
+      if (scoreA !== scoreB) return scoreA - scoreB;
+    }
+
+    // Dentro dos grupos aguardando aprovação (buckets 1-3): entrega mais próxima e maior tempo de espera
+    if (bucketA >= 1 && bucketA <= 3) {
+      const dA = daysA !== null ? daysA : 9999;
+      const dB = daysB !== null ? daysB : 9999;
+      if (dA !== dB) return dA - dB;
+      const wA = getHoursWaitingApproval(a);
+      const wB = getHoursWaitingApproval(b);
+      if (wA !== wB) return wB - wA;
+    }
+
+    // Por data de retirada exata
+    if (a.dataRetirada && b.dataRetirada && a.dataRetirada !== b.dataRetirada) {
+      return a.dataRetirada.localeCompare(b.dataRetirada);
+    }
+    if (a.dataRetirada && !b.dataRetirada) return -1;
+    if (!a.dataRetirada && b.dataRetirada) return 1;
+
+    // Desempate: pedido mais antigo primeiro (evita pedido antigo ficar esquecido)
+    return new Date(a.data || 0).getTime() - new Date(b.data || 0).getTime();
+  };
+
+  // Urgent orders that still have pending artwork (ordenadas por entrega mais próxima)
   const urgentArtOrders = useMemo(() => {
-    return sales.filter(s => {
-      if (s.status === 'Orçamento') return false;
-      if (s.removerDoDesign) return false;
-      if (s.statusArte === 'Arte Finalizada') return false;
-      return isUrgent(s);
-    });
+    return sales
+      .filter(s => {
+        if (s.status === 'Orçamento') return false;
+        if (s.removerDoDesign) return false;
+        if (s.statusArte === 'Arte Finalizada') return false;
+        return isUrgent(s);
+      })
+      .sort(compareByArtPriority);
   }, [sales, products]);
+
+  // Artes finalizadas/enviadas em que o cliente ainda não aprovou o layout (+24h / +48h)
+  const pendingApprovalOrders = useMemo(() => {
+    return sales
+      .filter(s => {
+        if (s.status === 'Orçamento') return false;
+        if (s.removerDoDesign) return false;
+        if (s.statusArte !== 'Arte Finalizada') return false;
+        return !s.clienteAprovouLayout;
+      })
+      .map(sale => ({
+        sale,
+        waitingHours: getHoursWaitingApproval(sale)
+      }))
+      .sort((a, b) => {
+        // Prioriza quem espera há mais tempo e tem entrega mais próxima
+        const dA = getDaysUntilPickup(a.sale) ?? 9999;
+        const dB = getDaysUntilPickup(b.sale) ?? 9999;
+        const critA = a.waitingHours >= 48 ? 2 : a.waitingHours >= 24 ? 1 : 0;
+        const critB = b.waitingHours >= 48 ? 2 : b.waitingHours >= 24 ? 1 : 0;
+        if (critA !== critB) return critB - critA;
+        if (dA !== dB) return dA - dB;
+        return b.waitingHours - a.waitingHours;
+      });
+  }, [sales]);
+
+  const delayedApprovalOrders = useMemo(() => {
+    return pendingApprovalOrders.filter(item => item.waitingHours >= 24);
+  }, [pendingApprovalOrders]);
+
+  const critical48hApprovalCount = useMemo(() => {
+    return pendingApprovalOrders.filter(item => item.waitingHours >= 48).length;
+  }, [pendingApprovalOrders]);
 
   const urgentOrdersInfoList: UrgentArtOrderInfo[] = useMemo(() => {
     return urgentArtOrders.map(s => ({
@@ -734,13 +899,19 @@ Muito obrigado pela confiança e preferência!
     if (filterUrgentOnly) {
       list = list.filter(s => isUrgent(s));
     }
+    if (filterPendingApprovalOnly) {
+      list = list.filter(s => s.statusArte === 'Arte Finalizada' && !s.clienteAprovouLayout);
+    }
+    if (sortByPriority) {
+      return [...list].sort(compareByArtPriority);
+    }
     return [...list].sort((a, b) => {
       if (!a.dataRetirada && !b.dataRetirada) return 0;
       if (!a.dataRetirada) return 1;
       if (!b.dataRetirada) return -1;
       return a.dataRetirada.localeCompare(b.dataRetirada);
     });
-  }, [filteredSales, filterUrgentOnly]);
+  }, [filteredSales, filterUrgentOnly, filterPendingApprovalOnly, sortByPriority, products]);
 
   const rawDesigner1Orders = useMemo(() => {
     return filteredSales.filter(s => s.designerId === 'designer1');
@@ -758,8 +929,14 @@ Muito obrigado pela confiança e preferência!
     if (filterUrgentOnly) {
       list = list.filter(s => isUrgent(s));
     }
+    if (filterPendingApprovalOnly) {
+      list = list.filter(s => s.statusArte === 'Arte Finalizada' && !s.clienteAprovouLayout);
+    }
+    if (sortByPriority) {
+      return [...list].sort(compareByArtPriority);
+    }
     return list;
-  }, [rawDesigner1Orders, hideFinishedInColumns, filterUrgentOnly]);
+  }, [rawDesigner1Orders, hideFinishedInColumns, filterUrgentOnly, filterPendingApprovalOnly, sortByPriority, products]);
 
   const designer2Orders = useMemo(() => {
     let list = rawDesigner2Orders;
@@ -769,8 +946,14 @@ Muito obrigado pela confiança e preferência!
     if (filterUrgentOnly) {
       list = list.filter(s => isUrgent(s));
     }
+    if (filterPendingApprovalOnly) {
+      list = list.filter(s => s.statusArte === 'Arte Finalizada' && !s.clienteAprovouLayout);
+    }
+    if (sortByPriority) {
+      return [...list].sort(compareByArtPriority);
+    }
     return list;
-  }, [rawDesigner2Orders, hideFinishedInColumns, filterUrgentOnly]);
+  }, [rawDesigner2Orders, hideFinishedInColumns, filterUrgentOnly, filterPendingApprovalOnly, sortByPriority, products]);
 
   // Metrics calculations
   const totalUnassigned = useMemo(() => filteredSales.filter(s => !s.designerId).length, [filteredSales]);
@@ -913,6 +1096,121 @@ Muito obrigado pela confiança e preferência!
                 </span>
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* ⏳ ALERTA DE ARTES ENVIADAS AGUARDANDO APROVAÇÃO DO CLIENTE HÁ +24h / +48h */}
+      {delayedApprovalOrders.length > 0 && (
+        <div className="bg-gradient-to-r from-amber-950/50 via-orange-950/25 to-zinc-950 border-2 border-amber-500/45 rounded-2xl p-4 sm:p-5 shadow-[0_0_24px_rgba(245,158,11,0.16)] space-y-3 relative overflow-hidden animate-fade-in">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-amber-500/20 border border-amber-500/40 text-amber-400 rounded-2xl flex items-center justify-center shrink-0">
+                <Clock className="h-5 w-5 text-amber-400 animate-pulse" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[10px] font-black uppercase tracking-widest text-amber-300 bg-amber-500/20 px-2 py-0.5 rounded-full border border-amber-500/30">
+                    ⏳ Cobrança de Aprovação
+                  </span>
+                  <span className="text-[11px] font-extrabold text-amber-400 font-mono">
+                    {delayedApprovalOrders.length} {delayedApprovalOrders.length === 1 ? 'arte parada há +24h' : 'artes paradas há +24h'}
+                  </span>
+                  {critical48hApprovalCount > 0 && (
+                    <span className="text-[10px] font-black text-rose-300 bg-rose-500/20 border border-rose-500/40 px-2 py-0.5 rounded-full animate-pulse">
+                      🚨 {critical48hApprovalCount} com +48h
+                    </span>
+                  )}
+                </div>
+                <h3 className="text-sm font-black text-zinc-100 mt-1">
+                  Clientes que receberam a arte e ainda não aprovaram o layout
+                </h3>
+                <p className="text-[11px] text-zinc-400">
+                  Cobre a aprovação em 1 clique no WhatsApp para liberar a confecção e não atrasar a entrega
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                playAppSound('click');
+                setFilterPendingApprovalOnly(prev => !prev);
+                if (hideFinishedInColumns) setHideFinishedInColumns(false);
+              }}
+              className={`w-full sm:w-auto px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 border shadow-sm ${
+                filterPendingApprovalOnly
+                  ? 'bg-amber-500 text-black border-amber-400'
+                  : 'bg-amber-500/15 text-amber-200 border-amber-500/35 hover:bg-amber-500/25'
+              }`}
+            >
+              <Filter className="h-3.5 w-3.5" />
+              <span>{filterPendingApprovalOnly ? 'Mostrar Toda a Fila' : 'Filtrar Aguardando Aprovação'}</span>
+            </button>
+          </div>
+
+          {/* Cards compactos com botão de cobrança em 1 clique */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 pt-2 border-t border-amber-500/20">
+            {delayedApprovalOrders.map(({ sale, waitingHours }) => {
+              const is48h = waitingHours >= 48;
+              return (
+                <div
+                  key={sale.id}
+                  onClick={() => handleSelectSaleForReceipt(sale)}
+                  className={`flex items-center justify-between gap-2 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                    is48h
+                      ? 'bg-rose-950/35 border-rose-500/45 hover:border-rose-400'
+                      : 'bg-zinc-950/85 border-amber-500/30 hover:border-amber-400'
+                  }`}
+                >
+                  <div className="min-w-0 space-y-0.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-extrabold text-zinc-100 truncate max-w-[130px]">
+                        {sale.cliente}
+                      </span>
+                      <span className="text-[9.5px] font-mono text-zinc-400 bg-zinc-900 border border-zinc-800 px-1 py-0.5 rounded">
+                        #{sale.numeroPedido || sale.id.substring(0, 5)}
+                      </span>
+                      {sale.designerId && (
+                        <span className={`text-[9px] font-black px-1 py-0.5 rounded ${
+                          sale.designerId === 'designer1' ? 'bg-brand-pink/20 text-brand-pink' : 'bg-cyan-500/20 text-cyan-300'
+                        }`}>
+                          {sale.designerId === 'designer1' ? 'D1' : 'D2'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] flex-wrap">
+                      <span className={`font-black font-mono ${is48h ? 'text-rose-300' : 'text-amber-300'}`}>
+                        {is48h ? '🚨' : '⚠️'} Enviada {formatWaitingTime(waitingHours)}
+                      </span>
+                      {sale.dataRetirada && (
+                        <span className="text-zinc-400 font-mono">
+                          • Entrega: {new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      playAppSound('click');
+                      sendLayoutApprovalReminderWhatsapp(sale, waitingHours);
+                    }}
+                    className={`shrink-0 px-2.5 py-1.5 rounded-lg text-[10.5px] font-black flex items-center gap-1 cursor-pointer transition-all active:scale-95 ${
+                      is48h
+                        ? 'bg-rose-600 hover:bg-rose-500 text-white shadow-sm'
+                        : 'bg-amber-500 hover:bg-amber-400 text-black shadow-sm'
+                    }`}
+                    title="Enviar cobrança de aprovação no WhatsApp do cliente"
+                  >
+                    <MessageSquare className="h-3 w-3" />
+                    <span>Cobrar Zap</span>
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1126,7 +1424,46 @@ Muito obrigado pela confiança e preferência!
         </div>
 
         {/* Actions & Search */}
-        <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-2.5 w-full xl:w-auto">
+        <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-2.5 w-full xl:w-auto flex-wrap">
+          {/* Toggle sort by priority/urgency */}
+          <button
+            type="button"
+            onClick={() => {
+              setSortByPriority(prev => !prev);
+              playAppSound('click');
+            }}
+            className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
+              sortByPriority
+                ? 'bg-sky-500/15 border-sky-500/50 text-sky-300 font-extrabold shadow-[0_0_12px_rgba(14,165,233,0.08)]'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
+            }`}
+            title="Ordena todas as colunas com artes pendentes de entrega mais próxima e taxa de urgência no topo"
+          >
+            <ArrowUpDown className={`h-3.5 w-3.5 ${sortByPriority ? 'text-sky-400' : 'text-zinc-500'}`} />
+            <span>{sortByPriority ? 'Ordem: Urgência' : 'Ordem: Padrão'}</span>
+          </button>
+
+          {/* Toggle pending client approval filter */}
+          {pendingApprovalOrders.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                setFilterPendingApprovalOnly(prev => !prev);
+                if (hideFinishedInColumns) setHideFinishedInColumns(false);
+                playAppSound('click');
+              }}
+              className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
+                filterPendingApprovalOnly
+                  ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-extrabold'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
+              }`}
+              title="Filtrar apenas artes enviadas que ainda aguardam aprovação do cliente"
+            >
+              <Clock className={`h-3.5 w-3.5 ${filterPendingApprovalOnly ? 'text-amber-300' : 'text-amber-500/80'}`} />
+              <span>Sem Aprovação ({pendingApprovalOrders.length})</span>
+            </button>
+          )}
+
           {/* Toggle only urgent */}
           <button
             type="button"
@@ -1226,123 +1563,134 @@ Muito obrigado pela confiança e preferência!
                 Nenhum pedido aguardando designer.
               </div>
             ) : (
-              unassignedOrders.map((sale, idx) => {
-                const urgent = isUrgent(sale);
-                return (
-                  <div 
-                    key={sale.id}
-                    onClick={() => handleSelectSaleForReceipt(sale)}
-                    className={`transition-all duration-300 cursor-pointer group active:scale-[0.99] border rounded-xl p-4 space-y-3 ${
-                      urgent
-                        ? 'border-red-500/40 bg-red-950/10 hover:border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.06)]'
-                        : 'bg-zinc-950 border-zinc-850 hover:border-zinc-700'
-                    }`}
-                  >
-                    <div className="flex justify-between items-center gap-1">
-                      <span className="text-[10px] font-mono font-bold bg-zinc-900 border border-zinc-800 text-zinc-450 px-1.5 py-0.5 rounded">
-                        Pedido #{sale.numeroPedido || sale.id.substring(0, 5)}
-                      </span>
-                      {urgent ? (
-                        <span className="text-[9px] font-extrabold uppercase text-red-400 bg-red-500/15 border border-red-500/25 px-1.5 py-0.5 rounded-sm animate-pulse flex items-center gap-1 shrink-0">
-                          🚨 Urgente: {getUrgentText(sale.dataRetirada)}
+              <>
+                {unassignedOrders.slice(0, col1Limit).map((sale) => {
+                  const urgent = isUrgent(sale);
+                  return (
+                    <div 
+                      key={sale.id}
+                      onClick={() => handleSelectSaleForReceipt(sale)}
+                      className={`transition-all duration-300 cursor-pointer group active:scale-[0.99] border rounded-xl p-4 space-y-3 ${
+                        urgent
+                          ? 'border-red-500/40 bg-red-950/10 hover:border-red-500 shadow-[0_0_12px_rgba(239,68,68,0.06)]'
+                          : 'bg-zinc-950 border-zinc-850 hover:border-zinc-700'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center gap-1">
+                        <span className="text-[10px] font-mono font-bold bg-zinc-900 border border-zinc-800 text-zinc-450 px-1.5 py-0.5 rounded">
+                          Pedido #{sale.numeroPedido || sale.id.substring(0, 5)}
                         </span>
-                      ) : (
-                        <span className="text-[9px] text-zinc-500">
-                          {formatDateTime(sale.data)}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="space-y-1">
-                      <p className="text-xs font-bold text-zinc-200 group-hover:text-brand-pink transition-colors truncate">
-                        {sale.cliente}
-                      </p>
-                      <p className="text-[10.5px] text-zinc-400 leading-snug line-clamp-2">
-                        {sale.itens && sale.itens.length > 0 
-                          ? sale.itens.map(it => `${it.quantidade}x ${it.produtoNome}`).join(', ')
-                          : `${sale.quantidade}x ${sale.produtoNome}`}
-                      </p>
-                    </div>
-
-                    {sale.dataRetirada && (
-                      <div className={`flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-lg border w-fit ${getRetiradaBadgeStyle(sale.dataRetirada)}`}>
-                        <Calendar className="h-3 w-3" />
-                        <span>{getRetiradaBadgeText(sale.dataRetirada, sale.turnoEntrega)}</span>
-                      </div>
-                    )}
-
-                    {/* Designer Notes preview directly on card */}
-                    {sale.observacoesDesign && (
-                      <div className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-2 py-1.5 rounded-lg font-mono line-clamp-2" title={sale.observacoesDesign}>
-                        📝 {sale.observacoesDesign}
-                      </div>
-                    )}
-
-                    {/* Item colors list */}
-                    {sale.itens && sale.itens.some(it => it.corSelecionada) && (
-                      <div className="flex flex-wrap gap-1">
-                        {sale.itens.filter(it => it.corSelecionada).map((it, itemIdx) => (
-                          <span key={itemIdx} className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-850 text-zinc-400">
-                            🎨 {it.corSelecionada}
+                        {urgent ? (
+                          <span className="text-[9px] font-extrabold uppercase text-red-400 bg-red-500/15 border border-red-500/25 px-1.5 py-0.5 rounded-sm animate-pulse flex items-center gap-1 shrink-0">
+                            🚨 Urgente: {sale.temTaxaUrgencia && !sale.dataRetirada ? 'Taxa Urgência' : getUrgentText(sale.dataRetirada)}
                           </span>
-                        ))}
+                        ) : (
+                          <span className="text-[9px] text-zinc-500">
+                            {formatDateTime(sale.data)}
+                          </span>
+                        )}
                       </div>
-                    )}
 
-                    {/* Badge de Acréscimo ou Diminuição ajustado hoje no lucro do dia */}
-                    {(() => {
-                      const ajustes = getSaleAdjustments(sale);
-                      if (ajustes.length === 0) return null;
-                      const now = new Date();
-                      const todayAdjustments = getSaleAdjustmentsForDate(sale, now);
-                      if (todayAdjustments.length > 0) {
-                        const todayLucroInc = todayAdjustments.reduce((sum, a) => sum + (a.lucroAdicional || 0), 0);
-                        if (Math.abs(todayLucroInc) < 0.005) return null;
-                        const isPositive = todayLucroInc >= 0;
-                        const formattedVal = Math.abs(todayLucroInc).toFixed(2);
-                        return (
-                          <div 
-                            className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-md inline-flex items-center gap-1 border ${
-                              isPositive
-                                ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
-                                : 'bg-rose-950/80 text-rose-300 border-rose-700/60'
-                            }`}
-                            title={todayAdjustments.map(a => `${a.descricao || 'Ajuste'}: ${a.valorAdicional >= 0 ? '+' : ''}R$ ${a.valorAdicional.toFixed(2)} (${a.lucroAdicional >= 0 ? '+' : ''}R$ ${a.lucroAdicional.toFixed(2)} no lucro)`).join('\n')}
-                          >
-                            <span>{isPositive ? '✨ +' : '📉 -'}R$ {formattedVal} no lucro de hoje</span>
-                          </div>
-                        );
-                      }
-                      return null;
-                    })()}
+                      <div className="space-y-1">
+                        <p className="text-xs font-bold text-zinc-200 group-hover:text-brand-pink transition-colors truncate">
+                          {sale.cliente}
+                        </p>
+                        <p className="text-[10.5px] text-zinc-400 leading-snug line-clamp-2">
+                          {sale.itens && sale.itens.length > 0 
+                            ? sale.itens.map(it => `${it.quantidade}x ${it.produtoNome}`).join(', ')
+                            : `${sale.quantidade}x ${sale.produtoNome}`}
+                        </p>
+                      </div>
 
-                  {/* Actions to Drag / Pull */}
-                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-900">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePullOrder(sale, 'designer1');
-                      }}
-                      className="py-1.5 px-2 bg-brand-pink text-black font-extrabold text-[10px] rounded-lg transition-all hover:bg-opacity-90 flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                    >
-                      <span>Pegar D1</span>
-                      <ChevronRight className="h-3 w-3" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePullOrder(sale, 'designer2');
-                      }}
-                      className="py-1.5 px-2 bg-cyan-500 hover:bg-cyan-450 text-black font-extrabold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                    >
-                      <span>Pegar D2</span>
-                      <ChevronRight className="h-3 w-3" />
-                    </button>
+                      {sale.dataRetirada && (
+                        <div className={`flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-lg border w-fit ${getRetiradaBadgeStyle(sale.dataRetirada)}`}>
+                          <Calendar className="h-3 w-3" />
+                          <span>{getRetiradaBadgeText(sale.dataRetirada, sale.turnoEntrega)}</span>
+                        </div>
+                      )}
+
+                      {/* Designer Notes preview directly on card */}
+                      {sale.observacoesDesign && (
+                        <div className="text-[10px] bg-zinc-900 border border-zinc-800 text-zinc-400 px-2 py-1.5 rounded-lg font-mono line-clamp-2" title={sale.observacoesDesign}>
+                          📝 {sale.observacoesDesign}
+                        </div>
+                      )}
+
+                      {/* Item colors list */}
+                      {sale.itens && sale.itens.some(it => it.corSelecionada) && (
+                        <div className="flex flex-wrap gap-1">
+                          {sale.itens.filter(it => it.corSelecionada).map((it, itemIdx) => (
+                            <span key={itemIdx} className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-zinc-900 border border-zinc-850 text-zinc-400">
+                              🎨 {it.corSelecionada}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Badge de Acréscimo ou Diminuição ajustado hoje no lucro do dia */}
+                      {(() => {
+                        const ajustes = getSaleAdjustments(sale);
+                        if (ajustes.length === 0) return null;
+                        const now = new Date();
+                        const todayAdjustments = getSaleAdjustmentsForDate(sale, now);
+                        if (todayAdjustments.length > 0) {
+                          const todayLucroInc = todayAdjustments.reduce((sum, a) => sum + (a.lucroAdicional || 0), 0);
+                          if (Math.abs(todayLucroInc) < 0.005) return null;
+                          const isPositive = todayLucroInc >= 0;
+                          const formattedVal = Math.abs(todayLucroInc).toFixed(2);
+                          return (
+                            <div 
+                              className={`text-[9px] font-mono font-bold px-2 py-0.5 rounded-md inline-flex items-center gap-1 border ${
+                                isPositive
+                                  ? 'bg-emerald-950/80 text-emerald-300 border-emerald-700/60'
+                                  : 'bg-rose-950/80 text-rose-300 border-rose-700/60'
+                              }`}
+                              title={todayAdjustments.map(a => `${a.descricao || 'Ajuste'}: ${a.valorAdicional >= 0 ? '+' : ''}R$ ${a.valorAdicional.toFixed(2)} (${a.lucroAdicional >= 0 ? '+' : ''}R$ ${a.lucroAdicional.toFixed(2)} no lucro)`).join('\n')}
+                            >
+                              <span>{isPositive ? '✨ +' : '📉 -'}R$ {formattedVal} no lucro de hoje</span>
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+
+                    {/* Actions to Drag / Pull */}
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-900">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePullOrder(sale, 'designer1');
+                        }}
+                        className="py-1.5 px-2 bg-brand-pink text-black font-extrabold text-[10px] rounded-lg transition-all hover:bg-opacity-90 flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                      >
+                        <span>Pegar D1</span>
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handlePullOrder(sale, 'designer2');
+                        }}
+                        className="py-1.5 px-2 bg-cyan-500 hover:bg-cyan-450 text-black font-extrabold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                      >
+                        <span>Pegar D2</span>
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              )})
+                )})}
+                {unassignedOrders.length > col1Limit && (
+                  <button
+                    type="button"
+                    onClick={() => setCol1Limit(prev => prev + 35)}
+                    className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Mostrar mais pedidos ({col1Limit} de {unassignedOrders.length})
+                  </button>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -1395,23 +1743,29 @@ Muito obrigado pela confiança e preferência!
                 Nenhum pedido com o Designer 1.
               </div>
             ) : (
-              designer1Orders.map((sale) => {
+              <>
+              {designer1Orders.slice(0, col2Limit).map((sale) => {
                 const isFinished = sale.statusArte === 'Arte Finalizada';
                 const isPendingClientApproval = isFinished && !sale.clienteAprovouLayout;
                 const isApprovedByClient = isFinished && Boolean(sale.clienteAprovouLayout);
+                const waitingApprovalHours = isPendingClientApproval ? getHoursWaitingApproval(sale) : 0;
+                const isApprovalDelayed24h = waitingApprovalHours >= 24;
+                const isApprovalCritical48h = waitingApprovalHours >= 48;
                 const delayInfo = checkArteDelay(sale);
                 return (
                   <div 
                     key={sale.id}
                     onClick={() => handleSelectSaleForReceipt(sale)}
                     className={`border border-l-4 rounded-xl p-4 space-y-3 transition-all cursor-pointer relative group ${
-                      isPendingClientApproval
-                        ? 'bg-amber-950/30 border-amber-500/50 border-l-amber-500 hover:border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/25'
-                        : isApprovedByClient
-                          ? 'bg-emerald-950/20 border-emerald-500/40 border-l-emerald-500 hover:border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.1)]'
-                          : delayInfo.isDelayed
-                            ? 'bg-red-950/10 border-brand-pink/20 border-l-red-500 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
-                            : 'bg-gradient-to-br from-zinc-950 to-brand-pink/[0.02] border-brand-pink/25 border-l-brand-pink hover:border-brand-pink/40 shadow-[0_0_10px_rgba(236,72,153,0.03)]'
+                      isApprovalCritical48h
+                        ? 'bg-rose-950/30 border-rose-500/60 border-l-rose-500 hover:border-rose-400 shadow-[0_0_18px_rgba(244,63,94,0.2)] ring-1 ring-rose-500/30'
+                        : isPendingClientApproval
+                          ? 'bg-amber-950/30 border-amber-500/50 border-l-amber-500 hover:border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/25'
+                          : isApprovedByClient
+                            ? 'bg-emerald-950/20 border-emerald-500/40 border-l-emerald-500 hover:border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.1)]'
+                            : delayInfo.isDelayed
+                              ? 'bg-red-950/10 border-brand-pink/20 border-l-red-500 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
+                              : 'bg-gradient-to-br from-zinc-950 to-brand-pink/[0.02] border-brand-pink/25 border-l-brand-pink hover:border-brand-pink/40 shadow-[0_0_10px_rgba(236,72,153,0.03)]'
                     }`}
                   >
                     {/* Floating Designer Badge */}
@@ -1420,13 +1774,18 @@ Muito obrigado pela confiança e preferência!
                       <span>MESA D1</span>
                     </div>
 
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center gap-1 flex-wrap">
                       <span className="text-[10px] font-mono font-bold bg-zinc-900 border border-zinc-800 text-zinc-450 px-1.5 py-0.5 rounded">
                         Pedido #{sale.numeroPedido || sale.id.substring(0, 5)}
                       </span>
                       {isPendingClientApproval ? (
-                        <span className="text-[9px] font-black text-amber-300 uppercase flex items-center gap-1 bg-amber-500/20 border border-amber-500/50 px-2 py-0.5 rounded-sm animate-pulse shadow-sm">
-                          <Clock className="h-2.5 w-2.5 text-amber-400" /> Pendente de Aprovação
+                        <span className={`text-[9px] font-black uppercase flex items-center gap-1 px-2 py-0.5 rounded-sm animate-pulse shadow-sm border ${
+                          isApprovalCritical48h
+                            ? 'text-rose-200 bg-rose-500/25 border-rose-500/60'
+                            : 'text-amber-300 bg-amber-500/20 border-amber-500/50'
+                        }`}>
+                          <Clock className={`h-2.5 w-2.5 ${isApprovalCritical48h ? 'text-rose-300' : 'text-amber-400'}`} />
+                          {isApprovalDelayed24h ? `Sem Aprovação (${formatWaitingTime(waitingApprovalHours)})` : 'Pendente de Aprovação'}
                         </span>
                       ) : isApprovedByClient ? (
                         <span className="text-[9px] font-bold text-emerald-350 uppercase flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-sm shadow-sm">
@@ -1515,14 +1874,42 @@ Muito obrigado pela confiança e preferência!
                         )}
                       </div>
                     ) : isFinished ? (
-                      <div className="text-[9.5px] bg-amber-950/50 border border-amber-500/50 text-amber-200 font-bold px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-1 shadow-[0_0_10px_rgba(245,158,11,0.08)]">
-                        <span className="flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0 animate-pulse" />
-                          <span>Aguardando Aprovação do Cliente</span>
+                      <div className={`text-[9.5px] font-bold px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-1.5 border ${
+                        isApprovalCritical48h
+                          ? 'bg-rose-950/60 border-rose-500/60 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.18)]'
+                          : isApprovalDelayed24h
+                            ? 'bg-amber-950/60 border-amber-500/60 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.14)]'
+                            : 'bg-amber-950/50 border-amber-500/50 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.08)]'
+                      }`}>
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <Clock className={`h-3.5 w-3.5 shrink-0 animate-pulse ${isApprovalCritical48h ? 'text-rose-400' : 'text-amber-400'}`} />
+                          <span className="truncate">
+                            {isApprovalCritical48h
+                              ? `🚨 Parada ${formatWaitingTime(waitingApprovalHours)}`
+                              : isApprovalDelayed24h
+                                ? `⚠️ Parada ${formatWaitingTime(waitingApprovalHours)}`
+                                : 'Aguardando Aprovação'}
+                          </span>
                         </span>
-                        <span className="text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-mono uppercase tracking-wide">
-                          Pendente
-                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playAppSound('click');
+                            sendLayoutApprovalReminderWhatsapp(sale, waitingApprovalHours);
+                          }}
+                          className={`shrink-0 text-[9px] font-black px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition-all active:scale-95 ${
+                            isApprovalCritical48h
+                              ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                              : isApprovalDelayed24h
+                                ? 'bg-amber-500 hover:bg-amber-400 text-black'
+                                : 'bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-500/40'
+                          }`}
+                          title="Enviar cobrança rápida de aprovação no WhatsApp"
+                        >
+                          <MessageSquare className="h-2.5 w-2.5" />
+                          <span>{isApprovalDelayed24h ? 'Cobrar Zap' : 'Lembrar'}</span>
+                        </button>
                       </div>
                     ) : null}
 
@@ -1627,7 +2014,17 @@ Muito obrigado pela confiança e preferência!
                     </div>
                   </div>
                 );
-              })
+              })}
+              {designer1Orders.length > col2Limit && (
+                <button
+                  type="button"
+                  onClick={() => setCol2Limit(prev => prev + 35)}
+                  className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Mostrar mais pedidos ({col2Limit} de {designer1Orders.length})
+                </button>
+              )}
+              </>
             )}
           </div>
         </div>
@@ -1671,23 +2068,29 @@ Muito obrigado pela confiança e preferência!
                 Nenhum pedido com o Designer 2.
               </div>
             ) : (
-              designer2Orders.map((sale) => {
+              <>
+              {designer2Orders.slice(0, col3Limit).map((sale) => {
                 const isFinished = sale.statusArte === 'Arte Finalizada';
                 const isPendingClientApproval = isFinished && !sale.clienteAprovouLayout;
                 const isApprovedByClient = isFinished && Boolean(sale.clienteAprovouLayout);
+                const waitingApprovalHours = isPendingClientApproval ? getHoursWaitingApproval(sale) : 0;
+                const isApprovalDelayed24h = waitingApprovalHours >= 24;
+                const isApprovalCritical48h = waitingApprovalHours >= 48;
                 const delayInfo = checkArteDelay(sale);
                 return (
                   <div 
                     key={sale.id}
                     onClick={() => handleSelectSaleForReceipt(sale)}
                     className={`border border-l-4 rounded-xl p-4 space-y-3 transition-all cursor-pointer relative group ${
-                      isPendingClientApproval
-                        ? 'bg-amber-950/30 border-amber-500/50 border-l-amber-500 hover:border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/25'
-                        : isApprovedByClient
-                          ? 'bg-emerald-950/20 border-emerald-500/40 border-l-emerald-500 hover:border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.1)]'
-                          : delayInfo.isDelayed
-                            ? 'bg-red-950/10 border-cyan-500/20 border-l-red-500 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
-                            : 'bg-gradient-to-br from-zinc-950 to-cyan-500/[0.02] border-cyan-500/25 border-l-cyan-400 hover:border-cyan-400/40 shadow-[0_0_10px_rgba(6,182,212,0.03)]'
+                      isApprovalCritical48h
+                        ? 'bg-rose-950/30 border-rose-500/60 border-l-rose-500 hover:border-rose-400 shadow-[0_0_18px_rgba(244,63,94,0.2)] ring-1 ring-rose-500/30'
+                        : isPendingClientApproval
+                          ? 'bg-amber-950/30 border-amber-500/50 border-l-amber-500 hover:border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/25'
+                          : isApprovedByClient
+                            ? 'bg-emerald-950/20 border-emerald-500/40 border-l-emerald-500 hover:border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.1)]'
+                            : delayInfo.isDelayed
+                              ? 'bg-red-950/10 border-cyan-500/20 border-l-red-500 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
+                              : 'bg-gradient-to-br from-zinc-950 to-cyan-500/[0.02] border-cyan-500/25 border-l-cyan-400 hover:border-cyan-400/40 shadow-[0_0_10px_rgba(6,182,212,0.03)]'
                     }`}
                   >
                     {/* Floating Designer Badge */}
@@ -1696,13 +2099,18 @@ Muito obrigado pela confiança e preferência!
                       <span>Mesa D2</span>
                     </div>
 
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center gap-1 flex-wrap">
                       <span className="text-[10px] font-mono font-bold bg-zinc-900 border border-zinc-800 text-zinc-450 px-1.5 py-0.5 rounded">
                         Pedido #{sale.numeroPedido || sale.id.substring(0, 5)}
                       </span>
                       {isPendingClientApproval ? (
-                        <span className="text-[9px] font-black text-amber-300 uppercase flex items-center gap-1 bg-amber-500/20 border border-amber-500/50 px-2 py-0.5 rounded-sm animate-pulse shadow-sm">
-                          <Clock className="h-2.5 w-2.5 text-amber-400" /> Pendente de Aprovação
+                        <span className={`text-[9px] font-black uppercase flex items-center gap-1 px-2 py-0.5 rounded-sm animate-pulse shadow-sm border ${
+                          isApprovalCritical48h
+                            ? 'text-rose-200 bg-rose-500/25 border-rose-500/60'
+                            : 'text-amber-300 bg-amber-500/20 border-amber-500/50'
+                        }`}>
+                          <Clock className={`h-2.5 w-2.5 ${isApprovalCritical48h ? 'text-rose-300' : 'text-amber-400'}`} />
+                          {isApprovalDelayed24h ? `Sem Aprovação (${formatWaitingTime(waitingApprovalHours)})` : 'Pendente de Aprovação'}
                         </span>
                       ) : isApprovedByClient ? (
                         <span className="text-[9px] font-bold text-emerald-350 uppercase flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-sm shadow-sm">
@@ -1791,14 +2199,42 @@ Muito obrigado pela confiança e preferência!
                         )}
                       </div>
                     ) : isFinished ? (
-                      <div className="text-[9.5px] bg-amber-950/50 border border-amber-500/50 text-amber-200 font-bold px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-1 shadow-[0_0_10px_rgba(245,158,11,0.08)]">
-                        <span className="flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5 text-amber-400 shrink-0 animate-pulse" />
-                          <span>Aguardando Aprovação do Cliente</span>
+                      <div className={`text-[9.5px] font-bold px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-1.5 border ${
+                        isApprovalCritical48h
+                          ? 'bg-rose-950/60 border-rose-500/60 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.18)]'
+                          : isApprovalDelayed24h
+                            ? 'bg-amber-950/60 border-amber-500/60 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.14)]'
+                            : 'bg-amber-950/50 border-amber-500/50 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.08)]'
+                      }`}>
+                        <span className="flex items-center gap-1.5 min-w-0">
+                          <Clock className={`h-3.5 w-3.5 shrink-0 animate-pulse ${isApprovalCritical48h ? 'text-rose-400' : 'text-amber-400'}`} />
+                          <span className="truncate">
+                            {isApprovalCritical48h
+                              ? `🚨 Parada ${formatWaitingTime(waitingApprovalHours)}`
+                              : isApprovalDelayed24h
+                                ? `⚠️ Parada ${formatWaitingTime(waitingApprovalHours)}`
+                                : 'Aguardando Aprovação'}
+                          </span>
                         </span>
-                        <span className="text-[8px] bg-amber-500/20 text-amber-300 border border-amber-500/40 px-1.5 py-0.5 rounded font-mono uppercase tracking-wide">
-                          Pendente
-                        </span>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playAppSound('click');
+                            sendLayoutApprovalReminderWhatsapp(sale, waitingApprovalHours);
+                          }}
+                          className={`shrink-0 text-[9px] font-black px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition-all active:scale-95 ${
+                            isApprovalCritical48h
+                              ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                              : isApprovalDelayed24h
+                                ? 'bg-amber-500 hover:bg-amber-400 text-black'
+                                : 'bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-500/40'
+                          }`}
+                          title="Enviar cobrança rápida de aprovação no WhatsApp"
+                        >
+                          <MessageSquare className="h-2.5 w-2.5" />
+                          <span>{isApprovalDelayed24h ? 'Cobrar Zap' : 'Lembrar'}</span>
+                        </button>
                       </div>
                     ) : null}
 
@@ -1903,7 +2339,17 @@ Muito obrigado pela confiança e preferência!
                     </div>
                   </div>
                 );
-              })
+              })}
+              {designer2Orders.length > col3Limit && (
+                <button
+                  type="button"
+                  onClick={() => setCol3Limit(prev => prev + 35)}
+                  className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Mostrar mais pedidos ({col3Limit} de {designer2Orders.length})
+                </button>
+              )}
+              </>
             )}
           </div>
         </div>

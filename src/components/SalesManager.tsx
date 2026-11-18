@@ -507,108 +507,115 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       .trim();
 
   // Get filtered sales history by client, product name, or receipt order number, and period
-  const filteredSales = sales.filter((sale) => {
-    if (sale.status === 'Orçamento') return false;
-
-    // Filter only Avulso orders if active
-    if (filterOnlyAvulso && !isAvulsoSale(sale, products)) {
-      return false;
-    }
-    // 1. Period Date filtering (inclui vendas originadas no período OU vendas com acréscimos/produtos adicionados no período)
-    try {
-      const saleDate = new Date(sale.data);
-      const now = new Date();
-      
-      const getBrazilDateString = (date: Date) => {
-        return date.toLocaleDateString('pt-BR', {
-          timeZone: 'America/Sao_Paulo',
-          year: 'numeric',
-          month: '2-digit',
-          day: '2-digit'
-        });
-      };
-
-      const checkMatchesFilter = (targetD: Date) => {
-        if (dateFilter === 'all') return true;
-        if (dateFilter === 'today') {
-          return getBrazilDateString(targetD) === getBrazilDateString(now);
-        } else if (dateFilter === 'yesterday') {
-          const yesterday = new Date();
-          yesterday.setDate(yesterday.getDate() - 1);
-          return getBrazilDateString(targetD) === getBrazilDateString(yesterday);
-        } else if (dateFilter === '7days') {
-          const diffTime = Math.abs(now.getTime() - targetD.getTime());
-          const diffDays = diffTime / (1000 * 60 * 60 * 24);
-          return diffDays <= 7;
-        } else if (dateFilter === 'this_month') {
-          const diffTime = now.getTime() - targetD.getTime();
-          const diffDays = diffTime / (1000 * 60 * 60 * 24);
-          return diffDays <= 30 && diffDays >= -0.5;
-        } else if (dateFilter === 'custom') {
-          if (startDateStr) {
-            const start = new Date(startDateStr + 'T00:00:00');
-            if (targetD < start) return false;
-          }
-          if (endDateStr) {
-            const end = new Date(endDateStr + 'T23:59:59');
-            if (targetD > end) return false;
-          }
-          return true;
-        }
-        return true;
-      };
-
-      const baseMatches = checkMatchesFilter(saleDate);
-      const adjustments = getSaleAdjustments(sale);
-      const hasMatchingAdj = adjustments.some(adj => {
-        try {
-          return checkMatchesFilter(new Date(adj.data));
-        } catch {
-          return false;
-        }
+  const filteredSales = useMemo(() => {
+    const now = new Date();
+    const getBrazilDateString = (date: Date) =>
+      date.toLocaleDateString('pt-BR', {
+        timeZone: 'America/Sao_Paulo',
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit'
       });
 
-      if (!baseMatches && !hasMatchingAdj) return false;
-    } catch (e) {
-      console.error(e);
-    }
+    const todayBrStr = dateFilter === 'today' ? getBrazilDateString(now) : '';
+    const yesterdayBrStr = dateFilter === 'yesterday'
+      ? (() => {
+          const y = new Date(now);
+          y.setDate(y.getDate() - 1);
+          return getBrazilDateString(y);
+        })()
+      : '';
+    const customStartMs = dateFilter === 'custom' && startDateStr ? new Date(startDateStr + 'T00:00:00').getTime() : null;
+    const customEndMs = dateFilter === 'custom' && endDateStr ? new Date(endDateStr + 'T23:59:59').getTime() : null;
+    const nowMs = now.getTime();
 
-    // 2. Text Search filtering (Avançado: Suporte a nome do cliente, acentuação, telefone, pedido, produto)
-    const rawTerm = salesSearchTerm.trim();
-    if (!rawTerm) {
+    const checkMatchesFilter = (targetD: Date) => {
+      if (dateFilter === 'all') return true;
+      if (dateFilter === 'today') {
+        return getBrazilDateString(targetD) === todayBrStr;
+      }
+      if (dateFilter === 'yesterday') {
+        return getBrazilDateString(targetD) === yesterdayBrStr;
+      }
+      if (dateFilter === '7days') {
+        const diffDays = Math.abs(nowMs - targetD.getTime()) / (1000 * 60 * 60 * 24);
+        return diffDays <= 7;
+      }
+      if (dateFilter === 'this_month') {
+        const diffDays = (nowMs - targetD.getTime()) / (1000 * 60 * 60 * 24);
+        return diffDays <= 30 && diffDays >= -0.5;
+      }
+      if (dateFilter === 'custom') {
+        const t = targetD.getTime();
+        if (customStartMs !== null && t < customStartMs) return false;
+        if (customEndMs !== null && t > customEndMs) return false;
+        return true;
+      }
       return true;
-    }
-    
-    const normalizedTerm = normalizeSearchText(rawTerm);
-    const termWords = normalizedTerm.split(/\s+/).filter(Boolean);
-    const cleanDigits = rawTerm.replace(/\D/g, '');
+    };
 
-    // Busca inteligente por nome do cliente
-    const clientNorm = normalizeSearchText(sale.cliente);
-    const matchName = clientNorm.includes(normalizedTerm) ||
-      (termWords.length > 1 && termWords.every(w => clientNorm.includes(w)));
+    const rawTerm = salesSearchTerm.trim();
+    const normalizedTerm = rawTerm ? normalizeSearchText(rawTerm) : '';
+    const termWords = normalizedTerm ? normalizedTerm.split(/\s+/).filter(Boolean) : [];
+    const cleanDigits = rawTerm ? rawTerm.replace(/\D/g, '') : '';
 
-    // Busca por produto
-    const matchProduct = normalizeSearchText(sale.produtoNome).includes(normalizedTerm);
+    return sales.filter((sale) => {
+      if (sale.status === 'Orçamento') return false;
 
-    // Busca por número de pedido ou ID
-    const orderNorm = normalizeSearchText(sale.numeroPedido);
-    const cleanOrder = sale.numeroPedido ? sale.numeroPedido.replace(/\D/g, '') : '';
-    const matchOrderNum = Boolean(
-      (sale.numeroPedido && orderNorm.includes(normalizedTerm)) ||
-      (cleanDigits.length > 0 && (cleanOrder === cleanDigits || cleanOrder.includes(cleanDigits))) ||
-      (sale.id && sale.id.toLowerCase().includes(normalizedTerm))
-    );
+      // Filter only Avulso orders if active
+      if (filterOnlyAvulso && !isAvulsoSale(sale, products)) {
+        return false;
+      }
 
-    // Busca por telefone (apenas se houver 3+ dígitos para não bater com letras)
-    const cleanPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '') : '';
-    const matchPhone = Boolean(cleanDigits.length >= 3 && cleanPhone.includes(cleanDigits));
+      // 1. Period Date filtering (inclui vendas originadas no período OU vendas com acréscimos/produtos adicionados no período)
+      if (dateFilter !== 'all') {
+        try {
+          const saleDate = new Date(sale.data);
+          const baseMatches = checkMatchesFilter(saleDate);
+          let hasMatchingAdj = false;
+          if (!baseMatches) {
+            const adjustments = getSaleAdjustments(sale);
+            hasMatchingAdj = adjustments.some(adj => {
+              try {
+                return checkMatchesFilter(new Date(adj.data));
+              } catch {
+                return false;
+              }
+            });
+          }
+          if (!baseMatches && !hasMatchingAdj) return false;
+        } catch (e) {
+          console.error(e);
+        }
+      }
 
-    // Busca nos itens adicionais
-    const matchItens = sale.itens ? sale.itens.some(item => normalizeSearchText(item.produtoNome).includes(normalizedTerm)) : false;
-    
-    return matchName || matchProduct || matchOrderNum || matchPhone || matchItens;
-  });
+      // 2. Text Search filtering
+      if (!rawTerm) {
+        return true;
+      }
+
+      const clientNorm = normalizeSearchText(sale.cliente);
+      const matchName = clientNorm.includes(normalizedTerm) ||
+        (termWords.length > 1 && termWords.every(w => clientNorm.includes(w)));
+
+      const matchProduct = normalizeSearchText(sale.produtoNome).includes(normalizedTerm);
+
+      const orderNorm = normalizeSearchText(sale.numeroPedido);
+      const cleanOrder = sale.numeroPedido ? sale.numeroPedido.replace(/\D/g, '') : '';
+      const matchOrderNum = Boolean(
+        (sale.numeroPedido && orderNorm.includes(normalizedTerm)) ||
+        (cleanDigits.length > 0 && (cleanOrder === cleanDigits || cleanOrder.includes(cleanDigits))) ||
+        (sale.id && sale.id.toLowerCase().includes(normalizedTerm))
+      );
+
+      const cleanPhone = sale.telefoneCliente ? sale.telefoneCliente.replace(/\D/g, '') : '';
+      const matchPhone = Boolean(cleanDigits.length >= 3 && cleanPhone.includes(cleanDigits));
+
+      const matchItens = sale.itens ? sale.itens.some(item => normalizeSearchText(item.produtoNome).includes(normalizedTerm)) : false;
+
+      return matchName || matchProduct || matchOrderNum || matchPhone || matchItens;
+    });
+  }, [sales, products, filterOnlyAvulso, dateFilter, startDateStr, endDateStr, salesSearchTerm]);
 
   // Se houver pesquisa ativa e filtro de período restritivo, calcula correspondências fora do período
   const otherDatesMatchesCount = useMemo(() => {
@@ -676,14 +683,12 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
   // Filter out delivered sales that are older than 15 days from the list, unless there is an active search term, an active date filter other than 'all', or showOldDeliveredSales is checked
   const displayedSales = useMemo(() => {
     const term = salesSearchTerm.toLowerCase().trim();
+    const nowMs = Date.now();
     return filteredSales.filter(sale => {
       if (!term && dateFilter === 'all' && !showOldDeliveredSales) {
         if (sale.statusProducao === 'Entregue') {
           try {
-            const saleDate = new Date(sale.data);
-            const now = new Date();
-            const diffTime = Math.abs(now.getTime() - saleDate.getTime());
-            const diffDays = diffTime / (1000 * 60 * 60 * 24);
+            const diffDays = Math.abs(nowMs - new Date(sale.data).getTime()) / (1000 * 60 * 60 * 24);
             if (diffDays > 15) return false;
           } catch {
             // fail safe
@@ -693,6 +698,11 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       return true;
     });
   }, [filteredSales, salesSearchTerm, dateFilter, showOldDeliveredSales]);
+
+  // Ordena a lista de vendas exibidas uma única vez via useMemo (em vez de reordenar a cada digitação)
+  const sortedDisplayedSales = useMemo(() => {
+    return [...displayedSales].sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime());
+  }, [displayedSales]);
 
   // Filter and Sort products that are available in stock (simplified to alphabetical order)
   const availableProducts = useMemo(() => {
@@ -3791,8 +3801,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-800/40">
-                    {[...displayedSales]
-                      .sort((a, b) => new Date(b.data).getTime() - new Date(a.data).getTime())
+                    {sortedDisplayedSales
                       .slice(0, visibleSalesCount)
                       .map((sale) => {
                       const isActive = viewedSale?.id === sale.id;
@@ -4096,9 +4105,16 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 </table>
               </div>
 
-              {displayedSales.length > visibleSalesCount && (
-                <div className="py-3 text-center text-[10px] text-zinc-500 font-bold border-t border-zinc-800/45 bg-zinc-950/20 select-none">
-                  Role para ver mais ({visibleSalesCount} de {displayedSales.length} vendas exibidas)
+              {sortedDisplayedSales.length > visibleSalesCount && (
+                <div className="py-3 px-4 flex flex-col sm:flex-row items-center justify-center gap-2 text-[10px] text-zinc-500 font-bold border-t border-zinc-800/45 bg-zinc-950/20 select-none">
+                  <span>Exibindo {visibleSalesCount} de {sortedDisplayedSales.length} vendas</span>
+                  <button
+                    type="button"
+                    onClick={() => setVisibleSalesCount(prev => Math.min(prev + 25, sortedDisplayedSales.length))}
+                    className="px-3 py-1 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg text-[10px] font-extrabold cursor-pointer transition-colors"
+                  >
+                    Carregar mais (+25)
+                  </button>
                 </div>
               )}
             </div>
