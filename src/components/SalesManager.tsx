@@ -85,6 +85,8 @@ export function getCartItemEffectiveQty(
 export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdateStock, onUpdateSale, onDeleteSale, currentUserEmail = '', isAdmin: passedIsAdmin }: SalesManagerProps) {
   const isAdmin = passedIsAdmin !== undefined ? passedIsAdmin : (currentUserEmail.trim().toLowerCase() === 'oxentefesteje@gmail.com' || currentUserEmail.trim().toLowerCase() === 'abraaoapp@oxente.com');
   const [selectedProductId, setSelectedProductId] = useState('');
+  const [productSearchTerm, setProductSearchTerm] = useState('');
+  const [isProductSearchFocused, setIsProductSearchFocused] = useState(false);
   const [selectedColor, setSelectedColor] = useState('');
   const [billingPeriod, setBillingPeriod] = useState<7 | 15 | 30>(7);
   const [cliente, setCliente] = useState('');
@@ -716,6 +718,30 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     return [...list].sort((a, b) => a.nome.localeCompare(b.nome));
   }, [products]);
 
+  // Pesquisa rápida de produtos e adicionais por nome/categoria (insensível a acentos e com suporte a múltiplas palavras)
+  const filteredSelectableProducts = useMemo(() => {
+    const normalizedTerm = normalizeSearchText(productSearchTerm);
+    if (!normalizedTerm) {
+      return {
+        main: availableProducts,
+        addons: availableAddons,
+        totalCount: availableProducts.length + availableAddons.length
+      };
+    }
+    const words = normalizedTerm.split(/\s+/).filter(Boolean);
+    const matchesProduct = (p: Product) => {
+      const target = `${normalizeSearchText(p.nome)} ${normalizeSearchText(p.categoria || '')}`;
+      return words.every(w => target.includes(w));
+    };
+    const main = availableProducts.filter(matchesProduct);
+    const addons = availableAddons.filter(matchesProduct);
+    return {
+      main,
+      addons,
+      totalCount: main.length + addons.length
+    };
+  }, [availableProducts, availableAddons, productSearchTerm]);
+
   const selectedProduct = products.find(p => p.id === selectedProductId);
 
   const isLisoProduct = useMemo(() => {
@@ -1077,6 +1103,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
     // Reset single item selector fields
     setSelectedProductId('');
+    setProductSearchTerm('');
+    setIsProductSearchFocused(false);
     setSelectedColor('');
     setQuantidade(1);
     setSelectedAddonIds([]);
@@ -1424,6 +1452,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
 
     // Reset fields (keeping client empty)
     setSelectedProductId('');
+    setProductSearchTerm('');
+    setIsProductSearchFocused(false);
     setQuantidade(1);
     setSelectedAddonIds([]);
     setCustomNome('');
@@ -2350,9 +2380,9 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 </button>
               </div>
 
-              {/* Product selector dropdown */}
+              {/* Product selector with instant name search + classic dropdown */}
               <div>
-                <label htmlFor="sale-p-select" className="block text-xs font-semibold text-zinc-400 mb-1">
+                <label htmlFor="sale-p-select" className="block text-xs font-semibold text-zinc-400 mb-1.5">
                   Brinde / Produto Escolhido <span className="text-brand-pink font-bold">*</span>
                 </label>
                 {products.length === 0 ? (
@@ -2364,42 +2394,208 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                     Todos os produtos estão esgotados!
                   </div>
                 ) : (
-                  <select
-                    id="sale-p-select"
-                    value={selectedProductId}
-                    onChange={(e) => {
-                      setSelectedProductId(e.target.value);
-                      if (e.target.value === 'produto-avulso') {
-                        setCustomNome('');
-                        setCustomPreco('');
-                        setCustomCusto('');
-                      }
-                    }}
-                    className="w-full px-4 py-2.5 border border-zinc-800 rounded-xl bg-black focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-150 text-sm"
-                  >
-                    <option value="" className="text-zinc-500">-- Selecione o item --</option>
-                    <option value="produto-avulso" className="bg-purple-950 text-purple-300 font-bold">
-                      📦 + PRODUTO AVULSO (Item não cadastrado na loja)
-                    </option>
-                    {availableProducts.length > 0 && (
-                      <optgroup label="Produtos / Brindes Principais" className="bg-black text-brand-pink font-semibold">
-                        {availableProducts.map(p => (
-                          <option key={p.id} value={p.id} className="bg-zinc-900 text-zinc-100 font-normal">
-                            {p.nome} (Preço: R$ {p.preco.toFixed(2)} | Estoque: {p.estoqueInfinito ? '∞ Infinito' : `${p.estoque} un.`})
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                    {availableAddons.length > 0 && (
-                      <optgroup label="Adicionais / Opcionais (Venda avulsa)" className="bg-black text-emerald-450 font-semibold">
-                        {availableAddons.map(p => (
-                          <option key={p.id} value={p.id} className="bg-zinc-900 text-zinc-100 font-normal">
-                            {p.nome} (Preço: R$ {p.preco.toFixed(2)} | Estoque: {p.estoqueInfinito ? '∞ Infinito' : `${p.estoque} un.`})
-                          </option>
-                        ))}
-                      </optgroup>
-                    )}
-                  </select>
+                  <div className="space-y-2">
+                    {/* Campo de pesquisa rápida por nome do item */}
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-zinc-500 pointer-events-none" />
+                      <input
+                        id="sale-p-search"
+                        type="text"
+                        value={productSearchTerm}
+                        onFocus={() => setIsProductSearchFocused(true)}
+                        onBlur={() => setTimeout(() => setIsProductSearchFocused(false), 180)}
+                        onChange={(e) => {
+                          setProductSearchTerm(e.target.value);
+                          setIsProductSearchFocused(true);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            const firstMatch = filteredSelectableProducts.main[0] || filteredSelectableProducts.addons[0];
+                            if (productSearchTerm.trim() && firstMatch) {
+                              setSelectedProductId(firstMatch.id);
+                              setProductSearchTerm('');
+                              setIsProductSearchFocused(false);
+                              playSound('add');
+                            }
+                          } else if (e.key === 'Escape') {
+                            setIsProductSearchFocused(false);
+                          }
+                        }}
+                        placeholder="Pesquisar item pelo nome (ex: copo, bolsa, taça)..."
+                        autoComplete="off"
+                        className="w-full pl-9 pr-8 py-2 border border-zinc-800 rounded-xl bg-black/90 focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 placeholder-zinc-500 text-xs"
+                      />
+                      {productSearchTerm && (
+                        <button
+                          type="button"
+                          onMouseDown={(e) => e.preventDefault()}
+                          onClick={() => {
+                            setProductSearchTerm('');
+                            setIsProductSearchFocused(false);
+                          }}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-200 cursor-pointer p-0.5"
+                          title="Limpar pesquisa"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+
+                      {/* Lista de resultados instantâneos ao digitar */}
+                      {productSearchTerm.trim().length > 0 && isProductSearchFocused && (
+                        <div className="absolute z-30 left-0 right-0 mt-1.5 bg-zinc-950 border border-zinc-700/80 rounded-xl shadow-2xl max-h-64 overflow-y-auto custom-scrollbar divide-y divide-zinc-900">
+                          {filteredSelectableProducts.totalCount === 0 ? (
+                            <div className="p-3 space-y-2 text-center">
+                              <p className="text-[11px] text-zinc-400">
+                                Nenhum item encontrado para <strong className="text-zinc-200">"{productSearchTerm.trim()}"</strong>
+                              </p>
+                              <button
+                                type="button"
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  const typedName = productSearchTerm.trim();
+                                  setSelectedProductId('produto-avulso');
+                                  setCustomNome(typedName);
+                                  setCustomPreco('');
+                                  setCustomCusto('');
+                                  setProductSearchTerm('');
+                                  setIsProductSearchFocused(false);
+                                  playSound('add');
+                                }}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-950/60 hover:bg-purple-900/60 border border-purple-500/40 text-purple-200 text-[11px] font-bold cursor-pointer transition-colors"
+                              >
+                                <Plus className="h-3 w-3" />
+                                <span>Lançar "{productSearchTerm.trim()}" como Produto Avulso</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              {filteredSelectableProducts.main.length > 0 && (
+                                <div className="py-1">
+                                  <div className="px-3 py-1 text-[9.5px] font-black uppercase tracking-wider text-brand-pink bg-black/50">
+                                    Produtos / Brindes ({filteredSelectableProducts.main.length})
+                                  </div>
+                                  {filteredSelectableProducts.main.map(p => {
+                                    const isSelectedItem = selectedProductId === p.id;
+                                    const outOfStock = !p.estoqueInfinito && p.estoque <= 0;
+                                    return (
+                                      <button
+                                        key={p.id}
+                                        type="button"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => {
+                                          setSelectedProductId(p.id);
+                                          setProductSearchTerm('');
+                                          setIsProductSearchFocused(false);
+                                          playSound('add');
+                                        }}
+                                        className={`w-full px-3 py-2 text-left flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                          isSelectedItem
+                                            ? 'bg-brand-pink/15 text-brand-pink'
+                                            : 'hover:bg-zinc-900 text-zinc-100'
+                                        }`}
+                                      >
+                                        <div className="min-w-0 flex items-center gap-1.5">
+                                          {isSelectedItem && <Check className="h-3.5 w-3.5 text-brand-pink shrink-0" />}
+                                          <span className="text-xs font-semibold truncate">{p.nome}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0 text-[10.5px] font-mono">
+                                          <span className="text-emerald-400 font-bold">R$ {p.preco.toFixed(2)}</span>
+                                          <span className={outOfStock ? 'text-red-400 font-bold' : 'text-zinc-400'}>
+                                            {p.estoqueInfinito ? '∞' : `${p.estoque} un.`}
+                                          </span>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              {filteredSelectableProducts.addons.length > 0 && (
+                                <div className="py-1">
+                                  <div className="px-3 py-1 text-[9.5px] font-black uppercase tracking-wider text-emerald-400 bg-black/50">
+                                    Adicionais / Opcionais ({filteredSelectableProducts.addons.length})
+                                  </div>
+                                  {filteredSelectableProducts.addons.map(p => {
+                                    const isSelectedItem = selectedProductId === p.id;
+                                    const outOfStock = !p.estoqueInfinito && p.estoque <= 0;
+                                    return (
+                                      <button
+                                        key={p.id}
+                                        type="button"
+                                        onMouseDown={(e) => e.preventDefault()}
+                                        onClick={() => {
+                                          setSelectedProductId(p.id);
+                                          setProductSearchTerm('');
+                                          setIsProductSearchFocused(false);
+                                          playSound('add');
+                                        }}
+                                        className={`w-full px-3 py-2 text-left flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+                                          isSelectedItem
+                                            ? 'bg-emerald-500/15 text-emerald-300'
+                                            : 'hover:bg-zinc-900 text-zinc-100'
+                                        }`}
+                                      >
+                                        <div className="min-w-0 flex items-center gap-1.5">
+                                          {isSelectedItem && <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />}
+                                          <span className="text-xs font-semibold truncate">{p.nome}</span>
+                                        </div>
+                                        <div className="flex items-center gap-2 shrink-0 text-[10.5px] font-mono">
+                                          <span className="text-emerald-400 font-bold">R$ {p.preco.toFixed(2)}</span>
+                                          <span className={outOfStock ? 'text-red-400 font-bold' : 'text-zinc-400'}>
+                                            {p.estoqueInfinito ? '∞' : `${p.estoque} un.`}
+                                          </span>
+                                        </div>
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Lista completa tradicional (continua funcionando normalmente) */}
+                    <select
+                      id="sale-p-select"
+                      value={selectedProductId}
+                      onChange={(e) => {
+                        setSelectedProductId(e.target.value);
+                        setProductSearchTerm('');
+                        setIsProductSearchFocused(false);
+                        if (e.target.value === 'produto-avulso') {
+                          setCustomNome('');
+                          setCustomPreco('');
+                          setCustomCusto('');
+                        }
+                      }}
+                      className="w-full px-4 py-2.5 border border-zinc-800 rounded-xl bg-black focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-150 text-sm"
+                    >
+                      <option value="" className="text-zinc-500">-- Selecione o item --</option>
+                      <option value="produto-avulso" className="bg-purple-950 text-purple-300 font-bold">
+                        📦 + PRODUTO AVULSO (Item não cadastrado na loja)
+                      </option>
+                      {availableProducts.length > 0 && (
+                        <optgroup label="Produtos / Brindes Principais" className="bg-black text-brand-pink font-semibold">
+                          {availableProducts.map(p => (
+                            <option key={p.id} value={p.id} className="bg-zinc-900 text-zinc-100 font-normal">
+                              {p.nome} (Preço: R$ {p.preco.toFixed(2)} | Estoque: {p.estoqueInfinito ? '∞ Infinito' : `${p.estoque} un.`})
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {availableAddons.length > 0 && (
+                        <optgroup label="Adicionais / Opcionais (Venda avulsa)" className="bg-black text-emerald-450 font-semibold">
+                          {availableAddons.map(p => (
+                            <option key={p.id} value={p.id} className="bg-zinc-900 text-zinc-100 font-normal">
+                              {p.nome} (Preço: R$ {p.preco.toFixed(2)} | Estoque: {p.estoqueInfinito ? '∞ Infinito' : `${p.estoque} un.`})
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                  </div>
                 )}
               </div>
 
