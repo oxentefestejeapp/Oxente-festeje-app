@@ -32,6 +32,20 @@ const DEFAULT_STORE_INFO: StoreInfo = {
   endereco: "Rua Josina Lessa Feitosa 176, Mangabeira 1 - João Pessoa - PB"
 };
 
+const getValidStorePhone = (rawPhone?: string | null): string => {
+  const digits = (rawPhone || '').replace(/\D/g, '');
+  // Bloqueia telefone vazio, muito curto ou o número fictício de exemplo (81 99876-5432)
+  if (!digits || digits.length < 10 || digits.includes('998765432')) {
+    return DEFAULT_STORE_INFO.telefone;
+  }
+  return rawPhone!.trim();
+};
+
+const formatStorePhoneForWA = (rawPhone?: string | null): string => {
+  const digits = getValidStorePhone(rawPhone).replace(/\D/g, '');
+  return digits.startsWith('55') ? digits : `55${digits}`;
+};
+
 export function OrderTrackingPage() {
   const [trackingId, setTrackingId] = useState<string>(() => {
     const urlParams = new URLSearchParams(window.location.search);
@@ -140,7 +154,7 @@ export function OrderTrackingPage() {
         setStoreInfo({
           nome: validNome,
           instagram: storeData.instagram || DEFAULT_STORE_INFO.instagram,
-          telefone: storeData.telefone || DEFAULT_STORE_INFO.telefone,
+          telefone: getValidStorePhone(storeData.telefone),
           endereco: storeData.endereco || DEFAULT_STORE_INFO.endereco,
           whatsappTemplate: storeData.whatsapp_template || undefined
         });
@@ -155,8 +169,7 @@ export function OrderTrackingPage() {
 
   const getWhatsAppConfirmationUrl = () => {
     if (!sale) return '#';
-    const cleanPhone = (storeInfo?.telefone || DEFAULT_STORE_INFO.telefone).replace(/\D/g, '');
-    const storePhoneForWA = cleanPhone.startsWith('55') ? cleanPhone : `55${cleanPhone}`;
+    const storePhoneForWA = formatStorePhoneForWA(storeInfo?.telefone);
     const pedidoTag = sale.numeroPedido ? `#${sale.numeroPedido}` : `#${sale.id.substring(0, 5)}`;
     const storeName = storeInfo?.nome && !/^\d{10,}$/.test(storeInfo.nome.trim()) ? storeInfo.nome : 'Oxente Festeje';
     const textMsg = `Olá, *${storeName}*! Tudo bem? 🎨✨\n\nAqui é *${sale.cliente || 'Cliente'}*!\nPassei para avisar que *APROVEI O LAYOUT* do meu pedido *${pedidoTag}*! ✅🧵\n\nConferi com atenção todas as cores, modelos, textos, ortografia e detalhes. Está tudo certinho para a confecção e produção! 🚀🎈\n\nMuito obrigado!`;
@@ -770,7 +783,7 @@ export function OrderTrackingPage() {
 
               <div className="pt-2">
                 <a
-                  href={`https://api.whatsapp.com/send?phone=55${storeInfo.telefone.replace(/\D/g, '')}&text=${encodeURIComponent(`Olá Oxente Festeje! Sou o cliente ${sale.cliente || ''} e gostaria de tirar uma dúvida sobre o meu pedido #${sale.numeroPedido || sale.id.substring(0, 5)}`)}`}
+                  href={`https://api.whatsapp.com/send?phone=${formatStorePhoneForWA(storeInfo.telefone)}&text=${encodeURIComponent(`Olá Oxente Festeje! Sou o cliente ${sale.cliente || ''} e gostaria de tirar uma dúvida sobre o meu pedido #${sale.numeroPedido || sale.id.substring(0, 5)}`)}`}
                   target="_blank"
                   rel="noreferrer"
                   className="w-full py-3.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-550/30 hover:border-emerald-500/50 rounded-2xl block text-center font-bold text-xs text-emerald-400 transition-all cursor-pointer active:scale-98"

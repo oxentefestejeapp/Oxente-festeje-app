@@ -706,6 +706,10 @@ export default function App() {
       if (!loadedStoreInfo.nome || /^\d{10,}$/.test(loadedStoreInfo.nome.trim())) {
         loadedStoreInfo.nome = defaultStoreInfo.nome;
       }
+      const cachedPhoneDigits = (loadedStoreInfo.telefone || '').replace(/\D/g, '');
+      if (!cachedPhoneDigits || cachedPhoneDigits.includes('998765432')) {
+        loadedStoreInfo.telefone = defaultStoreInfo.telefone;
+      }
       if (!loadedStoreInfo.whatsappTemplate || !loadedStoreInfo.whatsappTemplate.includes('Josina Lessa')) {
         loadedStoreInfo.whatsappTemplate = defaultStoreInfo.whatsappTemplate;
       }
@@ -890,13 +894,22 @@ export default function App() {
 
         // Sync Store Info
         if (dbStore) {
+          let needsCloudFix = false;
           if (!dbStore.nome || /^\d{10,}$/.test(dbStore.nome.trim())) {
             dbStore.nome = defaultStoreInfo.nome;
-            dbSupabase.saveStoreInfo(dbStore).catch((err: any) => console.warn('Erro ao atualizar nome no Supabase:', err));
+            needsCloudFix = true;
+          }
+          const dbPhoneDigits = (dbStore.telefone || '').replace(/\D/g, '');
+          if (!dbPhoneDigits || dbPhoneDigits.includes('998765432')) {
+            dbStore.telefone = defaultStoreInfo.telefone;
+            needsCloudFix = true;
           }
           if (!dbStore.whatsappTemplate || !dbStore.whatsappTemplate.includes('Josina Lessa')) {
             dbStore.whatsappTemplate = defaultStoreInfo.whatsappTemplate;
-            dbSupabase.saveStoreInfo(dbStore).catch((err: any) => console.warn('Erro ao atualizar whatsappTemplate no Supabase:', err));
+            needsCloudFix = true;
+          }
+          if (needsCloudFix) {
+            dbSupabase.saveStoreInfo(dbStore).catch((err: any) => console.warn('Erro ao corrigir dados da loja no Supabase:', err));
           }
           setStoreInfo(dbStore);
           localStorage.setItem('oxente_store_info', JSON.stringify(dbStore));
@@ -1219,11 +1232,15 @@ export default function App() {
         const validNome = newRow.nome && !/^\d{10,}$/.test(newRow.nome.trim())
           ? newRow.nome
           : defaultStoreInfo.nome;
+        const newRowPhoneDigits = (newRow.telefone || '').replace(/\D/g, '');
+        const validTelefone = newRowPhoneDigits && !newRowPhoneDigits.includes('998765432')
+          ? newRow.telefone
+          : defaultStoreInfo.telefone;
 
         const updatedStore = {
           nome: validNome,
           instagram: newRow.instagram || '',
-          telefone: newRow.telefone || '',
+          telefone: validTelefone,
           endereco: newRow.endereco || '',
           whatsappTemplate: newRow.whatsapp_template || ''
         };
@@ -1527,6 +1544,10 @@ export default function App() {
         }
 
         if (dbStore) {
+          const pollPhoneDigits = (dbStore.telefone || '').replace(/\D/g, '');
+          if (!pollPhoneDigits || pollPhoneDigits.includes('998765432')) {
+            dbStore.telefone = defaultStoreInfo.telefone;
+          }
           setStoreInfo((curr) => {
             const hasChanged = JSON.stringify(curr) !== JSON.stringify(dbStore);
             if (hasChanged) {
