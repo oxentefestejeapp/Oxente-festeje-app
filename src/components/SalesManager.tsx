@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
-import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check, CheckSquare, TrendingUp, TrendingDown, Sparkles, Activity, Package } from 'lucide-react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { ShoppingBag, Users, Calendar, DollarSign, Wallet, FileText, CheckCircle2, RotateCcw, Search, Phone, Pencil, X, Plus, Trash2, MessageSquare, Check, CheckSquare, TrendingUp, TrendingDown, Sparkles, Activity, Package, Eye, EyeOff, AlertTriangle } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { BarChart, Bar, AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { Product, Sale, PaymentMethod, StoreInfo, SaleItem, getProductUnitPrice, getProductUnitCost, calculateSaleItemUnitCost, findMatchingProduct, isAvulsoSale, isAvulsoItem, getSaleAvulsoInfo, getSaleCostInfo, formatCpfCnpj, SaleProfitAdjustment, getSaleAdjustments, getSaleAdjustmentsForDate, hasSaleAdditionOnDate, findAddedItemsSummary, getBrazilDayString } from '../types';
@@ -286,11 +286,32 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     }
   }, [clientCashbackBalance, appliedCashbackDiscount]);
 
-  // States for editing a sale
+  // States for editing & deleting a sale
   const [editingSale, setEditingSale] = useState<Sale | null>(null);
   const [saleIdToDelete, setSaleIdToDelete] = useState<string | null>(null);
+  const [saleToDeleteObj, setSaleToDeleteObj] = useState<Sale | null>(null);
   const [saleDeletePassword, setSaleDeletePassword] = useState('');
+  const [showDeleteCode, setShowDeleteCode] = useState(false);
+  const [deleteCodeError, setDeleteCodeError] = useState(false);
+  const [deleteFieldNonce, setDeleteFieldNonce] = useState(1);
+  const [isDeleteInputEditable, setIsDeleteInputEditable] = useState(false);
+  const [isSalesSearchEditable, setIsSalesSearchEditable] = useState(false);
+  const salesSearchFieldName = useMemo(() => `ox_flt_${Math.random().toString(36).slice(2, 9)}`, []);
+  const deleteCodeInputRef = useRef<HTMLInputElement | null>(null);
   const [isDeletingSaleId, setIsDeletingSaleId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!saleIdToDelete) {
+      setIsDeleteInputEditable(false);
+      return;
+    }
+    // Unlock delete code input shortly after opening so browsers never trigger autofill on mount
+    const timer = window.setTimeout(() => {
+      setIsDeleteInputEditable(true);
+      deleteCodeInputRef.current?.focus();
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [saleIdToDelete, deleteFieldNonce]);
   const [editCliente, setEditCliente] = useState('');
   const [editTelefone, setEditTelefone] = useState('');
   const [editDocumentoCliente, setEditDocumentoCliente] = useState('');
@@ -1698,17 +1719,29 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setEditingSale(null);
   };
 
+  const closeDeleteSaleModal = () => {
+    setSaleIdToDelete(null);
+    setSaleToDeleteObj(null);
+    setSaleDeletePassword('');
+    setShowDeleteCode(false);
+    setDeleteCodeError(false);
+    setIsDeleteInputEditable(false);
+  };
+
   const handleDeleteSaleSubmit = async (e: React.SyntheticEvent, saleId: string) => {
     e.preventDefault();
     e.stopPropagation();
     if (!onDeleteSale) return;
+    if (saleDeletePassword.trim() !== '69apagar69') {
+      setDeleteCodeError(true);
+      return;
+    }
     setIsDeletingSaleId(saleId);
     try {
       playSound('remove');
       const success = await onDeleteSale(saleId);
       if (success) {
-        setSaleIdToDelete(null);
-        setSaleDeletePassword('');
+        closeDeleteSaleModal();
         // If the deleted sale is the one currently viewed on the receipt, clear it
         if (viewedSale && viewedSale.id === saleId) {
           setViewedSale(null);
@@ -3761,19 +3794,45 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   <Search className="h-4 w-4" />
                 </span>
                 <input
-                  type="search"
-                  name="historico-vendas-pesquisa"
+                  type="text"
+                  name={salesSearchFieldName}
                   autoComplete="off"
+                  aria-autocomplete="none"
                   autoCorrect="off"
                   autoCapitalize="off"
                   spellCheck={false}
                   data-lpignore="true"
                   data-1p-ignore="true"
+                  data-bwignore="true"
                   data-form-type="other"
+                  readOnly={!isSalesSearchEditable || Boolean(saleIdToDelete)}
+                  disabled={Boolean(saleIdToDelete)}
+                  onPointerDown={(e) => {
+                    if (!saleIdToDelete) {
+                      e.currentTarget.readOnly = false;
+                      setIsSalesSearchEditable(true);
+                    }
+                  }}
+                  onTouchStart={(e) => {
+                    if (!saleIdToDelete) {
+                      e.currentTarget.readOnly = false;
+                      setIsSalesSearchEditable(true);
+                    }
+                  }}
+                  onFocus={(e) => {
+                    if (!saleIdToDelete) {
+                      e.currentTarget.readOnly = false;
+                      setIsSalesSearchEditable(true);
+                    }
+                  }}
+                  onBlur={() => setIsSalesSearchEditable(false)}
                   placeholder="Pesquisar por nome do cliente, telefone, produto ou pedido (#)..."
                   value={salesSearchTerm}
-                  onChange={(e) => setSalesSearchTerm(e.target.value)}
-                  className="w-full pl-9 pr-10 py-2 bg-black border border-zinc-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 placeholder-zinc-650 text-xs transition-colors"
+                  onChange={(e) => {
+                    if (!isSalesSearchEditable || saleIdToDelete) return;
+                    setSalesSearchTerm(e.target.value);
+                  }}
+                  className="w-full pl-9 pr-10 py-2 bg-black border border-zinc-850 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-pink/50 focus:border-brand-pink text-zinc-100 placeholder-zinc-650 text-xs transition-colors disabled:opacity-50"
                 />
                 {salesSearchTerm && (
                   <button
@@ -4250,81 +4309,26 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                                 </button>
                               )}
                               {isAdmin && (
-                                <>
-                                  {saleIdToDelete === sale.id ? (
-                                    <form
-                                      autoComplete="off"
-                                      onSubmit={(e) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        if (isDeletingSaleId !== sale.id && saleDeletePassword.trim() === '69apagar69') {
-                                          handleDeleteSaleSubmit(e, sale.id);
-                                        }
-                                      }}
-                                      className="flex items-center gap-1.5 bg-red-950/40 border border-red-900/60 rounded px-2 py-0.5 animate-fade-in shrink-0"
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      <input
-                                        type="text"
-                                        name={`confirmar-exclusao-${sale.id}`}
-                                        autoComplete="off"
-                                        autoCorrect="off"
-                                        autoCapitalize="off"
-                                        spellCheck={false}
-                                        data-lpignore="true"
-                                        data-1p-ignore="true"
-                                        data-form-type="other"
-                                        autoFocus
-                                        placeholder="Senha..."
-                                        value={saleDeletePassword}
-                                        onChange={(e) => setSaleDeletePassword(e.target.value)}
-                                        onKeyDown={(e) => {
-                                          if (e.key === 'Escape') {
-                                            e.stopPropagation();
-                                            setSaleIdToDelete(null);
-                                            setSaleDeletePassword('');
-                                          }
-                                        }}
-                                        className="w-24 sm:w-28 px-2 py-0.5 bg-black border border-red-900/80 focus:border-red-500 rounded text-[10px] font-mono focus:outline-none text-zinc-100 placeholder-red-400/50 [-webkit-text-security:disc]"
-                                        title="Insira a senha de administrador"
-                                      />
-                                      <button
-                                        type="submit"
-                                        disabled={isDeletingSaleId === sale.id || saleDeletePassword.trim() !== '69apagar69'}
-                                        className="p-1 hover:bg-black/40 text-emerald-400 hover:text-emerald-350 rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                        title={saleDeletePassword.trim() === '69apagar69' ? "Confirmar exclusão definitiva do banco" : "Digite a senha correta para destravar"}
-                                      >
-                                        <Check className="h-3.5 w-3.5" />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSaleIdToDelete(null);
-                                          setSaleDeletePassword('');
-                                        }}
-                                        disabled={isDeletingSaleId === sale.id}
-                                        className="p-1 hover:bg-black/40 text-red-500 hover:text-red-400 rounded cursor-pointer"
-                                        title="Cancelar"
-                                      >
-                                        <X className="h-3.5 w-3.5" />
-                                      </button>
-                                    </form>
-                                  ) : (
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        setSaleIdToDelete(sale.id);
-                                        setSaleDeletePassword('');
-                                      }}
-                                      className="px-2 py-1 bg-zinc-950 border border-zinc-805 hover:border-red-500 text-zinc-400 hover:text-red-400 rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0 active:scale-95"
-                                      title="Excluir este pedido permanentemente do sistema"
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                      <span>Excluir</span>
-                                    </button>
-                                  )}
-                                </>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    (document.activeElement as HTMLElement | null)?.blur?.();
+                                    setIsSalesSearchEditable(false);
+                                    setSaleIdToDelete(sale.id);
+                                    setSaleToDeleteObj(sale);
+                                    setSaleDeletePassword('');
+                                    setShowDeleteCode(false);
+                                    setDeleteCodeError(false);
+                                    setIsDeleteInputEditable(false);
+                                    setDeleteFieldNonce((n) => n + 1);
+                                  }}
+                                  className="px-2 py-1 bg-zinc-950 border border-zinc-805 hover:border-red-500 text-zinc-400 hover:text-red-400 rounded-md text-[10px] font-bold transition-colors cursor-pointer flex items-center gap-1 shrink-0 active:scale-95"
+                                  title="Excluir este pedido permanentemente do sistema"
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                  <span>Excluir</span>
+                                </button>
                               )}
                             </div>
                           </td>
@@ -5651,6 +5655,197 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                 </div>
 
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Sale Confirmation Modal (Isolated from Search Bar & Browser Autofill) */}
+      <AnimatePresence>
+        {saleIdToDelete && saleToDeleteObj && (
+          <div
+            className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+            onClick={() => {
+              if (!isDeletingSaleId) closeDeleteSaleModal();
+            }}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 12 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md bg-zinc-950 border border-red-900/60 rounded-2xl shadow-2xl overflow-hidden"
+            >
+              <div className="px-5 py-4 bg-red-950/35 border-b border-red-900/40 flex items-center justify-between gap-3">
+                <div className="flex items-center gap-2.5">
+                  <div className="p-2 rounded-xl bg-red-500/15 border border-red-500/30 text-red-400">
+                    <AlertTriangle className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-black text-red-200 tracking-tight">
+                      Confirmar Exclusão do Pedido
+                    </h3>
+                    <p className="text-[11px] text-red-300/75">
+                      Esta ação apaga apenas este registro definitivamente.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={Boolean(isDeletingSaleId)}
+                  onClick={closeDeleteSaleModal}
+                  className="p-1.5 rounded-lg text-zinc-400 hover:text-zinc-100 hover:bg-zinc-900 transition-colors cursor-pointer"
+                  title="Fechar"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {/* Summary of the exact order being deleted */}
+                <div className="p-3.5 rounded-xl bg-black/70 border border-zinc-800 space-y-1.5 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-zinc-100 truncate">
+                      {saleToDeleteObj.cliente}
+                    </span>
+                    {saleToDeleteObj.numeroPedido ? (
+                      <span className="px-2 py-0.5 rounded bg-zinc-800 text-brand-pink font-mono text-[10px] font-bold shrink-0">
+                        #{saleToDeleteObj.numeroPedido}
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 rounded bg-amber-950/50 text-amber-400 border border-amber-900/40 text-[10px] font-bold shrink-0">
+                        Orçamento
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-zinc-400 text-[11px] truncate">
+                    {saleToDeleteObj.produtoNome} ({saleToDeleteObj.quantidade} un.)
+                  </p>
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-zinc-800/80">
+                    <span className="text-zinc-500">
+                      {saleToDeleteObj.dataVenda
+                        ? new Date(saleToDeleteObj.dataVenda).toLocaleString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })
+                        : ''}
+                    </span>
+                    <span className="font-mono font-bold text-red-400">
+                      R$ {Number(saleToDeleteObj.total || 0).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Zero-autofill authorization code input (no <form>, no password type/keywords) */}
+                <div className="space-y-1.5">
+                  <p className="text-xs font-semibold text-zinc-300">
+                    Digite o código de autorização para apagar:
+                  </p>
+                  <div className="relative">
+                    {!showDeleteCode && (
+                      <div
+                        aria-hidden="true"
+                        className="pointer-events-none absolute inset-y-0 left-0 right-10 flex items-center px-3.5 font-mono text-sm tracking-widest overflow-hidden whitespace-nowrap"
+                      >
+                        {saleDeletePassword.length > 0 ? (
+                          <span className="text-zinc-100">{'•'.repeat(saleDeletePassword.length)}</span>
+                        ) : (
+                          <span className="text-zinc-600 text-xs tracking-normal font-sans">
+                            Digite o código aqui...
+                          </span>
+                        )}
+                      </div>
+                    )}
+                    <input
+                      ref={deleteCodeInputRef}
+                      key={`del-code-${deleteFieldNonce}`}
+                      type="text"
+                      name={`ox_chk_${deleteFieldNonce}`}
+                      autoComplete="off"
+                      aria-autocomplete="none"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      data-lpignore="true"
+                      data-1p-ignore="true"
+                      data-bwignore="true"
+                      data-form-type="other"
+                      readOnly={!isDeleteInputEditable}
+                      onPointerDown={(e) => {
+                        e.currentTarget.readOnly = false;
+                        setIsDeleteInputEditable(true);
+                      }}
+                      onTouchStart={(e) => {
+                        e.currentTarget.readOnly = false;
+                        setIsDeleteInputEditable(true);
+                      }}
+                      value={saleDeletePassword}
+                      onChange={(e) => {
+                        setSaleDeletePassword(e.target.value);
+                        if (deleteCodeError) setDeleteCodeError(false);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                          e.stopPropagation();
+                          if (!isDeletingSaleId) closeDeleteSaleModal();
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (isDeletingSaleId !== saleIdToDelete) {
+                            handleDeleteSaleSubmit(e, saleIdToDelete);
+                          }
+                        }
+                      }}
+                      placeholder={showDeleteCode ? 'Digite o código aqui...' : ''}
+                      className={`w-full pl-3.5 pr-10 py-2.5 bg-black border rounded-xl font-mono text-sm focus:outline-none transition-colors ${
+                        deleteCodeError
+                          ? 'border-red-500 ring-1 ring-red-500/40'
+                          : 'border-zinc-800 focus:border-red-500/80'
+                      } ${showDeleteCode ? 'text-zinc-100 placeholder-zinc-600' : 'text-transparent caret-red-400 selection:bg-red-500/25'}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowDeleteCode((prev) => !prev);
+                        deleteCodeInputRef.current?.focus();
+                      }}
+                      className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-zinc-500 hover:text-zinc-200 transition-colors cursor-pointer"
+                      title={showDeleteCode ? 'Ocultar código' : 'Mostrar código'}
+                    >
+                      {showDeleteCode ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {deleteCodeError && (
+                    <p className="text-[11px] font-bold text-red-400">
+                      Código incorreto. Verifique e tente novamente.
+                    </p>
+                  )}
+                </div>
+
+                {/* Action buttons */}
+                <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-zinc-800/80">
+                  <button
+                    type="button"
+                    disabled={Boolean(isDeletingSaleId)}
+                    onClick={closeDeleteSaleModal}
+                    className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 font-semibold rounded-xl text-xs transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isDeletingSaleId === saleIdToDelete || saleDeletePassword.trim() !== '69apagar69'}
+                    onClick={(e) => handleDeleteSaleSubmit(e, saleIdToDelete)}
+                    className="px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-red-950/60 disabled:text-red-400/40 disabled:cursor-not-allowed text-white font-bold rounded-xl text-xs transition-colors cursor-pointer flex items-center gap-1.5"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    <span>{isDeletingSaleId === saleIdToDelete ? 'Apagando...' : 'Apagar Pedido'}</span>
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}
