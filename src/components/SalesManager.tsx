@@ -1698,7 +1698,8 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
     setEditingSale(null);
   };
 
-  const handleDeleteSaleSubmit = async (e: React.MouseEvent, saleId: string) => {
+  const handleDeleteSaleSubmit = async (e: React.SyntheticEvent, saleId: string) => {
+    e.preventDefault();
     e.stopPropagation();
     if (!onDeleteSale) return;
     setIsDeletingSaleId(saleId);
@@ -3760,7 +3761,15 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                   <Search className="h-4 w-4" />
                 </span>
                 <input
-                  type="text"
+                  type="search"
+                  name="historico-vendas-pesquisa"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-form-type="other"
                   placeholder="Pesquisar por nome do cliente, telefone, produto ou pedido (#)..."
                   value={salesSearchTerm}
                   onChange={(e) => setSalesSearchTerm(e.target.value)}
@@ -4243,27 +4252,52 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                               {isAdmin && (
                                 <>
                                   {saleIdToDelete === sale.id ? (
-                                    <div 
+                                    <form
+                                      autoComplete="off"
+                                      onSubmit={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        if (isDeletingSaleId !== sale.id && saleDeletePassword.trim() === '69apagar69') {
+                                          handleDeleteSaleSubmit(e, sale.id);
+                                        }
+                                      }}
                                       className="flex items-center gap-1.5 bg-red-950/40 border border-red-900/60 rounded px-2 py-0.5 animate-fade-in shrink-0"
                                       onClick={(e) => e.stopPropagation()}
                                     >
                                       <input
-                                        type="password"
-                                        placeholder="Senha"
+                                        type="text"
+                                        name={`confirmar-exclusao-${sale.id}`}
+                                        autoComplete="off"
+                                        autoCorrect="off"
+                                        autoCapitalize="off"
+                                        spellCheck={false}
+                                        data-lpignore="true"
+                                        data-1p-ignore="true"
+                                        data-form-type="other"
+                                        autoFocus
+                                        placeholder="Senha..."
                                         value={saleDeletePassword}
                                         onChange={(e) => setSaleDeletePassword(e.target.value)}
-                                        className="w-16 px-1.5 py-0.5 bg-black border border-red-950 focus:border-red-905 rounded text-[9.5px] font-mono focus:outline-none text-zinc-100 placeholder-red-900/40"
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Escape') {
+                                            e.stopPropagation();
+                                            setSaleIdToDelete(null);
+                                            setSaleDeletePassword('');
+                                          }
+                                        }}
+                                        className="w-24 sm:w-28 px-2 py-0.5 bg-black border border-red-900/80 focus:border-red-500 rounded text-[10px] font-mono focus:outline-none text-zinc-100 placeholder-red-400/50 [-webkit-text-security:disc]"
                                         title="Insira a senha de administrador"
                                       />
                                       <button
-                                        onClick={(e) => handleDeleteSaleSubmit(e, sale.id)}
-                                        disabled={isDeletingSaleId === sale.id || saleDeletePassword !== '69apagar69'}
+                                        type="submit"
+                                        disabled={isDeletingSaleId === sale.id || saleDeletePassword.trim() !== '69apagar69'}
                                         className="p-1 hover:bg-black/40 text-emerald-400 hover:text-emerald-350 rounded cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                                        title={saleDeletePassword === '69apagar69' ? "Confirmar exclusão definitiva do banco" : "Digite a senha correta para destravar"}
+                                        title={saleDeletePassword.trim() === '69apagar69' ? "Confirmar exclusão definitiva do banco" : "Digite a senha correta para destravar"}
                                       >
                                         <Check className="h-3.5 w-3.5" />
                                       </button>
                                       <button
+                                        type="button"
                                         onClick={(e) => {
                                           e.stopPropagation();
                                           setSaleIdToDelete(null);
@@ -4275,7 +4309,7 @@ Muito obrigado pela preferência! Oxente Festeje 🎈
                                       >
                                         <X className="h-3.5 w-3.5" />
                                       </button>
-                                    </div>
+                                    </form>
                                   ) : (
                                     <button
                                       onClick={(e) => {
