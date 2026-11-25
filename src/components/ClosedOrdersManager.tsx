@@ -90,6 +90,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   const [filterUrgentOnly, setFilterUrgentOnly] = useState(false);
   const [urgentMaxDays, setUrgentMaxDays] = useState<'all' | number>('all');
   const [customUrgentDaysInput, setCustomUrgentDaysInput] = useState('');
+  const [selectedUrgentChipId, setSelectedUrgentChipId] = useState<string | null>(null);
   const [sortByPriority, setSortByPriority] = useState(true);
   const [filterPendingApprovalOnly, setFilterPendingApprovalOnly] = useState(false);
   const [col1Limit, setCol1Limit] = useState(35);
@@ -1331,7 +1332,7 @@ Qualquer ajuste que precisar, estamos por aqui!
           </div>
 
           {/* Chips interativos de pedidos urgentes */}
-          <div className="flex flex-wrap gap-2 pt-2 border-t border-red-500/20 relative z-10">
+          <div className="space-y-2.5 pt-2 border-t border-red-500/20 relative z-10">
             {displayedUrgentArtOrders.length === 0 ? (
               <div className="w-full py-3 px-4 bg-zinc-950/60 border border-dashed border-red-500/25 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="text-zinc-400 font-medium">
@@ -1349,26 +1350,183 @@ Qualquer ajuste que precisar, estamos por aqui!
                 </button>
               </div>
             ) : (
-              displayedUrgentArtOrders.map((sale) => (
-                <button
-                  key={sale.id}
-                  type="button"
-                  onClick={() => handleSelectSaleForReceipt(sale)}
-                  className="group flex items-center gap-2 px-3 py-1.5 bg-zinc-950/80 hover:bg-zinc-900 border border-red-500/30 hover:border-red-400 rounded-xl text-xs font-mono transition-all cursor-pointer text-left shadow-sm"
-                >
-                  <span className="font-extrabold text-zinc-200 group-hover:text-white">
-                    {sale.cliente} {sale.numeroPedido ? `(#${sale.numeroPedido})` : ''}
-                  </span>
-                  <span className="text-[10.5px] text-zinc-400 font-sans truncate max-w-[150px]">
-                    {sale.produtoNome}
-                  </span>
-                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 font-bold border border-red-500/30">
-                    {sale.temTaxaUrgencia
-                      ? (sale.dataRetirada ? `⚡ ${getUrgentText(sale.dataRetirada)}` : '⚡ Taxa Urgência')
-                      : getUrgentText(sale.dataRetirada)}
-                  </span>
-                </button>
-              ))
+              <>
+                <div className="flex flex-wrap gap-2">
+                  {displayedUrgentArtOrders.map((sale) => {
+                    const isSelectedChip = selectedUrgentChipId === sale.id;
+                    return (
+                      <button
+                        key={sale.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedUrgentChipId(prev => (prev === sale.id ? null : sale.id));
+                          playAppSound('click');
+                        }}
+                        className={`group flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-mono transition-all cursor-pointer text-left shadow-sm border ${
+                          isSelectedChip
+                            ? 'bg-red-500/25 border-amber-400 ring-2 ring-amber-400/35 text-white'
+                            : 'bg-zinc-950/80 hover:bg-zinc-900 border-red-500/30 hover:border-red-400'
+                        }`}
+                        title="Clique para puxar direto para uma mesa ou ver o recibo"
+                      >
+                        <span className="font-extrabold text-zinc-200 group-hover:text-white">
+                          {sale.cliente} {sale.numeroPedido ? `(#${sale.numeroPedido})` : ''}
+                        </span>
+                        <span className="text-[10.5px] text-zinc-400 font-sans truncate max-w-[150px]">
+                          {sale.produtoNome}
+                        </span>
+                        {sale.designerId && (
+                          <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase ${
+                            sale.designerId === 'designer1'
+                              ? 'bg-brand-pink/20 text-brand-pink border border-brand-pink/35'
+                              : sale.designerId === 'designer2'
+                                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/35'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-500/35'
+                          }`}>
+                            {sale.designerId === 'designer1' ? 'D1' : sale.designerId === 'designer2' ? 'D2' : 'ADM'}
+                          </span>
+                        )}
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 font-bold border border-red-500/30">
+                          {sale.temTaxaUrgencia
+                            ? (sale.dataRetirada ? `⚡ ${getUrgentText(sale.dataRetirada)}` : '⚡ Taxa Urgência')
+                            : getUrgentText(sale.dataRetirada)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Painel rápido ao clicar em um pedido urgente: puxar direto para Mesa D1, D2 ou Admin */}
+                {(() => {
+                  const selectedUrgentSale = displayedUrgentArtOrders.find(s => s.id === selectedUrgentChipId);
+                  if (!selectedUrgentSale) return null;
+                  const currentDeskLabel =
+                    selectedUrgentSale.designerId === 'designer1'
+                      ? 'Mesa D1'
+                      : selectedUrgentSale.designerId === 'designer2'
+                        ? 'Mesa D2'
+                        : selectedUrgentSale.designerId === 'admin'
+                          ? 'Mesa Admin'
+                          : 'Fila de Triagem';
+                  return (
+                    <div className="p-3 bg-zinc-950/95 border border-amber-500/45 rounded-xl shadow-lg flex flex-col lg:flex-row lg:items-center justify-between gap-3 animate-fade-in">
+                      <div className="min-w-0 space-y-0.5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs font-black text-zinc-100">
+                            {selectedUrgentSale.cliente}
+                            {selectedUrgentSale.numeroPedido ? ` (#${selectedUrgentSale.numeroPedido})` : ''}
+                          </span>
+                          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-zinc-900 border border-zinc-800 text-zinc-300">
+                            Atual: {currentDeskLabel}
+                          </span>
+                          {selectedUrgentSale.dataRetirada && (
+                            <span className="text-[10px] font-mono font-bold text-amber-300">
+                              📅 {new Date(selectedUrgentSale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-zinc-400 truncate">
+                          {selectedUrgentSale.itens && selectedUrgentSale.itens.length > 0
+                            ? selectedUrgentSale.itens.map(it => `${it.quantidade}x ${it.produtoNome}`).join(', ')
+                            : `${selectedUrgentSale.quantidade}x ${selectedUrgentSale.produtoNome}`}
+                        </p>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          disabled={selectedUrgentSale.designerId === 'designer1'}
+                          onClick={() => {
+                            handlePullOrder(selectedUrgentSale, 'designer1');
+                            setSelectedUrgentChipId(null);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold transition-all flex items-center gap-1 cursor-pointer active:scale-95 ${
+                            selectedUrgentSale.designerId === 'designer1'
+                              ? 'bg-brand-pink/20 border border-brand-pink/40 text-brand-pink cursor-not-allowed opacity-70'
+                              : 'bg-brand-pink hover:brightness-110 text-black shadow-sm'
+                          }`}
+                        >
+                          <span>{selectedUrgentSale.designerId === 'designer1' ? '✓ Já na D1' : 'Puxar p/ Mesa D1'}</span>
+                          {selectedUrgentSale.designerId !== 'designer1' && <ChevronRight className="h-3.5 w-3.5" />}
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={selectedUrgentSale.designerId === 'designer2'}
+                          onClick={() => {
+                            handlePullOrder(selectedUrgentSale, 'designer2');
+                            setSelectedUrgentChipId(null);
+                          }}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold transition-all flex items-center gap-1 cursor-pointer active:scale-95 ${
+                            selectedUrgentSale.designerId === 'designer2'
+                              ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 cursor-not-allowed opacity-70'
+                              : 'bg-cyan-500 hover:bg-cyan-400 text-black shadow-sm'
+                          }`}
+                        >
+                          <span>{selectedUrgentSale.designerId === 'designer2' ? '✓ Já na D2' : 'Puxar p/ Mesa D2'}</span>
+                          {selectedUrgentSale.designerId !== 'designer2' && <ChevronRight className="h-3.5 w-3.5" />}
+                        </button>
+
+                        {isAdminUser && (
+                          <button
+                            type="button"
+                            disabled={selectedUrgentSale.designerId === 'admin'}
+                            onClick={() => {
+                              handlePullOrder(selectedUrgentSale, 'admin');
+                              setSelectedUrgentChipId(null);
+                            }}
+                            className={`px-3 py-1.5 rounded-lg text-[11px] font-black transition-all flex items-center gap-1 cursor-pointer active:scale-95 border ${
+                              selectedUrgentSale.designerId === 'admin'
+                                ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 cursor-not-allowed opacity-70'
+                                : 'bg-amber-500 hover:bg-amber-400 border-amber-400 text-black shadow-sm'
+                            }`}
+                          >
+                            <Crown className="h-3 w-3" />
+                            <span>{selectedUrgentSale.designerId === 'admin' ? '✓ Já na Admin' : 'Puxar p/ Mesa Admin'}</span>
+                          </button>
+                        )}
+
+                        {selectedUrgentSale.designerId && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handlePullOrder(selectedUrgentSale, null);
+                              setSelectedUrgentChipId(null);
+                            }}
+                            className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 hover:border-red-500/50 text-zinc-300 hover:text-red-300 rounded-lg text-[10.5px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                            title="Devolver pedido para a Fila de Triagem"
+                          >
+                            <ArrowRightLeft className="h-3 w-3" />
+                            <span>Triagem</span>
+                          </button>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectSaleForReceipt(selectedUrgentSale);
+                            setSelectedUrgentChipId(null);
+                          }}
+                          className="px-2.5 py-1.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-lg text-[10.5px] font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Abrir recibo e observações deste pedido"
+                        >
+                          <FileText className="h-3 w-3 text-brand-pink" />
+                          <span>Ver Recibo</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setSelectedUrgentChipId(null)}
+                          className="p-1.5 text-zinc-500 hover:text-zinc-200 hover:bg-zinc-900 rounded-lg transition-colors cursor-pointer"
+                          title="Fechar opções"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </>
             )}
           </div>
         </div>
