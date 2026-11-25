@@ -104,7 +104,7 @@ export interface Sale {
   criadoPorEmail?: string;
   dataRetirada?: string; // Format YYYY-MM-DD
   statusProducao?: 'Agendado' | 'Em Produção' | 'Pronto para Retirada' | 'Agendado para Entrega' | 'Entregue';
-  designerId?: 'designer1' | 'designer2' | null;
+  designerId?: 'designer1' | 'designer2' | 'admin' | null;
   statusArte?: 'Pendente' | 'Arte Finalizada';
   puxadoPor?: string;
   puxadoEm?: string;

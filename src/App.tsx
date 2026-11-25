@@ -3213,6 +3213,7 @@ export default function App() {
                 storeInfo={storeInfo}
                 onUpdateSale={handleUpdateSale}
                 currentUserEmail={firebaseUser?.email || ''}
+                isAdmin={isAdmin}
               />
             )}
 

@@ -11,7 +11,7 @@ export interface UrgentArtOrderInfo {
   dataRetirada?: string;
   turnoEntrega?: 'Manhã' | 'Tarde';
   temTaxaUrgencia?: boolean;
-  designerId?: 'designer1' | 'designer2' | null;
+  designerId?: 'designer1' | 'designer2' | 'admin' | null;
   statusArte?: string;
 }
 
@@ -23,6 +23,8 @@ interface CelebrationOverlayProps {
   productStock?: number;
   urgentOrders?: UrgentArtOrderInfo[];
   onActionClick?: () => void;
+  initialUrgentMaxDays?: 'all' | number;
+  onSelectUrgentMaxDays?: (maxDays: 'all' | number) => void;
 }
 
 interface Balloon {
@@ -65,11 +67,72 @@ export function CelebrationOverlay({
   productName, 
   productStock,
   urgentOrders,
-  onActionClick 
+  onActionClick,
+  initialUrgentMaxDays = 'all',
+  onSelectUrgentMaxDays
 }: CelebrationOverlayProps) {
   const [balloons, setBalloons] = useState<Balloon[]>([]);
   const [fireworks, setFireworks] = useState<FireworkCluster[]>([]);
   const [cosmicStars, setCosmicStars] = useState<CosmicStar[]>([]);
+  const [modalUrgentMaxDays, setModalUrgentMaxDays] = useState<'all' | number>(initialUrgentMaxDays);
+  const [modalCustomDaysInput, setModalCustomDaysInput] = useState(
+    typeof initialUrgentMaxDays === 'number' && ![0, 3, 5, 7, 10, 15].includes(initialUrgentMaxDays)
+      ? String(initialUrgentMaxDays)
+      : ''
+  );
+
+  useEffect(() => {
+    setModalUrgentMaxDays(initialUrgentMaxDays);
+    setModalCustomDaysInput(
+      typeof initialUrgentMaxDays === 'number' && ![0, 3, 5, 7, 10, 15].includes(initialUrgentMaxDays)
+        ? String(initialUrgentMaxDays)
+        : ''
+    );
+  }, [initialUrgentMaxDays, type]);
+
+  const getModalDaysUntilPickup = (dataRetirada?: string): number | null => {
+    if (!dataRetirada) return null;
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const pickupDate = new Date(dataRetirada + 'T12:00:00');
+      pickupDate.setHours(0, 0, 0, 0);
+      return Math.round((pickupDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    } catch {
+      return null;
+    }
+  };
+
+  const matchesModalDeadline = (item: UrgentArtOrderInfo, maxDays: 'all' | number): boolean => {
+    if (maxDays === 'all') return true;
+    const days = getModalDaysUntilPickup(item.dataRetirada);
+    if (days === null) return Boolean(item.temTaxaUrgencia);
+    return days <= maxDays;
+  };
+
+  const getModalRemainingLabel = (item: UrgentArtOrderInfo): string => {
+    const days = getModalDaysUntilPickup(item.dataRetirada);
+    if (days === null) return item.temTaxaUrgencia ? '⚡ Taxa Urgência' : 'Prazo Próximo';
+    const prefix = item.temTaxaUrgencia ? '⚡ ' : '';
+    if (days < 0) return `${prefix}Atrasado ${Math.abs(days)}d`;
+    if (days === 0) return `${prefix}Hoje!`;
+    if (days === 1) return `${prefix}Amanhã!`;
+    return `${prefix}${days} dias`;
+  };
+
+  const modalUrgentPresets: { value: 'all' | number; label: string }[] = [
+    { value: 'all', label: 'Todos' },
+    { value: 0, label: 'Hoje/Atras.' },
+    { value: 3, label: 'Até 3d' },
+    { value: 5, label: 'Até 5d' },
+    { value: 7, label: 'Até 7d' },
+    { value: 10, label: 'Até 10d' },
+    { value: 15, label: 'Até 15d' },
+  ];
+
+  const filteredModalUrgentOrders = (urgentOrders || []).filter((item) =>
+    matchesModalDeadline(item, modalUrgentMaxDays)
+  );
 
   useEffect(() => {
     if (type === 'goal') {
@@ -997,58 +1060,144 @@ export function CelebrationOverlay({
             </h1>
 
             {/* Subtitle */}
-            <p className="text-xs text-zinc-350 font-medium px-2 mb-4 leading-relaxed">
-              Constam <strong className="text-red-400 font-bold">{urgentOrders && urgentOrders.length > 0 ? urgentOrders.length : 1} {urgentOrders && urgentOrders.length === 1 ? 'pedido urgente' : 'pedidos urgentes'}</strong> aguardando criação ou aprovação da arte antes da produção/entrega!
+            <p className="text-xs text-zinc-350 font-medium px-2 mb-3 leading-relaxed">
+              Constam <strong className="text-red-400 font-bold">{urgentOrders && urgentOrders.length > 0 ? urgentOrders.length : 1} {urgentOrders && urgentOrders.length === 1 ? 'pedido urgente' : 'pedidos urgentes'}</strong> aguardando criação da arte antes da produção/entrega!
             </p>
 
-            {/* List of Urgent Orders preview */}
-            <div className="space-y-2 mb-5 max-h-48 overflow-y-auto pr-1 text-left custom-scrollbar">
-              {(urgentOrders || []).slice(0, 3).map((item) => (
-                <div key={item.id} className="bg-zinc-900/90 border border-red-500/25 p-3 rounded-xl shadow-inner">
-                  <div className="flex items-center justify-between gap-2 mb-1">
-                    <span className="text-xs font-black text-zinc-100 truncate">
-                      {item.cliente} {item.numeroPedido ? `(#${item.numeroPedido})` : ''}
-                    </span>
-                    {item.temTaxaUrgencia ? (
-                      <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 border border-red-500/30 text-[9px] font-black rounded uppercase shrink-0">
-                        ⚡ Urgência
+            {/* Deadline Filter Bar inside Urgent Modal */}
+            <div className="mb-3 p-2.5 bg-zinc-900/80 border border-red-500/20 rounded-xl space-y-2 text-left">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1">
+                  <Calendar className="h-3 w-3 text-amber-400" />
+                  Filtrar por Prazo:
+                </span>
+                <span className="text-[10px] font-mono font-bold text-zinc-400">
+                  {filteredModalUrgentOrders.length} de {(urgentOrders || []).length}
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {modalUrgentPresets.map((preset) => {
+                  const count = (urgentOrders || []).filter((item) => matchesModalDeadline(item, preset.value)).length;
+                  const isActive = modalUrgentMaxDays === preset.value && modalCustomDaysInput === '';
+                  return (
+                    <button
+                      key={String(preset.value)}
+                      type="button"
+                      onClick={() => {
+                        setModalUrgentMaxDays(preset.value);
+                        setModalCustomDaysInput('');
+                        onSelectUrgentMaxDays?.(preset.value);
+                        playAppSound('click');
+                      }}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all cursor-pointer border flex items-center gap-1 ${
+                        isActive
+                          ? 'bg-red-500 text-white border-red-400 shadow-sm'
+                          : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:border-red-500/40 hover:text-white'
+                      }`}
+                    >
+                      <span>{preset.label}</span>
+                      <span className={`font-mono text-[9px] px-1 rounded ${isActive ? 'bg-black/25 text-white' : 'bg-zinc-900 text-zinc-400'}`}>
+                        {count}
                       </span>
-                    ) : (
-                      <span className="px-1.5 py-0.5 bg-amber-500/20 text-amber-400 border border-amber-500/30 text-[9px] font-black rounded uppercase shrink-0">
-                        📅 Prazo Próximo
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-[11px] text-zinc-400 truncate mb-1">
-                    {item.produtoNome}
-                  </p>
-                  <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium">
-                    <span>
-                      {item.dataRetirada ? `📅 Retirada: ${new Date(item.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}${item.turnoEntrega ? ` (${item.turnoEntrega})` : ''}` : 'Prazo Imediato'}
-                    </span>
-                    <span className="text-amber-400 font-bold font-mono">
-                      {item.designerId === 'designer1' ? 'Na Fila D1' : item.designerId === 'designer2' ? 'Na Fila D2' : 'Fila de Triagem'}
-                    </span>
-                  </div>
+                    </button>
+                  );
+                })}
+                <div className="flex items-center gap-1 bg-zinc-950 border border-zinc-800 rounded-lg px-2 py-0.5">
+                  <span className="text-[9.5px] text-zinc-400 font-bold">Até</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={365}
+                    value={modalCustomDaysInput}
+                    onChange={(e) => {
+                      const raw = e.target.value;
+                      setModalCustomDaysInput(raw);
+                      if (raw.trim() === '') {
+                        setModalUrgentMaxDays('all');
+                        onSelectUrgentMaxDays?.('all');
+                      } else {
+                        const parsed = parseInt(raw, 10);
+                        if (!isNaN(parsed) && parsed >= 0) {
+                          setModalUrgentMaxDays(parsed);
+                          onSelectUrgentMaxDays?.(parsed);
+                        }
+                      }
+                    }}
+                    placeholder="dias"
+                    className="w-11 bg-transparent text-[10px] font-mono font-bold text-amber-300 placeholder-zinc-600 focus:outline-none text-center"
+                  />
+                  <span className="text-[9.5px] text-zinc-400 font-bold">d</span>
                 </div>
-              ))}
-              {urgentOrders && urgentOrders.length > 3 && (
-                <p className="text-[10px] text-center text-zinc-500 font-semibold py-0.5">
-                  + {urgentOrders.length - 3} outros pedidos urgentes na fila
-                </p>
+              </div>
+            </div>
+
+            {/* List of Urgent Orders preview */}
+            <div className="space-y-2 mb-5 max-h-56 overflow-y-auto pr-1 text-left custom-scrollbar">
+              {filteredModalUrgentOrders.length === 0 ? (
+                <div className="bg-zinc-900/70 border border-dashed border-zinc-800 p-4 rounded-xl text-center space-y-2">
+                  <p className="text-[11px] text-zinc-400 font-semibold">
+                    Nenhum pedido urgente com prazo de {modalUrgentMaxDays === 0 ? 'hoje ou atrasado' : `até ${modalUrgentMaxDays} dias`}.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalUrgentMaxDays('all');
+                      setModalCustomDaysInput('');
+                      onSelectUrgentMaxDays?.('all');
+                    }}
+                    className="text-[10px] font-bold text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                  >
+                    Mostrar todos os urgentes
+                  </button>
+                </div>
+              ) : (
+                filteredModalUrgentOrders.map((item) => (
+                  <div key={item.id} className="bg-zinc-900/90 border border-red-500/25 p-3 rounded-xl shadow-inner">
+                    <div className="flex items-center justify-between gap-2 mb-1">
+                      <span className="text-xs font-black text-zinc-100 truncate">
+                        {item.cliente} {item.numeroPedido ? `(#${item.numeroPedido})` : ''}
+                      </span>
+                      <span className={`px-1.5 py-0.5 border text-[9px] font-black rounded uppercase shrink-0 ${
+                        item.temTaxaUrgencia
+                          ? 'bg-red-500/20 text-red-300 border-red-500/35'
+                          : 'bg-amber-500/20 text-amber-300 border-amber-500/35'
+                      }`}>
+                        {getModalRemainingLabel(item)}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-zinc-400 truncate mb-1">
+                      {item.produtoNome}
+                    </p>
+                    <div className="flex items-center justify-between text-[10px] text-zinc-400 font-medium">
+                      <span>
+                        {item.dataRetirada ? `📅 Retirada: ${new Date(item.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')}${item.turnoEntrega ? ` (${item.turnoEntrega})` : ''}` : 'Prazo Imediato'}
+                      </span>
+                      <span className="text-amber-400 font-bold font-mono">
+                        {item.designerId === 'designer1' ? 'Na Fila D1' : item.designerId === 'designer2' ? 'Na Fila D2' : item.designerId === 'admin' ? 'Na Mesa Admin' : 'Fila de Triagem'}
+                      </span>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
 
             {/* CTA Button */}
             <button
               onClick={() => {
+                onSelectUrgentMaxDays?.(modalUrgentMaxDays);
                 if (onActionClick) onActionClick();
                 onClose();
               }}
               className="w-full py-3 px-5 bg-gradient-to-r from-red-600 via-rose-600 to-amber-500 hover:brightness-110 active:scale-[0.98] transition-all text-white font-black text-xs rounded-xl shadow-lg shadow-red-500/25 cursor-pointer animate-pulse flex items-center justify-center gap-2 font-sans"
             >
               <Paintbrush className="h-4 w-4" />
-              <span>Priorizar Artes Urgentes Agora! 🚀</span>
+              <span>
+                {modalUrgentMaxDays === 'all'
+                  ? 'Priorizar Artes Urgentes Agora! 🚀'
+                  : modalUrgentMaxDays === 0
+                    ? 'Filtrar Urgentes (Hoje / Atrasados) 🚀'
+                    : `Filtrar Urgentes (Até ${modalUrgentMaxDays} dias) 🚀`}
+              </span>
             </button>
           </motion.div>
         ) : type === 'critical_stock' ? (

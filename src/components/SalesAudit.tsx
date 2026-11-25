@@ -3023,7 +3023,7 @@ export function SalesAudit({ sales, products = [], storeInfo, onUpdateSale }: Sa
                       <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 text-blue-400 bg-blue-950/20 border border-blue-900/15 px-3 py-1.5 rounded-xl text-[11px] font-medium mt-1.5">
                         <Palette className="h-3.5 w-3.5 text-blue-450 shrink-0" />
                         <div>
-                          <span className="font-bold text-blue-300">Puxado para Design (Mesa {sale.designerId === 'designer1' ? '1' : '2'}):</span>{' '}
+                          <span className="font-bold text-blue-300">Puxado para Design (Mesa {sale.designerId === 'designer1' ? '1' : sale.designerId === 'designer2' ? '2' : 'Admin'}):</span>{' '}
                           <span className="text-zinc-350">
                             Por <strong className="text-blue-200 font-mono">{sale.puxadoPor || 'Designer'}</strong>{sale.puxadoEm && ` em ${formatAuditDate(sale.puxadoEm)}`}
                           </span>

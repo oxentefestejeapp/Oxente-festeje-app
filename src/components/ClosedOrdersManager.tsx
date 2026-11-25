@@ -29,6 +29,9 @@ import {
   EyeOff,
   Flame,
   Lock,
+  Unlock,
+  Crown,
+  ShieldCheck,
   ArrowUpDown
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -45,9 +48,11 @@ interface ClosedOrdersManagerProps {
   storeInfo: StoreInfo;
   onUpdateSale: (updatedSale: Sale) => void;
   currentUserEmail: string;
+  isAdmin?: boolean;
 }
 
-export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, currentUserEmail }: ClosedOrdersManagerProps) {
+export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, currentUserEmail, isAdmin = false }: ClosedOrdersManagerProps) {
+  const isAdminUser = Boolean(isAdmin) || currentUserEmail === 'oxentefesteje@gmail.com' || currentUserEmail === 'abraaoapp@oxente.com';
   const [searchTerm, setSearchTerm] = useState('');
   const [viewedSale, setViewedSale] = useState<Sale | null>(null);
   const [copiedText, setCopiedText] = useState(false);
@@ -83,11 +88,14 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   const [showRemovedFromDesign, setShowRemovedFromDesign] = useState(false);
   const [hideFinishedInColumns, setHideFinishedInColumns] = useState(false);
   const [filterUrgentOnly, setFilterUrgentOnly] = useState(false);
+  const [urgentMaxDays, setUrgentMaxDays] = useState<'all' | number>('all');
+  const [customUrgentDaysInput, setCustomUrgentDaysInput] = useState('');
   const [sortByPriority, setSortByPriority] = useState(true);
   const [filterPendingApprovalOnly, setFilterPendingApprovalOnly] = useState(false);
   const [col1Limit, setCol1Limit] = useState(35);
   const [col2Limit, setCol2Limit] = useState(35);
   const [col3Limit, setCol3Limit] = useState(35);
+  const [colAdminLimit, setColAdminLimit] = useState(35);
 
   const paymentMethods: { value: 'Pix' | 'Dinheiro' | 'Cartão de Crédito' | 'Cartão de Débito'; label: string; icon: string }[] = [
     { value: 'Pix', label: 'Pix', icon: '⚡' },
@@ -327,7 +335,10 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   };
 
   // Assign or Pull order
-  const handlePullOrder = (sale: Sale, targetDesigner: 'designer1' | 'designer2' | null) => {
+  const handlePullOrder = (sale: Sale, targetDesigner: 'designer1' | 'designer2' | 'admin' | null) => {
+    if ((targetDesigner === 'admin' || sale.designerId === 'admin') && !isAdminUser) {
+      return;
+    }
     const updated: Sale = {
       ...sale,
       designerId: targetDesigner,
@@ -531,9 +542,80 @@ Qualquer ajuste que precisar, estamos por aqui!
     }
   };
 
+  // Exclusivo Mesa Admin: concluir arte e liberar aprovação direto sem exigir clique do cliente no link
+  const handleAdminCompleteWithoutLink = async (sale: Sale) => {
+    if (!isAdminUser || sale.designerId !== 'admin') return;
+    const nowIso = new Date().toISOString();
+    const keepAdvancedProd =
+      sale.statusProducao === 'Entregue' ||
+      sale.statusProducao === 'Pronto para Retirada' ||
+      sale.statusProducao === 'Agendado para Entrega';
+    const nextProdStatus = keepAdvancedProd ? sale.statusProducao : 'Em Produção';
+
+    const updated: Sale = {
+      ...sale,
+      statusArte: 'Arte Finalizada',
+      statusProducao: nextProdStatus,
+      clienteAprovouLayout: true,
+      clienteAprovouLayoutEm: nowIso,
+      arteFinalizadaPorEmail: currentUserEmail,
+      arteFinalizadaEm: sale.arteFinalizadaEm || nowIso
+    };
+    onUpdateSale(updated);
+    playAppSound('complete');
+
+    try {
+      await supabase
+        .from('oxente_sales')
+        .update({
+          status_arte: 'Arte Finalizada',
+          status_producao: nextProdStatus,
+          cliente_aprovou_layout: true,
+          cliente_aprovou_layout_em: nowIso,
+          arte_finalizada_por_email: currentUserEmail,
+          arte_finalizada_em: sale.arteFinalizadaEm || nowIso
+        })
+        .eq('id', sale.id);
+    } catch (err) {
+      console.warn('Erro ao concluir arte sem link (Admin) no Supabase:', err);
+    }
+  };
+
+  // Exclusivo Mesa Admin: liberar aprovação de uma arte já enviada sem aguardar clique no link
+  const handleAdminUnlockApproval = async (sale: Sale) => {
+    if (!isAdminUser || sale.designerId !== 'admin') return;
+    const nowIso = new Date().toISOString();
+    const updated: Sale = {
+      ...sale,
+      statusArte: 'Arte Finalizada',
+      clienteAprovouLayout: true,
+      clienteAprovouLayoutEm: nowIso,
+      arteFinalizadaPorEmail: sale.arteFinalizadaPorEmail || currentUserEmail,
+      arteFinalizadaEm: sale.arteFinalizadaEm || nowIso
+    };
+    onUpdateSale(updated);
+    playAppSound('complete');
+
+    try {
+      await supabase
+        .from('oxente_sales')
+        .update({
+          status_arte: 'Arte Finalizada',
+          cliente_aprovou_layout: true,
+          cliente_aprovou_layout_em: nowIso,
+          arte_finalizada_por_email: sale.arteFinalizadaPorEmail || currentUserEmail,
+          arte_finalizada_em: sale.arteFinalizadaEm || nowIso
+        })
+        .eq('id', sale.id);
+    } catch (err) {
+      console.warn('Erro ao liberar aprovação (Admin) no Supabase:', err);
+    }
+  };
+
   const handleConfirmRemoveFromDesign = (sale: Sale, shouldRemove: boolean) => {
-    // Bloqueia ocultação se o cliente ainda não tiver aprovado formalmente o layout
-    if (shouldRemove && !sale.clienteAprovouLayout) {
+    const canBypassClientApproval = isAdminUser && sale.designerId === 'admin';
+    // Bloqueia ocultação nas mesas D1/D2 se o cliente ainda não tiver aprovado formalmente o layout
+    if (shouldRemove && !sale.clienteAprovouLayout && !canBypassClientApproval) {
       return;
     }
     const updated: Sale = {
@@ -692,10 +774,32 @@ Qualquer ajuste que precisar, estamos por aqui!
         if (s.status === 'Orçamento') return false;
         if (s.removerDoDesign) return false;
         if (s.statusArte === 'Arte Finalizada') return false;
+        if (!isAdminUser && s.designerId === 'admin') return false;
         return isUrgent(s);
       })
       .sort(compareByArtPriority);
-  }, [sales, products]);
+  }, [sales, products, isAdminUser]);
+
+  const urgentDeadlinePresets: { value: 'all' | number; label: string }[] = [
+    { value: 'all', label: 'Todos' },
+    { value: 0, label: 'Hoje / Atras.' },
+    { value: 3, label: 'Até 3 dias' },
+    { value: 5, label: 'Até 5 dias' },
+    { value: 7, label: 'Até 7 dias' },
+    { value: 10, label: 'Até 10 dias' },
+    { value: 15, label: 'Até 15 dias' },
+  ];
+
+  const matchesUrgentDeadline = (sale: Sale, maxDays: 'all' | number): boolean => {
+    if (maxDays === 'all') return true;
+    const days = getDaysUntilPickup(sale);
+    if (days === null) return Boolean(sale.temTaxaUrgencia);
+    return days <= maxDays;
+  };
+
+  const displayedUrgentArtOrders = useMemo(() => {
+    return urgentArtOrders.filter(s => matchesUrgentDeadline(s, urgentMaxDays));
+  }, [urgentArtOrders, urgentMaxDays]);
 
   // Artes finalizadas/enviadas em que o cliente ainda não aprovou o layout (+24h / +48h)
   const pendingApprovalOrders = useMemo(() => {
@@ -704,6 +808,7 @@ Qualquer ajuste que precisar, estamos por aqui!
         if (s.status === 'Orçamento') return false;
         if (s.removerDoDesign) return false;
         if (s.statusArte !== 'Arte Finalizada') return false;
+        if (!isAdminUser && s.designerId === 'admin') return false;
         return !s.clienteAprovouLayout;
       })
       .map(sale => ({
@@ -720,7 +825,7 @@ Qualquer ajuste que precisar, estamos por aqui!
         if (dA !== dB) return dA - dB;
         return b.waitingHours - a.waitingHours;
       });
-  }, [sales]);
+  }, [sales, isAdminUser]);
 
   const delayedApprovalOrders = useMemo(() => {
     return pendingApprovalOrders.filter(item => item.waitingHours >= 24);
@@ -897,7 +1002,7 @@ Qualquer ajuste que precisar, estamos por aqui!
   const unassignedOrders = useMemo(() => {
     let list = filteredSales.filter(s => !s.designerId);
     if (filterUrgentOnly) {
-      list = list.filter(s => isUrgent(s));
+      list = list.filter(s => isUrgent(s) && matchesUrgentDeadline(s, urgentMaxDays));
     }
     if (filterPendingApprovalOnly) {
       list = list.filter(s => s.statusArte === 'Arte Finalizada' && !s.clienteAprovouLayout);
@@ -911,7 +1016,7 @@ Qualquer ajuste que precisar, estamos por aqui!
       if (!b.dataRetirada) return -1;
       return a.dataRetirada.localeCompare(b.dataRetirada);
     });
-  }, [filteredSales, filterUrgentOnly, filterPendingApprovalOnly, sortByPriority, products]);
+  }, [filteredSales, filterUrgentOnly, urgentMaxDays, filterPendingApprovalOnly, sortByPriority, products]);
 
   const rawDesigner1Orders = useMemo(() => {
     return filteredSales.filter(s => s.designerId === 'designer1');
@@ -921,13 +1026,18 @@ Qualquer ajuste que precisar, estamos por aqui!
     return filteredSales.filter(s => s.designerId === 'designer2');
   }, [filteredSales]);
 
+  const rawAdminOrders = useMemo(() => {
+    if (!isAdminUser) return [];
+    return filteredSales.filter(s => s.designerId === 'admin');
+  }, [filteredSales, isAdminUser]);
+
   const designer1Orders = useMemo(() => {
     let list = rawDesigner1Orders;
     if (hideFinishedInColumns) {
       list = list.filter(s => s.statusArte !== 'Arte Finalizada');
     }
     if (filterUrgentOnly) {
-      list = list.filter(s => isUrgent(s));
+      list = list.filter(s => isUrgent(s) && matchesUrgentDeadline(s, urgentMaxDays));
     }
     if (filterPendingApprovalOnly) {
       list = list.filter(s => s.statusArte === 'Arte Finalizada' && !s.clienteAprovouLayout);
@@ -936,7 +1046,7 @@ Qualquer ajuste que precisar, estamos por aqui!
       return [...list].sort(compareByArtPriority);
     }
     return list;
-  }, [rawDesigner1Orders, hideFinishedInColumns, filterUrgentOnly, filterPendingApprovalOnly, sortByPriority, products]);
+  }, [rawDesigner1Orders, hideFinishedInColumns, filterUrgentOnly, urgentMaxDays, filterPendingApprovalOnly, sortByPriority, products]);
 
   const designer2Orders = useMemo(() => {
     let list = rawDesigner2Orders;
@@ -944,7 +1054,7 @@ Qualquer ajuste que precisar, estamos por aqui!
       list = list.filter(s => s.statusArte !== 'Arte Finalizada');
     }
     if (filterUrgentOnly) {
-      list = list.filter(s => isUrgent(s));
+      list = list.filter(s => isUrgent(s) && matchesUrgentDeadline(s, urgentMaxDays));
     }
     if (filterPendingApprovalOnly) {
       list = list.filter(s => s.statusArte === 'Arte Finalizada' && !s.clienteAprovouLayout);
@@ -953,7 +1063,25 @@ Qualquer ajuste que precisar, estamos por aqui!
       return [...list].sort(compareByArtPriority);
     }
     return list;
-  }, [rawDesigner2Orders, hideFinishedInColumns, filterUrgentOnly, filterPendingApprovalOnly, sortByPriority, products]);
+  }, [rawDesigner2Orders, hideFinishedInColumns, filterUrgentOnly, urgentMaxDays, filterPendingApprovalOnly, sortByPriority, products]);
+
+  const adminOrders = useMemo(() => {
+    if (!isAdminUser) return [];
+    let list = rawAdminOrders;
+    if (hideFinishedInColumns) {
+      list = list.filter(s => s.statusArte !== 'Arte Finalizada');
+    }
+    if (filterUrgentOnly) {
+      list = list.filter(s => isUrgent(s) && matchesUrgentDeadline(s, urgentMaxDays));
+    }
+    if (filterPendingApprovalOnly) {
+      list = list.filter(s => s.statusArte === 'Arte Finalizada' && !s.clienteAprovouLayout);
+    }
+    if (sortByPriority) {
+      return [...list].sort(compareByArtPriority);
+    }
+    return list;
+  }, [rawAdminOrders, isAdminUser, hideFinishedInColumns, filterUrgentOnly, urgentMaxDays, filterPendingApprovalOnly, sortByPriority, products]);
 
   // Metrics calculations
   const totalUnassigned = useMemo(() => filteredSales.filter(s => !s.designerId).length, [filteredSales]);
@@ -961,9 +1089,12 @@ Qualquer ajuste que precisar, estamos por aqui!
   const finishedD1 = rawDesigner1Orders.filter(s => s.statusArte === 'Arte Finalizada').length;
   const totalD2 = rawDesigner2Orders.length;
   const finishedD2 = rawDesigner2Orders.filter(s => s.statusArte === 'Arte Finalizada').length;
+  const totalAdmin = rawAdminOrders.length;
+  const finishedAdmin = rawAdminOrders.filter(s => s.statusArte === 'Arte Finalizada').length;
 
   const activeD1 = totalD1 - finishedD1;
   const activeD2 = totalD2 - finishedD2;
+  const activeAdmin = totalAdmin - finishedAdmin;
 
   const monthlyFinishedD1 = useMemo(() => {
     const now = new Date();
@@ -1003,6 +1134,26 @@ Qualquer ajuste que precisar, estamos por aqui!
     }).length;
   }, [sales]);
 
+  const monthlyFinishedAdmin = useMemo(() => {
+    if (!isAdminUser) return 0;
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    return sales.filter(s => {
+      if (s.status === 'Orçamento') return false;
+      if (s.designerId !== 'admin') return false;
+      if (s.statusArte !== 'Arte Finalizada') return false;
+      const dateStr = s.arteFinalizadaEm || s.data;
+      if (!dateStr) return false;
+      try {
+        const d = new Date(dateStr);
+        return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+      } catch {
+        return false;
+      }
+    }).length;
+  }, [sales, isAdminUser]);
+
   const totalFinishedEverD1 = useMemo(() => {
     return sales.filter(s => {
       if (s.status === 'Orçamento') return false;
@@ -1018,6 +1169,15 @@ Qualquer ajuste que precisar, estamos por aqui!
       return s.statusArte === 'Arte Finalizada';
     }).length;
   }, [sales]);
+
+  const totalFinishedEverAdmin = useMemo(() => {
+    if (!isAdminUser) return 0;
+    return sales.filter(s => {
+      if (s.status === 'Orçamento') return false;
+      if (s.designerId !== 'admin') return false;
+      return s.statusArte === 'Arte Finalizada';
+    }).length;
+  }, [sales, isAdminUser]);
 
   return (
     <div className="space-y-6">
@@ -1050,7 +1210,10 @@ Qualquer ajuste que precisar, estamos por aqui!
             <div className="flex items-center gap-2 w-full sm:w-auto">
               <button
                 type="button"
-                onClick={() => setFilterUrgentOnly(prev => !prev)}
+                onClick={() => {
+                  setFilterUrgentOnly(prev => !prev);
+                  playAppSound('click');
+                }}
                 className={`flex-1 sm:flex-none px-3.5 py-2 rounded-xl text-xs font-black transition-all cursor-pointer flex items-center justify-center gap-1.5 font-sans border shadow-sm ${
                   filterUrgentOnly
                     ? 'bg-brand-pink text-white border-brand-pink ring-2 ring-brand-pink/30'
@@ -1058,7 +1221,15 @@ Qualquer ajuste que precisar, estamos por aqui!
                 }`}
               >
                 <Filter className="h-3.5 w-3.5" />
-                <span>{filterUrgentOnly ? 'Ver Todos os Pedidos' : 'Filtrar Urgentes'}</span>
+                <span>
+                  {filterUrgentOnly
+                    ? 'Ver Todos os Pedidos'
+                    : urgentMaxDays === 'all'
+                      ? 'Filtrar Urgentes'
+                      : urgentMaxDays === 0
+                        ? 'Filtrar Fila (Hoje/Atras.)'
+                        : `Filtrar Fila (≤ ${urgentMaxDays}d)`}
+                </span>
               </button>
 
               <button
@@ -1076,26 +1247,129 @@ Qualquer ajuste que precisar, estamos por aqui!
             </div>
           </div>
 
+          {/* Seletor de Prazo dentro dos Pedidos Urgentes */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-red-500/20 relative z-10">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-300 flex items-center gap-1 mr-1">
+              <Calendar className="h-3 w-3 text-amber-400" />
+              Filtrar Prazo:
+            </span>
+            {urgentDeadlinePresets.map((preset) => {
+              const count = urgentArtOrders.filter(s => matchesUrgentDeadline(s, preset.value)).length;
+              const isActive = urgentMaxDays === preset.value && customUrgentDaysInput === '';
+              return (
+                <button
+                  key={String(preset.value)}
+                  type="button"
+                  onClick={() => {
+                    setUrgentMaxDays(preset.value);
+                    setCustomUrgentDaysInput('');
+                    playAppSound('click');
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer border flex items-center gap-1.5 active:scale-95 ${
+                    isActive
+                      ? 'bg-red-500 text-white border-red-400 shadow-sm'
+                      : 'bg-zinc-950/85 text-zinc-300 border-red-500/25 hover:border-red-400/60 hover:text-white'
+                  }`}
+                >
+                  <span>{preset.label}</span>
+                  <span className={`font-mono text-[9.5px] px-1 rounded ${isActive ? 'bg-black/25 text-white' : 'bg-zinc-900 text-zinc-400'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+
+            {/* Prazo personalizado em dias */}
+            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-colors ${
+              customUrgentDaysInput !== ''
+                ? 'bg-amber-500/20 border-amber-400 text-amber-200'
+                : 'bg-zinc-950/85 border-red-500/25 text-zinc-400'
+            }`}>
+              <span className="text-[10px] font-bold">Outro: até</span>
+              <input
+                type="number"
+                min={0}
+                max={365}
+                value={customUrgentDaysInput}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setCustomUrgentDaysInput(raw);
+                  if (raw.trim() === '') {
+                    setUrgentMaxDays('all');
+                  } else {
+                    const parsed = parseInt(raw, 10);
+                    if (!isNaN(parsed) && parsed >= 0) {
+                      setUrgentMaxDays(parsed);
+                    }
+                  }
+                }}
+                placeholder="ex: 4"
+                className="w-11 bg-black/50 border border-zinc-800 rounded px-1 py-0.5 text-[10.5px] font-mono font-bold text-amber-300 placeholder-zinc-600 focus:outline-none focus:border-amber-400 text-center"
+                title="Digite qualquer número de dias para filtrar urgentes até esse prazo"
+              />
+              <span className="text-[10px] font-bold">dias</span>
+              {customUrgentDaysInput !== '' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomUrgentDaysInput('');
+                    setUrgentMaxDays('all');
+                  }}
+                  className="text-amber-300 hover:text-white ml-0.5 cursor-pointer"
+                  title="Limpar prazo personalizado"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            {urgentMaxDays !== 'all' && (
+              <span className="text-[10px] font-mono font-bold text-amber-300/90 ml-auto">
+                Exibindo {displayedUrgentArtOrders.length} de {urgentArtOrders.length} urgentes
+              </span>
+            )}
+          </div>
+
           {/* Chips interativos de pedidos urgentes */}
           <div className="flex flex-wrap gap-2 pt-2 border-t border-red-500/20 relative z-10">
-            {urgentArtOrders.map((sale) => (
-              <button
-                key={sale.id}
-                type="button"
-                onClick={() => setViewedSale(sale)}
-                className="group flex items-center gap-2 px-3 py-1.5 bg-zinc-950/80 hover:bg-zinc-900 border border-red-500/30 hover:border-red-400 rounded-xl text-xs font-mono transition-all cursor-pointer text-left shadow-sm"
-              >
-                <span className="font-extrabold text-zinc-200 group-hover:text-white">
-                  {sale.cliente} {sale.numeroPedido ? `(#${sale.numeroPedido})` : ''}
+            {displayedUrgentArtOrders.length === 0 ? (
+              <div className="w-full py-3 px-4 bg-zinc-950/60 border border-dashed border-red-500/25 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
+                <span className="text-zinc-400 font-medium">
+                  Nenhum pedido urgente pendente de arte para o prazo selecionado ({urgentMaxDays === 0 ? 'Hoje / Atrasados' : `até ${urgentMaxDays} dias`}).
                 </span>
-                <span className="text-[10.5px] text-zinc-400 font-sans truncate max-w-[150px]">
-                  {sale.produtoNome}
-                </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 font-bold border border-red-500/30">
-                  {sale.temTaxaUrgencia ? '⚡ Taxa Urgência' : getUrgentText(sale.dataRetirada)}
-                </span>
-              </button>
-            ))}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUrgentMaxDays('all');
+                    setCustomUrgentDaysInput('');
+                  }}
+                  className="text-[11px] font-bold text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                >
+                  Mostrar todos os {urgentArtOrders.length} urgentes
+                </button>
+              </div>
+            ) : (
+              displayedUrgentArtOrders.map((sale) => (
+                <button
+                  key={sale.id}
+                  type="button"
+                  onClick={() => handleSelectSaleForReceipt(sale)}
+                  className="group flex items-center gap-2 px-3 py-1.5 bg-zinc-950/80 hover:bg-zinc-900 border border-red-500/30 hover:border-red-400 rounded-xl text-xs font-mono transition-all cursor-pointer text-left shadow-sm"
+                >
+                  <span className="font-extrabold text-zinc-200 group-hover:text-white">
+                    {sale.cliente} {sale.numeroPedido ? `(#${sale.numeroPedido})` : ''}
+                  </span>
+                  <span className="text-[10.5px] text-zinc-400 font-sans truncate max-w-[150px]">
+                    {sale.produtoNome}
+                  </span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded bg-red-500/20 text-red-300 font-bold border border-red-500/30">
+                    {sale.temTaxaUrgencia
+                      ? (sale.dataRetirada ? `⚡ ${getUrgentText(sale.dataRetirada)}` : '⚡ Taxa Urgência')
+                      : getUrgentText(sale.dataRetirada)}
+                  </span>
+                </button>
+              ))
+            )}
           </div>
         </div>
       )}
@@ -1173,9 +1447,13 @@ Qualquer ajuste que precisar, estamos por aqui!
                       </span>
                       {sale.designerId && (
                         <span className={`text-[9px] font-black px-1 py-0.5 rounded ${
-                          sale.designerId === 'designer1' ? 'bg-brand-pink/20 text-brand-pink' : 'bg-cyan-500/20 text-cyan-300'
+                          sale.designerId === 'designer1'
+                            ? 'bg-brand-pink/20 text-brand-pink'
+                            : sale.designerId === 'designer2'
+                              ? 'bg-cyan-500/20 text-cyan-300'
+                              : 'bg-amber-500/20 text-amber-300'
                         }`}>
-                          {sale.designerId === 'designer1' ? 'D1' : 'D2'}
+                          {sale.designerId === 'designer1' ? 'D1' : sale.designerId === 'designer2' ? 'D2' : 'ADM'}
                         </span>
                       )}
                     </div>
@@ -1414,135 +1692,218 @@ Qualquer ajuste que precisar, estamos por aqui!
       </div>
 
       {/* 2. Top search and filter utility panel */}
-      <div className="bg-zinc-900/40 border border-zinc-850 p-4 rounded-xl flex flex-col md:flex-row gap-3 items-center justify-between">
-        <div className="flex items-center gap-2">
-          <FolderOpen className="h-5 w-5 text-brand-pink" />
-          <div>
-            <h2 className="text-sm font-bold text-zinc-100">Controle de Arte &amp; Criação</h2>
-            <p className="text-[10.5px] text-zinc-500">Puxe os pedidos para a sua camada, crie a arte e mude para finalizado</p>
+      <div className="bg-zinc-900/40 border border-zinc-850 p-4 rounded-xl space-y-3">
+        <div className="flex flex-col md:flex-row gap-3 items-center justify-between">
+          <div className="flex items-center gap-2">
+            <FolderOpen className="h-5 w-5 text-brand-pink" />
+            <div>
+              <h2 className="text-sm font-bold text-zinc-100">Controle de Arte &amp; Criação</h2>
+              <p className="text-[10.5px] text-zinc-500">Puxe os pedidos para a sua camada, crie a arte e mude para finalizado</p>
+            </div>
           </div>
-        </div>
 
-        {/* Actions & Search */}
-        <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-2.5 w-full xl:w-auto flex-wrap">
-          {/* Toggle sort by priority/urgency */}
-          <button
-            type="button"
-            onClick={() => {
-              setSortByPriority(prev => !prev);
-              playAppSound('click');
-            }}
-            className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
-              sortByPriority
-                ? 'bg-sky-500/15 border-sky-500/50 text-sky-300 font-extrabold shadow-[0_0_12px_rgba(14,165,233,0.08)]'
-                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
-            }`}
-            title="Ordena todas as colunas com artes pendentes de entrega mais próxima e taxa de urgência no topo"
-          >
-            <ArrowUpDown className={`h-3.5 w-3.5 ${sortByPriority ? 'text-sky-400' : 'text-zinc-500'}`} />
-            <span>{sortByPriority ? 'Ordem: Urgência' : 'Ordem: Padrão'}</span>
-          </button>
-
-          {/* Toggle pending client approval filter */}
-          {pendingApprovalOrders.length > 0 && (
+          {/* Actions & Search */}
+          <div className="flex flex-col xl:flex-row items-stretch xl:items-center gap-2.5 w-full xl:w-auto flex-wrap">
+            {/* Toggle sort by priority/urgency */}
             <button
               type="button"
               onClick={() => {
-                setFilterPendingApprovalOnly(prev => !prev);
-                if (hideFinishedInColumns) setHideFinishedInColumns(false);
+                setSortByPriority(prev => !prev);
                 playAppSound('click');
               }}
               className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
-                filterPendingApprovalOnly
-                  ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-extrabold'
+                sortByPriority
+                  ? 'bg-sky-500/15 border-sky-500/50 text-sky-300 font-extrabold shadow-[0_0_12px_rgba(14,165,233,0.08)]'
                   : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
               }`}
-              title="Filtrar apenas artes enviadas que ainda aguardam aprovação do cliente"
+              title="Ordena todas as colunas com artes pendentes de entrega mais próxima e taxa de urgência no topo"
             >
-              <Clock className={`h-3.5 w-3.5 ${filterPendingApprovalOnly ? 'text-amber-300' : 'text-amber-500/80'}`} />
-              <span>Sem Aprovação ({pendingApprovalOrders.length})</span>
+              <ArrowUpDown className={`h-3.5 w-3.5 ${sortByPriority ? 'text-sky-400' : 'text-zinc-500'}`} />
+              <span>{sortByPriority ? 'Ordem: Urgência' : 'Ordem: Padrão'}</span>
             </button>
-          )}
 
-          {/* Toggle only urgent */}
-          <button
-            type="button"
-            onClick={() => {
-              setFilterUrgentOnly(prev => !prev);
-              playAppSound('click');
-            }}
-            className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
-              filterUrgentOnly
-                ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 font-extrabold shadow-[0_0_12px_rgba(245,158,11,0.05)]'
-                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
-            }`}
-          >
-            <AlertTriangle className={`h-3.5 w-3.5 ${filterUrgentOnly ? 'text-amber-400 animate-pulse' : 'text-zinc-500'}`} />
-            <span>Somente Urgentes</span>
-          </button>
-
-          {/* Toggle hide finished */}
-          <button
-            type="button"
-            onClick={() => {
-              setHideFinishedInColumns(prev => !prev);
-              playAppSound('click');
-            }}
-            className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
-              hideFinishedInColumns
-                ? 'bg-brand-pink/10 border-brand-pink/50 text-brand-pink font-extrabold shadow-[0_0_12px_rgba(219,39,119,0.05)]'
-                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
-            }`}
-          >
-            <EyeOff className={`h-3.5 w-3.5 ${hideFinishedInColumns ? 'text-brand-pink' : 'text-zinc-550'}`} />
-            <span>Ocultar Prontas</span>
-          </button>
-
-          {/* Toggle show/hide archived design items */}
-          <button
-            type="button"
-            onClick={() => setShowRemovedFromDesign(prev => !prev)}
-            className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
-              showRemovedFromDesign
-                ? 'bg-red-500/10 border-red-500/50 text-red-400 font-extrabold shadow-[0_0_12px_rgba(239,68,68,0.05)]'
-                : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
-            }`}
-          >
-            {showRemovedFromDesign ? (
-              <>
-                <X className="h-3.5 w-3.5" />
-                <span>Ocultar Removidos</span>
-              </>
-            ) : (
-              <>
-                <Trash className="h-3.5 w-3.5 text-zinc-500" />
-                <span>Ver Ocultos</span>
-              </>
-            )}
-          </button>
-
-          {/* Search */}
-          <div className="relative w-full xl:w-64">
-            <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-zinc-500">
-              <Search className="h-3.5 w-3.5" />
-            </div>
-            <input
-              type="text"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Pesquisar cliente ou número..."
-              className="w-full bg-zinc-950/80 border border-zinc-800 text-xs px-9 py-2 rounded-xl text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-pink"
-            />
-            {searchTerm && (
-              <button 
-                onClick={() => setSearchTerm('')}
-                className="absolute inset-y-0 right-3 flex items-center text-zinc-500 hover:text-zinc-300"
+            {/* Toggle pending client approval filter */}
+            {pendingApprovalOrders.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterPendingApprovalOnly(prev => !prev);
+                  if (hideFinishedInColumns) setHideFinishedInColumns(false);
+                  playAppSound('click');
+                }}
+                className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
+                  filterPendingApprovalOnly
+                    ? 'bg-amber-500/20 border-amber-400 text-amber-300 font-extrabold'
+                    : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
+                }`}
+                title="Filtrar apenas artes enviadas que ainda aguardam aprovação do cliente"
               >
-                <X className="h-3 w-3" />
+                <Clock className={`h-3.5 w-3.5 ${filterPendingApprovalOnly ? 'text-amber-300' : 'text-amber-500/80'}`} />
+                <span>Sem Aprovação ({pendingApprovalOrders.length})</span>
               </button>
             )}
+
+            {/* Toggle only urgent */}
+            <button
+              type="button"
+              onClick={() => {
+                setFilterUrgentOnly(prev => !prev);
+                playAppSound('click');
+              }}
+              className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
+                filterUrgentOnly
+                  ? 'bg-amber-500/10 border-amber-500/50 text-amber-400 font-extrabold shadow-[0_0_12px_rgba(245,158,11,0.05)]'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
+              }`}
+            >
+              <AlertTriangle className={`h-3.5 w-3.5 ${filterUrgentOnly ? 'text-amber-400 animate-pulse' : 'text-zinc-500'}`} />
+              <span>
+                {filterUrgentOnly && urgentMaxDays !== 'all'
+                  ? (urgentMaxDays === 0 ? 'Urgentes (Hoje/Atras.)' : `Urgentes (≤ ${urgentMaxDays}d)`)
+                  : 'Somente Urgentes'}
+              </span>
+            </button>
+
+            {/* Toggle hide finished */}
+            <button
+              type="button"
+              onClick={() => {
+                setHideFinishedInColumns(prev => !prev);
+                playAppSound('click');
+              }}
+              className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
+                hideFinishedInColumns
+                  ? 'bg-brand-pink/10 border-brand-pink/50 text-brand-pink font-extrabold shadow-[0_0_12px_rgba(219,39,119,0.05)]'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
+              }`}
+            >
+              <EyeOff className={`h-3.5 w-3.5 ${hideFinishedInColumns ? 'text-brand-pink' : 'text-zinc-550'}`} />
+              <span>Ocultar Prontas</span>
+            </button>
+
+            {/* Toggle show/hide archived design items */}
+            <button
+              type="button"
+              onClick={() => setShowRemovedFromDesign(prev => !prev)}
+              className={`py-2 px-3 border rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 select-none ${
+                showRemovedFromDesign
+                  ? 'bg-red-500/10 border-red-500/50 text-red-400 font-extrabold shadow-[0_0_12px_rgba(239,68,68,0.05)]'
+                  : 'bg-zinc-950 border-zinc-800 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-900/30'
+              }`}
+            >
+              {showRemovedFromDesign ? (
+                <>
+                  <X className="h-3.5 w-3.5" />
+                  <span>Ocultar Removidos</span>
+                </>
+              ) : (
+                <>
+                  <Trash className="h-3.5 w-3.5 text-zinc-500" />
+                  <span>Ver Ocultos</span>
+                </>
+              )}
+            </button>
+
+            {/* Search */}
+            <div className="relative w-full xl:w-64">
+              <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none text-zinc-500">
+                <Search className="h-3.5 w-3.5" />
+              </div>
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Pesquisar cliente ou número..."
+                className="w-full bg-zinc-950/80 border border-zinc-800 text-xs px-9 py-2 rounded-xl text-zinc-200 placeholder-zinc-500 focus:outline-none focus:border-brand-pink"
+              />
+              {searchTerm && (
+                <button 
+                  onClick={() => setSearchTerm('')}
+                  className="absolute inset-y-0 right-3 flex items-center text-zinc-500 hover:text-zinc-300"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
+
+        {/* Barra de seleção de prazo ativa quando "Somente Urgentes" está ligado */}
+        {filterUrgentOnly && (
+          <div className="pt-3 border-t border-zinc-800/80 flex flex-wrap items-center gap-1.5 animate-fade-in">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1 mr-1">
+              <Calendar className="h-3 w-3" />
+              Prazo dos Urgentes na Fila:
+            </span>
+            {urgentDeadlinePresets.map((preset) => {
+              const count = urgentArtOrders.filter(s => matchesUrgentDeadline(s, preset.value)).length;
+              const isActive = urgentMaxDays === preset.value && customUrgentDaysInput === '';
+              return (
+                <button
+                  key={`bar-${String(preset.value)}`}
+                  type="button"
+                  onClick={() => {
+                    setUrgentMaxDays(preset.value);
+                    setCustomUrgentDaysInput('');
+                    playAppSound('click');
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[10.5px] font-bold transition-all cursor-pointer border flex items-center gap-1.5 active:scale-95 ${
+                    isActive
+                      ? 'bg-amber-500 text-black border-amber-400 font-black shadow-sm'
+                      : 'bg-zinc-950 text-zinc-300 border-zinc-800 hover:border-amber-500/40 hover:text-amber-300'
+                  }`}
+                >
+                  <span>{preset.label}</span>
+                  <span className={`font-mono text-[9.5px] px-1 rounded ${isActive ? 'bg-black/20 text-black' : 'bg-zinc-900 text-zinc-400'}`}>
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+
+            <div className={`flex items-center gap-1 px-2 py-0.5 rounded-lg border transition-colors ${
+              customUrgentDaysInput !== ''
+                ? 'bg-amber-500/15 border-amber-400 text-amber-200'
+                : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+            }`}>
+              <span className="text-[10px] font-bold">Até</span>
+              <input
+                type="number"
+                min={0}
+                max={365}
+                value={customUrgentDaysInput}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  setCustomUrgentDaysInput(raw);
+                  if (raw.trim() === '') {
+                    setUrgentMaxDays('all');
+                  } else {
+                    const parsed = parseInt(raw, 10);
+                    if (!isNaN(parsed) && parsed >= 0) {
+                      setUrgentMaxDays(parsed);
+                    }
+                  }
+                }}
+                placeholder="dias"
+                className="w-11 bg-black/60 border border-zinc-800 rounded px-1 py-0.5 text-[10.5px] font-mono font-bold text-amber-300 placeholder-zinc-600 focus:outline-none focus:border-amber-400 text-center"
+              />
+              <span className="text-[10px] font-bold">dias</span>
+              {customUrgentDaysInput !== '' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCustomUrgentDaysInput('');
+                    setUrgentMaxDays('all');
+                  }}
+                  className="text-amber-300 hover:text-white ml-0.5 cursor-pointer"
+                  title="Limpar prazo personalizado"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 3. Three Columns Kanban Layout */}
@@ -1655,29 +2016,45 @@ Qualquer ajuste que precisar, estamos por aqui!
                       })()}
 
                     {/* Actions to Drag / Pull */}
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-zinc-900">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePullOrder(sale, 'designer1');
-                        }}
-                        className="py-1.5 px-2 bg-brand-pink text-black font-extrabold text-[10px] rounded-lg transition-all hover:bg-opacity-90 flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                      >
-                        <span>Pegar D1</span>
-                        <ChevronRight className="h-3 w-3" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePullOrder(sale, 'designer2');
-                        }}
-                        className="py-1.5 px-2 bg-cyan-500 hover:bg-cyan-450 text-black font-extrabold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
-                      >
-                        <span>Pegar D2</span>
-                        <ChevronRight className="h-3 w-3" />
-                      </button>
+                    <div className="space-y-1.5 pt-2 border-t border-zinc-900">
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePullOrder(sale, 'designer1');
+                          }}
+                          className="py-1.5 px-2 bg-brand-pink text-black font-extrabold text-[10px] rounded-lg transition-all hover:bg-opacity-90 flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                        >
+                          <span>Pegar D1</span>
+                          <ChevronRight className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePullOrder(sale, 'designer2');
+                          }}
+                          className="py-1.5 px-2 bg-cyan-500 hover:bg-cyan-450 text-black font-extrabold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                        >
+                          <span>Pegar D2</span>
+                          <ChevronRight className="h-3 w-3" />
+                        </button>
+                      </div>
+                      {isAdminUser && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePullOrder(sale, 'admin');
+                          }}
+                          className="w-full py-1.5 px-2 bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/40 text-amber-300 font-extrabold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+                          title="Puxar pedido para sua Mesa Exclusiva do Administrador"
+                        >
+                          <Crown className="h-3 w-3 text-amber-400" />
+                          <span>Puxar p/ Mesa Admin</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 )})}
@@ -2011,6 +2388,20 @@ Qualquer ajuste que precisar, estamos por aqui!
                       >
                         D2
                       </button>
+
+                      {isAdminUser && (
+                        <button
+                          type="button"
+                          title="Transferir para Mesa do Administrador"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePullOrder(sale, 'admin');
+                          }}
+                          className="py-1 px-1.5 bg-amber-500/10 border border-amber-500/35 hover:bg-amber-500/20 hover:border-amber-400 text-amber-300 text-[9px] font-black rounded-lg transition-colors cursor-pointer"
+                        >
+                          ADM
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -2336,6 +2727,20 @@ Qualquer ajuste que precisar, estamos por aqui!
                       >
                         D1
                       </button>
+
+                      {isAdminUser && (
+                        <button
+                          type="button"
+                          title="Transferir para Mesa do Administrador"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePullOrder(sale, 'admin');
+                          }}
+                          className="py-1 px-1.5 bg-amber-500/10 border border-amber-500/35 hover:bg-amber-500/20 hover:border-amber-400 text-amber-300 text-[9px] font-black rounded-lg transition-colors cursor-pointer"
+                        >
+                          ADM
+                        </button>
+                      )}
                     </div>
                   </div>
                 );
@@ -2358,6 +2763,389 @@ Qualquer ajuste que precisar, estamos por aqui!
         </div>
 
       </div>
+
+      {/* 3.5 EXCLUSIVE ADMIN WORKSPACE (Rendered below D1/D2, visible ONLY to Admin) */}
+      {isAdminUser && (
+        <div className="bg-zinc-950/55 border border-amber-500/35 p-5 rounded-3xl relative shadow-2xl space-y-4 mt-2">
+          <div className="absolute -top-3 left-6 px-3 py-1 bg-zinc-950 border border-amber-500/40 rounded-full text-[9px] font-black uppercase tracking-widest text-amber-400 flex items-center gap-1.5 shadow-md">
+            <Crown className="h-3 w-3 text-amber-400" />
+            <span>Mesa Exclusiva do Administrador • Visível apenas para você</span>
+          </div>
+
+          {/* Header Panel Admin Desk */}
+          <div className="bg-gradient-to-br from-zinc-950 via-zinc-900/70 to-amber-950/20 border border-amber-500/25 p-4 rounded-2xl space-y-3 shadow-md relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-36 h-36 bg-amber-500/5 rounded-full filter blur-2xl pointer-events-none" />
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 relative z-10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center justify-center font-black text-xs font-mono shadow-inner shrink-0">
+                  <Crown className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-xs font-black text-zinc-100 uppercase tracking-wider">Mesa de Trabalho Admin</h3>
+                    <span className="text-[9px] font-extrabold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full flex items-center gap-1">
+                      <Unlock className="h-2.5 w-2.5" />
+                      Conclusão com ou sem link liberada
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-zinc-400 font-semibold block mt-0.5">
+                    Suas artes de apoio ({totalAdmin} {totalAdmin === 1 ? 'pedido' : 'pedidos'} • {activeAdmin} em produção • {monthlyFinishedAdmin} concluídas no mês • {totalFinishedEverAdmin} no total)
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10.5px] bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-lg font-bold font-mono">
+                  {finishedAdmin}/{totalAdmin} Prontas
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5 pt-1 relative z-10">
+              <div className="flex justify-between items-center text-[9.5px] font-bold text-zinc-400">
+                <span>Aproveitamento da Mesa Admin:</span>
+                <span className="text-amber-300 font-mono">{totalAdmin > 0 ? Math.round((finishedAdmin / totalAdmin) * 100) : 0}%</span>
+              </div>
+              <div className="w-full bg-zinc-900 h-1.5 rounded-full overflow-hidden border border-zinc-800">
+                <div
+                  className="h-full bg-amber-400 rounded-full transition-all duration-500"
+                  style={{ width: `${totalAdmin > 0 ? (finishedAdmin / totalAdmin) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Admin Desk Orders Grid */}
+          <div className="max-h-[620px] overflow-y-auto pr-1 pt-2.5">
+            {adminOrders.length === 0 ? (
+              <div className="p-8 text-center bg-zinc-900/20 border border-dashed border-amber-500/25 rounded-xl text-zinc-400 text-[11px] space-y-1">
+                <p className="font-bold text-zinc-300">Nenhum pedido na sua Mesa do Administrador.</p>
+                <p className="text-[10px] text-zinc-500">
+                  Clique em <strong className="text-amber-400">Puxar p/ Mesa Admin</strong> na Fila de Triagem ou em <strong className="text-amber-400">ADM</strong> nos cards de D1/D2 para assumir uma arte aqui.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
+                  {adminOrders.slice(0, colAdminLimit).map((sale) => {
+                    const isFinished = sale.statusArte === 'Arte Finalizada';
+                    const isPendingClientApproval = isFinished && !sale.clienteAprovouLayout;
+                    const isApprovedByClient = isFinished && Boolean(sale.clienteAprovouLayout);
+                    const waitingApprovalHours = isPendingClientApproval ? getHoursWaitingApproval(sale) : 0;
+                    const isApprovalDelayed24h = waitingApprovalHours >= 24;
+                    const isApprovalCritical48h = waitingApprovalHours >= 48;
+                    const delayInfo = checkArteDelay(sale);
+                    return (
+                      <div
+                        key={sale.id}
+                        onClick={() => handleSelectSaleForReceipt(sale)}
+                        className={`border border-l-4 rounded-xl p-4 space-y-3 transition-all cursor-pointer relative group ${
+                          isApprovalCritical48h
+                            ? 'bg-rose-950/30 border-rose-500/60 border-l-rose-500 hover:border-rose-400 shadow-[0_0_18px_rgba(244,63,94,0.2)] ring-1 ring-rose-500/30'
+                            : isPendingClientApproval
+                              ? 'bg-amber-950/30 border-amber-500/50 border-l-amber-500 hover:border-amber-400/80 shadow-[0_0_15px_rgba(245,158,11,0.15)] ring-1 ring-amber-500/25'
+                              : isApprovedByClient
+                                ? 'bg-emerald-950/20 border-emerald-500/40 border-l-emerald-500 hover:border-emerald-400/60 shadow-[0_0_12px_rgba(16,185,129,0.1)]'
+                                : delayInfo.isDelayed
+                                  ? 'bg-red-950/10 border-amber-500/25 border-l-red-500 hover:border-red-500/50 shadow-[0_0_15px_rgba(239,68,68,0.12)]'
+                                  : 'bg-gradient-to-br from-zinc-950 to-amber-500/[0.04] border-amber-500/30 border-l-amber-400 hover:border-amber-400/60 shadow-[0_0_10px_rgba(245,158,11,0.05)]'
+                        }`}
+                      >
+                        {/* Floating Admin Badge */}
+                        <div className="absolute top-0 right-4 -translate-y-1/2 flex items-center gap-1 bg-amber-400 text-black text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider shadow-md select-none z-10">
+                          <Crown className="h-2.5 w-2.5" />
+                          <span>MESA ADMIN</span>
+                        </div>
+
+                        <div className="flex justify-between items-center gap-1 flex-wrap">
+                          <span className="text-[10px] font-mono font-bold bg-zinc-900 border border-zinc-800 text-zinc-450 px-1.5 py-0.5 rounded">
+                            Pedido #{sale.numeroPedido || sale.id.substring(0, 5)}
+                          </span>
+                          {isPendingClientApproval ? (
+                            <span className={`text-[9px] font-black uppercase flex items-center gap-1 px-2 py-0.5 rounded-sm animate-pulse shadow-sm border ${
+                              isApprovalCritical48h
+                                ? 'text-rose-200 bg-rose-500/25 border-rose-500/60'
+                                : 'text-amber-300 bg-amber-500/20 border-amber-500/50'
+                            }`}>
+                              <Clock className={`h-2.5 w-2.5 ${isApprovalCritical48h ? 'text-rose-300' : 'text-amber-400'}`} />
+                              {isApprovalDelayed24h ? `Sem Aprovação (${formatWaitingTime(waitingApprovalHours)})` : 'Pendente de Aprovação'}
+                            </span>
+                          ) : isApprovedByClient ? (
+                            <span className="text-[9px] font-bold text-emerald-350 uppercase flex items-center gap-1 bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 rounded-sm shadow-sm">
+                              <CheckCircle2 className="h-2.5 w-2.5 text-emerald-400" /> Arte Aprovada
+                            </span>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              {delayInfo.isDelayed && (
+                                <span
+                                  title={`Este pedido está há ${delayInfo.hours} horas em produção!`}
+                                  className="text-[8.5px] font-black text-red-400 bg-red-500/10 border border-red-500/30 px-1.5 py-0.5 rounded-sm flex items-center gap-1 animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.4)]"
+                                >
+                                  <AlertTriangle className="h-2.5 w-2.5 text-red-500 animate-bounce" />
+                                  {delayInfo.hours}h ATRASADO
+                                </span>
+                              )}
+                              <span className="text-[9px] font-bold text-amber-400 uppercase flex items-center gap-1 bg-amber-500/10 border border-amber-500/25 px-1.5 py-0.5 rounded-sm animate-pulse">
+                                🎨 Em Produção
+                              </span>
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="space-y-1">
+                          <p className="text-xs font-bold text-zinc-200 group-hover:text-amber-400 transition-colors truncate">
+                            {sale.cliente}
+                          </p>
+                          <p className="text-[10.5px] text-zinc-400 leading-snug line-clamp-2">
+                            {sale.itens && sale.itens.length > 0
+                              ? sale.itens.map(it => `${it.quantidade}x ${it.produtoNome}`).join(', ')
+                              : `${sale.quantidade}x ${sale.produtoNome}`}
+                          </p>
+                        </div>
+
+                        {sale.dataRetirada && (
+                          <div className={`flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1 rounded-lg border w-fit ${getRetiradaBadgeStyle(sale.dataRetirada)}`}>
+                            <Calendar className="h-3 w-3" />
+                            <span>{getRetiradaBadgeText(sale.dataRetirada, sale.turnoEntrega)}</span>
+                          </div>
+                        )}
+
+                        {/* Designer Notes preview directly on card */}
+                        {sale.observacoesDesign && (
+                          <div className="text-[10px] bg-amber-500/5 border border-amber-500/20 text-amber-300/90 px-2 py-1.5 rounded-lg font-mono line-clamp-2" title={sale.observacoesDesign}>
+                            📝 {sale.observacoesDesign}
+                          </div>
+                        )}
+
+                        {/* Item colors list */}
+                        {sale.itens && sale.itens.some(it => it.corSelecionada) && (
+                          <div className="flex flex-wrap gap-1">
+                            {sale.itens.filter(it => it.corSelecionada).map((it, itemIdx) => (
+                              <span key={itemIdx} className="text-[8.5px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/25 text-amber-300">
+                                🎨 {it.corSelecionada}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Metadata: who pulled and date */}
+                        {sale.puxadoPor && (
+                          <div className="text-[9.5px] text-zinc-500 bg-zinc-900/60 p-1.5 rounded-md border border-zinc-850 flex items-center justify-between gap-1">
+                            <span className="flex items-center gap-1 truncate">
+                              <User className="h-2.5 w-2.5 shrink-0 text-amber-400" />
+                              <span>Puxado por: <strong>{sale.puxadoPor}</strong></span>
+                            </span>
+                            {sale.puxadoEm && (
+                              <span className="text-[8.5px] font-mono flex-shrink-0">
+                                {formatDateTime(sale.puxadoEm)}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Status de Confirmação / Aprovação */}
+                        {sale.clienteAprovouLayout ? (
+                          <div className="text-[9.5px] bg-emerald-950/40 border border-emerald-500/40 text-emerald-300 font-bold px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-1 shadow-sm">
+                            <span className="flex items-center gap-1.5">
+                              <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                              <span>Arte Aprovada / Liberada ✨</span>
+                            </span>
+                            {sale.clienteAprovouLayoutEm && (
+                              <span className="text-[8px] font-mono text-emerald-400/80">
+                                {formatDateTime(sale.clienteAprovouLayoutEm)}
+                              </span>
+                            )}
+                          </div>
+                        ) : isFinished ? (
+                          <div className={`text-[9.5px] font-bold px-2.5 py-1.5 rounded-lg flex items-center justify-between gap-1.5 border ${
+                            isApprovalCritical48h
+                              ? 'bg-rose-950/60 border-rose-500/60 text-rose-200 shadow-[0_0_12px_rgba(244,63,94,0.18)]'
+                              : isApprovalDelayed24h
+                                ? 'bg-amber-950/60 border-amber-500/60 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.14)]'
+                                : 'bg-amber-950/50 border-amber-500/50 text-amber-200 shadow-[0_0_10px_rgba(245,158,11,0.08)]'
+                          }`}>
+                            <span className="flex items-center gap-1.5 min-w-0">
+                              <Clock className={`h-3.5 w-3.5 shrink-0 animate-pulse ${isApprovalCritical48h ? 'text-rose-400' : 'text-amber-400'}`} />
+                              <span className="truncate">
+                                {isApprovalCritical48h
+                                  ? `🚨 Parada ${formatWaitingTime(waitingApprovalHours)}`
+                                  : isApprovalDelayed24h
+                                    ? `⚠️ Parada ${formatWaitingTime(waitingApprovalHours)}`
+                                    : 'Aguardando Aprovação'}
+                              </span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                playAppSound('click');
+                                sendLayoutApprovalReminderWhatsapp(sale, waitingApprovalHours);
+                              }}
+                              className={`shrink-0 text-[9px] font-black px-2 py-0.5 rounded flex items-center gap-1 cursor-pointer transition-all active:scale-95 ${
+                                isApprovalCritical48h
+                                  ? 'bg-rose-600 hover:bg-rose-500 text-white'
+                                  : isApprovalDelayed24h
+                                    ? 'bg-amber-500 hover:bg-amber-400 text-black'
+                                    : 'bg-amber-500/20 hover:bg-amber-500/35 text-amber-200 border border-amber-500/40'
+                              }`}
+                              title="Enviar cobrança rápida de aprovação no WhatsApp"
+                            >
+                              <MessageSquare className="h-2.5 w-2.5" />
+                              <span>{isApprovalDelayed24h ? 'Cobrar Zap' : 'Lembrar'}</span>
+                            </button>
+                          </div>
+                        ) : null}
+
+                        {/* Control Panel actions — Full parity with D1/D2 + Admin direct unlock */}
+                        <div className="space-y-2 pt-2 border-t border-zinc-900 no-print">
+                          {!isFinished ? (
+                            <div className="grid grid-cols-2 gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleArtworkStatus(sale);
+                                }}
+                                title="Concluir arte e enviar link de aprovação no WhatsApp do cliente (fluxo padrão)"
+                                className="py-1.5 px-2 bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                              >
+                                <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                <span>Concluir (Zap)</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleAdminCompleteWithoutLink(sale);
+                                }}
+                                title="Exclusivo Admin: conclui e aprova a arte direto sem precisar que o cliente clique no link"
+                                className="py-1.5 px-2 bg-amber-500 hover:bg-amber-400 text-black font-black text-[10px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95 shadow-sm"
+                              >
+                                <ShieldCheck className="h-3 w-3 shrink-0" />
+                                <span>Concluir s/ Link</span>
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleToggleArtworkStatus(sale);
+                                }}
+                                className="flex-1 min-w-[90px] py-1.5 px-2 bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-amber-500 hover:border-amber-500/30 font-bold text-[10px] rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95"
+                              >
+                                <RefreshCw className="h-3 w-3" />
+                                <span>Reabrir Arte</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                title="Enviar ou reenviar mensagem de aprovação de arte no WhatsApp do cliente"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  sendLayoutApprovalWhatsapp(sale);
+                                }}
+                                className="py-1.5 px-2 bg-emerald-500/10 border border-emerald-500/30 hover:bg-emerald-500/20 text-emerald-400 rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 text-[10px] font-bold"
+                              >
+                                <MessageSquare className="h-3 w-3" />
+                                <span>Zap</span>
+                              </button>
+
+                              {!sale.clienteAprovouLayout && (
+                                <button
+                                  type="button"
+                                  title="Liberar aprovação imediatamente sem aguardar o clique do cliente no link"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleAdminUnlockApproval(sale);
+                                  }}
+                                  className="py-1.5 px-2 bg-amber-500/20 border border-amber-500/50 hover:bg-amber-500 hover:text-black text-amber-300 rounded-lg transition-all flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 text-[10px] font-black"
+                                >
+                                  <Unlock className="h-3 w-3" />
+                                  <span>Liberar s/ Link</span>
+                                </button>
+                              )}
+
+                              <button
+                                type="button"
+                                title={sale.removerDoDesign ? "Mostrar na mesa do administrador" : "Ocultar da mesa (liberado sem bloqueio para o Admin)"}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleConfirmRemoveFromDesign(sale, !sale.removerDoDesign);
+                                }}
+                                className={`py-1.5 px-2.5 border rounded-lg transition-colors flex items-center justify-center gap-1 cursor-pointer active:scale-95 shrink-0 text-[10px] font-bold ${
+                                  sale.removerDoDesign
+                                    ? 'bg-emerald-950/20 border-emerald-950/40 hover:border-emerald-650 hover:text-emerald-300 text-emerald-400'
+                                    : 'bg-red-950/20 border-red-900/30 hover:border-red-650 hover:text-red-300 text-red-400'
+                                }`}
+                              >
+                                <Trash className="h-3.5 w-3.5" />
+                                <span>{sale.removerDoDesign ? 'Mostrar' : 'Ocultar'}</span>
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Devolve / Transfer row */}
+                          <div className="flex items-center justify-between gap-1.5 pt-1 border-t border-zinc-900/70">
+                            <span className="text-[9px] text-zinc-500 font-semibold">Mover pedido:</span>
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                type="button"
+                                title="Devolver para Fila de Triagem (Aguardando Designer)"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePullOrder(sale, null);
+                                }}
+                                className="py-1 px-2 bg-zinc-900 border border-zinc-800 hover:border-red-500 hover:text-red-400 text-zinc-400 text-[9px] font-bold rounded-lg transition-colors cursor-pointer flex items-center gap-1"
+                              >
+                                <ArrowRightLeft className="h-3 w-3" />
+                                <span>Triagem</span>
+                              </button>
+                              <button
+                                type="button"
+                                title="Transferir para Designer 1"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePullOrder(sale, 'designer1');
+                                }}
+                                className="py-1 px-2 bg-zinc-900 border border-zinc-800 hover:border-brand-pink hover:text-brand-pink text-zinc-400 text-[9px] font-bold rounded-lg transition-colors cursor-pointer"
+                              >
+                                D1
+                              </button>
+                              <button
+                                type="button"
+                                title="Transferir para Designer 2"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handlePullOrder(sale, 'designer2');
+                                }}
+                                className="py-1 px-2 bg-zinc-900 border border-zinc-800 hover:border-cyan-400 hover:text-cyan-400 text-zinc-400 text-[9px] font-bold rounded-lg transition-colors cursor-pointer"
+                              >
+                                D2
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {adminOrders.length > colAdminLimit && (
+                  <button
+                    type="button"
+                    onClick={() => setColAdminLimit(prev => prev + 35)}
+                    className="w-full py-2.5 bg-zinc-900 hover:bg-zinc-800 border border-amber-500/30 text-amber-300 text-xs font-bold rounded-xl transition-colors cursor-pointer"
+                  >
+                    Mostrar mais pedidos ({colAdminLimit} de {adminOrders.length})
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 4. Thermal view selected in the bottom with smooth scroll focuser */}
       <div ref={receiptContainerRef} className="pt-4 scroll-mt-6">
@@ -2596,14 +3384,26 @@ ${produtosTexto}`;
                                 <span className="text-amber-400 font-medium block">
                                   ⏳ Arte finalizada! Aguardando cliente clicar no link de confirmação no WhatsApp
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() => sendLayoutApprovalWhatsapp(viewedSale)}
-                                  className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded transition-colors cursor-pointer"
-                                >
-                                  <MessageSquare className="h-2.5 w-2.5" />
-                                  <span>Reenviar Confirmação de Layout (WhatsApp)</span>
-                                </button>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => sendLayoutApprovalWhatsapp(viewedSale)}
+                                    className="inline-flex items-center gap-1 text-[9.5px] font-bold text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 px-2 py-0.5 rounded transition-colors cursor-pointer"
+                                  >
+                                    <MessageSquare className="h-2.5 w-2.5" />
+                                    <span>Reenviar Confirmação de Layout (WhatsApp)</span>
+                                  </button>
+                                  {isAdminUser && viewedSale.designerId === 'admin' && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleAdminUnlockApproval(viewedSale)}
+                                      className="inline-flex items-center gap-1 text-[9.5px] font-black text-amber-300 bg-amber-500/15 hover:bg-amber-500 hover:text-black border border-amber-500/40 px-2 py-0.5 rounded transition-colors cursor-pointer"
+                                    >
+                                      <Unlock className="h-2.5 w-2.5" />
+                                      <span>Liberar s/ Link (Admin)</span>
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             )}
                           </div>
@@ -3329,6 +4129,15 @@ ${produtosTexto}`;
         <CelebrationOverlay
           type="urgent_art_alert"
           urgentOrders={urgentOrdersInfoList}
+          initialUrgentMaxDays={urgentMaxDays}
+          onSelectUrgentMaxDays={(maxDays) => {
+            setUrgentMaxDays(maxDays);
+            setCustomUrgentDaysInput(
+              typeof maxDays === 'number' && ![0, 3, 5, 7, 10, 15].includes(maxDays)
+                ? String(maxDays)
+                : ''
+            );
+          }}
           onClose={() => setShowUrgentArtOverlay(false)}
           onActionClick={() => {
             setFilterUrgentOnly(true);
