@@ -90,6 +90,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   const [filterUrgentOnly, setFilterUrgentOnly] = useState(false);
   const [urgentMaxDays, setUrgentMaxDays] = useState<'all' | number>('all');
   const [customUrgentDaysInput, setCustomUrgentDaysInput] = useState('');
+  const [urgentSearchTerm, setUrgentSearchTerm] = useState('');
   const [selectedUrgentChipId, setSelectedUrgentChipId] = useState<string | null>(null);
   const [sortByPriority, setSortByPriority] = useState(true);
   const [filterPendingApprovalOnly, setFilterPendingApprovalOnly] = useState(false);
@@ -411,6 +412,66 @@ Muito obrigado pela confiança e preferência!
     } catch (e) {
       console.warn('Erro ao abrir WhatsApp automaticamente:', e);
     }
+  };
+
+  // Gera o link direto do WhatsApp para o designer entrar em contato com o cliente sobre a arte do pedido
+  const getContactClientWhatsappUrl = (sale: Sale): string => {
+    const numToUse = formatWhatsappNumber(sale.telefoneCliente);
+    const clientName = sale.cliente || 'Cliente';
+    const orderNum = sale.numeroPedido || sale.id.substring(0, 5);
+    const storeName = storeInfo?.nome && !/^\d{10,}$/.test(storeInfo.nome.trim()) ? storeInfo.nome : 'Oxente Festeje';
+    const itemsSummary = sale.itens && sale.itens.length > 0
+      ? sale.itens.map(it => `${it.quantidade}x ${it.produtoNome}`).join(', ')
+      : `${sale.quantidade}x ${sale.produtoNome}`;
+
+    const text = `Olá, *${clientName}*! Tudo bem? 🎨✨\n\nSou da equipe de design da *${storeName}* e estou entrando em contato sobre a arte do seu pedido *#${orderNum}* (${itemsSummary}).`;
+    const encodedText = encodeURIComponent(text);
+
+    if (numToUse) {
+      return `https://api.whatsapp.com/send?phone=${numToUse}&text=${encodedText}`;
+    }
+    return `https://api.whatsapp.com/send?text=${encodedText}`;
+  };
+
+  // Botão direto de contato via WhatsApp exibido nos cartões das mesas de design (D1, D2 e Admin)
+  const renderContactWhatsappButton = (sale: Sale) => {
+    const formattedPhone = formatWhatsappNumber(sale.telefoneCliente);
+    if (formattedPhone) {
+      return (
+        <a
+          href={getContactClientWhatsappUrl(sale)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => {
+            e.stopPropagation();
+            playAppSound('click');
+          }}
+          title={`Entrar em contato no WhatsApp com ${sale.cliente} (${sale.telefoneCliente})`}
+          className="w-full py-1.5 px-2.5 bg-emerald-500/12 hover:bg-emerald-500/22 border border-emerald-500/35 hover:border-emerald-400/60 text-emerald-300 rounded-lg transition-all flex items-center justify-between gap-2 text-[10px] font-bold active:scale-[0.98] no-print"
+        >
+          <span className="flex items-center gap-1.5 truncate">
+            <MessageSquare className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+            <span>Entrar em Contato (Zap)</span>
+          </span>
+          <span className="text-[9px] font-mono text-emerald-400/90 shrink-0">
+            {sale.telefoneCliente}
+          </span>
+        </a>
+      );
+    }
+
+    return (
+      <div
+        onClick={(e) => e.stopPropagation()}
+        title="Pedido sem telefone cadastrado. Edite o pedido para informar o WhatsApp do cliente."
+        className="w-full py-1 px-2.5 bg-zinc-900/50 border border-zinc-800/80 text-zinc-500 rounded-lg flex items-center justify-between gap-2 text-[9.5px] font-medium no-print"
+      >
+        <span className="flex items-center gap-1.5">
+          <Smartphone className="h-3 w-3 text-zinc-600 shrink-0" />
+          <span>Sem WhatsApp cadastrado</span>
+        </span>
+      </div>
+    );
   };
 
   // Quantas horas se passaram desde o envio/finalização da arte sem aprovação do cliente
@@ -801,6 +862,31 @@ Qualquer ajuste que precisar, estamos por aqui!
   const displayedUrgentArtOrders = useMemo(() => {
     return urgentArtOrders.filter(s => matchesUrgentDeadline(s, urgentMaxDays));
   }, [urgentArtOrders, urgentMaxDays]);
+
+  const searchedUrgentArtOrders = useMemo(() => {
+    const raw = urgentSearchTerm.trim();
+    if (!raw) return displayedUrgentArtOrders;
+
+    const normalize = (str?: string) =>
+      (str || '')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase()
+        .trim();
+
+    const normQuery = normalize(raw);
+    const words = normQuery.split(/\s+/).filter(Boolean);
+
+    return displayedUrgentArtOrders.filter((sale) => {
+      const itemsText = (sale.itens || [])
+        .map(it => `${it.produtoNome || ''} ${it.corSelecionada || ''}`)
+        .join(' ');
+      const haystack = normalize(
+        `${sale.cliente || ''} ${sale.numeroPedido || ''} ${sale.produtoNome || ''} ${itemsText} ${sale.observacoesDesign || ''}`
+      );
+      return words.every(w => haystack.includes(w));
+    });
+  }, [displayedUrgentArtOrders, urgentSearchTerm]);
 
   // Artes finalizadas/enviadas em que o cliente ainda não aprovou o layout (+24h / +48h)
   const pendingApprovalOrders = useMemo(() => {
@@ -1333,26 +1419,71 @@ Qualquer ajuste que precisar, estamos por aqui!
 
           {/* Chips interativos de pedidos urgentes */}
           <div className="space-y-2.5 pt-2 border-t border-red-500/20 relative z-10">
-            {displayedUrgentArtOrders.length === 0 ? (
+            {/* Barra de pesquisa rápida dentro dos pedidos urgentes (produto, cliente, nº) */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+              <div className="relative flex-1 max-w-md">
+                <Search className="h-3.5 w-3.5 text-red-300/70 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={urgentSearchTerm}
+                  onChange={(e) => setUrgentSearchTerm(e.target.value)}
+                  placeholder="Pesquisar nos urgentes (ex: copo, porcelana, bolsa, cliente)..."
+                  autoComplete="off"
+                  className="w-full pl-9 pr-8 py-1.5 bg-zinc-950/90 border border-red-500/30 focus:border-amber-400 focus:ring-1 focus:ring-amber-400/30 rounded-xl text-xs text-zinc-100 placeholder-zinc-500 focus:outline-none transition-colors"
+                />
+                {urgentSearchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setUrgentSearchTerm('')}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white cursor-pointer p-0.5"
+                    title="Limpar pesquisa dos urgentes"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+              {urgentSearchTerm.trim() !== '' && (
+                <span className="text-[10.5px] font-mono font-bold text-amber-300 bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 rounded-lg w-fit">
+                  {searchedUrgentArtOrders.length} {searchedUrgentArtOrders.length === 1 ? 'pedido encontrado' : 'pedidos encontrados'}
+                </span>
+              )}
+            </div>
+
+            {searchedUrgentArtOrders.length === 0 ? (
               <div className="w-full py-3 px-4 bg-zinc-950/60 border border-dashed border-red-500/25 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="text-zinc-400 font-medium">
-                  Nenhum pedido urgente pendente de arte para o prazo selecionado ({urgentMaxDays === 0 ? 'Hoje / Atrasados' : `até ${urgentMaxDays} dias`}).
+                  {urgentSearchTerm.trim()
+                    ? `Nenhum pedido urgente encontrado para "${urgentSearchTerm.trim()}"${urgentMaxDays !== 'all' ? (urgentMaxDays === 0 ? ' (Hoje / Atrasados)' : ` (até ${urgentMaxDays} dias)`) : ''}.`
+                    : `Nenhum pedido urgente pendente de arte para o prazo selecionado (${urgentMaxDays === 0 ? 'Hoje / Atrasados' : `até ${urgentMaxDays} dias`}).`}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setUrgentMaxDays('all');
-                    setCustomUrgentDaysInput('');
-                  }}
-                  className="text-[11px] font-bold text-amber-400 hover:text-amber-300 underline cursor-pointer"
-                >
-                  Mostrar todos os {urgentArtOrders.length} urgentes
-                </button>
+                <div className="flex items-center gap-3">
+                  {urgentSearchTerm.trim() !== '' && (
+                    <button
+                      type="button"
+                      onClick={() => setUrgentSearchTerm('')}
+                      className="text-[11px] font-bold text-amber-400 hover:text-amber-300 underline cursor-pointer"
+                    >
+                      Limpar pesquisa
+                    </button>
+                  )}
+                  {urgentMaxDays !== 'all' && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUrgentMaxDays('all');
+                        setCustomUrgentDaysInput('');
+                      }}
+                      className="text-[11px] font-bold text-red-300 hover:text-red-200 underline cursor-pointer"
+                    >
+                      Mostrar todos os {urgentArtOrders.length} urgentes
+                    </button>
+                  )}
+                </div>
               </div>
             ) : (
               <>
                 <div className="flex flex-wrap gap-2">
-                  {displayedUrgentArtOrders.map((sale) => {
+                  {searchedUrgentArtOrders.map((sale) => {
                     const isSelectedChip = selectedUrgentChipId === sale.id;
                     return (
                       <button
@@ -1398,7 +1529,7 @@ Qualquer ajuste que precisar, estamos por aqui!
 
                 {/* Painel rápido ao clicar em um pedido urgente: puxar direto para Mesa D1, D2 ou Admin */}
                 {(() => {
-                  const selectedUrgentSale = displayedUrgentArtOrders.find(s => s.id === selectedUrgentChipId);
+                  const selectedUrgentSale = searchedUrgentArtOrders.find(s => s.id === selectedUrgentChipId);
                   if (!selectedUrgentSale) return null;
                   const currentDeskLabel =
                     selectedUrgentSale.designerId === 'designer1'
@@ -2448,6 +2579,9 @@ Qualquer ajuste que precisar, estamos por aqui!
                       </div>
                     ) : null}
 
+                    {/* Botão direto de contato via WhatsApp */}
+                    {renderContactWhatsappButton(sale)}
+
                     {/* Control Panel actions */}
                     <div className="flex items-center gap-2 pt-2 border-t border-zinc-900 no-print">
                       <div className="flex-1 flex gap-1.5">
@@ -2786,6 +2920,9 @@ Qualquer ajuste que precisar, estamos por aqui!
                         </button>
                       </div>
                     ) : null}
+
+                    {/* Botão direto de contato via WhatsApp */}
+                    {renderContactWhatsappButton(sale)}
 
                     {/* Control Panel actions */}
                     <div className="flex items-center gap-2 pt-2 border-t border-zinc-900 no-print">
@@ -3154,6 +3291,9 @@ Qualquer ajuste que precisar, estamos por aqui!
                           </div>
                         ) : null}
 
+                        {/* Botão direto de contato via WhatsApp */}
+                        {renderContactWhatsappButton(sale)}
+
                         {/* Control Panel actions — Full parity with D1/D2 + Admin direct unlock */}
                         <div className="space-y-2 pt-2 border-t border-zinc-900 no-print">
                           {!isFinished ? (
@@ -3347,7 +3487,21 @@ Qualquer ajuste que precisar, estamos por aqui!
                       <p className="text-[10px] text-zinc-500 font-medium">Básico estruturado para compartilhamento rápido</p>
                     </div>
                     
-                    <div className="flex gap-2 shrink-0">
+                    <div className="flex flex-wrap gap-2 shrink-0">
+                      {formatWhatsappNumber(viewedSale.telefoneCliente) && (
+                        <a
+                          href={getContactClientWhatsappUrl(viewedSale)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={() => playAppSound('click')}
+                          title={`Abrir WhatsApp direto com ${viewedSale.cliente} (${viewedSale.telefoneCliente})`}
+                          className="px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95 bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm"
+                        >
+                          <MessageSquare className="h-3.5 w-3.5" />
+                          <span>Entrar em Contato</span>
+                        </a>
+                      )}
+
                       <button
                         onClick={() => {
                           const numPed = viewedSale.numeroPedido || viewedSale.id.substring(0, 5);
