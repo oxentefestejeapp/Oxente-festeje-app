@@ -12,6 +12,7 @@ import { Receipt } from './Receipt';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound, getIsAudioMuted, setAudioMuted } from '../lib/audio';
 import { dbSupabase } from '../lib/supabase';
+import { getOrderTrackingUrl } from '../utils/siteUrl';
 
 interface SalesManagerProps {
   products: Product[];
@@ -1776,7 +1777,7 @@ export function SalesManager({ products, sales, storeInfo, onRecordSale, onUpdat
       itensDetail = sale.itens.map(item => `• ${item.produtoNome} (x${item.quantidade})`).join('\n');
     }
 
-    const trackingUrl = `${window.location.origin}/?venda=${sale.id}`;
+    const trackingUrl = getOrderTrackingUrl(sale.id);
 
     const message = `Seu pedido foi anotado! 📝✨
 

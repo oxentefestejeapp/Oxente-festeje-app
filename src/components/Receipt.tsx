@@ -28,6 +28,7 @@ import QRCode from 'qrcode';
 import { Sale, StoreInfo, formatCpfCnpj } from '../types';
 import { WhatsAppNotifier } from './WhatsAppNotifier';
 import { playAppSound } from '../lib/audio';
+import { getOrderTrackingUrl } from '../utils/siteUrl';
 
 interface ReceiptProps {
   sale: Sale;
@@ -59,7 +60,7 @@ export function Receipt({ sale, storeInfo, onUpdateSale, onEdit, products }: Rec
 
   useEffect(() => {
     if (!sale || sale.status === 'Orçamento') return;
-    const trackingUrl = `${window.location.origin}${window.location.pathname}?venda=${sale.id}`;
+    const trackingUrl = getOrderTrackingUrl(sale.id);
     QRCode.toDataURL(
       trackingUrl,
       {

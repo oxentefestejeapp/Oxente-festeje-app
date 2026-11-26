@@ -41,6 +41,7 @@ import { CelebrationOverlay, UrgentArtOrderInfo } from './CelebrationOverlay';
 import { playAppSound } from '../lib/audio';
 import { supabase } from '../lib/supabase';
 import QRCode from 'qrcode';
+import { getLayoutApprovalUrl } from '../utils/siteUrl';
 
 interface ClosedOrdersManagerProps {
   products: Product[];
@@ -371,9 +372,7 @@ export function ClosedOrdersManager({ products, sales, storeInfo, onUpdateSale, 
   const getLayoutApprovalMessage = (sale: Sale): string => {
     const clientName = sale.cliente || 'Cliente';
     const storeName = storeInfo?.nome && !/^\d{10,}$/.test(storeInfo.nome.trim()) ? storeInfo.nome : 'Oxente Festeje';
-    const baseUrl = window.location.origin;
-    const approvalParam = encodeURIComponent(sale.numeroPedido || sale.id);
-    const approvalLink = `${baseUrl}/?aprovar=${approvalParam}`;
+    const approvalLink = getLayoutApprovalUrl(sale.numeroPedido || sale.id);
 
     return `Olá, *${clientName}*! Tudo bem? 🎨✨
 
@@ -499,9 +498,7 @@ Muito obrigado pela confiança e preferência!
   const sendLayoutApprovalReminderWhatsapp = (sale: Sale, waitingHours: number) => {
     const clientName = sale.cliente || 'Cliente';
     const storeName = storeInfo?.nome && !/^\d{10,}$/.test(storeInfo.nome.trim()) ? storeInfo.nome : 'Oxente Festeje';
-    const baseUrl = window.location.origin;
-    const approvalParam = encodeURIComponent(sale.numeroPedido || sale.id);
-    const approvalLink = `${baseUrl}/?aprovar=${approvalParam}`;
+    const approvalLink = getLayoutApprovalUrl(sale.numeroPedido || sale.id);
     const pickupText = sale.dataRetirada
       ? new Date(sale.dataRetirada + 'T12:00:00').toLocaleDateString('pt-BR')
       : null;
